@@ -1,14 +1,14 @@
 # Agent Skills format reference
 
-Format for the shared skill cores under `.agents/skills/` in this commons. These
-are **portable cores**: generic content that any consuming repository can vendor
+Format for the shared skill cores under `skills/` in this commons. These are
+**portable cores**: generic content that any consuming repository can vendor
 unchanged. Repo-specific material belongs in the consuming repo's overlay, not
 here.
 
 ## Layout
 
 ```text
-.agents/skills/
+skills/
   <skill-name>/
     SKILL.md           # required
     <sibling>.md       # optional: deep detail, loaded on demand

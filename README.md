@@ -54,7 +54,7 @@ copilot plugin install agent-skills@jeremykuhne-agent-skills
 
 | Path | Purpose |
 | ---- | ------- |
-| `.agents/skills/` | The shared skill cores (the `gh skill` source). |
+| `skills/` | The shared skill cores (the `gh skill` source). |
 | `agents/` | Portable agent personas (e.g. a generic reviewer). |
 | `plugin.json` | Plugin manifest (skills + agents + MCP) for the CLI / Claude. |
 | `.github/plugin/marketplace.json` | Marketplace listing so the plugin is installable by name. |

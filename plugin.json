@@ -4,7 +4,7 @@
   "description": "Shared agent skills and MCP configuration for JeremyKuhne's .NET repositories. A gh skill source and a Copilot/Claude plugin.",
   "license": "MIT",
   "author": "Jeremy W. Kuhne",
-  "skills": [".agents/skills/"],
+  "skills": ["skills/"],
   "agents": "agents/",
   "mcpServers": ".mcp.json"
 }
