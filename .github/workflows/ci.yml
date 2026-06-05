@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate skills, format, and links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          globs: |
+            **/*.md
+            !node_modules
+          config: .markdownlint.jsonc
+
+      - name: Link check
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --offline
+            "**/*.md"
+          fail: true
+
+      - name: Detect skills
+        id: skills
+        shell: bash
+        run: |
+          if compgen -G ".agents/skills/*/SKILL.md" > /dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No SKILL.md files yet (skeleton stage); skipping skills-ref validate."
+          fi
+
+      # The agentskills.io reference validator. Runs only once real skills exist
+      # (rollout Phase 3). Confirm the exact distribution / package name when the
+      # first skill is migrated in; this step is intentionally inert until then.
+      - name: Validate skill spec (skills-ref)
+        if: steps.skills.outputs.present == 'true'
+        shell: bash
+        run: |
+          for dir in .agents/skills/*/; do
+            echo "Validating $dir"
+            npx --yes skills-ref validate "$dir"
+          done

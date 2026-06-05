@@ -1,0 +1,12 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vs/
+
+# Node tooling (markdownlint-cli2, lychee caches, etc.)
+node_modules/
+.lycheecache
+
+# Local scratch
+/scratch/

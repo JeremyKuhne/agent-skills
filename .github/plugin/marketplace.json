@@ -1,0 +1,14 @@
+{
+  "name": "jeremykuhne-agent-skills",
+  "owner": {
+    "name": "Jeremy W. Kuhne",
+    "url": "https://github.com/JeremyKuhne"
+  },
+  "plugins": [
+    {
+      "name": "agent-skills",
+      "source": "./",
+      "description": "Shared agent skills and MCP configuration for JeremyKuhne's .NET repositories."
+    }
+  ]
+}

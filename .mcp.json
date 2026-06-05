@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp"
+    },
+    "nuget": {
+      "type": "stdio",
+      "command": "dnx",
+      "args": ["NuGet.Mcp.Server@1.4.3", "--yes"]
+    }
+  }
+}
