@@ -133,7 +133,9 @@ on the canonical repo's `main` but not in your branch will fail.
 - No whitespace-only lines (a "blank" line must be truly empty).
 - Tabs are forbidden in Markdown bodies.
 - **Files must end with a single newline character** (markdownlint MD047).
-  The validator flags this; markdownlint enforces it in CI. New files
+  The validator flags a *missing* trailing newline (it checks the file ends
+  with `\n`, not that there is exactly one); markdownlint enforces the full
+  single-newline rule in CI. New files
   created via the standard editor tooling get this for free, but
   hand-edited or copy-pasted content sometimes loses the final `\n`.
 - These rules are enforced both by the validator and by markdownlint.

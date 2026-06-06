@@ -82,7 +82,7 @@ force-push, or leave the commit in place.
 ## Related
 
 - Your repo's agent guidance (`AGENTS.md`) - the rule itself.
-- The `create-pr` skill - opening the initial PR (different approval
-  semantics).
+- The `create-pr` skill - opening the initial PR (same publish gate,
+  different edit scope).
 - The `pre-pr-self-review` skill - the validation checklist that applies
   to both initial and follow-up rounds.

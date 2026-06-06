@@ -171,8 +171,8 @@ Tell the user:
 
 Once the PR exists, this skill is done. Subsequent rounds of edits in
 response to review comments, requested changes, or CI failures go through
-the `address-pr-feedback` skill, which has different commit/push approval
-semantics.
+the `address-pr-feedback` skill, which covers a different edit scope under
+the same commit/push publish gate.
 
 ## Guardrails
 
