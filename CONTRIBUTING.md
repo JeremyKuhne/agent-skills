@@ -39,8 +39,8 @@ reference; the essentials:
 CI runs two checks on every push and pull request; run them before opening a PR:
 
 ```pwsh
-# Lint Markdown (auto-discovers .markdownlint.jsonc).
-npx --yes markdownlint-cli2 "**/*.md" "#node_modules"
+# Lint Markdown (the same config CI uses).
+npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"
 
 # Offline link check (same engine as CI; requires the lychee binary).
 lychee --no-progress --offline "**/*.md"
