@@ -7,10 +7,10 @@ vendors pinned, provenance-stamped copies of the skills it needs.
 It is both a [`gh skill`](https://docs.github.com/copilot/reference/copilot-cli-reference/cli-plugin-reference)
 source and a Copilot/Claude plugin marketplace.
 
-> **Status: skeleton (infrastructure only).** This repo has the distribution
-> scaffolding, MCP configuration, and CI, but no skill content yet. Skills are
-> migrated in later phases of the rollout. See the design doc in the touki repo:
-> `docs/skills-improvement-plan.md`.
+> **Status: early.** The distribution scaffolding, MCP configuration, and CI are
+> in place, and the first shared skill cores have landed under `skills/`. More
+> skills and agent personas arrive in later phases of the rollout. See the design
+> doc in the touki repo: `docs/skills-improvement-plan.md`.
 
 ## The model
 
@@ -60,13 +60,17 @@ copilot plugin install agent-skills@jeremykuhne-agent-skills
 | `.github/plugin/marketplace.json` | Marketplace listing so the plugin is installable by name. |
 | `.mcp.json` | MCP servers the skills rely on (`microsoft-learn`, NuGet). |
 | `FORMAT.md` | The skill file format authors follow when contributing a core. |
+| `CONTRIBUTING.md` | How to author and validate a shared skill core. |
+| `SECURITY.md` | How to report a vulnerability privately. |
+| `LICENSE` | The MIT license this project is distributed under. |
 
 ## Governance
 
 While every consumer is private and owned by the maintainer, this repo can stay
 private. Before any public or external consumer, the governance gate applies:
-a `LICENSE` (MIT, present), `--pin`ned installs, and immutable releases so a
-pinned tag cannot be rewritten after the fact.
+a `LICENSE` (MIT), a [security policy](SECURITY.md) and
+[contribution terms](CONTRIBUTING.md), `--pin`ned installs, and immutable releases
+so a pinned tag cannot be rewritten after the fact.
 
 ## License
 

@@ -1,0 +1,7 @@
+# Normalize line endings: commit text files with LF and let git auto-detect
+# binary files. This governs what is stored in the repository.
+* text=auto
+
+# Shell scripts must stay LF so they remain executable on Unix even when edited
+# on Windows.
+*.sh text eol=lf
