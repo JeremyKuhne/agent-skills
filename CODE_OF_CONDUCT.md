@@ -30,10 +30,11 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported privately to the maintainer through GitHub (open a private security
-advisory, or contact the owner of this repository). All complaints will be
-reviewed and investigated and will result in a response that is deemed necessary
-and appropriate to the circumstances.
+reported privately through the repository's **Security** tab using **Report a
+vulnerability** - the same private channel described in [SECURITY.md](SECURITY.md),
+visible only to the maintainer. All complaints will be reviewed and investigated
+and will result in a response that is deemed necessary and appropriate to the
+circumstances.
 
 Maintainers who do not follow or enforce the Code of Conduct in good faith may
 face temporary or permanent repercussions as determined by the project's

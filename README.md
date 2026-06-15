@@ -51,9 +51,10 @@ copilot plugin install agent-skills@jeremykuhne-agent-skills
 ```
 
 Installing the plugin brings in the MCP servers declared in `.mcp.json`. The
-client may start them on demand, which runs their commands locally (the NuGet
-server launches via `dnx`). Both are pinned to specific, reputable sources;
-review `.mcp.json` before installing if that matters in your environment.
+client may start them on demand: the NuGet server runs locally via `dnx` and is
+version-pinned (`NuGet.Mcp.Server@1.4.3`), while `microsoft-learn` is a hosted
+HTTP endpoint on an official Microsoft domain. Review `.mcp.json` before
+installing if that matters in your environment.
 
 ## Layout
 

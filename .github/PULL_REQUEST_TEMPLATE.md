@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] Markdown lints clean (`npx --yes markdownlint-cli2 "**/*.md" "#node_modules"`).
+- [ ] Markdown lints clean (`npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"`).
 - [ ] Links resolve offline (every relative link points to a file in the repo).
 - [ ] New or changed skill cores stay portable (no repo-specific paths, project
       names, or links into a particular repository's tree) - see
