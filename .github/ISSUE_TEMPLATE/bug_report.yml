@@ -1,0 +1,28 @@
+name: Bug report
+description: Report a problem with a skill, the plugin manifest, or the MCP configuration.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: skill
+    attributes:
+      label: Affected skill or file
+      description: Which skill, agent, or config file is involved?
+      placeholder: skills/security-review
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The tag or commit you are using.
+      placeholder: v0.6.0
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: How can the problem be reproduced?

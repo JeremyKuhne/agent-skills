@@ -50,6 +50,11 @@ copilot plugin marketplace add JeremyKuhne/agent-skills
 copilot plugin install agent-skills@jeremykuhne-agent-skills
 ```
 
+Installing the plugin brings in the MCP servers declared in `.mcp.json`. The
+client may start them on demand, which runs their commands locally (the NuGet
+server launches via `dnx`). Both are pinned to specific, reputable sources;
+review `.mcp.json` before installing if that matters in your environment.
+
 ## Layout
 
 | Path | Purpose |
@@ -61,16 +66,17 @@ copilot plugin install agent-skills@jeremykuhne-agent-skills
 | `.mcp.json` | MCP servers the skills rely on (`microsoft-learn`, NuGet). |
 | `FORMAT.md` | The skill file format authors follow when contributing a core. |
 | `CONTRIBUTING.md` | How to author and validate a shared skill core. |
+| `CODE_OF_CONDUCT.md` | The behavior expected of everyone in the project. |
 | `SECURITY.md` | How to report a vulnerability privately. |
 | `LICENSE` | The MIT license this project is distributed under. |
 
 ## Governance
 
-While every consumer is private and owned by the maintainer, this repo can stay
-private. Before any public or external consumer, the governance gate applies:
-a `LICENSE` (MIT), a [security policy](SECURITY.md) and
-[contribution terms](CONTRIBUTING.md), `--pin`ned installs, and immutable releases
-so a pinned tag cannot be rewritten after the fact.
+Consumers vendor pinned, provenance-stamped copies, so stability of published
+refs matters. The governance gate: a `LICENSE` (MIT), a
+[security policy](SECURITY.md), [contribution terms](CONTRIBUTING.md), and a
+[code of conduct](CODE_OF_CONDUCT.md); `--pin`ned installs; and immutable
+releases so a pinned tag cannot be rewritten after the fact.
 
 ## License
 

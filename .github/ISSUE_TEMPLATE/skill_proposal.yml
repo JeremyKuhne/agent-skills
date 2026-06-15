@@ -1,0 +1,26 @@
+name: Skill proposal
+description: Propose a new shared skill core or a change to an existing one.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does the skill solve?
+      description: Describe the recurring task or knowledge the skill would capture.
+    validations:
+      required: true
+  - type: textarea
+    id: trigger
+    attributes:
+      label: When should an agent invoke it?
+      description: The trigger phrasing for the description line (the auto-invocation surface).
+    validations:
+      required: true
+  - type: textarea
+    id: portability
+    attributes:
+      label: Portability
+      description: >-
+        Confirm the core can stay generic - no repo-specific paths, project
+        names, or links into a particular repository's tree. Note anything that
+        would need to live in a consuming repo's overlay instead.
