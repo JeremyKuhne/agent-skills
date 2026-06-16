@@ -10,7 +10,7 @@ fleet companion: update it as repos onboard.
 
 | Repo | Consumes commons | Produces | Onboarding state |
 | ---- | ---------------- | -------- | ---------------- |
-| **touki** | 8 cores vendored (`security-review` ... `performance-testing`) | the universal + several domain cores | **Onboarded** - the reference consumer |
+| **touki** | 13 commons cores vendored (5 added at `v0.8.1`) | the universal and domain cores | **Onboarded** - the reference consumer |
 | **filtrace** | nothing yet | the `filtrace` tool-shipped skill (canonical home) | **Producer only** - does not yet consume the universal tier |
 | **madowaku** | nothing yet (4 local forks) | `cswin32-interop`, `cswin32-com` (not yet promoted) | **Not onboarded** - forks to reconcile |
 | **thirtytwo** | nothing (no `.agents/`) | none | **Greenfield** - needs scaffolding first |
@@ -32,8 +32,8 @@ PR discipline.
       checker + `agent-files.yml` exist; stand up any missing piece.
 - [ ] Vendor the universal tier (`security-review`, `pre-pr-self-review`,
       `create-pr`, `address-pr-feedback`, `agent-files-review`), each `--pin`ned,
-      with overlays for filtrace paths. Add `manage-skills` once it lands in the
-      commons (it is pending promotion - see the ledger below).
+      with overlays for filtrace paths. Include `manage-skills` (now in the commons
+      as of `v0.8.0`).
 - [ ] Domain: vendor `performance-testing` (filtrace has a perf surface) and
       `scratch-buffer-strategy` as applicable.
 - [ ] Leave `filtrace`'s own skill as the canonical source; do not vendor it back
@@ -79,18 +79,20 @@ fleet. Each row ends in a recorded state; an unexplained divergence is the alarm
 
 | Item | Origin | Kind | Target | Status |
 | ---- | ------ | ---- | ------ | ------ |
-| `manage-skills` | touki (local) | Local-generic, universal | Promote to commons, vendor back to touki | **Pending** - the one universal-tier core not yet in the commons |
-| `fuzz-testing` | touki (local) | Local-generic, domain (project-gated) | Promote to commons | **Pending** - was gated behind the now-cleared traceq seam |
-| `polyfill-dotnet-api` | touki (local) | Domain, small portable core | Promote core to commons, keep layout in overlay | **Pending** - decide whether the thin core is worth a shared tier |
-| `il-copy-inspection` | touki (local) | Unclassified (semi-portable) | Classify; decide commons vs local | **Pending** - postdates the original plan |
-| `roslyn-analyzers` | touki (local) | Unclassified (semi-portable) | Classify; decide commons vs local | **Pending** - postdates the original plan |
 | `cswin32-interop` | madowaku (fork) | Local-generic, domain | Promote to commons as a `cswin32` group | **Pending** - madowaku not yet onboarded |
 | `cswin32-com` | madowaku (fork) | Local-generic, domain | Promote to commons | **Pending** |
 | `performance-testing` | madowaku (fork) | Fork of commons core | Reconcile to core + overlay | **Pending** |
+| `manage-skills` | touki (local) | Local-generic, universal | Promote to commons, vendor back | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
+| `fuzz-testing` | touki (local) | Local-generic, domain (project-gated) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
+| `roslyn-analyzers` | touki (local) | Domain (project-gated) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
+| `il-copy-inspection` | touki (local) | Domain (semi-portable) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
+| `dotnet-polyfills` | commons (born-shared) | Domain, consume side | Vendor into touki with overlay | **Resolved** - born in commons `v0.8.0`, vendored `v0.8.1` |
+| `polyfill-dotnet-api` | touki (local) | Domain, authoring side | Keep local; defer the source survey to `dotnet-polyfills` | **Resolved** - kept local, slimmed to defer |
 | `performance-testing` | touki | Vendored `v0.7.0` | - | **Resolved** - byte-identical to commons |
 | `publish-release` | touki, madowaku | Local-specific (both) | Keep local in each | **Resolved** - no shared core |
 | `run-tests-on-wsl` | touki | Local-specific | Keep local | **Resolved** |
 | `filtrace` | filtrace | Tool-shipped (canonical) | Vendor into consumers from the tool repo | **Resolved** - vendored into touki |
 
-The first eight rows are the open onboarding/promotion backlog; resolving them is
-the bulk of bringing filtrace, madowaku, and thirtytwo fully into the commons.
+The first three rows are the open onboarding/promotion backlog; resolving them is
+the bulk of bringing madowaku - and then filtrace and thirtytwo - fully into the
+commons.
