@@ -187,4 +187,6 @@ The repo-specific authoring conventions - where the files live, the
 behavior-parity and allocation rules, and the net472 / net481 codegen gotchas
 (like the `Unsafe.As` sign-extension trap) - are a separate skill,
 **polyfill-dotnet-api**. Come here first to ask "which package or generator covers
-this"; go there once the answer is genuinely "none."
+this"; go there once the answer is genuinely "none." A consuming repository wires
+the concrete link to that authoring skill and its downlevel-package and
+polyfill-layout specifics in its overlay.

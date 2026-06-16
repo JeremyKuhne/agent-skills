@@ -70,7 +70,10 @@ Decide where the skill's home is before writing much:
 - **Born-shared** - the skill is generic and other repos will want it. Author the
   portable core directly in the commons, then vendor it back here with an overlay.
   Keep repo-specific paths, cross-references, and example links out of the core
-  from the start - they belong in the overlay.
+  from the start - they belong in the overlay. Leave a short prose cue in the core
+  pointing the agent at the overlay (e.g. "a consuming repository wires the
+  concrete cross-references in its overlay"); that cue is what gets the overlay
+  read.
 
 A skill that is mostly generic but needs a few local specifics is still
 born-shared: the generic part is the core, the specifics are the overlay. The test

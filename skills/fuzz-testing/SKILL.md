@@ -26,7 +26,9 @@ handling, add or extend a fuzz target instead of relying on a single
 hand-written case. A `pre-pr-self-review` should treat new public parser /
 codec / buffer surface as needing a fuzz target (or an explicit "not fuzzed"
 note). On Windows the prebuilt driver runs natively, so a Linux / WSL path is
-optional rather than required.
+optional rather than required. A consuming repository wires the concrete
+harness- and regression-project names, the prerequisites script, and the target
+list in its overlay.
 
 ## Installing prerequisites
 

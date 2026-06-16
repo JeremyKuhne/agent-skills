@@ -106,6 +106,9 @@ library it guards (`<root>` is the library project name):
   `il-copy-inspection` is the post-build, ground-truth counterpart: it reads emitted
   IL to confirm a prediction and to find the compiler-synthesized copies an
   `IOperation`-based analyzer cannot see.
+- A consuming repository wires the concrete analyzer-project names, the example
+  analyzer to copy from, the diagnostic-ID prefix, and these cross-references in
+  its overlay.
 
 ## Disambiguation
 

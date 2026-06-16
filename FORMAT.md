@@ -54,6 +54,22 @@ Anything the core genuinely needs travels as a bundled `references/` doc or a
 portable sibling. Everything repo-specific is supplied by the consuming repo's
 overlay. A vendored core must pass that repo's link check unchanged.
 
+## Cue the overlay
+
+When a core replaces repo-specific names, paths, or cross-references with
+placeholders, leave a short **prose cue** that points the agent at the consuming
+repo's overlay - for example, close a "Related skills" list with "a consuming
+repository wires the concrete cross-references in its overlay." The cue is prose,
+**not a link**: the core cannot link an `overlay.md` that exists only downstream,
+and a literal link would dangle the commons link check. The cue is what gets the
+overlay read - an agent following it opens the overlay for the concrete bindings;
+a genericized core with no cue leaves the agent holding unbound placeholders with
+no signal an overlay exists.
+
+This is the default for every semi-portable core. A fully portable core with
+nothing to bind - no placeholders, no deferred cross-references - does not need
+one.
+
 ## Thin core plus sibling files
 
 Keep each `SKILL.md` body small - the whole body loads on every trigger, while
