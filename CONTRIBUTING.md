@@ -33,6 +33,11 @@ reference; the essentials:
   monikers, or links into a particular repository's tree. Anything a core truly
   needs travels with it as a bundled `references/` doc or a portable sibling;
   everything repo-specific belongs in the consuming repo's overlay.
+- When a core defers repo-specific names or cross-references to the overlay, leave
+  a short **prose cue** pointing the agent there (e.g. "a consuming repository
+  wires the concrete cross-references in its overlay"). It is prose, not a link -
+  the core can't link a downstream `overlay.md`, and the cue is what makes the
+  agent read the overlay. See [FORMAT.md](FORMAT.md) for the rule.
 
 ## Validating locally
 

@@ -104,6 +104,8 @@ durable choice; `ilspycmd` is the fastest manual spot-check.
 - `performance-testing` - whether the copy costs measurable time / allocation.
 - `scratch-buffer-strategy` - many `[NonCopyable]` types are pooled buffers; this
   skill audits whether one is being copied by value.
+- A consuming repository wires these cross-references and its concrete diagnostic
+  IDs and project names in its overlay.
 
 ## Disambiguation
 
