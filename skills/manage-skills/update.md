@@ -18,8 +18,8 @@ gh skill update --all
 `gh skill update` compares the local copy's provenance tree SHA against upstream
 and surfaces the difference as a normal diff. Review it like a dependency bump:
 read what changed, run the repo's agent-file checks (the frontmatter validator and
-the link checker), then re-pin when satisfied. A `--pin`ned skill is skipped by
-`--all`; bump its pin deliberately when you want its updates.
+the link checker), then re-pin when satisfied. A skill pinned with `--pin` is
+skipped by `--all`; bump its pin deliberately when you want its updates.
 
 Manual fallback (no `gh`): compare the local core against the commons copy at the
 recorded ref, apply the diff by hand, and update the provenance SHA.

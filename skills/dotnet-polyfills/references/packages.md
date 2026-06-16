@@ -1,6 +1,6 @@
 # Official .NET downlevel package catalog
 
-Reference for the [dotnet-polyfills](SKILL.md) skill. The Microsoft-shipped
+Reference for the [dotnet-polyfills](../SKILL.md) skill. The Microsoft-shipped
 packages that backport modern BCL surface to **.NET Framework** (net472 /
 net481) and older `netstandard`. Reach for one of these before hand-rolling a
 polyfill; add it to an ItemGroup conditioned on the downlevel target only.
