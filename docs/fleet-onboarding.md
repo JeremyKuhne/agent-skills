@@ -31,8 +31,9 @@ PR discipline.
 - [ ] Scaffold if needed: confirm `.agents/skills/` catalog + validator + link
       checker + `agent-files.yml` exist; stand up any missing piece.
 - [ ] Vendor the universal tier (`security-review`, `pre-pr-self-review`,
-      `create-pr`, `address-pr-feedback`, `agent-files-review`, `manage-skills`),
-      each `--pin`ned, with overlays for filtrace paths.
+      `create-pr`, `address-pr-feedback`, `agent-files-review`), each `--pin`ned,
+      with overlays for filtrace paths. Add `manage-skills` once it lands in the
+      commons (it is pending promotion - see the ledger below).
 - [ ] Domain: vendor `performance-testing` (filtrace has a perf surface) and
       `scratch-buffer-strategy` as applicable.
 - [ ] Leave `filtrace`'s own skill as the canonical source; do not vendor it back

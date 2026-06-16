@@ -6,7 +6,7 @@ sits above [CONTRIBUTING.md](../CONTRIBUTING.md), which covers authoring a singl
 skill core, and [FORMAT.md](../FORMAT.md), which covers the file format. For the
 sharing model see the [README](../README.md).
 
-## 1. The two roles a repository plays
+## 1. The roles a repository plays
 
 | Role | Meaning | How |
 | ---- | ------- | --- |
@@ -66,12 +66,15 @@ Two axes decide the buckets, and they are independent:
 ## 4. Stage 2 - Scaffold (greenfield repos only)
 
 A repo with no `.agents/` (a greenfield repo) needs the consumer scaffolding stood
-up before it can vendor. Copy from an already-onboarded repo and trim:
+up before it can vendor. Copy from an already-onboarded repo and trim (the exact
+filenames below are this fleet's convention, not a requirement - a repo may wire
+them differently and record that in its overlay):
 
 - `.agents/skills/` with a `README.md` catalog and a `FORMAT.md`.
-- The frontmatter validator (`tools/Validate-AgentFiles.ps1`) and the offline
-  link checker (`tools/Test-AgentFileLinks.ps1`).
-- The CI workflow that runs both on every push/PR (`.github/workflows/agent-files.yml`).
+- A frontmatter validator and an offline link checker (conventionally
+  `tools/Validate-AgentFiles.ps1` and `tools/Test-AgentFileLinks.ps1`).
+- A CI workflow that runs both on every push/PR (conventionally
+  `.github/workflows/agent-files.yml`).
 - An `AGENTS.md` (and its Copilot mirror) if the repo lacks one.
 
 A merge repo (one that already has `.agents/skills/`) skips this stage and goes
@@ -112,15 +115,18 @@ consumer.
 
 Vendor only the skills the repo's domain calls for (selective vendoring is the
 *only* reliable control over where a skill fires - a skill not vendored cannot
-fire). Pick from the commons by tier:
+fire). Pick from the commons by tier. Skills marked *(pending)* are planned but
+not yet published here - they are tracked in the fleet ledger and can be vendored
+only once they land; the rest are available now.
 
 - **Universal** - essentially every .NET repo: `security-review`,
   `pre-pr-self-review`, `create-pr`, `address-pr-feedback`, `agent-files-review`,
-  `manage-skills`, `performance-testing`, `scratch-buffer-strategy`,
-  `framework-jit-optimization`.
-- **Domain** - only repos in that domain: `polyfill-dotnet-api` (repos with a
-  `Framework/` polyfill tree), `fuzz-testing` (any parser/codec/buffer surface
-  worth fuzzing - project-gated), the `cswin32-*` skills (CsWin32 repos).
+  `performance-testing`, `scratch-buffer-strategy`, `framework-jit-optimization`,
+  and `manage-skills` *(pending)*.
+- **Domain** - only repos in that domain (all *(pending)* today):
+  `polyfill-dotnet-api` (repos with a `Framework/` polyfill tree), `fuzz-testing`
+  (any parser/codec/buffer surface worth fuzzing - project-gated), and the
+  `cswin32-*` skills (CsWin32 repos).
 - **Tool-shipped** - vendor from the tool's own repo, not here: a standalone
   tool's skill (for example `filtrace`), vendored from that tool's repo, for any
   repo that uses the tool.
