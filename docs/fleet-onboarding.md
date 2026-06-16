@@ -10,7 +10,7 @@ fleet companion: update it as repos onboard.
 
 | Repo | Consumes commons | Produces | Onboarding state |
 | ---- | ---------------- | -------- | ---------------- |
-| **touki** | 13 commons cores vendored (5 added at `v0.8.1`) | the universal and domain cores, and the born-shared `dotnet-polyfills` | **Onboarded** - the reference consumer |
+| **touki** | 13 commons cores vendored (5 added at `v0.8.1`) | the universal and domain cores | **Onboarded** - the reference consumer |
 | **filtrace** | nothing yet | the `filtrace` tool-shipped skill (canonical home) | **Producer only** - does not yet consume the universal tier |
 | **madowaku** | nothing yet (4 local forks) | `cswin32-interop`, `cswin32-com` (not yet promoted) | **Not onboarded** - forks to reconcile |
 | **thirtytwo** | nothing (no `.agents/`) | none | **Greenfield** - needs scaffolding first |
@@ -32,8 +32,8 @@ PR discipline.
       checker + `agent-files.yml` exist; stand up any missing piece.
 - [ ] Vendor the universal tier (`security-review`, `pre-pr-self-review`,
       `create-pr`, `address-pr-feedback`, `agent-files-review`), each `--pin`ned,
-      with overlays for filtrace paths. Add `manage-skills` once it lands in the
-      commons (it is pending promotion - see the ledger below).
+      with overlays for filtrace paths. Include `manage-skills` (now in the commons
+      as of `v0.8.0`).
 - [ ] Domain: vendor `performance-testing` (filtrace has a perf surface) and
       `scratch-buffer-strategy` as applicable.
 - [ ] Leave `filtrace`'s own skill as the canonical source; do not vendor it back
