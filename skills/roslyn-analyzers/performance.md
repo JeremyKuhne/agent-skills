@@ -136,8 +136,8 @@ dotnet build <root>.csproj -c Release -p:ReportAnalyzer=true -bl
 ```
 
 - `-p:ReportAnalyzer=true` makes the compiler emit a per-analyzer execution-time
-  report. Reading it from console output is unreliable (it is easy to bury, as seen
-  when wiring up this repo's analyzer); the dependable read is the `-bl` binary log
+  report. Reading it from console output is unreliable (it is easy to bury in a
+  noisy build log); the dependable read is the `-bl` binary log
   opened in the **MSBuild Structured Log Viewer**, where you can find the analyzer
   summary and each analyzer's time.
 - Compare your analyzer's time against the others in the same build. An analyzer

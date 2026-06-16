@@ -35,8 +35,8 @@ existing rule whose severity just needs raising.
 
 - Tune breadth with `AnalysisMode` / `AnalysisLevel` rather than per-rule lines
   when you want a whole band on.
-- Code-style rules only run in the build when `EnforceCodeStyleInBuild=true` (this
-  repo sets it). Confirm that before assuming an `IDE####` rule will fail CI.
+- Code-style rules only run in the build when `EnforceCodeStyleInBuild=true`.
+  Confirm that is set before assuming an `IDE####` rule will fail CI.
 
 If an existing rule covers it, **that is the answer.** No new code.
 

@@ -3,8 +3,8 @@
 Detail for the [roslyn-analyzers](SKILL.md) skill. An analyzer is only as good as
 its test suite: it must fire on exactly the code it should and stay silent on
 everything else. False positives are worse than a missing rule because they train
-users to ignore (or suppress) the analyzer. The working reference is
-`<root>.analyzers.tests/UseIsNullAnalyzerTests.cs`.
+users to ignore (or suppress) the analyzer. The examples below use the test suite
+for a `UseIsNull` analyzer (`UseIsNullAnalyzerTests.cs`) as a running example.
 
 ## Two harness options
 
@@ -31,9 +31,9 @@ diagnostic-only analyzer, and **always** for code fixes. It gives you:
 Span-accurate location testing is the main reason to use this harness: it catches
 the "fires, but squiggles the wrong token" bug that a presence-only check misses.
 
-### This repo's lightweight in-memory harness
+### A lightweight in-memory harness
 
-`<root>.analyzers.tests/AnalyzerTestHarness.cs`
+A minimal hand-written harness (`AnalyzerTestHarness.cs`)
 compiles a snippet with `CSharpCompilation.Create` (references pulled from
 `TRUSTED_PLATFORM_ASSEMBLIES`), runs the analyzer via
 `compilation.WithAnalyzers([analyzer]).GetAnalyzerDiagnosticsAsync()`, and returns
@@ -92,9 +92,9 @@ over-triggers until the semantic guards are added.
 
 ## Run in Debug and Release
 
-Per the repo rule, run `dotnet test -c Release` before declaring the analyzer done,
-not just Debug. Analyzers are ordinary IL subject to the same Release inlining and
-optimization differences as the rest of the codebase.
+Run `dotnet test -c Release`, not just Debug, before declaring the analyzer done.
+Analyzers are ordinary IL subject to the same Release inlining and optimization
+differences as the rest of the codebase.
 
 ```pwsh
 dotnet test <root>.analyzers.tests/<root>.analyzers.tests.csproj -c Release
@@ -109,7 +109,8 @@ cheapest proof is a temporary violation:
 
 1. Introduce one line that should trip the rule in a real source file.
 2. `dotnet build <root>.csproj -c Release` - confirm it now reports the
-   diagnostic as an **error** (the repo's `TreatWarningsAsErrors` makes it fatal).
+   diagnostic (it is fatal as a build **error** if the consumer repo sets
+   `TreatWarningsAsErrors`).
 3. Revert the line and confirm the build is green again.
 
 This is more reliable than reading the analyzer-execution report from build output,
@@ -128,6 +129,3 @@ code:
 [*.cs]
 dotnet_diagnostic.ABCD0001.severity = none
 ```
-
-See the real example at
-`src/_generated/.editorconfig`.

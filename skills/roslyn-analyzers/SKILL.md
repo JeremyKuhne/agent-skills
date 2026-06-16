@@ -47,7 +47,8 @@ library it guards (`<root>` is the library project name):
   `IncludeBuildOutput=false`, signed. Needs both `AnalyzerReleases.Shipped.md` and
   `AnalyzerReleases.Unshipped.md` or RS2008 fails the build.
 - **`<root>.analyzers.tests`** - a modern .NET test project (MSTest / xUnit).
-  Every test project needs a local `.editorconfig` disabling `CS1591`.
+  If your repo enforces XML-doc comments or treats warnings as errors, it may
+  need a local `.editorconfig` relaxing rules like `CS1591` on the test snippets.
 - **`<root>.analyzers.codefixes`** - the `CodeFixProvider`s. A **separate** assembly
   because a code fix references the Roslyn Workspaces layer, which RS1022 forbids in
   the analyzer assembly. Only needed when you ship fixes; see the code-fix section
