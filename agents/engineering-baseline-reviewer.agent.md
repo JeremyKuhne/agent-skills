@@ -1,5 +1,5 @@
 ---
-description: Read-only engineering-baseline reviewer. Audits a repository against the engineering-baseline skill's nine-domain standard (build, test, publish, CI, supply-chain security, OSS governance, agent enablement) and returns a scored, risk-ordered gap report. Findings only - never edits files, changes settings, or runs remote or irreversible actions. Use to "review this repo against the baseline" or to get a standards gap report without changing anything.
+description: Read-only engineering-baseline reviewer. Audits a repository against the engineering-baseline skill's nine-domain standard (foundation, build, test, publish, versioning, CI, supply-chain security, OSS governance, agent enablement) and returns a scored, risk-ordered gap report. Findings only - never edits files, changes settings, or runs remote or irreversible actions. Use to "review this repo against the baseline" or to get a standards gap report without changing anything.
 tools: ['search', 'usages', 'problems', 'changes', 'fetch']
 ---
 

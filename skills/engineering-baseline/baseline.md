@@ -13,7 +13,7 @@ Each item is tagged:
 - **(conditional: <condition>)** - applies only when the named condition holds;
   the parenthetical states the trigger so applicability is mechanical (for
   example *(conditional: untrusted input)*).
-- **(deferred)** - in scope, but the actual judgement is owned by another skill;
+- **(deferred)** - in scope, but the actual judgment is owned by another skill;
   confirm the check is wired, do not perform it here.
 
 Scoring and remediation read these tags to decide applicability; see
