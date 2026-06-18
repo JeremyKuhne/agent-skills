@@ -84,6 +84,21 @@ function Get-VersionMeta ([string] $id, [string] $v) {
     }
 }
 
+# True only when every SPDX identifier in the (possibly compound) expression is on
+# the allowlist. NuGet returns SPDX expressions such as "MIT OR Apache-2.0" or
+# "(MIT AND BSD-3-Clause)"; an exact match would wrongly reject those. Custom
+# (LicenseRef) expressions cannot be validated and are rejected.
+function Test-LicenseAllowed ([string] $license, [string[]] $allow) {
+    if ([string]::IsNullOrWhiteSpace($license)) { return $false }
+    if ($license -match '(?i)LicenseRef') { return $false }
+    $ids = $license -split '(?i)\s+(?:AND|OR|WITH)\s+' |
+        ForEach-Object { ($_ -replace '[()]', '').Trim().TrimEnd('+') } |
+        Where-Object { $_ }
+    if (-not $ids) { return $false }
+    foreach ($id in $ids) { if ($allow -notcontains $id) { return $false } }
+    return $true
+}
+
 # Newest stable version that passes every gate, scanning newest-first.
 function Resolve-KnownGood ([string] $id, [int] $minAge, [string[]] $allow) {
     $versions = Get-StableVersions $id | Sort-Object {
@@ -103,7 +118,7 @@ function Resolve-KnownGood ([string] $id, [int] $minAge, [string[]] $allow) {
         if ($m.Vulnerable)   { $reasons += 'advisory' }
         if ($age -lt $minAge) { $reasons += "age ${age}d<${minAge}d" }
         if (-not $m.License) { $reasons += 'license unknown' }
-        elseif ($allow -notcontains $m.License) { $reasons += "license $($m.License)" }
+        elseif (-not (Test-LicenseAllowed $m.License $allow)) { $reasons += "license $($m.License)" }
         if ($reasons.Count -eq 0) {
             return [pscustomobject]@{ Version = $v; Age = $age; License = $m.License; Reason = '' }
         }
