@@ -157,7 +157,9 @@ $Year          = (Get-Date).Year
 $IsMultiTarget = $Archetype -eq 'multi-target'
 $IsTool        = $Archetype -eq 'tool'
 $MainTfm       = $Framework
-$NameTitle     = (Get-Culture).TextInfo.ToTitleCase($Name)
+# Title-case only an all-lowercase name; preserve any name the user already cased
+# (ToTitleCase would downcase internal capitals, for example MyLib -> Mylib).
+$NameTitle     = if ($Name -cmatch '[A-Z]') { $Name } else { (Get-Culture).TextInfo.ToTitleCase($Name) }
 $SdkVersion    = (& dotnet --version 2>&1).Trim()
 
 # The generated global.json pins this exact SDK. If the host SDK is a prerelease,

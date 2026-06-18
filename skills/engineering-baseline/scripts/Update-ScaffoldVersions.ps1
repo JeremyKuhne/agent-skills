@@ -55,12 +55,13 @@ $flat = $null
 $reg  = $null
 
 function Get-StableVersions ([string] $id) {
-    $u = "$flat/$($id.ToLower())/index.json"
+    $u = "$flat/$($id.ToLowerInvariant())/index.json"
     (Invoke-RestMethod $u -TimeoutSec 30).versions | Where-Object { $_ -notmatch '-' }
 }
 
 function Get-VersionMeta ([string] $id, [string] $v) {
-    $leaf = Invoke-RestMethod "$reg/$($id.ToLower())/$v.json" -TimeoutSec 30
+    $lid  = $id.ToLowerInvariant()
+    $leaf = Invoke-RestMethod "$reg/$lid/$v.json" -TimeoutSec 30
     $ce = $leaf.catalogEntry
     if ($ce -is [string]) { $ce = Invoke-RestMethod $ce -TimeoutSec 30 }
 
@@ -68,7 +69,7 @@ function Get-VersionMeta ([string] $id, [string] $v) {
         $ce.licenseExpression
     } else {
         try {
-            $nuspec = [xml]((Invoke-WebRequest "$flat/$($id.ToLower())/$v/$($id.ToLower()).nuspec" -TimeoutSec 30).Content)
+            $nuspec = [xml]((Invoke-WebRequest "$flat/$lid/$v/$lid.nuspec" -TimeoutSec 30).Content)
             [string]$nuspec.package.metadata.license.'#text'
         } catch { $null }
     }
@@ -85,8 +86,14 @@ function Get-VersionMeta ([string] $id, [string] $v) {
 
 # Newest stable version that passes every gate, scanning newest-first.
 function Resolve-KnownGood ([string] $id, [int] $minAge, [string[]] $allow) {
-    $versions = Get-StableVersions $id |
-        Sort-Object { [version]($_ -replace '^(\d+\.\d+\.\d+).*', '$1') } -Descending
+    $versions = Get-StableVersions $id | Sort-Object {
+        # Order by full numeric version, padding to four components and dropping any
+        # build metadata, so 4-segment versions are not collapsed to three.
+        $base = ($_ -split '[-+]', 2)[0]
+        $n = @($base -split '\.' | ForEach-Object { [int]$_ })
+        while ($n.Count -lt 4) { $n += 0 }
+        [version]::new($n[0], $n[1], $n[2], $n[3])
+    } -Descending
     foreach ($v in $versions) {
         try { $m = Get-VersionMeta $id $v } catch { continue }
         $age = [int]((Get-Date) - $m.Published).TotalDays
@@ -153,7 +160,11 @@ if ($blocked) { Write-Host "BLOCKED (no known-good version): $($blocked.Package 
 
 if ($Apply) {
     foreach ($r in $rows) { if ($r.KnownGood) { $doc.packages.$($r.Package) = $r.KnownGood } }
-    $doc.policy.lastVetted = (Get-Date).ToString('yyyy-MM-dd')
+    if ($blocked) {
+        Write-Host "`nNOT stamping lastVetted - no known-good version for $($blocked.Package -join ', '); resolve those before claiming a full vet." -ForegroundColor Yellow
+    } else {
+        $doc.policy.lastVetted = (Get-Date).ToString('yyyy-MM-dd')
+    }
     ($doc | ConvertTo-Json -Depth 8) + "`n" | Set-Content -LiteralPath $VersionsPath -Encoding utf8NoBOM -NoNewline
     Write-Host "`nApplied to $VersionsPath. Review the diff and commit deliberately." -ForegroundColor Green
 } else {
@@ -163,24 +174,33 @@ if ($Apply) {
 if ($SmokeTest) {
     $scaffold = Join-Path $PSScriptRoot 'New-DotnetRepo.ps1'
     $cases = @(
-        @{ Name = 'vettool';  Args = @('-Archetype', 'tool', '-PackageId', 'VetTool', '-ToolCommandName', 'vettool', '-Description', 'compat probe', '-Owner', 'vet') }
-        @{ Name = 'vetlib';   Args = @('-Archetype', 'multi-target', '-PackageId', 'Vet.Lib', '-Framework', 'net10.0', '-FrameworkLegacy', 'net472', '-Description', 'compat probe', '-Owner', 'vet') }
+        @{ Name = 'vettool'; WindowsOnly = $false; Args = @('-Archetype', 'tool', '-PackageId', 'VetTool', '-ToolCommandName', 'vettool', '-Description', 'compat probe', '-Owner', 'vet') }
+        @{ Name = 'vetlib';  WindowsOnly = $true;  Args = @('-Archetype', 'multi-target', '-PackageId', 'Vet.Lib', '-Framework', 'net10.0', '-FrameworkLegacy', 'net472', '-Description', 'compat probe', '-Owner', 'vet') }
     )
     $smokeFailed = $false
     foreach ($c in $cases) {
+        if ($c.WindowsOnly -and -not $IsWindows) {
+            Write-Host "`nSmoke test ($($c.Name)) skipped - building net472 needs Windows (or reference-assembly packages)." -ForegroundColor DarkGray
+            continue
+        }
         $root = Join-Path ([IO.Path]::GetTempPath()) "vet-$($c.Name)-$(Get-Random)"
         Write-Host "`nSmoke test ($($c.Name)) -> $root" -ForegroundColor White
         try {
-            & pwsh -NoProfile -File $scaffold -Root $root -Name $c.Name @($c.Args) *>$null
+            $out = & pwsh -NoProfile -File $scaffold -Root $root -Name $c.Name @($c.Args) *>&1
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "  SCAFFOLD FAILED for $($c.Name) (exit $LASTEXITCODE)" -ForegroundColor Red
+                $out | Select-Object -Last 20 | Out-String | Write-Host
                 $smokeFailed = $true
                 continue
             }
             Push-Location $root
             try {
-                & dotnet build -c Release --nologo *>$null
-                if ($LASTEXITCODE -ne 0) { Write-Host "  BUILD FAILED for $($c.Name) - the pinned set is not TFM-compatible" -ForegroundColor Red; $smokeFailed = $true }
+                $out = & dotnet build -c Release --nologo *>&1
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "  BUILD FAILED for $($c.Name) - the pinned set is not TFM-compatible" -ForegroundColor Red
+                    $out | Select-Object -Last 20 | Out-String | Write-Host
+                    $smokeFailed = $true
+                }
                 else { Write-Host "  OK ($($c.Name) builds on its targeted TFMs)" -ForegroundColor Green }
             } finally { Pop-Location }
         } finally {
