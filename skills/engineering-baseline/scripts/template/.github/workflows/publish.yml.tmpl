@@ -16,6 +16,7 @@ jobs:
       id-token: write   # OIDC trusted publishing
     steps:
       - name: Validate SemVer tag
+        shell: bash
         run: |
           if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag '${GITHUB_REF_NAME}' is not a valid SemVer tag." && exit 1

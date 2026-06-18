@@ -314,12 +314,14 @@ Invoke-Dotnet new editorconfig --output .
 # a literal \n as its line separator; warnings-as-errors then fails the build on
 # any file missing the header.
 $headerTemplate = $headerLines -join '\n'
-Add-Content -Path '.editorconfig' -Value "`n[*.cs]`nfile_header_template = $headerTemplate`ndotnet_diagnostic.IDE0073.severity = warning`n"
+Add-Content -LiteralPath '.editorconfig' -Value "`n[*.cs]`nfile_header_template = $headerTemplate`ndotnet_diagnostic.IDE0073.severity = warning`n"
 
-# Keep the top-level artifacts output tree untracked.
-$gitignoreText = if (Test-Path '.gitignore') { Get-Content '.gitignore' -Raw } else { '' }
-if ($gitignoreText -notmatch '(?im)^artifacts/$') {
-    Add-Content -Path '.gitignore' -Value "`n# Build outputs`nartifacts/`n"
+# Keep the top-level artifacts output tree untracked - but only if the gitignore
+# template does not already cover it. Matched per line (Get-Content strips line
+# endings) so a CRLF gitignore does not defeat the check and duplicate the entry.
+$ignoreLines = if (Test-Path -LiteralPath '.gitignore') { Get-Content -LiteralPath '.gitignore' } else { @() }
+if ($ignoreLines -notcontains 'artifacts/') {
+    Add-Content -LiteralPath '.gitignore' -Value "`n# Build outputs`nartifacts/`n"
 }
 Done 'foundation'
 
