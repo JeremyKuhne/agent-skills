@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: build
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@<SHA> # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/cache@<SHA> # v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/Directory.Packages.props', '**/Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-
+
+      - uses: actions/setup-dotnet@<SHA> # v4
+        # SDK version comes from global.json
+
+      - run: dotnet restore --locked-mode
+      - run: dotnet build --configuration ${{ matrix.configuration }} --no-restore
+      - run: dotnet test --configuration ${{ matrix.configuration }} --no-build

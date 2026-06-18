@@ -40,6 +40,11 @@ literals.
 - **(core)** An `.editorconfig` that sets indentation, encoding, naming rules,
   and analyzer severities. Why: makes style machine-enforceable instead of a
   review topic.
+- **(core)** A license header on every source file, enforced
+  (`file_header_template` + `IDE0073`). Why: each file states its license and
+  copyright with a machine-readable SPDX id. Omit a per-file year (maintenance
+  churn, no legal benefit) and credit "<owner> and contributors" rather than a
+  roster.
 - **(conditional: redistributes third-party code)** A `NOTICE` /
   `THIRD-PARTY-NOTICES` file when third-party code is redistributed. Why:
   satisfies attribution obligations of bundled licenses.
@@ -51,13 +56,28 @@ literals.
 - **(core)** Central build properties in `Directory.Build.props` /
   `Directory.Build.targets`. Why: one source of truth for language version,
   nullability, and analysis settings across every project.
+- **(core)** Route build output and intermediates to a top-level `artifacts/`
+  tree (for example `artifacts/bin/` and `artifacts/obj/` via
+  `BaseOutputPath` / `BaseIntermediateOutputPath`). Why: keeps repository roots
+  clean, makes cleanup deterministic, and standardizes paths for CI artifacts.
 - **(core)** Central Package Management via `Directory.Packages.props`
   (`ManagePackageVersionsCentrally=true`). Why: one pinned version per package,
   repo-wide, removing version drift between projects.
+- **(core)** Commit a lock file (`packages.lock.json` via
+  `RestorePackagesWithLockFile`) and enable NuGet audit (`NuGetAudit` with
+  `NuGetAuditMode=all`); CI restores with `--locked-mode`. Why: pins the full
+  dependency graph including transitives, fails on drift, and flags advisories on
+  direct and transitive packages every restore.
 - **(core)** A pinned SDK in `global.json` with a `rollForward` policy. Why:
   reproducible builds across machines and CI; no silent SDK drift.
-- **(core)** `Nullable=enable`, a current `LangVersion`, and `ImplicitUsings`
-  set deliberately. Why: opts into the compiler's correctness guarantees.
+- **(core)** `Nullable=enable` globally (in `Directory.Build.props`), plus a
+  current `LangVersion` and a deliberate `ImplicitUsings` setting. Why: every
+  project opts into the compiler's null-safety analysis by default.
+- **(core)** Keep the shippable project AOT/trim clean on its modern target
+  (`IsAotCompatible=true`), which turns on the trim, AOT, and single-file
+  analyzers. Why: the code composes into trimmed/AOT apps and avoids expensive
+  runtime reflection - worth keeping clean even if you never publish AOT, and
+  with warnings-as-errors a regression fails the build.
 - **(core)** `TreatWarningsAsErrors=true` (with a short, documented
   `WarningsNotAsErrors` escape list) and `EnableNETAnalyzers` with a chosen
   `AnalysisLevel` / `AnalysisMode`. Why: keeps warnings from accumulating and
@@ -71,8 +91,22 @@ literals.
 
 ## 3. Testing and coverage
 
-- **(core)** A dedicated test project with a maintained runner. Why: a repo
-  without runnable tests cannot gate regressions.
+- **(core)** A dedicated test project on the
+  [Microsoft Testing Platform](https://learn.microsoft.com/en-us/dotnet/core/testing/microsoft-testing-platform-intro)
+  (MTP): the test project is an executable (`OutputType=Exe`) with an MTP runner
+  (`EnableMSTestRunner` for MSTest, `UseMicrosoftTestingPlatformRunner` for
+  xunit.v3), selected in `global.json` (`"test": { "runner":
+  "Microsoft.Testing.Platform" }`). Why: MTP is the supported, self-contained,
+  faster successor to the VSTest host and the direction for every .NET test
+  framework.
+- **(core)** Default to MSTest; when using xunit, use v3 - both are first-class
+  on MTP. Why: a current, MTP-native framework; the fleet defaults away from
+  xunit's contribution policy on AI-assisted changes. This is a fleet choice, not
+  a hard rule - an overlay may pick another MTP-capable framework.
+- **(core)** Run at the fullest concurrency the framework allows by default
+  (MSTest `[assembly: Parallelize(Workers = 0, Scope = MethodLevel)]`; xunit.v3
+  unlimited parallel threads). Why: fast feedback, and it surfaces hidden test
+  ordering or shared-state bugs early.
 - **(core)** Tests run in CI on every push and pull request, in Release. Why:
   Release codegen and timing differ from Debug; gate what ships.
 - **(core)** Code coverage collected and reported, with a gate on patch
@@ -156,6 +190,15 @@ literals.
   Security-Policy signal.
 - **(core)** A dependency-update tool (Dependabot or Renovate) configured. Why:
   out-of-date dependencies accrue known-vulnerable flaws; automate the bumps.
+- **(core)** Restore from a single trusted feed with package source mapping (a
+  `nuget.config` that clears inherited sources and maps every package to one
+  feed). Why: blocks dependency-confusion, where a package is silently served
+  from an unexpected source.
+- **(core)** Adopt only vetted, quarantined dependency versions - pin a
+  known-good floor and bump deliberately (a minimum release age, advisory,
+  deprecation, and listing checks, and a license allowlist) rather than tracking
+  latest. Why: a freshly published version is the least-vetted and the usual
+  vector for a compromised release.
 - **(core)** Static analysis / code scanning (for example CodeQL) on a schedule
   and on pull requests. Why: catches injectable and memory-safety bug classes
   before merge.

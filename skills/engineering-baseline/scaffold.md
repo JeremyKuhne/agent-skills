@@ -4,119 +4,150 @@ The greenfield verb: stand up a new repository built to [baseline.md](baseline.m
 from nothing. Triggered by "create a new repository for a command-line tool",
 "scaffold a new library", or "set up a new project with CI and publishing".
 
-Build the local tree directly; stop at the remote boundary (repository creation,
-branch protection, publishing) and propose those for explicit approval.
+The primary mechanism is the scaffold script ([scripts/New-DotnetRepo.ps1](scripts/New-DotnetRepo.ps1)),
+which uses `dotnet new` for the project skeleton and then applies the hardening
+layer (centralized build, CI workflows, governance files, agent stubs). Running
+the script produces an immediately buildable, testable, and packable tree. Stop
+at the remote boundary and propose those steps for explicit approval.
 
 ## 1. Confirm the archetype and identity
 
-Pick the archetype - it selects which baseline items apply:
+Pick the archetype - it selects which baseline items and script parameters apply:
 
-| Archetype | Ships | Adds over the core |
-| --------- | ----- | ------------------ |
-| **CLI tool** | A `dotnet` tool executable | `PackAsTool` + `ToolCommandName`; a thin arg-parsing entry point |
-| **Class library / NuGet package** | A single library package | Full package metadata, SourceLink, package validation |
-| **Multi-target library** | A library across a modern TFM and an older one | The library set plus the polyfill strategy for the downlevel target |
+| Archetype | Ships | Key script parameters |
+| --------- | ----- | --------------------- |
+| **tool** | A `dotnet` tool executable | `-Archetype tool -ToolCommandName <cmd>` |
+| **library** | A single-TFM NuGet library | `-Archetype library` |
+| **multi-target** | A library across a modern + legacy TFM | `-Archetype multi-target -Framework net10.0 -FrameworkLegacy net481` |
 
-Confirm, before writing files, with one short prompt: the repository name, the
-target framework(s), the package id and one-line description, the license
+Confirm, before running the script, with one short prompt: the repository name,
+the target framework(s), the package id and one-line description, the license
 (default MIT), and the owner. Do not invent these - if the user did not supply
-them, ask once. The literals collected here are what a brownfield repo would
-keep in its overlay.
+them, ask once. These are the literals the script takes as parameters, and what
+a brownfield repo would keep in its overlay.
 
-## 2. Lay down the foundation (domains 1-2)
+## 2. Run the scaffold script
 
-Create the local tree and the centralized build:
+Invoke `New-DotnetRepo.ps1` from the skill's `scripts/` directory (or a
+vendored copy in the consuming repo). Use an empty directory outside any
+existing repository as the root - the script refuses to run in a non-empty
+directory.
 
-- `LICENSE` (the chosen SPDX license), `README.md` (name, install, usage),
-  `.gitignore` (toolchain-scoped), `.gitattributes` (`* text=auto`),
-  `.editorconfig` (indentation, encoding, naming, severities).
-- `Directory.Build.props` / `Directory.Build.targets` with `Nullable=enable`, a
-  current `LangVersion`, `ImplicitUsings`, `TreatWarningsAsErrors` (plus a short
-  `WarningsNotAsErrors` escape list), `EnableNETAnalyzers` with a chosen
-  `AnalysisLevel`, `EnforceCodeStyleInBuild`, and `ContinuousIntegrationBuild`
-  gated on the CI environment.
-- `Directory.Packages.props` with `ManagePackageVersionsCentrally=true`.
-- `global.json` pinning the SDK with a `rollForward` policy.
-- The shippable project (library or tool entry point) and a solution.
-- For a multi-target library, express the framework set centrally and add the
-  downlevel polyfill packages conditioned on the older target - hand the polyfill
-  design itself to the polyfill skill a consuming repo names in its overlay.
+The static file bodies it lays down are real files under `scripts/template/`
+(rendered with simple `{{TOKEN}}` substitution); the `.ps1` is the orchestration
+layer that runs `dotnet new`, renders the template, and applies project-file
+hardening. To change what a scaffolded repo contains, edit the template files,
+not here-strings.
 
-## 3. Wire testing (domain 3)
+```pwsh
+# Example: scaffold a dotnet tool
+pwsh /path/to/New-DotnetRepo.ps1 `
+    -Root   C:\src\widgettool `
+    -Name   widgettool `
+    -Archetype tool `
+    -PackageId     WidgetTool `
+    -ToolCommandName widgettool `
+    -Description   "A sample command-line tool." `
+    -Owner  YourGitHubHandle
+```
 
-- A test project with a maintained runner, referencing the shippable project.
-- Coverage collection configured, and a patch-coverage gate to add once CI exists.
-- Add a perf or fuzz project only if the tool/library has a hot path or an
-  untrusted-input surface - do not scaffold empty ones.
+The script produces: `global.json`, `Directory.Build.props/.targets`,
+`Directory.Packages.props` (CPM on), a `dotnet new`-generated project and test
+project, `.gitignore`/`.gitattributes`/`.editorconfig`, `README.md`, `LICENSE`,
+`.github/workflows/` (ci, publish, codeql), `dependabot.yml`, `SECURITY.md`,
+`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, issue/PR templates, and `AGENTS.md`
+with its generated Copilot mirror.
 
-## 4. Wire packaging and versioning (domains 4-5)
+It also standardizes output paths to a top-level `artifacts/` tree:
 
-- **Library / tool:** complete package metadata (`PackageId`, `Description`,
-  `Authors`, `PackageLicenseExpression`, `PackageProjectUrl`, `RepositoryUrl`,
-  `RepositoryType`, `PackageReadmeFile`, `PackageTags`), Source Link with symbol
-  output, and (library) `EnablePackageValidation`. A CLI tool adds
-  `PackAsTool=true` and a `ToolCommandName`.
-- Tag-driven deterministic versioning (for example MinVer or
-  Nerdbank.GitVersioning) with a chosen tag prefix.
-- A release record: start a `CHANGELOG.md`, or decide to curate GitHub Releases
-  and note that choice in the README.
+- `artifacts/bin/` - build outputs
+- `artifacts/obj/` - intermediates
+- `artifacts/packages/` - packed `.nupkg` output
 
-## 5. Wire CI/CD (domain 6)
+The scaffold is **born safe** on the supply-chain axis: a committed
+`packages.lock.json` (restored with `--locked-mode` in CI), NuGet audit over
+direct and transitive packages, and a `nuget.config` that maps every package to
+nuget.org to block dependency-confusion. Package versions are **pinned from the
+vetted manifest `scripts/versions.json`** - a known-good floor, never "latest".
+Refresh that floor deliberately with `scripts/Update-ScaffoldVersions.ps1`, which
+proposes only versions that pass a quarantine window plus advisory, deprecation,
+listing, and license-allowlist checks (and can scaffold-and-build to confirm TFM
+compatibility); review the diff before committing.
 
-Add the workflows, actions pinned by full commit SHA with the version in a
-trailing comment, and a top-level `permissions: contents: read`:
+Test projects run on the **Microsoft Testing Platform** (MTP) and default to
+**MSTest** (`-TestRunner xunit` switches to xunit.v3); both run at the fullest
+parallelism by default, and `global.json` selects the MTP runner.
 
-- A build-and-test workflow on push and pull request to the default branch:
-  checkout (full history if versioning needs tags), set up the pinned SDK,
-  restore, build and test in Release with coverage, and a stable aggregate
-  status-check name for branch protection to require. Add concurrency that
-  cancels superseded pull-request runs.
-- **Library / tool:** a publish workflow triggered by a version tag, using OIDC
-  [trusted publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing)
-  (`id-token: write`, a short-lived key) - never a stored long-lived API key.
-  Validate the tag against a SemVer pattern before pushing.
+The shippable project is marked **AOT/trim clean** (`IsAotCompatible`) on its
+modern target, so the trim, AOT, and single-file analyzers run by default and the
+code stays composable into AOT apps even when AOT is never published.
 
-## 6. Wire security and governance (domains 7-8)
+## 3. Pin the action SHAs (domain 6)
 
-- `SECURITY.md` (private reporting channel, disclosure expectation),
-  `dependabot.yml` (the relevant ecosystems), a CodeQL workflow, `CONTRIBUTING.md`,
-  `CODE_OF_CONDUCT.md` (Contributor Covenant), and issue / pull-request templates.
-- A `CODEOWNERS` file if there will be more than one owner.
+The workflows emit `<SHA>` placeholders for every third-party action (with the
+version in a trailing comment). Replace them with full commit SHAs before the
+first push, then let Dependabot's `github-actions` ecosystem keep them current.
+Use [StepSecurity](https://app.stepsecurity.io) or
+`gh api repos/<owner>/<repo>/git/refs/tags` to resolve each version to a SHA.
 
-## 7. Wire agent enablement (domain 9)
+This is a local, reversible edit - do it before `git init`.
 
-- An `AGENTS.md` and the generated tool mirror, the skills location, and the
-  agent-file gate (frontmatter validation, mirror check, markdown lint, offline
-  link check).
-- Vendor the universal skill tier and wire the validator, link checker, and
-  drift job by handing off to the skill-lifecycle skill and the fleet onboarding
-  runbook - do not reinvent that pipeline here. A consuming repository names both
-  in its overlay.
+## 4. Extend for multi-target (domain 2, conditional)
 
-## 8. Validate locally
+For `multi-target`, the script adds the framework pair to `Directory.Build.props`
+and switches the main project to `<TargetFrameworks>`. The polyfill package
+strategy for the legacy target (PolySharp, `Microsoft.Bcl.*`, `System.Memory`,
+etc.) is not added by the script - hand that off to the polyfill skill a
+consuming repository names in its overlay.
 
-Build and run the tests. Run the repo's agent-file gates over the new agent
-files. Confirm a Release `pack` produces a package with the expected metadata
-(library / tool). Fix anything red before going near the remote.
+## 5. Add optional surfaces (domain 3, conditional)
 
-## 9. Propose the remote setup (the boundary)
+The script does not scaffold a perf or fuzz project; add those only if the
+tool/library has a hot path or an untrusted-input surface. Hand them off to the
+perf-testing and fuzz-testing skills a consuming repository names in its overlay.
 
-Everything so far was local. The remaining steps are remote or hard to reverse -
-**propose each as an exact command and wait for an explicit publishing verb.**
-Do not run them silently:
+## 6. Wire agent enablement (domain 9)
 
-- Create the repository (`gh repo create`, with visibility chosen by the user).
-- Push the initial commit and set the default branch.
-- Branch protection / a ruleset on the default branch: require the aggregate
-  status check, require pull requests, block force-push and deletion. Emit the
+The script creates an `AGENTS.md` stub, generates its Copilot mirror
+(`.github/copilot-instructions.md`) with `tools/Sync-AgentInstructions.ps1`, adds
+an `agent-files.yml` workflow that fails if the mirror drifts from `AGENTS.md`,
+and vendors a pinned starting skill tier into `.agents/skills/` via `gh skill`
+(`manage-skills`, `agent-files-review`, `create-pr`, `address-pr-feedback`,
+`security-review` by default; override with `-Skills` / `-SkillsRef`). When
+`gh skill` is unavailable it records the pinned install commands instead of
+failing. The broader agent-file gate (skill-frontmatter validation, link
+checking) and vendoring any domain skills remain a handoff to the skill-lifecycle
+skill and the fleet onboarding runbook - do not reinvent that pipeline here.
+
+## 7. Validate locally
+
+```pwsh
+dotnet build -c Release
+dotnet test  -c Release
+dotnet pack  src/<Name>/<Name>.csproj -c Release -o artifacts/packages
+```
+
+All three must be clean before going near the remote. The pack confirms the
+package metadata is correct and SourceLink is wired. Fix anything red first.
+
+## 8. Propose the remote setup (the boundary)
+
+The script prints a remote setup checklist at the end. Everything on it is
+remote or hard to reverse - **propose each step and wait for an explicit
+publishing verb.** Do not run them silently:
+
+- Replace `<SHA>` placeholders in workflows (see step 3).
+- `gh repo create <owner>/<name> --public --source . --remote origin`
+- `git init && git add -A && git commit -m "Initial scaffold" && git push -u origin main`
+- Branch protection / ruleset on `main`: require the `build` status check,
+  require pull requests, block force-push and deletion. Emit the exact
   `gh api` call or ruleset JSON for review.
-- Enable secret scanning and push protection.
-- Register the trusted-publishing policy on the gallery before the first publish.
+- Enable secret scanning and push protection (GitHub repo Settings > Security).
+- Register the trusted-publishing policy on nuget.org before the first publish.
 
-Present these as a numbered checklist with the exact commands, then stop. The
-user runs them, or approves running them, one at a time.
+Present these as a numbered checklist, then stop.
 
-## 10. Report back
+## 9. Report back
 
 Summarize the archetype, the tree created, what was validated locally, and the
 remote checklist still awaiting approval. End with the single next action.
