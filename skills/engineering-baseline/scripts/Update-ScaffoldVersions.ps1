@@ -50,8 +50,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$flat = 'https://api.nuget.org/v3-flatcontainer'
-$reg  = 'https://api.nuget.org/v3/registration5-semver1'
+# Resolved from the feed's v3 service index once $Source is known (see below).
+$flat = $null
+$reg  = $null
 
 function Get-StableVersions ([string] $id) {
     $u = "$flat/$($id.ToLower())/index.json"
@@ -94,7 +95,8 @@ function Resolve-KnownGood ([string] $id, [int] $minAge, [string[]] $allow) {
         if ($m.Deprecated)   { $reasons += 'deprecated' }
         if ($m.Vulnerable)   { $reasons += 'advisory' }
         if ($age -lt $minAge) { $reasons += "age ${age}d<${minAge}d" }
-        if ($m.License -and $allow -notcontains $m.License) { $reasons += "license $($m.License)" }
+        if (-not $m.License) { $reasons += 'license unknown' }
+        elseif ($allow -notcontains $m.License) { $reasons += "license $($m.License)" }
         if ($reasons.Count -eq 0) {
             return [pscustomobject]@{ Version = $v; Age = $age; License = $m.License; Reason = '' }
         }
@@ -109,6 +111,18 @@ $doc    = Get-Content $VersionsPath -Raw | ConvertFrom-Json
 $minAge = if ($PSBoundParameters.ContainsKey('MinimumReleaseAgeDays')) { $MinimumReleaseAgeDays } else { [int]$doc.policy.minimumReleaseAgeDays }
 $allow  = @($doc.policy.allowedLicenses)
 if (-not $Source) { $Source = [string]$doc.policy.source }
+
+# Resolve the flat-container and registration endpoints from the feed's v3 service
+# index so -Source actually targets the requested feed (not a hard-coded nuget.org).
+$index = Invoke-RestMethod $Source -TimeoutSec 30
+$flat = ($index.resources | Where-Object { $_.'@type' -eq 'PackageBaseAddress/3.0.0' } | Select-Object -First 1).'@id'
+foreach ($rt in @('RegistrationsBaseUrl/3.6.0', 'RegistrationsBaseUrl/Versioned', 'RegistrationsBaseUrl/3.4.0', 'RegistrationsBaseUrl')) {
+    $reg = ($index.resources | Where-Object { $_.'@type' -eq $rt } | Select-Object -First 1).'@id'
+    if ($reg) { break }
+}
+if (-not $flat -or -not $reg) { throw "Could not resolve PackageBaseAddress/RegistrationsBaseUrl from the service index at $Source." }
+$flat = $flat.TrimEnd('/')
+$reg = $reg.TrimEnd('/')
 
 Write-Host "Vetting scaffold package versions" -ForegroundColor White
 Write-Host "  source:    $Source"
@@ -152,19 +166,26 @@ if ($SmokeTest) {
         @{ Name = 'vettool';  Args = @('-Archetype', 'tool', '-PackageId', 'VetTool', '-ToolCommandName', 'vettool', '-Description', 'compat probe', '-Owner', 'vet') }
         @{ Name = 'vetlib';   Args = @('-Archetype', 'multi-target', '-PackageId', 'Vet.Lib', '-Framework', 'net10.0', '-FrameworkLegacy', 'net472', '-Description', 'compat probe', '-Owner', 'vet') }
     )
+    $smokeFailed = $false
     foreach ($c in $cases) {
         $root = Join-Path ([IO.Path]::GetTempPath()) "vet-$($c.Name)-$(Get-Random)"
         Write-Host "`nSmoke test ($($c.Name)) -> $root" -ForegroundColor White
         try {
             & pwsh -NoProfile -File $scaffold -Root $root -Name $c.Name @($c.Args) *>$null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "  SCAFFOLD FAILED for $($c.Name) (exit $LASTEXITCODE)" -ForegroundColor Red
+                $smokeFailed = $true
+                continue
+            }
             Push-Location $root
             try {
                 & dotnet build -c Release --nologo *>$null
-                if ($LASTEXITCODE -ne 0) { Write-Host "  BUILD FAILED for $($c.Name) - the pinned set is not TFM-compatible" -ForegroundColor Red }
+                if ($LASTEXITCODE -ne 0) { Write-Host "  BUILD FAILED for $($c.Name) - the pinned set is not TFM-compatible" -ForegroundColor Red; $smokeFailed = $true }
                 else { Write-Host "  OK ($($c.Name) builds on its targeted TFMs)" -ForegroundColor Green }
             } finally { Pop-Location }
         } finally {
             Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
+    if ($smokeFailed) { throw "Smoke test failed: the pinned set did not scaffold and build on every targeted TFM." }
 }

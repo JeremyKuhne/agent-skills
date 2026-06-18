@@ -75,7 +75,7 @@
 #>
 
 #Requires -Version 7.2
-[CmdletBinding(SupportsShouldProcess)]
+[CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string] $Root,
     [Parameter(Mandatory)] [string] $Name,
@@ -147,14 +147,25 @@ if (-not (Test-Path $TemplateRoot)) { throw "Template folder not found next to t
 # derived values and template tokens
 # ---------------------------------------------------------------------------
 
+if ($Archetype -eq 'multi-target' -and -not $FrameworkLegacy) {
+    throw "Archetype 'multi-target' requires -FrameworkLegacy (for example -FrameworkLegacy net472)."
+}
+
 $ToolCommandName = if ($ToolCommandName) { $ToolCommandName } else { $Name.ToLowerInvariant() }
 $RepoUrl       = "https://github.com/$Owner/$Name"
 $Year          = (Get-Date).Year
-$IsMultiTarget = ($Archetype -eq 'multi-target') -and $FrameworkLegacy
+$IsMultiTarget = $Archetype -eq 'multi-target'
 $IsTool        = $Archetype -eq 'tool'
 $MainTfm       = $Framework
 $NameTitle     = (Get-Culture).TextInfo.ToTitleCase($Name)
 $SdkVersion    = (& dotnet --version 2>&1).Trim()
+
+# The generated global.json pins this exact SDK. If the host SDK is a prerelease,
+# allowPrerelease must be true or the pinned version cannot resolve - keep them in
+# sync rather than emitting a contradictory, unbuildable global.json.
+$SdkIsPrerelease = $SdkVersion -match '-'
+$AllowPrerelease = if ($SdkIsPrerelease) { 'true' } else { 'false' }
+if ($SdkIsPrerelease) { Warn "host SDK $SdkVersion is a prerelease; global.json will set allowPrerelease=true" }
 
 $LegacyTfmLine     = if ($IsMultiTarget) { "`n    <LegacyTfm>$FrameworkLegacy</LegacyTfm>" } else { '' }
 $FrameworksDisplay = if ($IsMultiTarget) { "$Framework, $FrameworkLegacy" } else { $Framework }
@@ -185,6 +196,7 @@ $PackageVersionsXml = (@($coreIds; $testIds) | ForEach-Object {
 
 $tokens = @{
     SDK_VERSION        = $SdkVersion
+    ALLOW_PRERELEASE   = $AllowPrerelease
     FRAMEWORK          = $Framework
     LEGACY_TFM_LINE    = $LegacyTfmLine
     FRAMEWORKS_DISPLAY = $FrameworksDisplay
@@ -216,8 +228,8 @@ $fileHeaderComment = (($headerLines | ForEach-Object { "// $_" }) -join "`n") + 
 
 Write-Host "`nScaffolding '$Name' ($Archetype) -> $Root`n" -ForegroundColor White
 
-if (Test-Path $Root) {
-    $existing = @(Get-ChildItem $Root -Force -ErrorAction SilentlyContinue)
+if (Test-Path -LiteralPath $Root) {
+    $existing = @(Get-ChildItem -LiteralPath $Root -Force -ErrorAction SilentlyContinue)
     if ($existing.Count -gt 0) {
         throw "Root '$Root' is not empty ($($existing.Count) items). Remove it or choose a different path."
     }
@@ -225,7 +237,7 @@ if (Test-Path $Root) {
     New-Item -ItemType Directory -Path $Root -Force | Out-Null
 }
 
-Push-Location $Root
+Push-Location -LiteralPath $Root
 try {
 
 # ---------------------------------------------------------------------------
