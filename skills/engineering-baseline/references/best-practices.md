@@ -41,16 +41,20 @@ The cross-cutting standards the domain checks draw from.
 | ------ | ------ | --------- |
 | SDK-style projects | [NuGet: project format](https://learn.microsoft.com/en-us/nuget/resources/check-project-format) | The supported, metadata-in-project format |
 | Central Package Management | [NuGet: central package management](https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management) | One pinned version per package repo-wide; no inter-project drift |
+| Lock file + restore audit | [Lock files](https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files#locking-dependencies), [NuGet audit](https://learn.microsoft.com/en-us/nuget/concepts/auditing-packages) | Pins the full transitive graph (`--locked-mode` in CI) and flags advisories every restore |
 | Pinned SDK in `global.json` | [global.json overview](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json) | Reproducible builds across machines and CI |
 | Nullable reference types on | [Nullable references](https://learn.microsoft.com/en-us/dotnet/csharp/nullable-references) | Opts into compiler null-safety |
 | Analyzers on, warnings as errors | [.NET code analysis overview](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview) | Stops warnings accumulating; turns analyzers on by default |
 | Deterministic build / `ContinuousIntegrationBuild` | [.NET reproducible builds](https://github.com/dotnet/reproducible-builds), [MSBuild props](https://learn.microsoft.com/en-us/dotnet/core/project-sdk/msbuild-props#continuousintegrationbuild) | Path-independent, reproducible outputs and PDBs |
+| Nullable reference types enabled repo-wide | [Nullable references](https://learn.microsoft.com/en-us/dotnet/csharp/nullable-references) | Every project opts into compiler null-safety by default |
+| AOT/trim-clean shippable project | [Prepare libraries for trimming](https://learn.microsoft.com/en-us/dotnet/core/deploying/trimming/prepare-libraries-for-trimming), [Native AOT](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/) | `IsAotCompatible` runs the trim/AOT analyzers so code composes into AOT apps and avoids runtime reflection |
 
 ## 3. Testing and coverage
 
 | Choice | Source | Rationale |
 | ------ | ------ | --------- |
 | A real test project and suite | [.NET unit-testing best practices](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-best-practices) | A repo without runnable tests cannot gate regressions; OpenSSF CI-Tests check |
+| Microsoft Testing Platform (MTP) | [MTP overview](https://learn.microsoft.com/en-us/dotnet/core/testing/microsoft-testing-platform-intro), [MTP + dotnet test](https://learn.microsoft.com/en-us/dotnet/core/testing/microsoft-testing-platform-integration-dotnet-test) | The supported, self-contained successor to the VSTest host; the direction for all .NET test frameworks |
 | Coverage collected and gated | [.NET code coverage](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-code-coverage) | A patch-coverage gate holds new code to a bar without whole-project noise |
 | Perf project where a hot path exists | [BenchmarkDotNet](https://benchmarkdotnet.org/) | Perf claims need measurement, not intuition |
 | Fuzz untrusted-input surfaces | [OWASP: fuzzing](https://owasp.org/www-community/Fuzzing), [Scorecard: Fuzzing](https://github.com/ossf/scorecard/blob/main/docs/checks.md#fuzzing) | Coverage-guided fuzzing finds malformed-input bugs unit tests miss |
@@ -92,6 +96,8 @@ The cross-cutting standards the domain checks draw from.
 | ------ | ------ | --------- |
 | Branch protection / rulesets on the default branch | [GitHub: about rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets), [Scorecard: Branch-Protection](https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection) | Prevents direct, unreviewed, or history-rewriting changes to main |
 | A dependency-update tool | [Dependabot version updates](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates), [Renovate](https://docs.renovatebot.com/) | Out-of-date dependencies accrue known-vulnerable flaws |
+| Single trusted feed (source mapping) | [Package source mapping](https://learn.microsoft.com/en-us/nuget/consume-packages/package-source-mapping) | Blocks dependency-confusion across configured feeds |
+| Adopt only vetted, quarantined versions | [Renovate: minimumReleaseAge](https://docs.renovatebot.com/configuration-options/#minimumreleaseage), [OpenSSF Concise Guide](https://github.com/ossf/wg-best-practices-os-developers/blob/main/docs/Concise-Guide-for-Developing-More-Secure-Software.md) | A freshly published version is least-vetted and the usual compromised-release vector |
 | Static analysis / code scanning | [CodeQL code scanning](https://docs.github.com/en/code-security/code-scanning/introduction-to-code-scanning/about-code-scanning-with-codeql), [Scorecard: SAST](https://github.com/ossf/scorecard/blob/main/docs/checks.md#sast) | Catches injectable and memory-safety bug classes before merge |
 | Secret scanning + push protection | [About secret scanning](https://docs.github.com/en/code-security/secret-scanning/introduction/about-secret-scanning), [About push protection](https://docs.github.com/en/code-security/secret-scanning/introduction/about-push-protection) | Stops credentials from entering history |
 | `SECURITY.md` with private reporting | [GitHub: adding a security policy](https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository), [Scorecard: Security-Policy](https://github.com/ossf/scorecard/blob/main/docs/checks.md#security-policy) | Gives reporters a safe path; a Scorecard signal |
