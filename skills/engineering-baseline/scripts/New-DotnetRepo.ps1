@@ -335,6 +335,7 @@ $pg.SetAttribute('Label', 'Package identity')
 $props = [ordered]@{
     PackageId         = $PackageId
     Description       = $Description
+    PackageTags       = if ($IsTool) { 'dotnet;dotnet-tool;cli' } else { 'dotnet;library' }
     PackageReadmeFile = 'README.md'
 }
 if ($IsTool) {
@@ -597,9 +598,12 @@ Then, with explicit approval for each step, run:
   1. Replace <SHA> placeholders in .github/workflows/*.yml with full commit SHAs
      (use Dependabot or https://app.stepsecurity.io to resolve them).
 
-  2. gh repo create $Owner/$Name --public --source . --remote origin
+  2. Create the repository (choose visibility - default to private):
+       gh repo create $Owner/$Name --private --source . --remote origin
+     (use --public instead to publish it openly)
 
   3. git init && git add -A && git commit -m "Initial scaffold"
+     git branch -M main
      git push -u origin main
 
   4. Branch protection (propose exact ruleset JSON or enable via GitHub web UI):
