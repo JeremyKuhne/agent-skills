@@ -260,7 +260,9 @@ Invoke-Dotnet sln "$Name.slnx" add $srcDir --in-root
 Step 'test project'
 $testDir = "tests/$Name.tests"
 if ($TestRunner -eq 'mstest') {
-    Invoke-Dotnet new mstest --test-runner Microsoft.Testing.Platform --coverage-tool Microsoft.CodeCoverage -n "$Name.tests" -o $testDir --framework $MainTfm --no-restore
+    # No --coverage-tool: the hardening step below wipes the template's package
+    # references, so the coverage package it would add is removed anyway.
+    Invoke-Dotnet new mstest --test-runner Microsoft.Testing.Platform -n "$Name.tests" -o $testDir --framework $MainTfm --no-restore
 } else {
     # The SDK ships no xunit v3 template; generate the v2 template for its file
     # structure and convert it to xunit.v3 + MTP during hardening below.
@@ -285,7 +287,19 @@ $skip = @()
 if ($License -ne 'MIT') { $skip += 'LICENSE' }
 Expand-Template -TemplateRoot $TemplateRoot -DestRoot (Get-Location).Path -Tokens $tokens -SkipLeaf $skip
 if ($License -ne 'MIT') {
-    Warn "License '$License' - LICENSE file not generated (only the MIT body is bundled); add it manually."
+    # Only the MIT body ships with the scaffold. Write a TODO placeholder so the
+    # source headers and the README "See LICENSE" reference still resolve to a file.
+    $licensePlaceholder = @(
+        "Copyright (c) $Year $Owner and contributors."
+        ''
+        "SPDX-License-Identifier: $License"
+        ''
+        "TODO: Replace this placeholder with the full $License license text before"
+        "publishing. The scaffold only bundles the MIT body; the canonical text is at"
+        "https://spdx.org/licenses/$License.html."
+    )
+    Set-Content -LiteralPath 'LICENSE' -Value (($licensePlaceholder -join "`n") + "`n") -Encoding utf8NoBOM -NoNewline
+    Warn "License '$License': wrote a TODO placeholder LICENSE - replace it with the full $License text before publishing."
 }
 Done 'template files rendered'
 
