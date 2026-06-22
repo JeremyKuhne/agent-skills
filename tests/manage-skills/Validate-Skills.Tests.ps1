@@ -327,4 +327,36 @@ Describe 'Validate-Skills.ps1' {
             $r.Output | Should -Match 'All 1 skill'
         }
     }
+
+    Context 'YAML block shapes' {
+        It 'folds a block-scalar (>) description and validates the folded text' {
+            $dir = Join-Path $TestDrive 'block-good'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $content = "---`nname: block-good`ndescription: >`n  Analyze CSV files and clean messy data.`n  Use when the user has a CSV or tabular file.`n---`n`n# block-good`n"
+            Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
+        }
+
+        It 'checks the folded block-scalar content, not the indicator' {
+            $dir = Join-Path $TestDrive 'block-xml'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $content = "---`nname: block-xml`ndescription: >`n  Handles Span<T> buffers in hot paths.`n---`n`n# block-xml`n"
+            Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'XML-style tags'
+        }
+
+        It 'rejects a block sequence (allowed-tools as a list)' {
+            $dir = Join-Path $TestDrive 'block-seq'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $content = "---`nname: block-seq`ndescription: A skill.`nallowed-tools:`n  - search`n  - edit`n---`n`n# block-seq`n"
+            Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'Block sequences are not supported'
+        }
+    }
 }

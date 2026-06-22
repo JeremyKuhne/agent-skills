@@ -16,17 +16,17 @@
       - description: required; non-empty; <= 1024 chars; no XML-style tags (the
         name and description are injected into the agent's skill-metadata block).
       - compatibility: if present, a string <= 500 chars.
-      - yaml: no unquoted ':' in a scalar value that a strict YAML parser
-        (skills-ref uses strictyaml) would reject; our lenient parser would miss it.
+      - yaml: inline scalar values carry no unquoted ':' (a mapping indicator that
+        a strict parser, like the strictyaml skills-ref uses, would reject).
       - length: SKILL.md is at most 500 lines (the spec's progressive-disclosure
         recommendation, "Keep your main SKILL.md under 500 lines").
 
     The length and no-XML-tags checks go beyond skills-ref, which validates
     frontmatter only; the colon check restores parity with its strict YAML parser.
 
-    The frontmatter parser is intentionally minimal - flat scalars plus a single
-    level of `metadata:` mapping, which is the shape these skills use. It is not a
-    general YAML parser; for arbitrary YAML use the reference `skills-ref` tool.
+    The frontmatter parser handles inline scalars, `>`/`|` block scalars, and one
+    level of `metadata:` mapping. It rejects block sequences and unquoted-colon
+    scalars rather than guess; for arbitrary YAML use the reference `skills-ref` tool.
 
     Exits 0 when every skill is valid, 1 otherwise.
 
@@ -72,41 +72,103 @@ function Get-SkillMd ([string] $dir) {
     return $null
 }
 
-# Parse SKILL.md frontmatter into a case-sensitive ordered map. Supports flat
-# scalars and one level of block mapping (the `metadata:` block); not general YAML.
+# Strip matching surrounding quotes from a scalar value.
+function Get-ScalarValue ([string] $value) {
+    return ($value -replace '^(["''])(.*)\1$', '$2')
+}
+
+# Reject an unquoted inline scalar whose value holds a ':' followed by whitespace
+# (or a trailing ':') - a YAML mapping indicator that strict parsers (strictyaml,
+# which skills-ref uses) reject. Quoted values and block scalars are exempt.
+function Test-InlineColon ([string] $key, [string] $value) {
+    if ($value -match '^["''>|]') { return }
+    if ($value -match ':(\s|$)') {
+        throw "Invalid YAML in frontmatter: value for '$key' has an unquoted ':' (a YAML mapping indicator); quote the value or use a block scalar (>-)."
+    }
+}
+
+# Fold a YAML block scalar (the lines under a `key: >` or `key: |`) into a string:
+# common indentation stripped, '|' kept literal (newline-joined), '>' folded with
+# spaces.
+function Join-BlockScalar ([System.Collections.Generic.List[string]] $blockLines, [bool] $literal) {
+    $nonBlank = @($blockLines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($nonBlank.Count -eq 0) { return '' }
+    $minIndent = ($nonBlank | ForEach-Object { [regex]::Match($_, '^\s*').Length } | Measure-Object -Minimum).Minimum
+    $dedented = $blockLines | ForEach-Object {
+        if ([string]::IsNullOrWhiteSpace($_)) { '' } else { $_.Substring([Math]::Min($minIndent, $_.Length)) }
+    }
+    if ($literal) { return ($dedented -join "`n").Trim() }
+    $sb = [System.Text.StringBuilder]::new()
+    $prevBlank = $true
+    foreach ($l in $dedented) {
+        if ($l -eq '') { [void]$sb.Append("`n"); $prevBlank = $true }
+        else { if (-not $prevBlank) { [void]$sb.Append(' ') }; [void]$sb.Append($l); $prevBlank = $false }
+    }
+    return $sb.ToString().Trim()
+}
+
+# Parse SKILL.md frontmatter into a case-sensitive ordered map. Handles inline
+# scalars, `>`/`|` block scalars, and one level of block mapping (the `metadata:`
+# block). Block sequences and unquoted-colon scalars are rejected rather than
+# guessed. Not a general YAML parser; for arbitrary YAML use `skills-ref`.
 function Read-Frontmatter ([string] $content) {
     if (-not $content.StartsWith('---')) { throw 'SKILL.md must start with YAML frontmatter (---)' }
     $parts = $content.Split([string[]]@('---'), 3, [System.StringSplitOptions]::None)
     if ($parts.Count -lt 3) { throw 'SKILL.md frontmatter not properly closed with ---' }
 
     $map = New-Object System.Collections.Specialized.OrderedDictionary ([System.StringComparer]::Ordinal)
-    $currentMapKey = $null
-    foreach ($line in ($parts[1] -split "\r?\n")) {
-        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-        if ($line.TrimStart().StartsWith('#')) { continue }
-
-        if ($currentMapKey -and $line -match '^\s+\S') {
-            $kv = $line.Trim()
-            $idx = $kv.IndexOf(':')
-            if ($idx -lt 0) { throw "Invalid YAML in frontmatter near: $kv" }
-            $k = $kv.Substring(0, $idx).Trim()
-            $v = $kv.Substring($idx + 1).Trim() -replace '^(["''])(.*)\1$', '$2'
-            $map[$currentMapKey][$k] = $v
-            continue
-        }
+    $lines = $parts[1] -split "\r?\n"
+    $i = 0
+    while ($i -lt $lines.Count) {
+        $line = $lines[$i]
+        if ([string]::IsNullOrWhiteSpace($line)) { $i++; continue }
+        if ($line.TrimStart().StartsWith('#')) { $i++; continue }
+        if ($line -notmatch '^\S') { throw "Invalid YAML in frontmatter near: $line" }
 
         $idx = $line.IndexOf(':')
         if ($idx -lt 0) { throw "Invalid YAML in frontmatter near: $line" }
-        $k = $line.Substring(0, $idx).Trim()
-        $v = $line.Substring($idx + 1).Trim()
-        if ($v -eq '') {
-            $map[$k] = New-Object System.Collections.Specialized.OrderedDictionary ([System.StringComparer]::Ordinal)
-            $currentMapKey = $k
+        $key = $line.Substring(0, $idx).Trim()
+        $rest = $line.Substring($idx + 1).Trim()
+
+        if ($rest -match '^[|>][+-]?\d*\s*$') {
+            $literal = $rest.StartsWith('|')
+            $i++
+            $blockLines = [System.Collections.Generic.List[string]]::new()
+            while ($i -lt $lines.Count -and ([string]::IsNullOrWhiteSpace($lines[$i]) -or $lines[$i] -match '^\s')) {
+                $blockLines.Add($lines[$i]); $i++
+            }
+            $map[$key] = Join-BlockScalar $blockLines $literal
+            continue
         }
-        else {
-            $map[$k] = ($v -replace '^(["''])(.*)\1$', '$2')
-            $currentMapKey = $null
+
+        if ($rest -eq '') {
+            $j = $i + 1
+            while ($j -lt $lines.Count -and [string]::IsNullOrWhiteSpace($lines[$j])) { $j++ }
+            if ($j -lt $lines.Count -and $lines[$j] -match '^\s+-(\s|$)') {
+                throw "Block sequences are not supported in frontmatter (field '$key'); use an inline value."
+            }
+            $sub = New-Object System.Collections.Specialized.OrderedDictionary ([System.StringComparer]::Ordinal)
+            $i++
+            while ($i -lt $lines.Count) {
+                if ([string]::IsNullOrWhiteSpace($lines[$i])) { $i++; continue }
+                if ($lines[$i] -notmatch '^\s') { break }
+                if ($lines[$i].TrimStart().StartsWith('#')) { $i++; continue }
+                $kv = $lines[$i].Trim()
+                $ci = $kv.IndexOf(':')
+                if ($ci -lt 0) { throw "Invalid YAML in frontmatter near: $kv" }
+                $sk = $kv.Substring(0, $ci).Trim()
+                $sv = $kv.Substring($ci + 1).Trim()
+                Test-InlineColon $sk $sv
+                $sub[$sk] = Get-ScalarValue $sv
+                $i++
+            }
+            $map[$key] = $sub
+            continue
         }
+
+        Test-InlineColon $key $rest
+        $map[$key] = Get-ScalarValue $rest
+        $i++
     }
     return $map
 }
@@ -117,31 +179,6 @@ function Measure-SkillLineCount ([string] $content) {
     $n = ($content -split "\r?\n").Count
     if ($content.EndsWith("`n")) { $n-- }
     return $n
-}
-
-# Flag unquoted frontmatter scalar values whose text holds a ':' followed by
-# whitespace (or a trailing ':'). A strict YAML parser - strictyaml, which
-# skills-ref uses - reads that as a mapping indicator and fails to parse. Our own
-# parser splits on the first ':' and would silently miss it. Quote the value or
-# use a block scalar (>-).
-function Test-FrontmatterColons ([string] $content) {
-    $found = [System.Collections.Generic.List[string]]::new()
-    $parts = $content.Split([string[]]@('---'), 3, [System.StringSplitOptions]::None)
-    if ($parts.Count -lt 3) { return $found.ToArray() }
-    foreach ($line in ($parts[1] -split "\r?\n")) {
-        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-        if ($line.TrimStart().StartsWith('#')) { continue }
-        $idx = $line.IndexOf(':')
-        if ($idx -lt 0) { continue }
-        $key = $line.Substring(0, $idx).Trim()
-        $val = $line.Substring($idx + 1).Trim()
-        if ($val -eq '') { continue }
-        if ($val -match '^["''>|]') { continue }
-        if ($val -match ':(\s|$)') {
-            $found.Add("Field '$key' value has an unquoted ':' that breaks strict YAML parsers (e.g. skills-ref); quote the value or use a block scalar.")
-        }
-    }
-    return $found.ToArray()
 }
 
 function Test-SkillName ($name, [string] $dir) {
@@ -217,8 +254,6 @@ function Test-SkillDir ([string] $dir) {
     catch {
         return @($_.Exception.Message)
     }
-
-    Test-FrontmatterColons $raw | ForEach-Object { $errors.Add($_) }
 
     $extra = @($fm.Keys | Where-Object { $_ -cnotin $AllowedFields })
     if ($extra.Count) {
