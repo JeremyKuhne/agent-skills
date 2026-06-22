@@ -55,3 +55,23 @@ jobs:
             echo "Validating $dir"
             npx --yes skills-ref validate "$dir"
           done
+
+  scripts:
+    name: Script tests (Pester)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -MinimumVersion 5.5.0 -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.5.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests'
+          $config.Run.Throw = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config

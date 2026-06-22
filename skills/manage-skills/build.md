@@ -57,8 +57,9 @@ Author it to the repo's `FORMAT.md`:
 - Set `metadata.portability`.
 - Add a row to the catalog `README.md` inventory in the same change, and a
   disambiguation entry if the trigger phrasing competes with an existing skill.
-- Validate with the repo's agent-file checks - a frontmatter validator and a link
-  checker.
+- Validate the `SKILL.md` frontmatter with the bundled
+  [scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1), then run the repo's
+  remaining agent-file checks (the link checker, markdown lint).
 
 ### Born-local vs born-shared
 
