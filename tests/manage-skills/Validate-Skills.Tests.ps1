@@ -199,6 +199,17 @@ Describe 'Validate-Skills.ps1' {
             $r.Output | Should -Match 'All 1 skill'
         }
 
+        It 'accepts an inline flow mapping on an unknown field' {
+            $dir = New-SkillFixture -Name 'flow-map' -Frontmatter (@(
+                    'name: flow-map'
+                    'description: A skill.'
+                    'custom-data: { a: 1, b: 2 }'
+                ) -join "`n")
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
+        }
+
         It 'rejects an over-long compatibility string' {
             $long = 'a' * 501
             $dir = New-SkillFixture -Name 'long-compat' -Frontmatter (@(

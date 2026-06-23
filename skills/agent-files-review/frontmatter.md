@@ -33,7 +33,8 @@ workflow (mirror, links, validator, whitespace) stays in [SKILL.md](SKILL.md).
 ## `SKILL.md` (`.agents/skills/<name>/SKILL.md`)
 
 - `name` is **required** and must:
-  - match `^[a-z0-9-]{1,64}$`
+  - be 1-64 chars of lowercase letters/digits (Unicode allowed) and hyphens,
+    with no leading, trailing, or consecutive hyphen
   - equal the parent directory name exactly
 - `description` is required; make it specific enough that another agent
   can decide when to load it.
