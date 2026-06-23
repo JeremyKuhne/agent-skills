@@ -189,6 +189,16 @@ Describe 'Validate-Skills.ps1' {
             $r.Output | Should -Match 'All 1 skill'
         }
 
+        It 'unwraps a single-quoted value and un-doubles escaped quotes' {
+            $dir = New-SkillFixture -Name 'sq-escape' -Frontmatter (@(
+                    'name: sq-escape'
+                    "description: 'It''s a valid skill.'"
+                ) -join "`n")
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
+        }
+
         It 'rejects an over-long compatibility string' {
             $long = 'a' * 501
             $dir = New-SkillFixture -Name 'long-compat' -Frontmatter (@(

@@ -74,9 +74,16 @@ function Get-SkillMd ([string] $dir) {
     return $null
 }
 
-# Strip matching surrounding quotes from a scalar value.
+# Unwrap a YAML scalar's surrounding quotes. A single-quoted scalar un-doubles ''
+# (the YAML single-quote escape); a double-quoted scalar is stripped as-is.
 function Get-ScalarValue ([string] $value) {
-    return ($value -replace '^(["''])(.*)\1$', '$2')
+    if ($value.Length -ge 2 -and $value.StartsWith("'") -and $value.EndsWith("'")) {
+        return $value.Substring(1, $value.Length - 2).Replace("''", "'")
+    }
+    if ($value.Length -ge 2 -and $value.StartsWith('"') -and $value.EndsWith('"')) {
+        return $value.Substring(1, $value.Length - 2)
+    }
+    return $value
 }
 
 # Reject an unquoted inline scalar whose value holds a ':' followed by whitespace
