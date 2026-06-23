@@ -27,6 +27,13 @@ workflow (mirror, links, validator, whitespace) stays in [SKILL.md](SKILL.md).
     - edit
   ```
 
+- Use VS Code's current tool names: bare tool-set names (`search`, `read`,
+  `edit`, `web`) or namespaced `<set>/<tool>` members (`read/problems`,
+  `web/fetch`, `search/usages`, `search/changes`). The legacy flat names
+  (`usages`, `problems`, `changes`, `fetch`) still resolve but raise an
+  info-level "renamed" notice in VS Code, so prefer the current form. A bare
+  tool-set name already includes its members (e.g. `search` covers
+  `search/usages` and `search/changes`).
 - The repo's authoring rules forbid end-of-line comments; document optional
   fields with comment lines *above* them in any examples.
 

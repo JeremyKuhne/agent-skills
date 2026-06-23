@@ -1,6 +1,6 @@
 ---
 name: pre-pr-self-review
-description: Self-review checklist before opening a PR. Use before invoking `create-pr`, when reviewing your own draft, or when a reviewer flags issues that should have been caught earlier. Codifies recurring mistakes from multi-targeted polyfill work - missing tests for new public surface, unchecked length sums, null-pointer foot-guns from `MemoryMarshal.GetReference` on empty spans, drift from `ArgumentNullException.ThrowIfNull` and `checked()` conventions, TFM phrasing errors, and stale PR descriptions.
+description: Self-review checklist - plus an agentic review pass (a read-only reviewer persona over the diff) - before opening a PR. Use before invoking `create-pr`, when reviewing your own draft, or when a reviewer flags issues that should have been caught earlier. Codifies recurring mistakes from multi-targeted polyfill work - missing tests for new public surface, unchecked length sums, null-pointer foot-guns from `MemoryMarshal.GetReference` on empty spans, drift from `ArgumentNullException.ThrowIfNull` and `checked()` conventions, TFM phrasing errors, and stale PR descriptions.
 license: MIT
 metadata:
   portability: semi-portable
@@ -26,6 +26,20 @@ allocation and algorithmic DoS, argument validation, and every use of `unsafe` /
 "unsafe" or "caller must"). Invoke `security-review` alongside this checklist for
 any change that adds or modifies a member accepting caller-supplied data, or that
 touches one of those caller-validated constructs - the common case, not a niche.
+
+## Agentic review pass
+
+Before walking the checklist, run an automated review pass over the diff so the
+reviewer-bot class of findings - correctness edge cases, hand-rolled
+parser/format pitfalls, CI and supply-chain hygiene, and doc-vs-behavior drift -
+surfaces locally instead of across PR rounds. Spawn a **read-only pre-PR reviewer
+persona** (a consuming repo wires the concrete agent in its overlay) over the
+working diff, triage its findings (valid / nit / judgment call / likely false
+positive), fix the valid ones, and re-run at most once when the fixes were
+non-trivial. Keep it bounded: a same-class model nitpicks indefinitely, so two
+passes is the cap and the deterministic gates - tests, lint, the format
+validators - stay the source of truth. The checklist below is the human
+complement: the recurring, domain-specific mistakes an agent pass tends to miss.
 
 ## 1. Tests cover every new branch
 
