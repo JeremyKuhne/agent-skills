@@ -23,7 +23,7 @@ overlay.
 
 - The mirror is generated. **Never edit `.github/copilot-instructions.md` by hand.**
   Edits go in `AGENTS.md`, then regenerate the mirror with the validator's
-  fix mode (`Validate-AgentFiles.ps1 -Fix`).
+  fix mode.
 - Run the validator after any `AGENTS.md` edit. The agent-files CI workflow
   enforces this; out-of-sync mirrors fail CI.
 - **Relative Markdown links must work in both `AGENTS.md` and the mirror.** The
@@ -40,48 +40,13 @@ overlay.
 - Run a grammar pass: singular vs. plural ("extension methods"),
   "for your needs" not "for your need", etc.
 
-## 2. `*.instructions.md` (path-specific instructions)
+## 2. Per-file frontmatter and naming
 
-- Frontmatter must include a non-empty `applyTo` glob.
-- Glob is comma-separated, relative to repo root. Quote the value for safety.
-- The validator only checks `applyTo`'s presence and emptiness; it does not
-  verify that the glob actually matches anything. Sanity-check by eye.
+The frontmatter and naming rules for each file type - `*.instructions.md`,
+`*.agent.md`, `SKILL.md`, and `*.prompt.md` - live in
+[frontmatter.md](frontmatter.md). Check the entry for the file type you touched.
 
-## 3. `*.agent.md` (custom agents)
-
-- Frontmatter must include `description`.
-- If `tools` is present, it must be a YAML list. Either form is accepted by
-  the validator:
-
-  ```yaml
-  tools: ['search', 'edit']
-  ```
-
-  ```yaml
-  tools:
-    - search
-    - edit
-  ```
-
-- The repo's authoring rules forbid end-of-line comments; document optional
-  fields with comment lines *above* them in any examples.
-
-## 4. `SKILL.md` (`.agents/skills/<name>/SKILL.md`)
-
-- `name` is **required** and must:
-  - match `^[a-z0-9-]{1,64}$`
-  - equal the parent directory name exactly
-- `description` is required; make it specific enough that another agent
-  can decide when to load it.
-- A name/dir mismatch causes the skill to silently fail to load. Always
-  verify by running the validator.
-
-## 5. `*.prompt.md` (reusable prompts)
-
-- No required frontmatter, but `description` is recommended for the slash
-  menu UX.
-
-## 6. Validator and workflow
+## 3. Validator and workflow
 
 - The frontmatter parser in the validator script is typically hand-rolled. A
   hand-rolled parser supports flat scalars, inline lists, and block lists, but
@@ -98,7 +63,7 @@ overlay.
 - The CI job typically runs on `ubuntu-latest`. PowerShell is preinstalled
   there; no `pip` step is needed.
 
-## 7. Relative Markdown links must resolve in this branch
+## 4. Relative Markdown links must resolve in this branch
 
 The CI link check is **offline lychee** - it only follows links that
 resolve to files in the current working tree. A link to a file that exists
@@ -127,7 +92,7 @@ on the canonical repo's `main` but not in your branch will fail.
   Either fix the link or rebase. Backtick references work as a last resort
   when the file truly does not exist in any branch yet.
 
-## 8. Whitespace (applies to every file in scope)
+## 5. Whitespace (applies to every file in scope)
 
 - No trailing whitespace.
 - No whitespace-only lines (a "blank" line must be truly empty).

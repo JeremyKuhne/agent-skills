@@ -51,14 +51,25 @@ Stop and ask one short yes/no question.
 
 ## Workflow
 
-1. **Fetch the feedback.** Use the GitHub PR tools (or
-   `Invoke-RestMethod` against
-   `api.github.com/repos/<owner>/<repo>/pulls/<N>/comments`) to read review
-   comments. Read PR-level conversation comments and check-run logs too if
-   relevant.
-2. **Plan the response.** Decide which comments require code changes,
-   which are out of scope, and which you disagree with. For comments you
-   disagree with, plan a written response rather than silently overriding.
+1. **Fetch the feedback.** Read review comments, PR conversation, and check-run
+   logs via the GitHub PR tools (or `Invoke-RestMethod` against
+   `api.github.com/repos/<owner>/<repo>/pulls/<N>/comments`). With multiple
+   review passes, fetch the **latest** review's comments (filter by the newest
+   review id) so you act on the current round.
+
+   Automated reviewers (e.g. Copilot) post asynchronously - on open, on push, or
+   when requested - a minute or two after the trigger. If one was requested but
+   hasn't posted, say so and act when the user reports comments (or check once);
+   don't poll. Verify their comments per step 2 - they produce confident false
+   positives.
+2. **Plan, and verify each comment.** Don't fix something just because a reviewer
+   (especially a bot) flagged it: confirm the claim against the code, and prove
+   it when checkable (a REPL check, a build, a test) - a fix to a false positive
+   can introduce the bug the reviewer imagined. Classify each:
+   - **Valid** - real issue; fix it.
+   - **Nit** - minor; fix if cheap, else note it.
+   - **Out of scope** - plan a written reply.
+   - **False positive / disagree** - plan a written explanation, not a change.
 3. **Edit files.** Make the code changes. Run the build and any relevant
    tests. The applicable validation rules are still the `pre-pr-self-review`
    checklist - a follow-up round needs the same checks as the initial PR.
@@ -71,6 +82,23 @@ Stop and ask one short yes/no question.
    round of changes, and push. The staging/commit/push mechanics are the
    same as in the `create-pr` skill (its "Commit changes" and "Push the
    branch" steps).
+7. **Resolve the threads, with explanations.** Replying and resolving are remote
+   actions, so they ride in the same approved publish step as the push; honor
+   explicit scoping ("push and resolve only", "don't re-request") and report
+   what you did. For each comment, reply then resolve:
+   - **Fixed** - one line on what changed (reference the commit or behavior).
+   - **False positive / won't-fix** - the rationale or the evidence. Leave a
+     thread open only to invite a human onto a contested point, and say so.
+   With the PR tool, use its resolve action; with `gh`, resolve via the GraphQL
+   `resolveReviewThread` mutation on the thread node id (not the comment id).
+8. **Re-request review when non-trivial.** After real code changes, request a
+   fresh pass from the same reviewer - also a remote action in the publish step.
+   Skip it for trivial rounds (typo, reword, one-line nit) to avoid an endless
+   trickle, and say which you did.
+
+**When to stop.** Later auto-review passes drift toward nits and false positives.
+Once comments stop being substantive, stop re-requesting, say so, and let the
+user merge.
 
 ## When you've already violated the rule
 
@@ -86,3 +114,6 @@ force-push, or leave the commit in place.
   different edit scope).
 - The `pre-pr-self-review` skill - the validation checklist that applies
   to both initial and follow-up rounds.
+- The `agent-files-review` skill - for a CI failure from the *agent-files*
+  workflow specifically; its checklist owns the frontmatter, mirror, and
+  link rules.
