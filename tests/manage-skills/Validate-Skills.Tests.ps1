@@ -315,6 +315,16 @@ Describe 'Validate-Skills.ps1' {
             $r.ExitCode | Should -Be 0
             $r.Output | Should -Match 'All 1 skill'
         }
+
+        It 'does not let a leading > bypass the colon guard' {
+            $dir = Join-Path $TestDrive 'gt-prefix'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $content = "---`nname: gt-prefix`ndescription: > use this when: the user asks`n---`n`n# gt-prefix`n"
+            Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "unquoted ':'"
+        }
     }
 
     Context 'XML tags in description' {

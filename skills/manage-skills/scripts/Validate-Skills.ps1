@@ -88,9 +88,10 @@ function Get-ScalarValue ([string] $value) {
 
 # Reject an unquoted inline scalar whose value holds a ':' followed by whitespace
 # (or a trailing ':') - a YAML mapping indicator that strict parsers (strictyaml,
-# which skills-ref uses) reject. Quoted values and block scalars are exempt.
+# which skills-ref uses) reject. Only quoted values are exempt; true block scalars
+# are handled before this is reached, so a leading '>'/'|' here is plain text.
 function Test-InlineColon ([string] $key, [string] $value) {
-    if ($value -match '^["''>|]') { return }
+    if ($value -match '^["'']') { return }
     if ($value -match ':(\s|$)') {
         throw "Invalid YAML in frontmatter: value for '$key' has an unquoted ':' (a YAML mapping indicator); quote the value or use a block scalar (>-)."
     }
