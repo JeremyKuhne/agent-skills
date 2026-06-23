@@ -52,13 +52,16 @@ that an improvement was written into the wrong layer. See [update.md](update.md)
 
 ## Conventions every skill follows
 
-Whatever the verb, the result must satisfy the repo's format rules (its
-`FORMAT.md`): a thin `SKILL.md` core under the size budget with deep detail in
-sibling files; `name` matching the directory; a "pushy" `description` with trigger
-phrasing; `metadata.portability` set; a row in the catalog `README.md`; and a
-disambiguation entry when the trigger phrasing competes with an existing skill.
-After any add or edit, validate with the repo's agent-file checks - a frontmatter
-validator and a link checker.
+Whatever the verb, the result must satisfy the repo's authoring rules
+(`FORMAT.md`) and then pass `agent-files-review`, which owns the file-level
+checks - frontmatter, mirror sync, whitespace, and the validator and link
+checker. Don't restate those rules here.
+
+For the `SKILL.md` frontmatter check specifically, this skill bundles
+[scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1) - a dependency-free
+PowerShell port of the Agent Skills spec validator - so the check runs anywhere
+the skill is vendored, without the upstream tool. Run it on the skill directory:
+`pwsh scripts/Validate-Skills.ps1 <skill-dir>`.
 
 ## Sub-pages
 

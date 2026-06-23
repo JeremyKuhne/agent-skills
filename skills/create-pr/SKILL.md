@@ -169,10 +169,19 @@ Tell the user:
 - The base the PR targets (`upstream/main` or `origin/main`).
 - The PR URL (from `gh pr create` output) or the compare URL fallback.
 
-Once the PR exists, this skill is done. Subsequent rounds of edits in
-response to review comments, requested changes, or CI failures go through
-the `address-pr-feedback` skill, which covers a different edit scope under
-the same commit/push publish gate.
+## 7. Watch for an automated reviewer
+
+Some repos auto-review PRs (e.g. GitHub Copilot), posting a review a minute or
+two after the PR opens or after each push; others let you request one.
+
+- Tell the user a review may land shortly; offer to fetch and investigate it
+  when it does. Don't poll - act when the user reports comments, or check once.
+- If nothing auto-reviews, offer to request a reviewer - a remote action, only
+  with the user's go-ahead.
+
+Opening the PR ends this skill. Handling whatever the reviewer posts - resolving
+threads, re-requesting review - is the `address-pr-feedback` workflow, under the
+same commit/push publish gate.
 
 ## Guardrails
 
