@@ -8,8 +8,8 @@
     For each skill directory, checks the SKILL.md against the Agent Skills
     spec (https://agentskills.io/specification):
 
-      - Only the allowed fields are present: name, description, license,
-        compatibility, metadata, allowed-tools.
+      - required fields present: name and description. Any other field (the spec's
+        optionals, client extensions, or custom keys) is allowed and not flagged.
       - name: required; <= 64 chars; NFKC-normalized; lowercase; letters, digits,
         and hyphens only; no leading/trailing or consecutive hyphen; matches the
         directory name.
@@ -25,8 +25,9 @@
     frontmatter only; the colon check restores parity with its strict YAML parser.
 
     The frontmatter parser handles inline scalars, `>`/`|` block scalars, and one
-    level of `metadata:` mapping. It rejects block sequences and unquoted-colon
-    scalars rather than guess; for arbitrary YAML use the reference `skills-ref` tool.
+    level of `metadata:` mapping, with `---` matched line by line. A known field
+    given a block mapping/sequence (or an unquoted-colon scalar) is rejected;
+    unknown fields may take any shape. For arbitrary YAML use the `skills-ref` tool.
 
     Exits 0 when every skill is valid, 1 otherwise.
 
@@ -61,8 +62,9 @@ $MaxName = 64
 $MaxDescription = 1024
 $MaxCompatibility = 500
 $MaxSkillLines = 500
-# Allowed frontmatter fields per the Agent Skills spec (skills-ref validator.py).
-$AllowedFields = @('name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools')
+# Spec scalar fields. If one of these is given a block mapping/sequence instead of
+# a scalar it is rejected; unknown fields and `metadata` are not shape-checked.
+$KnownScalarFields = @('name', 'description', 'license', 'compatibility', 'allowed-tools')
 
 function Get-SkillMd ([string] $dir) {
     foreach ($n in 'SKILL.md', 'skill.md') {
@@ -107,17 +109,25 @@ function Join-BlockScalar ([System.Collections.Generic.List[string]] $blockLines
     return $sb.ToString().Trim()
 }
 
-# Parse SKILL.md frontmatter into a case-sensitive ordered map. Handles inline
-# scalars, `>`/`|` block scalars, and one level of block mapping (the `metadata:`
-# block). Block sequences and unquoted-colon scalars are rejected rather than
-# guessed. Not a general YAML parser; for arbitrary YAML use `skills-ref`.
+# Parse SKILL.md frontmatter into a case-sensitive ordered map. The `---`
+# delimiters are matched line by line. Handles inline scalars, `>`/`|` block
+# scalars, and one level of `metadata:` block mapping. A known field given a block
+# mapping/sequence is rejected; an unknown field may take any shape (unvalidated).
+# Not a general YAML parser; for arbitrary YAML use `skills-ref`.
 function Read-Frontmatter ([string] $content) {
-    if (-not $content.StartsWith('---')) { throw 'SKILL.md must start with YAML frontmatter (---)' }
-    $parts = $content.Split([string[]]@('---'), 3, [System.StringSplitOptions]::None)
-    if ($parts.Count -lt 3) { throw 'SKILL.md frontmatter not properly closed with ---' }
+    $allLines = $content -split "\r?\n"
+    if ($allLines.Count -eq 0 -or $allLines[0].Trim() -ne '---') {
+        throw 'SKILL.md must start with YAML frontmatter (---)'
+    }
+    $end = -1
+    for ($k = 1; $k -lt $allLines.Count; $k++) {
+        if ($allLines[$k].Trim() -eq '---') { $end = $k; break }
+    }
+    if ($end -lt 0) { throw 'SKILL.md frontmatter not properly closed with ---' }
 
     $map = New-Object System.Collections.Specialized.OrderedDictionary ([System.StringComparer]::Ordinal)
-    $lines = $parts[1] -split "\r?\n"
+    $lines = @()
+    if ($end -gt 1) { $lines = @($allLines[1..($end - 1)]) }
     $i = 0
     while ($i -lt $lines.Count) {
         $line = $lines[$i]
@@ -142,27 +152,47 @@ function Read-Frontmatter ([string] $content) {
         }
 
         if ($rest -eq '') {
+            # Empty value: classify the following block (mapping, sequence, or none).
             $j = $i + 1
             while ($j -lt $lines.Count -and [string]::IsNullOrWhiteSpace($lines[$j])) { $j++ }
-            if ($j -lt $lines.Count -and $lines[$j] -match '^\s+-(\s|$)') {
-                throw "Block sequences are not supported in frontmatter (field '$key'); use an inline value."
+            $hasChild = ($j -lt $lines.Count -and $lines[$j] -match '^\s')
+            $isSequence = $hasChild -and ($lines[$j] -match '^\s+-(\s|$)')
+
+            if ($hasChild -and $key -ceq 'metadata' -and -not $isSequence) {
+                $sub = New-Object System.Collections.Specialized.OrderedDictionary ([System.StringComparer]::Ordinal)
+                $i++
+                while ($i -lt $lines.Count) {
+                    if ([string]::IsNullOrWhiteSpace($lines[$i])) { $i++; continue }
+                    if ($lines[$i] -notmatch '^\s') { break }
+                    if ($lines[$i].TrimStart().StartsWith('#')) { $i++; continue }
+                    $kv = $lines[$i].Trim()
+                    $ci = $kv.IndexOf(':')
+                    if ($ci -lt 0) { throw "Invalid YAML in frontmatter near: $kv" }
+                    $sk = $kv.Substring(0, $ci).Trim()
+                    $sv = $kv.Substring($ci + 1).Trim()
+                    Test-InlineColon $sk $sv
+                    $sub[$sk] = Get-ScalarValue $sv
+                    $i++
+                }
+                $map[$key] = $sub
+                continue
             }
-            $sub = New-Object System.Collections.Specialized.OrderedDictionary ([System.StringComparer]::Ordinal)
-            $i++
-            while ($i -lt $lines.Count) {
-                if ([string]::IsNullOrWhiteSpace($lines[$i])) { $i++; continue }
-                if ($lines[$i] -notmatch '^\s') { break }
-                if ($lines[$i].TrimStart().StartsWith('#')) { $i++; continue }
-                $kv = $lines[$i].Trim()
-                $ci = $kv.IndexOf(':')
-                if ($ci -lt 0) { throw "Invalid YAML in frontmatter near: $kv" }
-                $sk = $kv.Substring(0, $ci).Trim()
-                $sv = $kv.Substring($ci + 1).Trim()
-                Test-InlineColon $sk $sv
-                $sub[$sk] = Get-ScalarValue $sv
+
+            if ($hasChild -and $key -cin $KnownScalarFields) {
+                $shape = if ($isSequence) { 'sequence' } else { 'mapping' }
+                throw "Field '$key' must be a scalar value, not a block $shape."
+            }
+
+            # A null value, an unknown field's nested block, or a metadata sequence:
+            # swallow any nested lines and store an empty value (shape unvalidated).
+            if ($hasChild) {
+                $i++
+                while ($i -lt $lines.Count -and ([string]::IsNullOrWhiteSpace($lines[$i]) -or $lines[$i] -match '^\s')) { $i++ }
+            }
+            else {
                 $i++
             }
-            $map[$key] = $sub
+            $map[$key] = ''
             continue
         }
 
@@ -253,11 +283,6 @@ function Test-SkillDir ([string] $dir) {
     }
     catch {
         return @($_.Exception.Message)
-    }
-
-    $extra = @($fm.Keys | Where-Object { $_ -cnotin $AllowedFields })
-    if ($extra.Count) {
-        $errors.Add("Unexpected fields in frontmatter: $(($extra | Sort-Object) -join ', '). Only $(($AllowedFields | Sort-Object) -join ', ') are allowed.")
     }
 
     if (-not $fm.Contains('name')) { $errors.Add('Missing required field in frontmatter: name') }

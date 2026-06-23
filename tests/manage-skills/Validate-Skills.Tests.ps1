@@ -177,15 +177,16 @@ Describe 'Validate-Skills.ps1' {
     }
 
     Context 'frontmatter fields' {
-        It 'rejects an unexpected field' {
+        It 'accepts an unknown (custom) field' {
             $dir = New-SkillFixture -Name 'extra-field' -Frontmatter (@(
                     'name: extra-field'
                     'description: x.'
+                    'argument-hint: a hint'
                     'bogus: nope'
                 ) -join "`n")
             $r = Invoke-Validator -Arguments @($dir)
-            $r.ExitCode | Should -Be 1
-            $r.Output | Should -Match 'Unexpected fields in frontmatter: bogus'
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
         }
 
         It 'rejects an over-long compatibility string' {
@@ -349,14 +350,44 @@ Describe 'Validate-Skills.ps1' {
             $r.Output | Should -Match 'XML-style tags'
         }
 
-        It 'rejects a block sequence (allowed-tools as a list)' {
+        It 'rejects a block sequence for a known field (allowed-tools)' {
             $dir = Join-Path $TestDrive 'block-seq'
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
             $content = "---`nname: block-seq`ndescription: A skill.`nallowed-tools:`n  - search`n  - edit`n---`n`n# block-seq`n"
             Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
             $r = Invoke-Validator -Arguments @($dir)
             $r.ExitCode | Should -Be 1
-            $r.Output | Should -Match 'Block sequences are not supported'
+            $r.Output | Should -Match 'must be a scalar value'
+        }
+
+        It 'rejects a block mapping for a known field (license)' {
+            $dir = Join-Path $TestDrive 'block-map-known'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $content = "---`nname: block-map-known`ndescription: A skill.`nlicense:`n  spdx: MIT`n---`n`n# block-map-known`n"
+            Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'must be a scalar value'
+        }
+
+        It 'accepts a block mapping under an unknown field' {
+            $dir = Join-Path $TestDrive 'block-map-custom'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $content = "---`nname: block-map-custom`ndescription: A skill.`ncustom-data:`n  a: 1`n  b: 2`n---`n`n# block-map-custom`n"
+            Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
+        }
+
+        It 'does not let --- inside a value terminate the frontmatter' {
+            $dir = Join-Path $TestDrive 'dash-value'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $content = "---`ndescription: see the --- marker below`nname: dash-value`n---`n`n# dash-value`n"
+            Set-Content -LiteralPath (Join-Path $dir 'SKILL.md') -Value $content -NoNewline
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
         }
     }
 }
