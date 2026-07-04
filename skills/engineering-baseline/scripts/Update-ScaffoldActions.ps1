@@ -94,7 +94,7 @@ function Resolve-ActionVersion ([string] $repo, [int] $minAge) {
     foreach ($line in $releases) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         $tag, $published = $line -split "`t", 2
-        if ($tag -notmatch '^v\d+(\.\d+){1,2}$') { continue }
+        if ($tag -notmatch '^v\d+(\.\d+){0,2}$') { continue }
         $pub = [datetime]::Parse($published).ToUniversalTime()
         if ($pub -gt $cutoff) { continue }
         $candidates += [pscustomobject]@{ Tag = $tag; Published = $pub }
@@ -105,7 +105,7 @@ function Resolve-ActionVersion ([string] $repo, [int] $minAge) {
         # No qualifying releases; fall back to stable tags (age cannot be checked).
         $tags = @(gh api "repos/$repo/tags" --paginate --jq '.[].name' 2>$null)
         foreach ($tag in $tags) {
-            if ($tag -notmatch '^v\d+(\.\d+){1,2}$') { continue }
+            if ($tag -notmatch '^v\d+(\.\d+){0,2}$') { continue }
             $candidates += [pscustomobject]@{ Tag = $tag; Published = $null }
         }
         $usedFallback = $true
@@ -199,6 +199,11 @@ if (-not $Apply) {
 }
 
 foreach ($file in $plan.Keys) {
+    # Preserve the file's existing newline style (LF vs CRLF). WriteAllLines would
+    # otherwise force the current platform's newline (CRLF on Windows) and churn
+    # every line across OSes.
+    $raw = [System.IO.File]::ReadAllText($file)
+    $nl = if ($raw.Contains("`r`n")) { "`r`n" } else { "`n" }
     $lines = [System.IO.File]::ReadAllLines($file)
     foreach ($edit in $plan[$file]) {
         $idx = $edit.Line - 1
@@ -207,8 +212,7 @@ foreach ($file in $plan.Keys) {
         $lines[$idx] = "{0}{1}@{2}{3}{4}" -f `
             $m.Groups['pre'].Value, $m.Groups['action'].Value, $edit.Ref, $m.Groups['mid'].Value, $edit.Ver
     }
-    # Preserve the file's newline style and trailing newline.
-    [System.IO.File]::WriteAllLines($file, $lines)
+    [System.IO.File]::WriteAllText($file, ($lines -join $nl) + $nl)
 }
 
 Write-Host ""
