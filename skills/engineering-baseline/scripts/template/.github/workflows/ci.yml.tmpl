@@ -21,17 +21,17 @@ jobs:
       matrix:
         configuration: [Debug, Release]
     steps:
-      - uses: actions/checkout@<SHA> # v4
+      - uses: actions/checkout@<SHA> # v6.0.3
         with:
           fetch-depth: 0
 
-      - uses: actions/cache@<SHA> # v4
+      - uses: actions/cache@<SHA> # v5.0.5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/Directory.Packages.props', '**/Directory.Build.props', 'global.json') }}
           restore-keys: nuget-
 
-      - uses: actions/setup-dotnet@<SHA> # v4
+      - uses: actions/setup-dotnet@<SHA> # v5.3.0
         # SDK version comes from global.json
 
       - run: dotnet restore --locked-mode
