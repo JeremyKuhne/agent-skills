@@ -17,9 +17,9 @@ jobs:
     name: analyze
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@<SHA> # v4
-      - uses: github/codeql-action/init@<SHA> # v3
+      - uses: actions/checkout@<SHA> # v6.0.3
+      - uses: github/codeql-action/init@<SHA> # v4.36.2
         with:
           languages: csharp
-      - uses: github/codeql-action/autobuild@<SHA> # v3
-      - uses: github/codeql-action/analyze@<SHA> # v3
+      - uses: github/codeql-action/autobuild@<SHA> # v4.36.2
+      - uses: github/codeql-action/analyze@<SHA> # v4.36.2
