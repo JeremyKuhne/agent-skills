@@ -72,7 +72,12 @@ vetted manifest `scripts/versions.json`** - a known-good floor, never "latest".
 Refresh that floor deliberately with `scripts/Update-ScaffoldVersions.ps1`, which
 proposes only versions that pass a quarantine window plus advisory, deprecation,
 listing, and license-allowlist checks (and can scaffold-and-build to confirm TFM
-compatibility); review the diff before committing.
+compatibility); review the diff before committing. The GitHub Actions pinned in
+the workflow templates carry the same quarantine floor, refreshed by
+`scripts/Update-ScaffoldActions.ps1` (the actions counterpart). Keeping both
+floors current, plus a `dependabot.yml` that **groups every update per ecosystem
+into one PR**, is what stops a fresh repo from opening a long list of day-one
+dependency bumps.
 
 Test projects run on the **Microsoft Testing Platform** (MTP) and default to
 **MSTest** (`-TestRunner xunit` switches to xunit.v3); both run at the fullest
@@ -84,10 +89,12 @@ code stays composable into AOT apps even when AOT is never published.
 
 ## 3. Pin the action SHAs (domain 6)
 
-The workflows emit `<SHA>` placeholders for every third-party action (with the
-version in a trailing comment). Replace them with full commit SHAs before the
-first push, then let Dependabot's `github-actions` ecosystem keep them current.
-Use [StepSecurity](https://app.stepsecurity.io) or
+The workflows emit `<SHA>` placeholders for every third-party action, each with
+its target version in a trailing comment kept current by
+`scripts/Update-ScaffoldActions.ps1`. Replace each placeholder with the full
+commit SHA for the commented version before the first push, then let Dependabot's
+grouped `github-actions` updates keep them current. Use
+[StepSecurity](https://app.stepsecurity.io) or
 `gh api repos/<owner>/<repo>/git/refs/tags` to resolve each version to a SHA.
 
 This is a local, reversible edit - do it before `git init`.
