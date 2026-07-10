@@ -98,9 +98,10 @@ Describe 'Installed skill artifacts' {
     It 'rejects a differently-cased sibling on a case-sensitive file system' -Skip:$IsWindows {
         $artifactRoot = Join-Path $TestDrive 'artifact'
         $siblingRoot = Join-Path $TestDrive 'Artifact'
-        New-Item -ItemType Directory -Path $artifactRoot, $siblingRoot | Out-Null
-        Set-Content -LiteralPath (Join-Path $artifactRoot 'SKILL.md') -NoNewline -Value '[escape](../Artifact/target.md)'
-        Set-Content -LiteralPath (Join-Path $siblingRoot 'target.md') -NoNewline -Value '# Existing target'
+        [System.IO.Directory]::CreateDirectory($artifactRoot) | Out-Null
+        [System.IO.Directory]::CreateDirectory($siblingRoot) | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $artifactRoot 'SKILL.md'), '[escape](../Artifact/target.md)')
+        [System.IO.File]::WriteAllText((Join-Path $siblingRoot 'target.md'), '# Existing target')
 
         $brokenLinks = @(Get-BrokenRelativeLinks $artifactRoot)
         $brokenLinks.Count | Should -Be 1
