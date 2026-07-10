@@ -32,8 +32,9 @@ foreach ($environmentName in $environmentNames) {
 try {
     $env:HOME = $temporaryHome
     $env:USERPROFILE = $temporaryHome
-    $env:APPDATA = Join-Path $temporaryHome 'AppData/Roaming'
-    $env:LOCALAPPDATA = Join-Path $temporaryHome 'AppData/Local'
+    $appDataRoot = Join-Path $temporaryHome 'AppData'
+    $env:APPDATA = Join-Path $appDataRoot 'Roaming'
+    $env:LOCALAPPDATA = Join-Path $appDataRoot 'Local'
     $env:COPILOT_HOME = Join-Path $temporaryHome '.copilot'
     $env:COPILOT_CACHE_HOME = Join-Path $temporaryHome 'cache'
 
@@ -53,7 +54,9 @@ try {
         throw "Installed plugin list does not contain $pluginSpecification."
     }
 
-    $installedPluginRoot = Join-Path $env:COPILOT_HOME "installed-plugins/$marketplaceName/$($plugin.name)"
+    $installedPluginsRoot = Join-Path $env:COPILOT_HOME 'installed-plugins'
+    $marketplaceRoot = Join-Path $installedPluginsRoot $marketplaceName
+    $installedPluginRoot = Join-Path $marketplaceRoot $plugin.name
     if (-not (Test-Path -LiteralPath $installedPluginRoot -PathType Container)) {
         throw "Installed plugin root not found: $installedPluginRoot`n$installText"
     }
