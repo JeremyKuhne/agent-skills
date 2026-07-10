@@ -133,6 +133,9 @@ GitHub Copilot (VS Code, CLI, cloud agent) and Claude Code, and installable with
 
 ## Validation
 
+Skill Markdown must not contain HTML entities. Write the character directly or
+use plain words instead; Unicode text is valid.
+
 Run the strict bundled policy and the reference specification validator:
 
 ```pwsh

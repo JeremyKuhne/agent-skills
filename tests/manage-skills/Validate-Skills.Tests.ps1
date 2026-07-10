@@ -488,6 +488,31 @@ core-pin: v1.2.3
         }
     }
 
+    Context 'Markdown readability' {
+        It 'rejects named and numeric HTML entities in skill Markdown' {
+            $dir = New-SkillFixture -Name 'entity-bad' -Frontmatter (@(
+                    'name: entity-bad'
+                    'description: A skill.'
+                ) -join "`n") -Body "# Entity bad`n`nSee &sect;1."
+            Set-Content -LiteralPath (Join-Path $dir 'detail.md') -NoNewline -Value "Decimal &#167; and hexadecimal &#xA7;."
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "HTML entity '&sect;'"
+            $r.Output | Should -Match "HTML entity '&#167;'"
+            $r.Output | Should -Match "HTML entity '&#xA7;'"
+        }
+
+        It 'accepts directly readable Unicode text' {
+            $dir = New-SkillFixture -Name 'unicode-good' -Frontmatter (@(
+                    'name: unicode-good'
+                    'description: A skill.'
+                ) -join "`n") -Body "# Unicode good`n`nUse §, ≤, →, and …."
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
+        }
+    }
+
     Context 'YAML colon safety' {
         It 'rejects an unquoted value containing a colon' {
             $dir = New-SkillFixture -Name 'colon-bad' -Frontmatter (@(
