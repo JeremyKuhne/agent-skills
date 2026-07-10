@@ -92,6 +92,18 @@ Describe 'Skill catalog contracts' {
         $secondHash | Should -Be $firstHash
     }
 
+    It 'ignores an end marker that appears before the portfolio start marker' {
+        $generator = Join-Path $script:RepoRoot 'tools/Update-SkillCatalog.ps1'
+        $temporarySkills = Join-Path $TestDrive 'catalog-marker-order'
+        Copy-Item -LiteralPath $script:SkillsRoot -Destination $temporarySkills -Recurse
+        $catalogPath = Join-Path $temporarySkills 'README.md'
+        $catalog = Get-Content -LiteralPath $catalogPath -Raw
+        Set-Content -LiteralPath $catalogPath -NoNewline -Value "<!-- portfolio-matrix:end -->`n$catalog"
+
+        $output = & pwsh -NoProfile -File $generator -SkillsRoot $temporarySkills 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because "$output"
+    }
+
     It 'resolves every required and related skill to a source core' {
         foreach ($record in $script:SkillRecords) {
             foreach ($relationshipField in @('requires', 'related')) {

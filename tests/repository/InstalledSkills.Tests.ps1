@@ -16,6 +16,7 @@ BeforeAll {
     function Get-BrokenRelativeLinks ([string] $artifactRoot) {
         $broken = [System.Collections.Generic.List[string]]::new()
         $artifactFullPath = [System.IO.Path]::GetFullPath($artifactRoot)
+        $artifactPrefix = $artifactFullPath.TrimEnd([char]'\', [char]'/') + [System.IO.Path]::DirectorySeparatorChar
         foreach ($markdownFile in (Get-ChildItem -LiteralPath $artifactRoot -Filter '*.md' -File -Recurse)) {
             $content = Get-Content -LiteralPath $markdownFile.FullName -Raw
             foreach ($match in [regex]::Matches($content, '\[[^\]]*\]\((?<target>[^)\s]+)(?:\s+"[^"]*")?\)')) {
@@ -26,7 +27,9 @@ BeforeAll {
                 if ([string]::IsNullOrWhiteSpace($pathPart)) { continue }
                 $resolvedPath = [System.IO.Path]::GetFullPath((Join-Path $markdownFile.DirectoryName $pathPart))
                 $relativeFile = [System.IO.Path]::GetRelativePath($artifactRoot, $markdownFile.FullName)
-                if (-not $resolvedPath.StartsWith($artifactFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $isArtifactRoot = $resolvedPath.Equals($artifactFullPath, [System.StringComparison]::OrdinalIgnoreCase)
+                $isInsideArtifact = $resolvedPath.StartsWith($artifactPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+                if (-not ($isArtifactRoot -or $isInsideArtifact)) {
                     $broken.Add("$relativeFile -> $target (escapes installed artifact)")
                 }
                 elseif (-not (Test-Path -LiteralPath $resolvedPath)) {
@@ -39,6 +42,18 @@ BeforeAll {
 }
 
 Describe 'Installed skill artifacts' {
+    It 'rejects a sibling path that only shares the artifact-root prefix' {
+        $artifactRoot = Join-Path $TestDrive 'artifact'
+        $siblingRoot = Join-Path $TestDrive 'artifact-sibling'
+        New-Item -ItemType Directory -Path $artifactRoot, $siblingRoot | Out-Null
+        Set-Content -LiteralPath (Join-Path $artifactRoot 'SKILL.md') -NoNewline -Value '[escape](../artifact-sibling/target.md)'
+        Set-Content -LiteralPath (Join-Path $siblingRoot 'target.md') -NoNewline -Value '# Existing target'
+
+        $brokenLinks = @(Get-BrokenRelativeLinks $artifactRoot)
+        $brokenLinks.Count | Should -Be 1
+        $brokenLinks[0] | Should -Match 'escapes installed artifact'
+    }
+
     It 'installs every core with only declared requirements and keeps it self-contained' {
         Get-Command gh -ErrorAction Stop | Should -Not -BeNullOrEmpty
         & gh skill --help *> $null

@@ -42,6 +42,10 @@ try {
 
     $installOutput = & copilot plugin install $pluginSpecification 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Plugin install failed:`n$installOutput" }
+    $installText = $installOutput -join "`n"
+    if ($installText -notmatch "Installed\s+$expectedSkills\s+skills") {
+        throw "Plugin install did not report $expectedSkills skills:`n$installText"
+    }
 
     $listOutput = & copilot plugin list 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Plugin list failed:`n$listOutput" }
@@ -49,9 +53,14 @@ try {
         throw "Installed plugin list does not contain $pluginSpecification."
     }
 
-    $installedSkills = @(Get-ChildItem $temporaryHome -Filter 'SKILL.md' -File -Recurse).Count
-    $installedAgents = @(Get-ChildItem $temporaryHome -Filter '*.agent.md' -File -Recurse).Count
-    $installedMcpConfigs = @(Get-ChildItem $temporaryHome -Filter '.mcp.json' -File -Recurse).Count
+    $installedPluginRoot = Join-Path $env:COPILOT_HOME "installed-plugins/$marketplaceName/$($plugin.name)"
+    if (-not (Test-Path -LiteralPath $installedPluginRoot -PathType Container)) {
+        throw "Installed plugin root not found: $installedPluginRoot`n$installText"
+    }
+
+    $installedSkills = @(Get-ChildItem (Join-Path $installedPluginRoot 'skills') -Filter 'SKILL.md' -File -Recurse -FollowSymlink).Count
+    $installedAgents = @(Get-ChildItem (Join-Path $installedPluginRoot 'agents') -Filter '*.agent.md' -File -Recurse -FollowSymlink).Count
+    $installedMcpConfigs = [int](Test-Path -LiteralPath (Join-Path $installedPluginRoot '.mcp.json') -PathType Leaf)
 
     if ($installedSkills -ne $expectedSkills) {
         throw "Plugin installed $installedSkills skills; expected $expectedSkills."

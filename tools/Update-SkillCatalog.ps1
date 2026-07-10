@@ -59,7 +59,12 @@ $expectedBlock = $lines -join "`n"
 
 $catalog = Get-Content -LiteralPath $catalogPath -Raw
 $startIndex = $catalog.IndexOf($startMarker, [System.StringComparison]::Ordinal)
-$endIndex = $catalog.IndexOf($endMarker, [System.StringComparison]::Ordinal)
+$endIndex = if ($startIndex -ge 0) {
+    $catalog.IndexOf($endMarker, $startIndex + $startMarker.Length, [System.StringComparison]::Ordinal)
+}
+else {
+    -1
+}
 
 if ($startIndex -lt 0 -or $endIndex -lt $startIndex) {
     if (-not $Apply) {
