@@ -8,13 +8,17 @@ fleet companion: update it as repos onboard.
 
 ## Fleet status
 
-| Repo | Consumes commons | Produces | Onboarding state |
-| ---- | ---------------- | -------- | ---------------- |
-| **touki** | 13 commons cores vendored (5 added at `v0.8.1`) | the universal and domain cores | **Onboarded** - the reference consumer |
-| **filtrace** | nothing yet | the `filtrace` tool-shipped skill (canonical home) | **Producer only** - does not yet consume the universal tier |
-| **madowaku** | nothing yet (4 local forks) | `cswin32-interop`, `cswin32-com` (not yet promoted) | **Not onboarded** - forks to reconcile |
-| **thirtytwo** | nothing (no `.agents/`) | none | **Greenfield** - needs scaffolding first |
-| *(future repos)* | - | - | Use the generic checklist in the [runbook](onboarding-plan.md) |
+`Last checked` is the date a maintainer verified the repository state, not the
+date this document happened to be edited. Re-check stale rows before making a
+fleet decision.
+
+| Repo | Owner | Commons pin | Consumes commons | Produces | Onboarding state | Last checked |
+| ---- | ----- | ----------- | ---------------- | -------- | ---------------- | ------------ |
+| **touki** | `JeremyKuhne` | mixed `v0.7.0`-`v0.8.1` | 13 commons cores | the universal and domain cores | **Onboarded** - reference consumer | 2026-07-09 |
+| **filtrace** | `JeremyKuhne` | N/A | nothing yet | the `filtrace` tool-shipped skill | **Producer only** - does not consume the starting tier | 2026-06-16 |
+| **madowaku** | `JeremyKuhne` | N/A | nothing yet (4 local forks) | `cswin32-interop`, `cswin32-com` | **Not onboarded** - forks to reconcile | 2026-06-16 |
+| **thirtytwo** | `JeremyKuhne` | N/A | nothing (no `.agents/`) | none | **Greenfield** - needs scaffolding first | 2026-06-16 |
+| *(future repos)* | TBD | N/A | - | - | Use the generic checklist in the [runbook](onboarding-plan.md) | Not checked |
 
 ## Per-repo onboarding checklists
 
@@ -54,8 +58,8 @@ CsWin32 skills the commons lacks.
     detail is repo-bound).
 - [ ] Vendor the universal tier with overlays for madowaku's
       `net10.0-windows...` moniker and `madowaku.perf` project.
-- [ ] If fuzzing is wanted, vendor `fuzz-testing` and let its bootstrap stand up
-      `madowaku.fuzz`.
+- [ ] If fuzzing is wanted, stand up `madowaku.fuzz` to match the repo layout,
+      then vendor `fuzz-testing` and bind the project in its overlay.
 - [ ] Reconcile against madowaku's *different* instruction set (`interop`,
       `msbuild`, `tests` - no `perf`/`polyfills`); a core linking to a missing
       instruction file fails its link check.
@@ -67,9 +71,10 @@ CsWin32 skills the commons lacks.
       + validator + link checker + `agent-files.yml` + `AGENTS.md`.
 - [ ] Vendor the universal tier, plus the `cswin32-interop` / `cswin32-com`
       domain skills (they apply here, unlike touki).
-- [ ] Teach every project-gated skill's bootstrap to resolve thirtytwo's
-      `src/<root>` + `<root>_tests` layout, and record that mapping in the overlay.
-- [ ] Stand up `src/`-nested perf/fuzz projects if those skills are vendored.
+- [ ] Record thirtytwo's `src/<root>` + `<root>_tests` layout in each applicable
+      overlay.
+- [ ] Stand up `src/`-nested perf/fuzz projects before vendoring those
+      project-gated skills.
 - [ ] Run both gates green.
 
 ## Fleet deduplication and promotion ledger
@@ -85,7 +90,7 @@ fleet. Each row ends in a recorded state; an unexplained divergence is the alarm
 | `manage-skills` | touki (local) | Local-generic, universal | Promote to commons, vendor back | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
 | `fuzz-testing` | touki (local) | Local-generic, domain (project-gated) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
 | `roslyn-analyzers` | touki (local) | Domain (project-gated) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
-| `il-copy-inspection` | touki (local) | Domain (semi-portable) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
+| `il-copy-inspection` | touki (local) | Domain portable core | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
 | `dotnet-polyfills` | commons (born-shared) | Domain, consume side | Vendor into touki with overlay | **Resolved** - born in commons `v0.8.0`, vendored `v0.8.1` |
 | `polyfill-dotnet-api` | touki (local) | Domain, authoring side | Keep local; defer the source survey to `dotnet-polyfills` | **Resolved** - kept local, slimmed to defer |
 | `performance-testing` | touki | Vendored `v0.7.0` | - | **Resolved** - byte-identical to commons |

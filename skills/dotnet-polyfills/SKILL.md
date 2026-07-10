@@ -2,11 +2,21 @@
 name: dotnet-polyfills
 description: Set up and use the standard .NET downlevel polyfill stack so a multi-targeted library can call modern BCL APIs on .NET Framework - PolySharp for compiler and language attributes, the official Microsoft downlevel NuGet packages (System.Memory, Microsoft.Bcl.Memory, Microsoft.Bcl.HashCode, Microsoft.IO.Redist, and the other Microsoft.Bcl.* / System.* backports), and the KlutzyNinja.Touki package's runtime polyfills layered on top. Use when adding a downlevel net472 / net481 target, choosing which package supplies a missing type before hand-rolling, configuring PolySharp, or checking whether an API is already polyfilled. For authoring a new hand-rolled polyfill inside a repo's own Framework tree, see polyfill-dotnet-api.
 license: MIT
+compatibility: Requires the .NET SDK, package restore access, and a project targeting .NET Framework alongside modern .NET.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: dotnet-framework
+  binding: optional-overlay
+  risk: local-write
+  maturity: canary
+  requires: none
+  related: pre-pr-self-review, framework-jit-optimization
 ---
 
 # .NET downlevel polyfills
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 The package-and-generator stack that lets a multi-targeted library call modern
 BCL APIs (`Span<T>`, `Index` / `Range`, `HashCode`, the C# language attributes,

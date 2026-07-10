@@ -43,6 +43,7 @@
       locked mode to fail on any drift.
     -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
     <!--
       Audit direct AND transitive packages against the GitHub Advisory DB on
       every restore (NU1901-1904). Kept as warnings via WarningsNotAsErrors so

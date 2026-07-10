@@ -2,11 +2,21 @@
 name: agent-files-review
 description: Review changes to AI-agent customization files (AGENTS.md, .github/copilot-instructions.md, *.instructions.md, *.prompt.md, *.agent.md, SKILL.md, the validator, the CI workflow). Use when asked to review or validate agent-file changes, fix CI failures from the agent-files workflow, or audit a draft of any of these files.
 license: MIT
+compatibility: Requires the repository's validator and relative-link check; exact commands may be supplied by an overlay.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: agent-customization
+  binding: optional-overlay
+  risk: local-write
+  maturity: canary
+  requires: none
+  related: manage-skills
 ---
 
 # Agent customization files - review checklist
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 Run through every applicable item below before approving a change to an agent
 customization file. Each item below caught a real bug in PR review history.
@@ -62,6 +72,13 @@ The frontmatter and naming rules for each file type - `*.instructions.md`,
   MD040 - adding a `text` language tag is trivial and prevents drift.
 - The CI job typically runs on `ubuntu-latest`. PowerShell is preinstalled
   there; no `pip` step is needed.
+- A commons repository should validate source `skills/*/SKILL.md`, not only a
+  consumer's `.agents/skills/` directory. Treat a conditional that silently
+  skips a populated source tree as a broken gate.
+- Validate agent frontmatter, plugin/marketplace/MCP manifests, relationship
+  names, and generated catalogs in addition to skill frontmatter. Then install
+  each core alone (plus declared `requires`) and resolve links inside that
+  artifact; a repo-wide link check cannot catch undeclared sibling dependencies.
 
 ## 4. Relative Markdown links must resolve in this branch
 
@@ -125,3 +142,11 @@ If CI fails after a local validator pass, the failure is almost always
 markdownlint (open the failing job's annotations) or the lychee link check
 (broken relative link - remember the mirror rewrites links, so test
 the form in `AGENTS.md`, not the rewritten copy).
+
+For a commons portfolio, use strict mode and check generated collateral:
+
+```pwsh
+./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
+./tools/Update-SkillCatalog.ps1
+Invoke-Pester ./tests
+```

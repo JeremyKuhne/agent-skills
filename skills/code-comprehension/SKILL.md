@@ -3,10 +3,19 @@ name: code-comprehension
 description: Evidence-based readability and cognitive-load review of code. Use when asked to "review this for readability", "is this too complex", "reduce nesting or cognitive load", "what is a reasonable method length / parameter count / nesting depth", or when judging whether code will be hard to understand. Screens code against research-backed thresholds and prioritizes the factors that actually drive comprehension - naming first, then structure that loads working memory.
 license: MIT
 metadata:
-  portability: semi-portable
+   portability: portable
+   applicability: universal
+   binding: optional-overlay
+   risk: advisory
+   maturity: canary
+   requires: none
+   related: pre-pr-self-review
 ---
 
 # Code comprehension review
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 A research-backed screen for how hard code is to *understand* (not how hard it is
 to test). Four decades of studies - including recent eye-tracking, EEG, and fMRI

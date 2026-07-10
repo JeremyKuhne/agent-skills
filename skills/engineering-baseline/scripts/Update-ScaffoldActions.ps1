@@ -48,7 +48,8 @@
 param(
     [string] $WorkflowsDir = (Join-Path $PSScriptRoot 'template/.github/workflows'),
     [int]    $MinimumReleaseAgeDays = 30,
-    [switch] $Apply
+    [switch] $Apply,
+    [Parameter(DontShow)] [switch] $SkipMain
 )
 
 Set-StrictMode -Version Latest
@@ -56,13 +57,6 @@ $ErrorActionPreference = 'Stop'
 
 function Step ([string] $msg) { Write-Host "  $msg" -ForegroundColor Cyan }
 function Warn ([string] $msg) { Write-Host "  WARN $msg" -ForegroundColor Yellow }
-
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw "gh (GitHub CLI) is required to resolve action releases. Install it and run 'gh auth login'."
-}
-if (-not (Test-Path $WorkflowsDir)) {
-    throw "Workflows directory not found: $WorkflowsDir"
-}
 
 # uses: owner/repo[/sub/path]@<ref> # vX[.Y[.Z]][suffix]
 $usesRegex = [regex]'^(?<pre>\s*(?:-\s+)?uses:\s*)(?<action>[^@\s]+)@(?<ref>\S+)(?<mid>\s+#\s+)(?<ver>v\d[^\s]*)\s*$'
@@ -122,6 +116,16 @@ function Resolve-ActionVersion ([string] $repo, [int] $minAge) {
 # ---------------------------------------------------------------------------
 # 1. discover every action reference in the templates
 # ---------------------------------------------------------------------------
+
+if ($SkipMain) { return }
+
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    throw "gh (GitHub CLI) is required to resolve action releases. Install it and run 'gh auth login'."
+}
+if (-not (Test-Path $WorkflowsDir)) {
+    throw "Workflows directory not found: $WorkflowsDir"
+}
+
 $files = @(Get-ChildItem -Path $WorkflowsDir -Recurse -File -Filter '*.tmpl' |
     Sort-Object FullName)
 if (-not $files) { $files = @(Get-ChildItem -Path $WorkflowsDir -Recurse -File | Sort-Object FullName) }

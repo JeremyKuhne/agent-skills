@@ -36,4 +36,6 @@ jobs:
 
       - run: dotnet restore --locked-mode
       - run: dotnet build --configuration ${{ matrix.configuration }} --no-restore
-      - run: dotnet test --configuration ${{ matrix.configuration }} --no-build
+      # The global.json MTP runner treats --no-build as a test-app argument and
+      # exits 5 with zero tests. CI=true keeps this implicit restore locked.
+      - run: dotnet test --configuration ${{ matrix.configuration }}

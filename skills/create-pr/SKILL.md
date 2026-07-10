@@ -2,11 +2,21 @@
 name: create-pr
 description: Create a pull request for the current changes. Use when asked to "make a PR", "open a pull request", "push and PR", or otherwise publish in-progress work for review. Ensures changes are on a non-`main` branch, commits are made and pushed, and the PR targets `upstream/main` when an `upstream` remote exists, otherwise `origin/main`.
 license: MIT
+compatibility: Requires git; remote creation uses an available GitHub integration or authenticated gh, with a browser fallback.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: git-github
+  binding: optional-overlay
+  risk: remote-write
+  maturity: canary
+  requires: none
+  related: pre-pr-self-review, address-pr-feedback
 ---
 
 # Create a pull request
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 Follow these steps in order. Stop and ask the user if any check is ambiguous;
 do not force-push, rewrite history, or delete branches without explicit
@@ -49,11 +59,10 @@ Decide the PR base:
   branch from the current `HEAD` with a short, descriptive, kebab-case name
   derived from the change (e.g. `fix-span-enumerate-lines`,
   `add-create-pr-skill`).
-- Confirm the branch name with `vscode_askQuestions` before creating it.
-  Pass two `options`: the suggested kebab-case name and `Use a different
-  name`. Free-form text is allowed by default, so the user can either
-  click the suggestion or type an override.
-  (`vscode_askQuestions` requires either zero options or two-plus.)
+- Confirm the branch name with an available structured-question capability
+  before creating it. Offer the suggested kebab-case name and a way to enter a
+  different name. If the host has no structured question tool, ask in chat.
+  Known client adapters are in [host-adapters.md](host-adapters.md).
 - Use `git switch -c <branch>` to move uncommitted changes onto the new
   branch.
 - If already on a non-`main` branch, keep using it.
@@ -112,18 +121,16 @@ so conflicts surface locally instead of on the PR:
 
 ## 5. Open the PR
 
-**Prefer the VS Code GitHub Pull Requests tool**
-(`github-pull-request_create_pull_request`) when it is available in the
-current tool set - it works without requiring `gh` to be installed and
-returns the PR number/URL directly. Fall back to the GitHub CLI (`gh`) if
-the VS Code tool is not available, and only fall back to a browser compare
-URL if neither is available.
+**Prefer an available GitHub integration** that can create a pull request and
+return its number/URL. Fall back to the GitHub CLI (`gh`) when no integration is
+available, and only fall back to a browser compare URL if neither is available.
+Known client adapters are in [host-adapters.md](host-adapters.md).
 
 Determine the target with the rule from step 1.
 
-### Option A - VS Code GitHub Pull Requests tool (preferred)
+### Option A - GitHub integration (preferred)
 
-Call `github-pull-request_create_pull_request` with:
+Call the host's pull-request creation capability with:
 
 - `title`, `body` (see PR title/body guidance below),
 - `head` = the feature branch name (no owner prefix),
@@ -191,3 +198,8 @@ same commit/push publish gate.
   workflow.
 - If the working tree has unrelated changes, ask the user which files belong
   in the PR before staging.
+
+## Host adapters
+
+- [host-adapters.md](host-adapters.md) - exact structured-question and GitHub
+  integration names for tested clients, plus the host-neutral fallbacks.

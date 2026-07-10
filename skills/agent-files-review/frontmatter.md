@@ -45,8 +45,16 @@ workflow (mirror, links, validator, whitespace) stays in [SKILL.md](SKILL.md).
   - equal the parent directory name exactly
 - `description` is required; make it specific enough that another agent
   can decide when to load it.
+- Shared portfolio cores also require string-valued `metadata.portability`,
+  `metadata.applicability`, `metadata.binding`, `metadata.risk`,
+  `metadata.maturity`, `metadata.requires`, and `metadata.related`. Use the
+  repository's `FORMAT.md` vocabulary; relationship names must resolve and the
+  required graph must remain acyclic.
+- For `optional-overlay` or `required-overlay`, keep the standard loader sentence
+  in the core. An `overlay.md` starts with `core` and `core-pin`; `core` matches
+  the directory, and a required overlay must exist.
 - A name/dir mismatch causes the skill to silently fail to load. Always
-  verify by running the validator.
+  verify by running both the strict bundled validator and `skills-ref`.
 
 ## `*.prompt.md` (reusable prompts)
 

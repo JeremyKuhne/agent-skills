@@ -2,11 +2,21 @@
 name: pre-pr-self-review
 description: Self-review checklist - plus an agentic review pass (a read-only reviewer persona over the diff) - before opening a PR. Use before invoking `create-pr`, when reviewing your own draft, or when a reviewer flags issues that should have been caught earlier. Codifies recurring mistakes from multi-targeted polyfill work - missing tests for new public surface, unchecked length sums, null-pointer foot-guns from `MemoryMarshal.GetReference` on empty spans, drift from `ArgumentNullException.ThrowIfNull` and `checked()` conventions, TFM phrasing errors, and stale PR descriptions.
 license: MIT
+compatibility: Requires git plus the repository's build, test, and agent-file validation commands.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: universal
+  binding: optional-overlay
+  risk: local-write
+  maturity: canary
+  requires: none
+  related: create-pr, address-pr-feedback, security-review, performance-testing
 ---
 
 # Pre-PR self-review
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 Run this checklist before invoking the `create-pr` skill. Each item is a question
 your code or PR body must answer. Update the skill whenever a reviewer flags

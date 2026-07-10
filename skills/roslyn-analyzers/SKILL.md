@@ -2,11 +2,21 @@
 name: roslyn-analyzers
 description: Design, build, validate, and ship a Roslyn analyzer (and optional code fix) in a dedicated analyzer project. Use when asked to "write an analyzer", "create a Roslyn/diagnostic analyzer", "add an analyzer rule", "add a code fix", "enforce a convention at build time", or "flag a pattern in code". ALWAYS starts by checking whether an existing analyzer suite (the .NET SDK CA/IDE rules, BannedApiAnalyzers, an EditorConfig rule, Roslynator, StyleCop, Meziantou, etc.) already covers the request before authoring anything new. Covers the netstandard2.0 project layout, packing the analyzer into your library's NuGet package, the statelessness/concurrency and IOperation-vs-syntax design rules, the Microsoft.CodeAnalysis.Testing validation harness, and the in-IDE performance discipline. For BenchmarkDotNet runtime microbenchmarks see `performance-testing`; for auditing untrusted-input handling see `security-review`.
 license: MIT
+compatibility: Requires the .NET SDK, Roslyn packages, and a test project capable of running Microsoft.CodeAnalysis.Testing fixtures.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: dotnet-project-gated
+  binding: optional-overlay
+  risk: local-write
+  maturity: canary
+  requires: none
+  related: performance-testing, security-review, pre-pr-self-review, il-copy-inspection
 ---
 
 # Roslyn analyzers
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 Author a Roslyn diagnostic analyzer (and optional code fix) the right way: confirm
 nothing already does the job, build it to the analyzer-authoring rules, validate it

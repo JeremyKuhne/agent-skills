@@ -21,8 +21,16 @@ body:
       label: Version
       description: The tag or commit you are using.
       placeholder: v0.6.0
+  - type: input
+    id: client
+    attributes:
+      label: Client and install mode
+      description: For example Copilot CLI plugin, gh skill into VS Code, or another Agent Skills host.
+      placeholder: Copilot CLI 1.0.63 plugin install
   - type: textarea
     id: repro
     attributes:
       label: Steps to reproduce
       description: How can the problem be reproduced?
+    validations:
+      required: true

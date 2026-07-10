@@ -28,6 +28,27 @@ BeforeAll {
         return $dir
     }
 
+    function New-PortfolioFrontmatter {
+        param(
+            [Parameter(Mandatory)] [string] $Name,
+            [string] $Portability = 'portable',
+            [string] $Binding = 'optional-overlay',
+            [string] $Related = 'none'
+        )
+        return @(
+            "name: $Name"
+            'description: A portfolio skill.'
+            'metadata:'
+            "  portability: $Portability"
+            '  applicability: universal'
+            "  binding: $Binding"
+            '  risk: advisory'
+            '  maturity: canary'
+            '  requires: none'
+            "  related: $Related"
+        ) -join "`n"
+    }
+
     # Invoke the validator and capture its output (info stream) plus exit code.
     # Arguments are the positional path(s) plus an optional '-Quiet'; they are
     # rebound through hashtable splatting so the switch binds as a switch.
@@ -35,11 +56,15 @@ BeforeAll {
         param([Parameter(Mandatory)] [string[]] $Arguments)
         $paths = @()
         $quiet = $false
-        foreach ($a in $Arguments) {
-            if ($a -eq '-Quiet') { $quiet = $true } else { $paths += $a }
+        $requirePortfolioMetadata = $false
+        foreach ($argument in $Arguments) {
+            if ($argument -eq '-Quiet') { $quiet = $true }
+            elseif ($argument -eq '-RequirePortfolioMetadata') { $requirePortfolioMetadata = $true }
+            else { $paths += $argument }
         }
         $splat = @{ Path = $paths }
         if ($quiet) { $splat['Quiet'] = $true }
+        if ($requirePortfolioMetadata) { $splat['RequirePortfolioMetadata'] = $true }
         $records = & $script:ValidatorPath @splat 6>&1
         $code = $LASTEXITCODE
         $text = ($records | ForEach-Object { $_.ToString() }) -join "`n"
@@ -80,6 +105,108 @@ Describe 'Validate-Skills.ps1' {
             $r = Invoke-Validator -Arguments @($dir)
             $r.ExitCode | Should -Be 0
             $r.Output | Should -Match 'All 1 skill'
+        }
+
+        It 'validates the complete source portfolio under the strict policy' {
+            $dir = Join-Path $script:RepoRoot 'skills'
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 15 skill'
+        }
+    }
+
+    Context 'portfolio metadata and overlays' {
+        It 'rejects missing portfolio metadata in strict mode' {
+            $dir = New-SkillFixture -Name 'missing-policy' -Frontmatter (@(
+                    'name: missing-policy'
+                    'description: A skill.'
+                ) -join "`n")
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'Missing required field in frontmatter: metadata'
+        }
+
+        It 'rejects an invalid metadata vocabulary value' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'bad-risk'
+            $frontmatter = $frontmatter.Replace('  risk: advisory', '  risk: destructive')
+            $dir = New-SkillFixture -Name 'bad-risk' -Frontmatter $frontmatter -Body @'
+# Bad risk
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "metadata.risk 'destructive' is invalid"
+        }
+
+        It 'rejects invalid relationship syntax' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'bad-related' -Related 'good-skill, Bad_Skill'
+            $dir = New-SkillFixture -Name 'bad-related' -Frontmatter $frontmatter -Body @'
+# Bad related
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "metadata.related contains invalid skill name 'Bad_Skill'"
+        }
+
+        It 'requires the loader cue for an overlay-aware core' {
+            $dir = New-SkillFixture -Name 'missing-cue' -Frontmatter (New-PortfolioFrontmatter -Name 'missing-cue')
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'requires this loader cue'
+        }
+
+        It 'requires overlay.md for a required binding' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'needs-overlay' -Binding 'required-overlay'
+            $dir = New-SkillFixture -Name 'needs-overlay' -Frontmatter $frontmatter -Body @'
+# Needs overlay
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "requires overlay.md beside SKILL.md"
+        }
+
+        It 'accepts a required overlay whose core and pin match' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'bound-skill' -Binding 'required-overlay'
+            $dir = New-SkillFixture -Name 'bound-skill' -Frontmatter $frontmatter -Body @'
+# Bound skill
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            Set-Content -LiteralPath (Join-Path $dir 'overlay.md') -NoNewline -Value @'
+---
+core: bound-skill
+core-pin: v1.2.3
+---
+
+# Bound skill overlay
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
+        }
+
+        It 'rejects an overlay bound to a different core' {
+            $dir = New-SkillFixture -Name 'wrong-core' -Frontmatter (New-PortfolioFrontmatter -Name 'wrong-core') -Body @'
+# Wrong core
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            Set-Content -LiteralPath (Join-Path $dir 'overlay.md') -NoNewline -Value @'
+---
+core: another-skill
+core-pin: v1.2.3
+---
+
+# Wrong overlay
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "must match skill directory 'wrong-core'"
         }
     }
 

@@ -4,11 +4,16 @@
     "name": "Jeremy W. Kuhne",
     "url": "https://github.com/JeremyKuhne"
   },
+  "metadata": {
+    "description": "Shared engineering skills and reviewer agents for .NET repositories.",
+    "version": "0.10.0"
+  },
   "plugins": [
     {
       "name": "agent-skills",
       "source": "./",
-      "description": "Shared agent skills and MCP configuration for JeremyKuhne's .NET repositories."
+      "description": "Shared agent skills and MCP configuration for JeremyKuhne's .NET repositories.",
+      "version": "0.10.0"
     }
   ]
 }
