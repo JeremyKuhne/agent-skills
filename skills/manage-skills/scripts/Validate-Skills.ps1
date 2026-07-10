@@ -453,11 +453,12 @@ function Test-SkillDir ([string] $dir) {
     Test-PortfolioMetadata $metadata $raw $dir $RequirePortfolioMetadata.IsPresent |
         ForEach-Object { $errors.Add($_) }
 
+    $htmlEntityRegex = [regex]::new('&(?:#[0-9]+|#[xX][0-9A-Fa-f]+|[A-Za-z][A-Za-z0-9]+);', [System.Text.RegularExpressions.RegexOptions]::Compiled)
     foreach ($markdownFile in Get-ChildItem -LiteralPath $dir -Recurse -File -Filter '*.md') {
         [int] $lineNumber = 0
         foreach ($line in Get-Content -LiteralPath $markdownFile.FullName) {
             $lineNumber++
-            foreach ($match in [regex]::Matches($line, '&(?:#[0-9]+|#[xX][0-9A-Fa-f]+|[A-Za-z][A-Za-z0-9]+);')) {
+            foreach ($match in $htmlEntityRegex.Matches($line)) {
                 [string] $relativePath = [System.IO.Path]::GetRelativePath($dir, $markdownFile.FullName)
                 $errors.Add("$relativePath`:$lineNumber contains HTML entity '$($match.Value)'; write the character directly or use plain words.")
             }
