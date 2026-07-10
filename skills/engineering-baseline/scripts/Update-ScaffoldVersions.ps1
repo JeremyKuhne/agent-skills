@@ -44,7 +44,8 @@ param(
     [int]    $MinimumReleaseAgeDays,
     [string] $Source,
     [switch] $Apply,
-    [switch] $SmokeTest
+    [switch] $SmokeTest,
+    [Parameter(DontShow)] [switch] $SkipMain
 )
 
 Set-StrictMode -Version Latest
@@ -128,6 +129,8 @@ function Resolve-KnownGood ([string] $id, [int] $minAge, [string[]] $allow) {
 }
 
 # ---------------------------------------------------------------------------
+
+if ($SkipMain) { return }
 
 $doc    = Get-Content $VersionsPath -Raw | ConvertFrom-Json
 $minAge = if ($PSBoundParameters.ContainsKey('MinimumReleaseAgeDays')) { $MinimumReleaseAgeDays } else { [int]$doc.policy.minimumReleaseAgeDays }

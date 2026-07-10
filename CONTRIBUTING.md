@@ -32,16 +32,17 @@ reference; the essentials:
 - Keep cores **portable**. No repo-specific paths, project names, target-framework
   monikers, or links into a particular repository's tree. Anything a core truly
   needs travels with it as a bundled `references/` doc or a portable sibling;
-  everything repo-specific belongs in the consuming repo's overlay.
-- When a core defers repo-specific names or cross-references to the overlay, leave
-  a short **prose cue** pointing the agent there (e.g. "a consuming repository
-  wires the concrete cross-references in its overlay"). It is prose, not a link -
-  the core can't link a downstream `overlay.md`, and the cue is what makes the
-  agent read the overlay. See [FORMAT.md](FORMAT.md) for the rule.
+  everything repo-specific belongs in the consuming repo's `overlay.md`.
+- Fill every portfolio metadata field and use the exact overlay loader sentence
+  from [FORMAT.md](FORMAT.md). Distinguish hard `requires` from optional
+  `related` handoffs.
+- Include at least one positive trigger example and one near-miss that should not
+  invoke the skill. For a behavior change, state the expected output or artifact
+  and any action the agent must not take without approval.
 
 ## Validating locally
 
-CI runs two checks on every push and pull request; run them before opening a PR:
+Run the same deterministic checks as CI before opening a PR:
 
 ```pwsh
 # Lint Markdown (the same config CI uses).
@@ -49,10 +50,19 @@ npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_module
 
 # Offline link check (same engine as CI; requires the lychee binary).
 lychee --no-progress --offline "**/*.md"
+
+# Agent Skills spec plus this portfolio's metadata/overlay contract.
+npx --yes skills-ref@0.1.5 validate ./skills/<name>
+./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
+
+# Generated catalog and executable contracts.
+./tools/Update-SkillCatalog.ps1
+Invoke-Pester ./tests
 ```
 
-Both must pass. Because the link check runs `--offline`, every relative link must
-resolve to a file that exists in the repository.
+All must pass. Because the link check runs `--offline`, every relative link must
+resolve to a file that exists in the repository. The installed-artifact tests
+also prevent a core from relying on an undeclared sibling skill.
 
 ## Style
 

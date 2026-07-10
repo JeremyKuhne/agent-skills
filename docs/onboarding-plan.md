@@ -56,8 +56,9 @@ drifting copies of the same skill.
 
 Two axes decide the buckets, and they are independent:
 
-- **Portability** - how much the content must change to be reused (`portable` /
-  `semi-portable` / `repo-specific`). Drives fork-vs-promote.
+- **Portability** - whether the installed core is self-contained (`portable`) or
+  tied to one repository (`repo-specific`). A historical "semi-portable" skill
+  must be split into a portable core plus an overlay before promotion.
 - **Applicability** - whether the repo should carry the skill at all, by domain
   (`universal` / `dotnet-framework` / `cswin32` / `project-gated` / `repo-local`
   / ...). A skill can be highly portable yet narrowly applicable (a CsWin32-COM
@@ -115,18 +116,20 @@ consumer.
 
 Vendor only the skills the repo's domain calls for (selective vendoring is the
 *only* reliable control over where a skill fires - a skill not vendored cannot
-fire). Pick from the commons by tier. Skills marked *(pending)* are planned but
-not yet published here - they are tracked in the fleet ledger and can be vendored
-only once they land; the rest are available now.
+fire). The generated [portfolio matrix](../skills/README.md#portfolio-contract)
+is the source of truth for applicability, binding, risk, maturity, and
+relationships.
 
-- **Universal** - essentially every .NET repo: `security-review`,
-  `pre-pr-self-review`, `create-pr`, `address-pr-feedback`, `agent-files-review`,
-  `performance-testing`, `scratch-buffer-strategy`, `framework-jit-optimization`,
-  and `manage-skills` *(pending)*.
-- **Domain** - only repos in that domain (all *(pending)* today):
-  `polyfill-dotnet-api` (repos with a `Framework/` polyfill tree), `fuzz-testing`
-  (any parser/codec/buffer surface worth fuzzing - project-gated), and the
-  `cswin32-*` skills (CsWin32 repos).
+- **Starting tier** - appropriate for most engineering repos: `manage-skills`,
+  `agent-files-review`, `create-pr`, `address-pr-feedback`, `security-review`,
+  `pre-pr-self-review`, and `code-comprehension`.
+- **.NET domain** - available now and selected by the repository's work:
+  `engineering-baseline`, `dotnet-polyfills`, `framework-jit-optimization`,
+  `scratch-buffer-strategy`, `performance-testing`, `fuzz-testing`,
+  `roslyn-analyzers`, and `il-copy-inspection`.
+- **Pending domain additions** - `cswin32-interop` and `cswin32-com`; these are
+  tracked in the fleet ledger and cannot be vendored from the commons until they
+  land.
 - **Tool-shipped** - vendor from the tool's own repo, not here: a standalone
   tool's skill (for example `filtrace`), vendored from that tool's repo, for any
   repo that uses the tool.
@@ -135,12 +138,11 @@ only once they land; the rest are available now.
 
 Two vendoring wrinkles:
 
-- **Project-gated bootstrap.** A skill that drives a sibling project (`fuzz-testing`
-  -> `<root>.fuzz`, `performance-testing` -> `<root>.perf`) carries an `assets/`
-  template and a bootstrap step: if the project does not exist, scaffold it from
-  the template, named to match the repo's existing sibling projects, and wire it
-  into the solution. Vendoring such a skill into a repo without the project *is*
-  the act of declaring "I want this here."
+- **Project-gated prerequisite.** `fuzz-testing`, `performance-testing`, and
+  `roslyn-analyzers` guide work in sibling projects but do not currently scaffold
+  those projects. Vendor one when the project exists or after separately creating
+  it to match the repository's layout. The engineering-baseline scaffold also
+  leaves perf and fuzz projects as explicit optional follow-up work.
 - **Layout detection.** The project-naming convention (`<root>`, `<root>.tests`,
   `<root>.perf`, `<root>.fuzz`) is not universal - some repos use a `src/<root>`
   layout and a `<root>_tests` underscore form instead. A vendored core must resolve
@@ -168,8 +170,9 @@ For every **Local-generic** skill (Stage 1) and every accepted **generic delta**
    with generic instructions ("see the examples under your repo's
    `Framework/Polyfills/` tree"). Deep content the core truly needs travels as a
    bundled `references/` doc or a portable sibling.
-2. **Classify.** Set `metadata.portability` and `metadata.applicability`, and
-   decide the tier (universal / domain / tool-shipped / repo-local).
+2. **Classify.** Set all portfolio metadata fields: portability, applicability,
+  binding, risk, maturity, requires, and related. Decide whether any local
+  bindings need an `overlay.md` generated from the standard template.
 3. **Author and tag.** Add the directory under `skills/`, follow
    [FORMAT.md](../FORMAT.md), pass the commons lint + offline link check
    ([CONTRIBUTING.md](../CONTRIBUTING.md)), and cut an immutable release tag.

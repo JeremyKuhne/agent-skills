@@ -2,11 +2,21 @@
 name: security-review
 description: Security-focused review of pending changes. Audit any change that could affect safety or correctness under abusive input or unchecked preconditions - oversized values, malformed structures, integer/length overflow, catastrophic backtracking, allocation pressure, other denial-of-service shapes, and any use of `unsafe` code or the `Unsafe` / `MemoryMarshal` / `Marshal` static helpers (which trade compiler safety guarantees for speed and need extra scrutiny). Add regression tests that pin safe behavior even when the current implementation already handles the input correctly. Use when asked to "assess for security vulnerabilities", "do a security review", "check for ReDoS / DoS", "audit untrusted input handling", or before publishing any change that adds or modifies code that parses, decodes, encodes, compiles, marshals, or reinterprets memory.
 license: MIT
+compatibility: Requires the repository's test runner; timing and allocation checks should run on every supported target framework.
 metadata:
   portability: portable
+  applicability: universal
+  binding: optional-overlay
+  risk: local-write
+  maturity: canary
+  requires: none
+  related: pre-pr-self-review, performance-testing, fuzz-testing
 ---
 
 # Security review
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 Surface and pin behavior under **malformed input** and **caller-validated
 APIs** (everything the C# compiler doesn't check for you).

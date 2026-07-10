@@ -2,11 +2,21 @@
 name: il-copy-inspection
 description: Find struct value copies in a method's compiled IL - defensive copies, boxing, by-value field/argument/return copies - by reading the emitted bytecode rather than predicting from source. Use when asked to "find struct copies", "where does the compiler copy this struct", "is this a defensive copy", "check for boxing in IL", "did the compiler emit a copy here", "confirm the analyzer's defensive-copy warning", or "audit a [NonCopyable] type's copies after build". Post-build, ground-truth counterpart to source-level defensive-copy analyzers - IL is post-lowering, so synthesized copies the analyzer cannot see are visible here. Not for wall-clock/allocation measurement (that is `performance-testing`) nor for JIT-emitted machine code (that is `framework-jit-optimization` + `DisassemblyDiagnoser`).
 license: MIT
+compatibility: Requires a Release build with portable or embedded PDBs and an IL reader such as ilspycmd, ildasm, Cecil, or System.Reflection.Metadata.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: dotnet
+  binding: optional-overlay
+  risk: advisory
+  maturity: canary
+  requires: none
+  related: roslyn-analyzers, framework-jit-optimization, performance-testing, scratch-buffer-strategy
 ---
 
 # Inspecting IL for struct copies
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 A struct copy is invisible in C# source but concrete in IL. This skill reads a
 method's **emitted bytecode** to find where the compiler actually copies a value

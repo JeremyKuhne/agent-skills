@@ -17,6 +17,47 @@ body:
     validations:
       required: true
   - type: textarea
+    id: negative-trigger
+    attributes:
+      label: When should it not run?
+      description: Give at least one near-miss that must not invoke this skill.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected outcome
+      description: Describe the report, code change, command result, or other artifact that proves the skill worked.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Maximum action risk
+      options:
+        - advisory
+        - local-write
+        - remote-write
+    validations:
+      required: true
+  - type: dropdown
+    id: binding
+    attributes:
+      label: Repository binding
+      options:
+        - none
+        - optional-overlay
+        - required-overlay
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility requirements
+      description: List required clients, runtimes, CLIs, operating systems, network access, or MCP servers; write none when unrestricted.
+    validations:
+      required: true
+  - type: textarea
     id: portability
     attributes:
       label: Portability
@@ -24,3 +65,12 @@ body:
         Confirm the core can stay generic - no repo-specific paths, project
         names, or links into a particular repository's tree. Note anything that
         would need to live in a consuming repo's overlay instead.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or fixture
+      description: Link a recurring task, review comment, incident, prototype, or fixture that demonstrates the need and expected behavior.
+    validations:
+      required: true

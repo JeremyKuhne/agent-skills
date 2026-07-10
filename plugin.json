@@ -1,9 +1,17 @@
 {
   "name": "agent-skills",
-  "version": "0.1.0",
-  "description": "Shared agent skills and MCP configuration for JeremyKuhne's .NET repositories. A gh skill source and a Copilot/Claude plugin.",
+  "version": "0.10.0",
+  "description": "Shared agent skills and MCP configuration for JeremyKuhne's .NET repositories. A gh skill source and GitHub Copilot CLI plugin.",
   "license": "MIT",
-  "author": "Jeremy W. Kuhne",
+  "author": {
+    "name": "Jeremy W. Kuhne",
+    "url": "https://github.com/JeremyKuhne"
+  },
+  "homepage": "https://github.com/JeremyKuhne/agent-skills",
+  "repository": "https://github.com/JeremyKuhne/agent-skills",
+  "keywords": ["agent-skills", "dotnet", "engineering"],
+  "category": "development",
+  "tags": ["agent-skills", "dotnet"],
   "skills": ["skills/"],
   "agents": "agents/",
   "mcpServers": ".mcp.json"

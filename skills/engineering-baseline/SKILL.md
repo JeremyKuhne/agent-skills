@@ -2,11 +2,21 @@
 name: engineering-baseline
 description: Create a new .NET repository fully wired for building, testing, and publishing with OSS best practices, or bring an existing repository up to a documented engineering baseline. Use when asked to "create a new repository" / "scaffold a new project" (a CLI tool, a class library / NuGet package, or a multi-target library) with CI, packaging, branch protection, and governance files, or to "ensure this repo follows modern engineering best practices" / "audit this repository" / "bring this repo up to standard". Scores a repository across nine domains - foundation, build, test, publish, versioning, CI, supply-chain security, OSS governance, and agent enablement - against an industry-cited baseline, then reports gaps and remediates. Irreversible or remote actions (repository creation, branch protection, release settings, publishing) are proposed for explicit approval, never run silently.
 license: MIT
+compatibility: Requires PowerShell 7.2, git, and the .NET SDK; remote setup additionally uses authenticated gh.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: dotnet
+  binding: optional-overlay
+  risk: remote-write
+  maturity: canary
+  requires: none
+  related: manage-skills, security-review, create-pr
 ---
 
 # Engineering baseline
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 The repository-lifecycle skill: stand up a new repository wired for the full
 build / test / publish path with open-source best practices, or measure an

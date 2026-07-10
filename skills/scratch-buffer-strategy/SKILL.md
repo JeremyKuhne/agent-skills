@@ -2,11 +2,21 @@
 name: scratch-buffer-strategy
 description: Choose how a hot path gets a short-lived scratch buffer - zeroed `stackalloc`, `[SkipLocalsInit]` + `stackalloc`, `BufferScope` of T (stack with pool fallback), or a rental from the shared `ArrayPool` of T - and apply the net481/net10 size crossovers. Use when designing or reviewing a performance-sensitive path that needs a temporary buffer, when deciding "should I rent or stackalloc?", when weighing `[SkipLocalsInit]`, or when evaluating buffer/allocation cost. Defers the backing measurements and full reasoning to the bundled references/arraypool-performance.md.
 license: MIT
+compatibility: Applies to multi-targeted .NET code where modern .NET and .NET Framework runtime costs can be measured separately.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: dotnet-framework
+  binding: optional-overlay
+  risk: advisory
+  maturity: canary
+  requires: none
+  related: performance-testing, framework-jit-optimization
 ---
 
 # Scratch buffer strategy (net481 + net10)
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 Pick the cheapest correct way to get a short-lived scratch buffer on a hot path.
 This skill is the compact decision aid; the measured numbers, the per-call

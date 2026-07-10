@@ -24,6 +24,11 @@
     The length and no-XML-tags checks go beyond skills-ref, which validates
     frontmatter only; the colon check restores parity with its strict YAML parser.
 
+    With -RequirePortfolioMetadata, also enforces this commons' portable-core
+    policy: metadata.portability/applicability/binding/risk/maturity/requires/
+    related, the optional-overlay loader cue, and overlay.md frontmatter when an
+    overlay is present.
+
     The frontmatter parser handles inline scalars, `>`/`|` block scalars, and one
     level of `metadata:` mapping, with `---` matched line by line. A known field
     given a block mapping/sequence (or an unquoted-colon scalar) is rejected;
@@ -39,6 +44,9 @@
 .PARAMETER Quiet
     Print only failures.
 
+.PARAMETER RequirePortfolioMetadata
+    Require and validate the commons portfolio metadata and overlay contract.
+
 .EXAMPLE
     pwsh Validate-Skills.ps1 skills/
     Validate every skill directory under skills/.
@@ -46,13 +54,18 @@
 .EXAMPLE
     pwsh Validate-Skills.ps1 skills/manage-skills
     Validate a single skill directory.
+
+.EXAMPLE
+    pwsh Validate-Skills.ps1 skills/ -RequirePortfolioMetadata
+    Validate every commons core against the stricter portfolio policy.
 #>
 
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)] [string[]] $Path,
-    [switch] $Quiet
+    [switch] $Quiet,
+    [switch] $RequirePortfolioMetadata
 )
 
 Set-StrictMode -Version Latest
@@ -62,6 +75,13 @@ $MaxName = 64
 $MaxDescription = 1024
 $MaxCompatibility = 500
 $MaxSkillLines = 500
+$PortfolioMetadataFields = @('portability', 'applicability', 'binding', 'risk', 'maturity', 'requires', 'related')
+$AllowedPortability = @('portable', 'semi-portable', 'repo-specific')
+$AllowedApplicability = @('universal', 'git-github', 'agent-customization', 'dotnet', 'dotnet-framework', 'dotnet-project-gated', 'tool-shipped', 'repo-local')
+$AllowedBinding = @('none', 'optional-overlay', 'required-overlay')
+$AllowedRisk = @('advisory', 'local-write', 'remote-write')
+$AllowedMaturity = @('experimental', 'canary', 'stable')
+$OverlayCue = 'If `overlay.md` exists beside this file, read it before acting'
 # Spec scalar fields. If one of these is given a block mapping/sequence instead of
 # a scalar it is rejected; unknown fields and `metadata` are not shape-checked.
 $KnownScalarFields = @('name', 'description', 'license', 'compatibility', 'allowed-tools')
@@ -275,6 +295,125 @@ function Test-SkillCompatibility ($compatibility) {
     }
 }
 
+function Get-MetadataValue ($metadata, [string] $key) {
+    if ($metadata -is [System.Collections.IDictionary] -and $metadata.Contains($key)) {
+        return $metadata[$key]
+    }
+    return $null
+}
+
+function Test-MetadataEnum ($metadata, [string] $key, [string[]] $allowed) {
+    $value = Get-MetadataValue $metadata $key
+    if ($null -eq $value) { return }
+    if ($value -isnot [string] -or [string]::IsNullOrWhiteSpace($value)) {
+        "metadata.$key must be a non-empty string"
+        return
+    }
+    if ($allowed -notcontains $value) {
+        "metadata.$key '$value' is invalid; expected one of: $($allowed -join ', ')"
+    }
+}
+
+function Test-RelationshipMetadata ($metadata, [string] $key) {
+    $value = Get-MetadataValue $metadata $key
+    if ($null -eq $value) { return }
+    if ($value -isnot [string] -or [string]::IsNullOrWhiteSpace($value)) {
+        "metadata.$key must be 'none' or a comma-separated list of skill names"
+        return
+    }
+    if ($value -eq 'none') { return }
+
+    $names = @($value -split ',' | ForEach-Object { $_.Trim() })
+    if ($names.Count -eq 0 -or $names -contains '') {
+        "metadata.$key must be 'none' or a comma-separated list of skill names"
+        return
+    }
+    foreach ($relationshipName in $names) {
+        if ($relationshipName -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') {
+            "metadata.$key contains invalid skill name '$relationshipName'"
+        }
+    }
+    $duplicates = @($names | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+    if ($duplicates.Count -gt 0) {
+        "metadata.$key contains duplicate skill name(s): $($duplicates -join ', ')"
+    }
+}
+
+function Test-OverlayContract ($metadata, [string] $raw, [string] $dir) {
+    $binding = Get-MetadataValue $metadata 'binding'
+    if ($binding -notin @('none', 'optional-overlay', 'required-overlay')) { return }
+
+    $overlayPath = Join-Path $dir 'overlay.md'
+    $hasOverlay = Test-Path -LiteralPath $overlayPath -PathType Leaf
+
+    if ($binding -in @('optional-overlay', 'required-overlay') -and -not $raw.Contains($OverlayCue)) {
+        "metadata.binding '$binding' requires this loader cue in SKILL.md: $OverlayCue"
+    }
+    if ($binding -eq 'required-overlay' -and -not $hasOverlay) {
+        "metadata.binding 'required-overlay' requires overlay.md beside SKILL.md"
+        return
+    }
+    if ($binding -eq 'none' -and $hasOverlay) {
+        "overlay.md exists but metadata.binding is 'none'"
+        return
+    }
+    if (-not $hasOverlay) { return }
+
+    try {
+        $overlayFrontmatter = Read-Frontmatter (Get-Content -LiteralPath $overlayPath -Raw)
+    }
+    catch {
+        "overlay.md: $($_.Exception.Message)"
+        return
+    }
+
+    foreach ($requiredOverlayField in @('core', 'core-pin')) {
+        if (-not $overlayFrontmatter.Contains($requiredOverlayField) -or
+            [string]::IsNullOrWhiteSpace([string]$overlayFrontmatter[$requiredOverlayField])) {
+            "overlay.md is missing required frontmatter field: $requiredOverlayField"
+        }
+    }
+    if ($overlayFrontmatter.Contains('core')) {
+        $directoryName = Split-Path -Leaf $dir
+        if ([string]$overlayFrontmatter['core'] -cne $directoryName) {
+            "overlay.md core '$($overlayFrontmatter['core'])' must match skill directory '$directoryName'"
+        }
+    }
+}
+
+function Test-PortfolioMetadata ($metadata, [string] $raw, [string] $dir, [bool] $required) {
+    if ($null -eq $metadata) {
+        if ($required) { 'Missing required field in frontmatter: metadata' }
+        return
+    }
+    if ($metadata -isnot [System.Collections.IDictionary]) {
+        'Field metadata must be a mapping'
+        return
+    }
+
+    if ($required) {
+        foreach ($requiredMetadataField in $PortfolioMetadataFields) {
+            if (-not $metadata.Contains($requiredMetadataField)) {
+                "Missing required portfolio field: metadata.$requiredMetadataField"
+            }
+        }
+    }
+
+    Test-MetadataEnum $metadata 'portability' $AllowedPortability
+    Test-MetadataEnum $metadata 'applicability' $AllowedApplicability
+    Test-MetadataEnum $metadata 'binding' $AllowedBinding
+    Test-MetadataEnum $metadata 'risk' $AllowedRisk
+    Test-MetadataEnum $metadata 'maturity' $AllowedMaturity
+    Test-RelationshipMetadata $metadata 'requires'
+    Test-RelationshipMetadata $metadata 'related'
+
+    if ($required -and (Get-MetadataValue $metadata 'portability') -ne 'portable') {
+        "Commons cores must set metadata.portability to 'portable'"
+    }
+
+    Test-OverlayContract $metadata $raw $dir
+}
+
 function Test-SkillDir ([string] $dir) {
     $errors = [System.Collections.Generic.List[string]]::new()
 
@@ -301,6 +440,10 @@ function Test-SkillDir ([string] $dir) {
     else { Test-SkillDescription $fm['description'] | ForEach-Object { $errors.Add($_) } }
 
     if ($fm.Contains('compatibility')) { Test-SkillCompatibility $fm['compatibility'] | ForEach-Object { $errors.Add($_) } }
+
+    $metadata = if ($fm.Contains('metadata')) { $fm['metadata'] } else { $null }
+    Test-PortfolioMetadata $metadata $raw $dir $RequirePortfolioMetadata.IsPresent |
+        ForEach-Object { $errors.Add($_) }
 
     $lineCount = Measure-SkillLineCount $raw
     if ($lineCount -gt $MaxSkillLines) {

@@ -5,12 +5,12 @@ This is the **commons**: the single upstream source from which each repository
 vendors pinned, provenance-stamped copies of the skills it needs.
 
 It is both a [`gh skill`](https://docs.github.com/copilot/reference/copilot-cli-reference/cli-plugin-reference)
-source and a Copilot/Claude plugin marketplace.
+source and a GitHub Copilot CLI plugin marketplace.
 
-> **Status: early.** The distribution scaffolding, MCP configuration, and CI are
-> in place, and the first shared skill cores have landed under `skills/`. More
-> skills and agent personas arrive in later phases of the rollout. See the design
-> doc in the touki repo: `docs/skills-improvement-plan.md`.
+> **Status: pre-1.0 and in active fleet use.** The repository currently ships 15
+> shared skill cores and two reviewer agents. Deterministic source,
+> isolated-install, plugin, and scaffold gates are in place; model behavioral
+> evaluations remain future work.
 
 ## The model
 
@@ -56,16 +56,22 @@ version-pinned (`NuGet.Mcp.Server@1.4.3`), while `microsoft-learn` is a hosted
 HTTP endpoint on an official Microsoft domain. Review `.mcp.json` before
 installing if that matters in your environment.
 
+The plugin install is smoke-tested with GitHub Copilot CLI. The skill cores use
+the vendor-neutral Agent Skills format and can be vendored for other compatible
+hosts, including Claude Code, but this repository does not currently claim a
+CI-tested Claude plugin-marketplace install.
+
 ## Layout
 
 | Path | Purpose |
 | ---- | ------- |
 | `skills/` | The shared skill cores (the `gh skill` source). |
 | `agents/` | Portable agent personas (e.g. a generic reviewer). |
-| `plugin.json` | Plugin manifest (skills + agents + MCP) for the CLI / Claude. |
+| `plugin.json` | GitHub Copilot CLI plugin manifest (skills + agents + MCP). |
 | `.github/plugin/marketplace.json` | Marketplace listing so the plugin is installable by name. |
 | `.mcp.json` | MCP servers the skills rely on (`microsoft-learn`, NuGet). |
 | `FORMAT.md` | The skill file format authors follow when contributing a core. |
+| `RELEASING.md` | Shared SemVer, release gates, and immutable-tag procedure. |
 | `CONTRIBUTING.md` | How to author and validate a shared skill core. |
 | `CODE_OF_CONDUCT.md` | The behavior expected of everyone in the project. |
 | `SECURITY.md` | How to report a vulnerability privately. |

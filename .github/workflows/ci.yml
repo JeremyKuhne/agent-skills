@@ -3,8 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '23 7 * * 1'
 
 permissions:
   contents: read
@@ -33,32 +36,31 @@ jobs:
             "**/*.md"
           fail: true
 
-      - name: Detect skills
-        id: skills
-        shell: bash
-        run: |
-          if compgen -G ".agents/skills/*/SKILL.md" > /dev/null; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "No SKILL.md files yet (skeleton stage); skipping skills-ref validate."
-          fi
+      - name: Validate portfolio metadata and overlays
+        shell: pwsh
+        run: ./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
 
-      # The agentskills.io reference validator. Runs only once real skills exist
-      # (rollout Phase 3). Confirm the exact distribution / package name when the
-      # first skill is migrated in; this step is intentionally inert until then.
-      - name: Validate skill spec (skills-ref)
-        if: steps.skills.outputs.present == 'true'
+      - name: Validate source skills (skills-ref 0.1.5)
         shell: bash
         run: |
-          for dir in .agents/skills/*/; do
+          shopt -s nullglob
+          dirs=(skills/*/)
+          if (( ${#dirs[@]} == 0 )); then
+            echo "No source skills found under skills/." >&2
+            exit 1
+          fi
+          for dir in "${dirs[@]}"; do
             echo "Validating $dir"
-            npx --yes skills-ref validate "$dir"
+            npx --yes skills-ref@0.1.5 validate "$dir"
           done
 
   scripts:
     name: Script tests (Pester)
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -75,3 +77,72 @@ jobs:
           $config.Run.Throw = $true
           $config.Output.Verbosity = 'Detailed'
           Invoke-Pester -Configuration $config
+
+  plugin-smoke:
+    name: Copilot plugin smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Copilot CLI 1.0.63
+        run: npm install --global @github/copilot@1.0.63
+
+      - name: Install and inspect plugin
+        shell: pwsh
+        run: ./tests/plugin/Invoke-PluginSmoke.ps1
+
+  scaffold:
+    name: Scaffold (${{ matrix.os }}, ${{ matrix.archetype }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        archetype: [tool, library]
+        runner: [mstest, xunit]
+        include:
+          # net481 can be built cross-platform but its test runtime is Windows-only.
+          - os: windows-latest
+            archetype: multi-target
+            runner: mstest
+          - os: windows-latest
+            archetype: multi-target
+            runner: xunit
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        id: dotnet
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Scaffold, build, test, and pack
+        shell: pwsh
+        run: >-
+          ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1
+          -Archetype '${{ matrix.archetype }}'
+          -TestRunner '${{ matrix.runner }}'
+          -SdkVersion '${{ steps.dotnet.outputs.dotnet-version }}'
+
+  scaffold-preview:
+    name: Weekly scaffold preview SDK canary
+    if: github.event_name == 'schedule'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        id: dotnet
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      - name: Exercise next SDK
+        shell: pwsh
+        run: >-
+          ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1
+          -Archetype library
+          -TestRunner mstest
+          -SdkVersion '${{ steps.dotnet.outputs.dotnet-version }}'

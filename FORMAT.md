@@ -26,6 +26,14 @@ skill silently fails to load.
 ---
 name: skill-name
 description: One-sentence summary of what the skill does and when to use it.
+metadata:
+  portability: portable
+  applicability: universal
+  binding: optional-overlay
+  risk: advisory
+  maturity: canary
+  requires: none
+  related: another-skill
 ---
 
 # Body
@@ -38,9 +46,33 @@ e.g. [detail.md](detail.md).
 - `description` - what the skill does **and when to use it**, with trigger
   phrasing. This is the entire auto-invocation surface; write it "pushy".
 
-Optional frontmatter: `compatibility` (free-text environment / MCP-dependency
-note), `argument-hint`, `user-invocable`, `disable-model-invocation`, `context`
-(`inline` or `fork`), and a `metadata` map (e.g. `metadata.portability`).
+Use `compatibility` when the workflow requires a particular runtime, CLI, MCP
+server, network capability, or operating system. Other optional Agent Skills
+fields are `argument-hint`, `user-invocable`, `disable-model-invocation`,
+`context` (`inline` or `fork`), and `allowed-tools`.
+
+## Portfolio metadata
+
+Every core in this commons carries these string-valued `metadata` keys. CI
+validates the values and generates the portfolio matrix in
+[skills/README.md](skills/README.md).
+
+| Key | Values | Meaning |
+| --- | --- | --- |
+| `portability` | `portable` | The installed core is self-contained. `semi-portable` and `repo-specific` are recognized for downstream catalogs but cannot be published as commons cores. |
+| `applicability` | `universal`, `git-github`, `agent-customization`, `dotnet`, `dotnet-framework`, `dotnet-project-gated`, `tool-shipped`, `repo-local` | Which repositories should carry the skill. Applicability is independent of portability. |
+| `binding` | `none`, `optional-overlay`, `required-overlay` | Whether the core consumes a sibling `overlay.md`. |
+| `risk` | `advisory`, `local-write`, `remote-write` | The strongest action the workflow may take. Use this to scale review and evaluation depth. |
+| `maturity` | `experimental`, `canary`, `stable` | The assurance level. Promotion requires the release gates appropriate to that level. |
+| `requires` | `none` or comma-separated skill names | Hard dependencies that must be installed with this core. Keep this list small. |
+| `related` | `none` or comma-separated skill names | Optional companions and handoffs. A related skill is never an undeclared file dependency. |
+
+Relationship names must resolve to another source core and the `requires` graph
+must remain acyclic. The generated matrix is updated with:
+
+```pwsh
+./tools/Update-SkillCatalog.ps1 -Apply
+```
 
 ## Portable-core rules
 
@@ -54,21 +86,37 @@ Anything the core genuinely needs travels as a bundled `references/` doc or a
 portable sibling. Everything repo-specific is supplied by the consuming repo's
 overlay. A vendored core must pass that repo's link check unchanged.
 
-## Cue the overlay
+Do not link to a related skill from a core. Name it in prose and in
+`metadata.related`; the consuming repo may not have installed it. A required
+skill belongs in `metadata.requires` and the installed-artifact test installs
+that declared bundle before resolving links.
 
-When a core replaces repo-specific names, paths, or cross-references with
-placeholders, leave a short **prose cue** that points the agent at the consuming
-repo's overlay - for example, close a "Related skills" list with "a consuming
-repository wires the concrete cross-references in its overlay." The cue is prose,
-**not a link**: the core cannot link an `overlay.md` that exists only downstream,
-and a literal link would dangle the commons link check. The cue is what gets the
-overlay read - an agent following it opens the overlay for the concrete bindings;
-a genericized core with no cue leaves the agent holding unbound placeholders with
-no signal an overlay exists.
+## Overlay contract
 
-This is the default for every semi-portable core. A fully portable core with
-nothing to bind - no placeholders, no deferred cross-references - does not need
-one.
+`overlay.md` is the standard sibling for repository-specific bindings. A core
+with `binding: optional-overlay` or `binding: required-overlay` includes this
+exact loader instruction near the top of `SKILL.md`:
+
+> If `overlay.md` exists beside this file, read it before acting; it contains
+> repository-specific bindings. This core remains usable without it.
+
+For `required-overlay`, change the final sentence to state that the overlay is
+required; the strict validator also fails when the file is absent.
+
+An overlay starts with:
+
+```markdown
+---
+core: skill-name
+core-pin: vX.Y.Z
+---
+```
+
+`core` must match the directory and `core-pin` records the tag or SHA the
+bindings were reviewed against. Start from
+`skills/manage-skills/assets/overlay.md.tmpl`. When re-pinning the core, update
+`core-pin` and re-review the bindings. The overlay may link to repository files;
+the portable core may not.
 
 ## Thin core plus sibling files
 
@@ -82,3 +130,18 @@ overview that links to them.
 Vendor-neutral [Agent Skills](https://agentskills.io/) location, discovered by
 GitHub Copilot (VS Code, CLI, cloud agent) and Claude Code, and installable with
 `gh skill install JeremyKuhne/agent-skills <skill>`.
+
+## Validation
+
+Run the strict bundled policy and the reference specification validator:
+
+```pwsh
+./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
+Get-ChildItem ./skills -Directory | ForEach-Object {
+  npx --yes skills-ref@0.1.5 validate $_.FullName
+}
+./tools/Update-SkillCatalog.ps1
+```
+
+CI additionally installs every skill in isolation, resolves links inside the
+installed artifact, validates agents and manifests, and smoke-tests the plugin.

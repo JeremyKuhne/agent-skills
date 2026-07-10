@@ -2,11 +2,21 @@
 name: address-pr-feedback
 description: Address feedback on an existing pull request - review comments, requested changes, CI failures, or any post-PR follow-up work. Use when the user says "address the review", "fix the comments", "address Copilot's feedback", "fix the CI failure", or any similar phrasing. Distinct from `create-pr`, which covers opening the *initial* PR.
 license: MIT
+compatibility: Requires git and either a GitHub integration or authenticated gh for remote pull-request operations.
 metadata:
-  portability: semi-portable
+  portability: portable
+  applicability: git-github
+  binding: optional-overlay
+  risk: remote-write
+  maturity: canary
+  requires: none
+  related: create-pr, pre-pr-self-review, agent-files-review
 ---
 
 # Address PR feedback
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 This skill is the post-PR counterpart to the `create-pr` skill. Both share the
 **same** publish gate: neither `git commit` nor `git push` runs without an

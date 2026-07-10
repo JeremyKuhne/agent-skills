@@ -2,11 +2,21 @@
 name: manage-skills
 description: Find, add, update, and share agent skills in this repo. Use when asked to "find a skill" for a task, "build a skill" or "create a skill" (this skill checks whether one already exists - in the repo, the shared commons, or a public catalog - before authoring a new one), "update a skill", or reconcile a local skill change against the upstream commons vs a repo-local overlay. Covers the find-first build path, the tiered search, and the pull/push update flow. Not for validating one agent file's syntax - that is `agent-files-review`.
 license: MIT
+compatibility: Requires gh 2.90 or later for install and update operations; manual file comparison remains available without gh.
 metadata:
   portability: portable
+  applicability: universal
+  binding: optional-overlay
+  risk: remote-write
+  maturity: canary
+  requires: none
+  related: agent-files-review
 ---
 
 # Manage skills
+
+If `overlay.md` exists beside this file, read it before acting; it contains
+repository-specific bindings. This core remains usable without it.
 
 The lifecycle skill for the skills under a repo's `.agents/skills/`: discover one,
 add one, update one, and keep local changes in sync with the shared set. It turns
@@ -61,7 +71,12 @@ For the `SKILL.md` frontmatter check specifically, this skill bundles
 [scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1) - a dependency-free
 PowerShell port of the Agent Skills spec validator - so the check runs anywhere
 the skill is vendored, without the upstream tool. Run it on the skill directory:
-`pwsh scripts/Validate-Skills.ps1 <skill-dir>`.
+`pwsh scripts/Validate-Skills.ps1 <skill-dir>`. A commons portfolio uses
+`-RequirePortfolioMetadata` to enforce its metadata and overlay contract.
+
+For a new downstream binding, start from
+`assets/overlay.md.tmpl`, replace its skill and pin tokens, and keep every local
+path and concrete cross-reference in that overlay.
 
 ## Sub-pages
 
@@ -75,7 +90,7 @@ the skill is vendored, without the upstream tool. Run it on the skill directory:
 ## Disambiguation
 
 `manage-skills` operates on the **catalog lifecycle** - discover, add, vendor,
-sync. It is not [agent-files-review](../agent-files-review/SKILL.md), which
+sync. It is not `agent-files-review`, which
 validates the **syntax and conventions** of one agent file (frontmatter, mirror
 sync, whitespace). The normal order is: run `manage-skills` to bring a skill in
 or push one out, then `agent-files-review` to validate the file you ended up with.

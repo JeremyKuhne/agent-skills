@@ -259,14 +259,15 @@ Invoke-Dotnet sln "$Name.slnx" add $srcDir --in-root
 
 Step 'test project'
 $testDir = "tests/$Name.tests"
+$testProjectName = "$Name.Tests"
 if ($TestRunner -eq 'mstest') {
     # No --coverage-tool: the hardening step below wipes the template's package
     # references, so the coverage package it would add is removed anyway.
-    Invoke-Dotnet new mstest --test-runner Microsoft.Testing.Platform -n "$Name.tests" -o $testDir --framework $MainTfm --no-restore
+    Invoke-Dotnet new mstest --test-runner Microsoft.Testing.Platform -n $testProjectName -o $testDir --framework $MainTfm --no-restore
 } else {
     # The SDK ships no xunit v3 template; generate the v2 template for its file
     # structure and convert it to xunit.v3 + MTP during hardening below.
-    Invoke-Dotnet new xunit -n "$Name.tests" -o $testDir --framework $MainTfm --no-restore
+    Invoke-Dotnet new xunit -n $testProjectName -o $testDir --framework $MainTfm --no-restore
 }
 Invoke-Dotnet sln "$Name.slnx" add $testDir --in-root
 Done 'project skeleton'
@@ -425,8 +426,8 @@ else {
 # ---------------------------------------------------------------------------
 # 5. harden the test project file (CPM fix-up, doc-gen off, project reference)
 # ---------------------------------------------------------------------------
-Step "harden $testDir/$Name.tests.csproj"
-$testCsproj = "$testDir/$Name.tests.csproj"
+Step "harden $testDir/$testProjectName.csproj"
+$testCsproj = "$testDir/$testProjectName.csproj"
 $xml = [xml](Get-Content $testCsproj -Raw)
 $proj = $xml.Project
 
@@ -444,10 +445,12 @@ foreach ($pkgId in $testIds) {
 $proj.AppendChild($pkgGroup) | Out-Null
 
 # Idempotently set the MTP + test-project properties (the mstest template already
-# sets some of these, so update in place rather than duplicating).
+# sets some of these, so update in place rather than duplicating). Keep XML-doc
+# generation enabled because IDE0005 requires it when code style runs at build;
+# suppress only CS1591 for the test surface.
 $firstPg = $xml.SelectSingleNode('//*[local-name()="PropertyGroup"]')
 if (-not $firstPg) { $firstPg = $xml.CreateElement('PropertyGroup'); $proj.InsertBefore($firstPg, $proj.FirstChild) | Out-Null }
-$wanted = [ordered]@{ OutputType = 'Exe'; IsPackable = 'false'; GenerateDocumentationFile = 'false' }
+$wanted = [ordered]@{ OutputType = 'Exe'; IsPackable = 'false'; GenerateDocumentationFile = 'true'; NoWarn = '$(NoWarn);CS1591' }
 if ($TestRunner -eq 'mstest') { $wanted['EnableMSTestRunner'] = 'true' }
 else { $wanted['UseMicrosoftTestingPlatformRunner'] = 'true' }
 foreach ($kv in $wanted.GetEnumerator()) {
@@ -466,13 +469,15 @@ $xml.Save((Resolve-Path $testCsproj))
 # Run at the fullest level of concurrency by default.
 if ($TestRunner -eq 'mstest') {
     # The MTP MSTest template emits MSTestSettings.cs with method-level parallelism;
-    # overwrite it to make the worker count explicit (0 = all processors).
+    # overwrite it to make the worker count explicit (0 = all processors). Fully
+    # qualify the attribute because MSTest is already imported implicitly and an
+    # explicit using fails the generated repo's IDE0005 build gate.
     Set-Content -LiteralPath "$testDir/MSTestSettings.cs" -Encoding utf8NoBOM -NoNewline -Value @'
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-
 // Fullest MSTest parallelization: every test method may run concurrently across
 // all available processors.
-[assembly: Parallelize(Workers = 0, Scope = ExecutionScope.MethodLevel)]
+[assembly: Microsoft.VisualStudio.TestTools.UnitTesting.Parallelize(
+    Workers = 0,
+    Scope = Microsoft.VisualStudio.TestTools.UnitTesting.ExecutionScope.MethodLevel)]
 '@
 } else {
     Set-Content -LiteralPath "$testDir/Parallelism.cs" -Encoding utf8NoBOM -NoNewline -Value @'
@@ -481,7 +486,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 [assembly: Xunit.CollectionBehavior(MaxParallelThreads = -1)]
 '@
 }
-Done "$Name.tests.csproj hardened"
+Done "$testProjectName.csproj hardened"
 
 # ---------------------------------------------------------------------------
 # 5b. prepend the license header to generated source (enforced by IDE0073)
