@@ -75,7 +75,7 @@ beats a naive per-element loop for whole-buffer primitives.
 
 **Practical consequence:** do not assume "the BCL is vectorized so my generic code
 is fine." On `net481` a hand-written specialized loop frequently beats the BCL by
-2-3&times; for full-scan workloads.
+2-3× for full-scan workloads.
 
 ## Decision flow for a new framework-only fast path
 
@@ -116,17 +116,17 @@ a PR.
 
 | Decision | Net481 effect (length 4096, full scan) |
 | --- | --- |
-| `typeof(T)` specialization vs generic `IEquatable` loop | 1.42&times; faster |
-| `[AggressiveInlining]` on a tight scalar loop (length 16) | 1.82&times; &rarr; 1.07&times; vs baseline |
-| Unroll-4 indexed (`ptr[0..3]` + `ptr += 4`) | 1.5&times; faster than scalar |
-| Unroll-8 same form | **1.6&times; slower** than scalar at 256+ |
-| Per-iteration `*ptr; ptr++` instead of indexed reads | ~1.4&times; slower than indexed |
+| `typeof(T)` specialization vs generic `IEquatable` loop | 1.42× faster |
+| `[AggressiveInlining]` on a tight scalar loop (length 16) | 1.82× → 1.07× vs baseline |
+| Unroll-4 indexed (`ptr[0..3]` + `ptr += 4`) | 1.5× faster than scalar |
+| Unroll-8 same form | **1.6× slower** than scalar at 256+ |
+| Per-iteration `*ptr; ptr++` instead of indexed reads | ~1.4× slower than indexed |
 | Integer-indexed unroll (`ptr[i+0..3]; i += 4`) | **Worse than the scalar baseline** |
-| Branchless `*ptr = v == old ? new : v` (sparse matches) | **1.5-3&times; slower** than branchful conditional store |
-| SWAR haszero for char `Replace` (dense matches) | **3&times; slower** than scalar |
-| BCL `IndexOf` for `Replace` (full-scan) | 2.18-3.08&times; slower than specialized scalar |
-| BCL `IndexOf` for `Count` (sparse matches, 1/64 density) | 2-3&times; **faster** than full-scan specialization |
-| Exponential `SequenceEqual` probe for `CommonPrefixLength` (4096, full match) | 3.3&times; faster than per-element scalar |
+| Branchless `*ptr = v == old ? new : v` (sparse matches) | **1.5-3× slower** than branchful conditional store |
+| SWAR haszero for char `Replace` (dense matches) | **3× slower** than scalar |
+| BCL `IndexOf` for `Replace` (full-scan) | 2.18-3.08× slower than specialized scalar |
+| BCL `IndexOf` for `Count` (sparse matches, 1/64 density) | 2-3× **faster** than full-scan specialization |
+| Exponential `SequenceEqual` probe for `CommonPrefixLength` (4096, full match) | 3.3× faster than per-element scalar |
 | Tuple swap `(a, b) = (b, a)` for plain locals | **~23% slower** than `T t = a; a = b; b = t;` |
 | Tuple swap on paired `Span<T>` indexed swap (sort hot path) | **~9% slower** than explicit temps |
 | Tuple swap on a single `Span<T>` indexed swap or two `ref` locals | Equivalent (within noise) |

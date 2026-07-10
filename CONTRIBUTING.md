@@ -66,5 +66,6 @@ also prevent a core from relying on an undeclared sibling skill.
 
 ## Style
 
-- Use plain ASCII in prose: a hyphen (`-`), not an em-dash or an HTML entity.
+- Do not use HTML entities in prose. Write the character directly or use plain
+  words so the source remains readable.
 - Prefer short, declarative sentences and match the surrounding document's voice.
