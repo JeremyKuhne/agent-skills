@@ -18,8 +18,8 @@
       - compatibility: if present, a string <= 500 chars.
       - yaml: inline scalar values carry no unquoted ':' (a mapping indicator that
         a strict parser, like the strictyaml skills-ref uses, would reject).
-            - readability: Markdown files contain no HTML entities; direct Unicode and
-                plain words remain valid.
+      - readability: Markdown files contain no HTML entities; direct Unicode and
+        plain words remain valid.
       - length: SKILL.md is at most 500 lines (the spec's progressive-disclosure
         recommendation, "Keep your main SKILL.md under 500 lines").
 
