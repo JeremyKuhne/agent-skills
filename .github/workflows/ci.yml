@@ -6,16 +6,57 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
-  schedule:
-    - cron: '23 7 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
+  release-contract:
+    name: Validate release tag
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Match tag to plugin version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ($tag -cnotmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Tag '$tag' is not a valid release tag."
+          }
+
+          $pluginVersion = [string](Get-Content plugin.json -Raw | ConvertFrom-Json).version
+          $marketplace = Get-Content .github/plugin/marketplace.json -Raw | ConvertFrom-Json
+          $marketplaceVersion = [string]$marketplace.metadata.version
+          $pluginName = [string](Get-Content plugin.json -Raw | ConvertFrom-Json).name
+          $marketplaceEntries = @($marketplace.plugins | Where-Object name -CEQ $pluginName)
+
+          if ($marketplaceEntries.Count -ne 1) {
+            throw "Expected exactly one marketplace plugin named '$pluginName'."
+          }
+
+          $expectedTag = "v$pluginVersion"
+          if ($tag -cne $expectedTag) {
+            throw "plugin.json version '$pluginVersion' does not match tag '$tag'."
+          }
+          if ($marketplaceVersion -cne $pluginVersion) {
+            throw "Marketplace metadata version '$marketplaceVersion' does not match '$pluginVersion'."
+          }
+          if ([string]$marketplaceEntries[0].version -cne $pluginVersion) {
+            throw "Marketplace plugin version '$($marketplaceEntries[0].version)' does not match '$pluginVersion'."
+          }
+
   validate:
     name: Validate skills, format, and links
-    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -54,15 +95,25 @@ jobs:
             npx --yes skills-ref@0.1.5 validate "$dir"
           done
 
-  scripts:
-    name: Script tests (Pester)
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+      - name: Install Copilot CLI 1.0.63
+        run: npm install --global @github/copilot@1.0.63
+
+      - name: Install and inspect plugin
+        shell: pwsh
+        run: ./tests/plugin/Invoke-PluginSmoke.ps1
+
+  scaffold-linux:
+    name: Scaffold (Linux ARM64)
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        id: dotnet
+        with:
+          dotnet-version: 10.0.x
 
       - name: Install Pester
         shell: pwsh
@@ -78,37 +129,27 @@ jobs:
           $config.Output.Verbosity = 'Detailed'
           Invoke-Pester -Configuration $config
 
-  plugin-smoke:
-    name: Copilot plugin smoke
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Install Copilot CLI 1.0.63
-        run: npm install --global @github/copilot@1.0.63
-
-      - name: Install and inspect plugin
+      - name: Scaffold, build, test, and pack
         shell: pwsh
-        run: ./tests/plugin/Invoke-PluginSmoke.ps1
+        run: |
+          $cases = @(
+            @{ Archetype = 'tool'; TestRunner = 'mstest' }
+            @{ Archetype = 'tool'; TestRunner = 'xunit' }
+            @{ Archetype = 'library'; TestRunner = 'mstest' }
+            @{ Archetype = 'library'; TestRunner = 'xunit' }
+          )
 
-  scaffold:
-    name: Scaffold (${{ matrix.os }}, ${{ matrix.archetype }}, ${{ matrix.runner }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        archetype: [tool, library]
-        runner: [mstest, xunit]
-        include:
-          # net481 can be built cross-platform but its test runtime is Windows-only.
-          - os: windows-latest
-            archetype: multi-target
-            runner: mstest
-          - os: windows-latest
-            archetype: multi-target
-            runner: xunit
+          foreach ($case in $cases) {
+            ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1 `
+              @case `
+              -SdkVersion '${{ steps.dotnet.outputs.dotnet-version }}'
+          }
+
+  scaffold-windows:
+    name: Scaffold (Windows multi-target)
+    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -119,30 +160,10 @@ jobs:
 
       - name: Scaffold, build, test, and pack
         shell: pwsh
-        run: >-
-          ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1
-          -Archetype '${{ matrix.archetype }}'
-          -TestRunner '${{ matrix.runner }}'
-          -SdkVersion '${{ steps.dotnet.outputs.dotnet-version }}'
-
-  scaffold-preview:
-    name: Weekly scaffold preview SDK canary
-    if: github.event_name == 'schedule'
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
-        id: dotnet
-        with:
-          dotnet-version: 11.0.x
-          dotnet-quality: preview
-
-      - name: Exercise next SDK
-        shell: pwsh
-        run: >-
-          ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1
-          -Archetype library
-          -TestRunner mstest
-          -SdkVersion '${{ steps.dotnet.outputs.dotnet-version }}'
+        run: |
+          foreach ($testRunner in @('mstest', 'xunit')) {
+            ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1 `
+              -Archetype multi-target `
+              -TestRunner $testRunner `
+              -SdkVersion '${{ steps.dotnet.outputs.dotnet-version }}'
+          }
