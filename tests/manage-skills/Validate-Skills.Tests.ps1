@@ -139,6 +139,32 @@ If `overlay.md` exists beside this file, read it before acting.
             $r.Output | Should -Match "metadata.risk 'destructive' is invalid"
         }
 
+        It 'rejects a mixed-case metadata vocabulary value' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'upper-risk'
+            $frontmatter = $frontmatter.Replace('  risk: advisory', '  risk: ADVISORY')
+            $dir = New-SkillFixture -Name 'upper-risk' -Frontmatter $frontmatter -Body @'
+# Upper risk
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "metadata.risk 'ADVISORY' is invalid"
+        }
+
+        It 'rejects mixed-case portability in strict mode' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'upper-portability' -Portability 'Portable'
+            $dir = New-SkillFixture -Name 'upper-portability' -Frontmatter $frontmatter -Body @'
+# Upper portability
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "metadata.portability 'Portable' is invalid"
+            $r.Output | Should -Match "must set metadata.portability to 'portable'"
+        }
+
         It 'rejects invalid relationship syntax' {
             $frontmatter = New-PortfolioFrontmatter -Name 'bad-related' -Related 'good-skill, Bad_Skill'
             $dir = New-SkillFixture -Name 'bad-related' -Frontmatter $frontmatter -Body @'
@@ -149,6 +175,45 @@ If `overlay.md` exists beside this file, read it before acting.
             $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
             $r.ExitCode | Should -Be 1
             $r.Output | Should -Match "metadata.related contains invalid skill name 'Bad_Skill'"
+        }
+
+        It 'rejects a mixed-case none sentinel' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'upper-none'
+            $frontmatter = $frontmatter.Replace('  requires: none', '  requires: None')
+            $dir = New-SkillFixture -Name 'upper-none' -Frontmatter $frontmatter -Body @'
+# Upper none
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "metadata.requires contains invalid skill name 'None'"
+        }
+
+        It 'rejects a mixed-case relationship name' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'upper-related' -Related 'Bad-Skill'
+            $dir = New-SkillFixture -Name 'upper-related' -Frontmatter $frontmatter -Body @'
+# Upper related
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match "metadata.related contains invalid skill name 'Bad-Skill'"
+        }
+
+        It 'trims canonical portfolio values before validation' {
+            $frontmatter = New-PortfolioFrontmatter -Name 'trimmed-values'
+            $frontmatter = $frontmatter.Replace('  portability: portable', '  portability: " portable "')
+            $frontmatter = $frontmatter.Replace('  requires: none', '  requires: " none "')
+            $dir = New-SkillFixture -Name 'trimmed-values' -Frontmatter $frontmatter -Body @'
+# Trimmed values
+
+If `overlay.md` exists beside this file, read it before acting.
+'@
+            $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
+            $r.ExitCode | Should -Be 0
+            $r.Output | Should -Match 'All 1 skill'
         }
 
         It 'requires the loader cue for an overlay-aware core' {

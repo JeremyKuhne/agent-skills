@@ -309,7 +309,8 @@ function Test-MetadataEnum ($metadata, [string] $key, [string[]] $allowed) {
         "metadata.$key must be a non-empty string"
         return
     }
-    if ($allowed -notcontains $value) {
+    $value = $value.Trim()
+    if ($allowed -cnotcontains $value) {
         "metadata.$key '$value' is invalid; expected one of: $($allowed -join ', ')"
     }
 }
@@ -321,15 +322,16 @@ function Test-RelationshipMetadata ($metadata, [string] $key) {
         "metadata.$key must be 'none' or a comma-separated list of skill names"
         return
     }
-    if ($value -eq 'none') { return }
+    $value = $value.Trim()
+    if ($value -ceq 'none') { return }
 
     $names = @($value -split ',' | ForEach-Object { $_.Trim() })
-    if ($names.Count -eq 0 -or $names -contains '') {
+    if ($names.Count -eq 0 -or $names -ccontains '') {
         "metadata.$key must be 'none' or a comma-separated list of skill names"
         return
     }
     foreach ($relationshipName in $names) {
-        if ($relationshipName -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') {
+        if ($relationshipName -cnotmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') {
             "metadata.$key contains invalid skill name '$relationshipName'"
         }
     }
@@ -341,19 +343,21 @@ function Test-RelationshipMetadata ($metadata, [string] $key) {
 
 function Test-OverlayContract ($metadata, [string] $raw, [string] $dir) {
     $binding = Get-MetadataValue $metadata 'binding'
-    if ($binding -notin @('none', 'optional-overlay', 'required-overlay')) { return }
+    if ($binding -isnot [string]) { return }
+    $binding = $binding.Trim()
+    if (@('none', 'optional-overlay', 'required-overlay') -cnotcontains $binding) { return }
 
     $overlayPath = Join-Path $dir 'overlay.md'
     $hasOverlay = Test-Path -LiteralPath $overlayPath -PathType Leaf
 
-    if ($binding -in @('optional-overlay', 'required-overlay') -and -not $raw.Contains($OverlayCue)) {
+    if (@('optional-overlay', 'required-overlay') -ccontains $binding -and -not $raw.Contains($OverlayCue)) {
         "metadata.binding '$binding' requires this loader cue in SKILL.md: $OverlayCue"
     }
-    if ($binding -eq 'required-overlay' -and -not $hasOverlay) {
+    if ($binding -ceq 'required-overlay' -and -not $hasOverlay) {
         "metadata.binding 'required-overlay' requires overlay.md beside SKILL.md"
         return
     }
-    if ($binding -eq 'none' -and $hasOverlay) {
+    if ($binding -ceq 'none' -and $hasOverlay) {
         "overlay.md exists but metadata.binding is 'none'"
         return
     }
@@ -407,7 +411,9 @@ function Test-PortfolioMetadata ($metadata, [string] $raw, [string] $dir, [bool]
     Test-RelationshipMetadata $metadata 'requires'
     Test-RelationshipMetadata $metadata 'related'
 
-    if ($required -and (Get-MetadataValue $metadata 'portability') -ne 'portable') {
+    $portability = Get-MetadataValue $metadata 'portability'
+    if ($portability -is [string]) { $portability = $portability.Trim() }
+    if ($required -and $portability -cne 'portable') {
         "Commons cores must set metadata.portability to 'portable'"
     }
 
