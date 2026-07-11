@@ -10,7 +10,7 @@ metadata:
   risk: remote-write
   maturity: canary
   requires: none
-  related: manage-skills, security-review, create-pr
+  related: manage-skills, security-review, create-pr, github-actions-cost-optimization
 ---
 
 # Engineering baseline
@@ -28,11 +28,12 @@ The standard in one paragraph: a high-quality .NET repository is **buildable**
 (centralized, deterministic, analyzer-enforced), **tested** (with coverage and,
 where it applies, perf and fuzz surfaces), **publishable** (signed, SourceLinked,
 validated packages with rich metadata), **released** deterministically from tags,
-**gated** by CI with least-privilege tokens and pinned actions, **secured** by
-branch protection, dependency updates, and scanning, **governed** by the OSS
-community files, and **agent-enabled** with vendored skills and the agent-file
-gates. The [baseline](baseline.md) is that standard as a checklist; the
-[citation catalog](references/best-practices.md) is the *why* behind every line.
+**gated** by cost-aware CI with least-privilege tokens and pinned actions,
+**secured** by branch protection, dependency updates, and scanning,
+**governed** by the OSS community files, and **agent-enabled** with vendored
+skills and the agent-file gates. The [baseline](baseline.md) is that standard as
+a checklist; the [citation catalog](references/best-practices.md) is the *why*
+behind every line.
 
 ## When to use
 
@@ -102,10 +103,12 @@ When in doubt, stop and ask one yes/no question.
 ## Related skills
 
 Run a security review over any code the scaffold generates or the assessment
-adds, and use the repository's PR skills to publish the result. The
-agent-enablement domain hands off to the skill-lifecycle skill and the fleet
-onboarding runbook for vendoring the skill tier and wiring the agent-file gates.
-A consuming repository wires these concrete cross-references in its overlay.
+adds, and use the repository's PR skills to publish the result. Hand detailed
+workflow usage, billing, and matrix analysis to the GitHub Actions cost
+optimization skill. The agent-enablement domain hands off to the skill-lifecycle
+skill and the fleet onboarding runbook for vendoring the skill tier and wiring
+the agent-file gates. A consuming repository wires these concrete
+cross-references in its overlay.
 
 ## Sub-pages
 
