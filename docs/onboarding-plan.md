@@ -123,13 +123,14 @@ relationships.
 - **Starting tier** - appropriate for most engineering repos: `manage-skills`,
   `agent-files-review`, `create-pr`, `address-pr-feedback`, `security-review`,
   `pre-pr-self-review`, and `code-comprehension`.
-- **.NET domain** - available now and selected by the repository's work:
+- **Released .NET domain** - available from the latest release and selected by
+  the repository's work:
   `engineering-baseline`, `dotnet-polyfills`, `framework-jit-optimization`,
   `scratch-buffer-strategy`, `performance-testing`, `fuzz-testing`,
   `roslyn-analyzers`, and `il-copy-inspection`.
-- **Pending domain additions** - `cswin32-interop` and `cswin32-com`; these are
-  tracked in the fleet ledger and cannot be vendored from the commons until they
-  land.
+- **Source-promoted .NET additions** - `cswin32-interop` and `cswin32-com` are
+  present on `main` but require the next release before pinned vendoring. The COM
+  skill declares the interop skill as a hard dependency.
 - **Tool-shipped** - vendor from the tool's own repo, not here: a standalone
   tool's skill (for example `filtrace`), vendored from that tool's repo, for any
   repo that uses the tool.
