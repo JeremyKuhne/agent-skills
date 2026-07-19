@@ -16,7 +16,7 @@ fleet decision.
 | ---- | ----- | ----------- | ---------------- | -------- | ---------------- | ------------ |
 | **touki** | `JeremyKuhne` | mixed `v0.7.0`-`v0.8.1` | 13 commons cores | the universal and domain cores | **Onboarded** - reference consumer | 2026-07-09 |
 | **filtrace** | `JeremyKuhne` | N/A | nothing yet | the `filtrace` tool-shipped skill | **Producer only** - does not consume the starting tier | 2026-06-16 |
-| **madowaku** | `JeremyKuhne` | N/A | nothing yet (4 local forks) | `cswin32-interop`, `cswin32-com` | **Not onboarded** - forks to reconcile | 2026-06-16 |
+| **madowaku** | `JeremyKuhne` | `v0.10.0` + `85325db` | 14 commons cores | originated `cswin32-interop` / `cswin32-com`; keeps `publish-release` local | **Partially onboarded** - CsWin32 release/vendor-back pending | 2026-07-16 |
 | **thirtytwo** | `JeremyKuhne` | N/A | nothing (no `.agents/`) | none | **Greenfield** - needs scaffolding first | 2026-06-16 |
 | *(future repos)* | TBD | N/A | - | - | Use the generic checklist in the [runbook](onboarding-plan.md) | Not checked |
 
@@ -46,24 +46,20 @@ PR discipline.
 
 ### madowaku (merge consumer + producer)
 
-The richest reconciliation: madowaku carries four local forks and owns two
-CsWin32 skills the commons lacks.
+Madowaku already vendors 14 commons cores. It originated the two CsWin32 skills
+now promoted here; the remaining work is to release them and vendor the pinned
+cores back while retaining the existing madowaku overlays.
 
-- [ ] Audit and bucket the four local skills:
-  - `performance-testing` -> **Fork**: reconcile against the commons core; its
-    generic parts already match, so it should drop to core + a ~20-line overlay.
-  - `cswin32-interop`, `cswin32-com` -> **Local-generic**: promote both into the
-    commons as a new `cswin32` domain group, then vendor back.
-  - `publish-release` -> **Local-specific**: keep local (dual-stream release
-    detail is repo-bound).
-- [ ] Vendor the universal tier with overlays for madowaku's
-      `net10.0-windows...` moniker and `madowaku.perf` project.
+- [x] Reconcile `performance-testing` to the commons `v0.10.0` core plus a
+      madowaku overlay.
+- [x] Keep `publish-release` local; its dual-stream release detail is repo-bound.
+- [x] Vendor the applicable universal and .NET tiers with madowaku overlays.
+- [ ] Release `cswin32-interop` and `cswin32-com`, then vendor both back with
+      their existing overlays.
 - [ ] If fuzzing is wanted, stand up `madowaku.fuzz` to match the repo layout,
       then vendor `fuzz-testing` and bind the project in its overlay.
-- [ ] Reconcile against madowaku's *different* instruction set (`interop`,
-      `msbuild`, `tests` - no `perf`/`polyfills`); a core linking to a missing
-      instruction file fails its link check.
-- [ ] Run both gates green; record every fork resolution in the ledger.
+- [ ] Run both gates green after vendor-back and record the final pin in the
+      ledger.
 
 ### thirtytwo (greenfield consumer)
 
@@ -84,9 +80,9 @@ fleet. Each row ends in a recorded state; an unexplained divergence is the alarm
 
 | Item | Origin | Kind | Target | Status |
 | ---- | ------ | ---- | ------ | ------ |
-| `cswin32-interop` | madowaku (fork) | Local-generic, domain | Promote to commons as a `cswin32` group | **Pending** - madowaku not yet onboarded |
-| `cswin32-com` | madowaku (fork) | Local-generic, domain | Promote to commons | **Pending** |
-| `performance-testing` | madowaku (fork) | Fork of commons core | Reconcile to core + overlay | **Pending** |
+| `cswin32-interop` | madowaku (fork) | Local-generic, domain | Promote to commons, release, and vendor back | **Promoted** - release/pin and madowaku vendor-back pending |
+| `cswin32-com` | madowaku (fork) | Local-generic, domain | Promote to commons, release, and vendor back | **Promoted** - release/pin and madowaku vendor-back pending |
+| `performance-testing` | madowaku (fork) | Fork of commons core | Reconcile to core + overlay | **Resolved** - vendored `v0.10.0` with overlay |
 | `manage-skills` | touki (local) | Local-generic, universal | Promote to commons, vendor back | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
 | `fuzz-testing` | touki (local) | Local-generic, domain (project-gated) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
 | `roslyn-analyzers` | touki (local) | Domain (project-gated) | Promote to commons | **Resolved** - commons `v0.8.0`, vendored `v0.8.1` |
@@ -98,6 +94,7 @@ fleet. Each row ends in a recorded state; an unexplained divergence is the alarm
 | `run-tests-on-wsl` | touki | Local-specific | Keep local | **Resolved** |
 | `filtrace` | filtrace | Tool-shipped (canonical) | Vendor into consumers from the tool repo | **Resolved** - vendored into touki |
 
-The first three rows are the open onboarding/promotion backlog; resolving them is
-the bulk of bringing madowaku - and then filtrace and thirtytwo - fully into the
-commons.
+The first two rows have cleared promotion but still need release/pinning and
+vendor-back. The former third row (`performance-testing`) is resolved. Completing
+the CsWin32 vendor-back is the remaining madowaku skill transition before
+continuing with filtrace and thirtytwo.

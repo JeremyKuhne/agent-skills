@@ -7,7 +7,7 @@ vendors pinned, provenance-stamped copies of the skills it needs.
 It is both a [`gh skill`](https://docs.github.com/copilot/reference/copilot-cli-reference/cli-plugin-reference)
 source and a GitHub Copilot CLI plugin marketplace.
 
-> **Status: pre-1.0 and in active fleet use.** The repository currently ships 16
+> **Status: pre-1.0 and in active fleet use.** The repository currently ships 18
 > shared skill cores and two reviewer agents. Deterministic source,
 > isolated-install, plugin, and scaffold gates are in place; model behavioral
 > evaluations remain future work.
@@ -38,6 +38,17 @@ gh skill install JeremyKuhne/agent-skills <skill> --pin vX.Y.Z
 
 # Later, review upstream drift as a normal diff.
 gh skill update <skill>
+```
+
+`gh skill install` installs only the named skill; it does not resolve the
+portfolio's `metadata.requires` relationships. Check the **Requires** column in
+the [skills catalog](skills/README.md#portfolio-contract) and install every hard
+dependency at the same pin. For example, `cswin32-com` requires
+`cswin32-interop`:
+
+```pwsh
+gh skill install JeremyKuhne/agent-skills cswin32-interop --pin vX.Y.Z
+gh skill install JeremyKuhne/agent-skills cswin32-com --pin vX.Y.Z
 ```
 
 `--pin` records the exact version (and writes provenance: source repo, ref, and
