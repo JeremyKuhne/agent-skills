@@ -137,6 +137,9 @@ inspection.
   method, the interactive picker, and useful switches.
 - [interpreting-results.md](interpreting-results.md) - before/after discipline on
   both TFMs and reading the memory columns.
+- [investigation-workflow.md](investigation-workflow.md) - fresh-state phase
+   measurement versus profiling, experiment ledgers, exact-source oracles, and
+   reconstructable run provenance for multi-step investigations.
 - [reading-codegen.md](reading-codegen.md) - seeing the C# lowering, IL, and JIT
   asm behind a number: sharplab, `[DisassemblyDiagnoser]`, `[HardwareCounters]`,
   the `DOTNET_JitDisasm*` knobs, and the tiering/PGO inspection traps.
