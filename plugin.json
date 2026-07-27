@@ -1,6 +1,6 @@
 {
   "name": "agent-skills",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Shared agent skills and MCP configuration for JeremyKuhne's .NET repositories. A gh skill source and GitHub Copilot CLI plugin.",
   "license": "MIT",
   "author": {
