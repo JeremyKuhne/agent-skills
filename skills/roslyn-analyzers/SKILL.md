@@ -47,6 +47,10 @@ The short version, in priority order:
    StyleCop, Meziantou, SonarAnalyzer.
 4. **Only if none fit** - author a custom analyzer. Continue below.
 
+If the answer is "an existing rule is right except in one context", you may be
+looking at a `DiagnosticSuppressor` rather than an analyzer - but read Rule 0 of
+[suppressors.md](suppressors.md) first, because most suppressors should not exist.
+
 ## Where analyzers live (the project layout)
 
 By convention the analyzer ships as a small cluster of projects alongside the
@@ -106,6 +110,9 @@ library it guards (`<root>` is the library project name):
 - [performance.md](performance.md) - the in-IDE performance budget, the cheap-first
   rule, per-compilation symbol caching, concurrency, allocation hygiene, and how to
   measure with `ReportAnalyzer`.
+- [suppressors.md](suppressors.md) - `DiagnosticSuppressor`: when owning the domain
+  beats suppressing, what is suppressible at all, the id convention, why suppressions
+  cannot be release-tracked, and how to prove one is load-bearing.
 
 ## Cross-skill
 
