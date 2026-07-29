@@ -29,10 +29,9 @@ authorizes you to *edit*:
 - This skill authorizes editing files in response to review feedback or
   CI failures on an existing PR. Same approval gate before commit/push.
 
-Your repo's agent guidance (the "Working with the user on changes" rules in
-`AGENTS.md`) is the source of truth for the commit/push approval rule. Re-read it
-at the start of every invocation; this skill is the decision-point reminder, not
-a replacement.
+Repository guidance is the source of truth for commit/push approval. Re-read it
+at the start of every invocation when present; this skill is a reminder, not a
+replacement.
 
 ## Recognizing approval
 
@@ -61,11 +60,11 @@ Stop and ask one short yes/no question.
 
 ## Workflow
 
-1. **Fetch the feedback.** Read review comments, PR conversation, and check-run
-   logs via the GitHub PR tools (or `Invoke-RestMethod` against
-   `api.github.com/repos/<owner>/<repo>/pulls/<N>/comments`). With multiple
-   review passes, fetch the **latest** review's comments (filter by the newest
-   review id) so you act on the current round.
+1. **Fetch the feedback.** Read every unresolved review thread across all review
+  passes, including replies, plus the PR conversation and check-run logs. Do
+  not filter by newest review id - older unresolved threads remain actionable.
+  Prefer a PR tool; use [thread-workflow.md](thread-workflow.md) for the `gh`
+  fallback.
 
    Automated reviewers (e.g. Copilot) post asynchronously - on open, on push, or
    when requested - a minute or two after the trigger. If one was requested but
@@ -92,19 +91,17 @@ Stop and ask one short yes/no question.
    round of changes, and push. The staging/commit/push mechanics are the
    same as in the `create-pr` skill (its "Commit changes" and "Push the
    branch" steps).
-7. **Resolve the threads, with explanations.** Replying and resolving are remote
-   actions, so they ride in the same approved publish step as the push; honor
-   explicit scoping ("push and resolve only", "don't re-request") and report
-   what you did. For each comment, reply then resolve:
+7. **Reply in-thread, then resolve.** These are PR write actions. Follow repository
+   guidance; when it does not bundle them with push/update approval, get explicit
+   approval. For each comment:
    - **Fixed** - one line on what changed (reference the commit or behavior).
    - **False positive / won't-fix** - the rationale or the evidence. Leave a
      thread open only to invite a human onto a contested point, and say so.
-   With the PR tool, use its resolve action; with `gh`, resolve via the GraphQL
-   `resolveReviewThread` mutation on the thread node id (not the comment id).
-8. **Re-request review when non-trivial.** After real code changes, request a
-   fresh pass from the same reviewer - also a remote action in the publish step.
-   Skip it for trivial rounds (typo, reword, one-line nit) to avoid an endless
-   trickle, and say which you did.
+   Verify both operations; a reply does not resolve a thread. Report what you did.
+8. **Re-request review when non-trivial.** This is another PR write action, so
+   follow the same approval policy. After real code changes, request a fresh pass
+   from the same reviewer. Skip it for trivial rounds (typo, reword, one-line
+   nit) to avoid an endless trickle, and say which you did.
 
 **When to stop.** Later auto-review passes drift toward nits and false positives.
 Once comments stop being substantive, stop re-requesting, say so, and let the
@@ -119,7 +116,7 @@ force-push, or leave the commit in place.
 
 ## Related
 
-- Your repo's agent guidance (`AGENTS.md`) - the rule itself.
+- Repository agent guidance, when present - the local approval rule.
 - The `create-pr` skill - opening the initial PR (same publish gate,
   different edit scope).
 - The `pre-pr-self-review` skill - the validation checklist that applies
