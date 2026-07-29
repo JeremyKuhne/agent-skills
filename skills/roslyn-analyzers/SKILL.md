@@ -82,9 +82,9 @@ library it guards (`<root>` is the library project name):
    severity, `helpLinkUri`. Add the row to `AnalyzerReleases.Unshipped.md` in the
    same change or RS2000 fails.
 3. **Design the analyzer** to the statelessness, registration, and
-   `IOperation`-vs-syntax rules in [design.md](design.md). Copy the shape of a
-  known-good analyzer. For declaration-wide rules, also read
-  [symbol-actions.md](symbol-actions.md).
+    `IOperation`-vs-syntax rules in [design.md](design.md). Copy the shape of a
+    known-good analyzer. For declaration-wide rules, also read
+    [symbol-actions.md](symbol-actions.md).
 4. **Validate** with positive, negative, and boundary cases per
    [validation.md](validation.md). Run in Debug *and* Release.
 5. **Check performance** against the in-IDE budget in [performance.md](performance.md):
