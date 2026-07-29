@@ -28,10 +28,11 @@ query(
 }
 ```
 
-Run it with pagination and keep unresolved thread node IDs:
+Replace the uppercase tokens below with actual values and temporary-file paths.
+Run the query with pagination and keep unresolved thread node IDs:
 
 ```text
-gh api graphql --paginate -F owner='<base-owner>' -F repo='<base-repo>' -F number=<N> -F query=@<threads-query-file> --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id'
+gh api graphql --paginate -F owner=BASE_OWNER -F repo=BASE_REPO -F number=PULL_NUMBER -F query=@THREADS_QUERY_FILE --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id'
 ```
 
 For each unresolved thread, save and run this paginated comments query:
@@ -57,7 +58,7 @@ query($threadId: ID!, $endCursor: String) {
 ```
 
 ```text
-gh api graphql --paginate -F threadId='<thread-node-id>' -F query=@<comments-query-file> --jq '.data.node.comments.nodes[]'
+gh api graphql --paginate -F threadId=THREAD_NODE_ID -F query=@COMMENTS_QUERY_FILE --jq '.data.node.comments.nodes[]'
 ```
 
 Classify every unresolved thread after reading all its replies.
@@ -78,7 +79,7 @@ mutation($threadId: ID!, $body: String!) {
 ```
 
 ```text
-gh api graphql -F threadId='<thread-node-id>' -F body=@<reply-file> -F query=@<reply-query-file> --jq '.data.addPullRequestReviewThreadReply.comment'
+gh api graphql -F threadId=THREAD_NODE_ID -F body=@REPLY_FILE -F query=@REPLY_QUERY_FILE --jq '.data.addPullRequestReviewThreadReply.comment'
 ```
 
 Require a non-null comment `id` before reporting that the reply was posted.
@@ -96,7 +97,7 @@ mutation($threadId: ID!) {
 ```
 
 ```text
-gh api graphql -F threadId='<thread-node-id>' -F query=@<resolve-query-file> --jq '.data.resolveReviewThread.thread'
+gh api graphql -F threadId=THREAD_NODE_ID -F query=@RESOLVE_QUERY_FILE --jq '.data.resolveReviewThread.thread'
 ```
 
 Require `isResolved: true` before reporting success.

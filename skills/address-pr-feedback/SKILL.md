@@ -93,7 +93,7 @@ Stop and ask one short yes/no question.
    branch" steps).
 7. **Reply in-thread, then resolve.** These are PR write actions. Follow repository
    guidance; when it does not bundle them with push/update approval, get explicit
-   approval. For each comment:
+  approval. For each thread:
    - **Fixed** - one line on what changed (reference the commit or behavior).
    - **False positive / won't-fix** - the rationale or the evidence. Leave a
      thread open only to invite a human onto a contested point, and say so.
