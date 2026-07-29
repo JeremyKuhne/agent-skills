@@ -82,8 +82,9 @@ library it guards (`<root>` is the library project name):
    severity, `helpLinkUri`. Add the row to `AnalyzerReleases.Unshipped.md` in the
    same change or RS2000 fails.
 3. **Design the analyzer** to the statelessness, registration, and
-   `IOperation`-vs-syntax rules in [design.md](design.md). Copy the shape of a
-   known-good analyzer.
+    `IOperation`-vs-syntax rules in [design.md](design.md). Copy the shape of a
+    known-good analyzer. For declaration-wide rules, also read
+    [symbol-actions.md](symbol-actions.md).
 4. **Validate** with positive, negative, and boundary cases per
    [validation.md](validation.md). Run in Debug *and* Release.
 5. **Check performance** against the in-IDE budget in [performance.md](performance.md):
@@ -104,6 +105,10 @@ library it guards (`<root>` is the library project name):
 - [design.md](design.md) - authoring rules: stateless and thread-safe, narrowest
   registration, `IOperation` over raw syntax, descriptors, release tracking, and a
   note on code-fix providers.
+- [symbol-actions.md](symbol-actions.md) - complete symbol coverage, names that
+  cannot be fixed at the report site, and analyzer-crash diagnosis.
+- [release-tracking.md](release-tracking.md) - shipped/unshipped file format,
+  immutable release history, release promotion, and the `RS20xx` diagnostics.
 - [validation.md](validation.md) - testing: the `Microsoft.CodeAnalysis.Testing`
   markup harness, a lightweight in-memory harness, the coverage checklist, and the
   dogfood probe.
