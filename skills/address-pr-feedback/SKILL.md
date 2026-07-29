@@ -60,11 +60,14 @@ Stop and ask one short yes/no question.
 
 ## Workflow
 
-1. **Fetch the feedback.** Read every unresolved review thread across all review
-  passes, including replies, plus the PR conversation and check-run logs. Do
-  not filter by newest review id - older unresolved threads remain actionable.
-  Prefer a PR tool; use [thread-workflow.md](thread-workflow.md) for the `gh`
-  fallback.
+1. **Confirm the PR is open, then fetch feedback.** If it was merged or closed,
+   stop, report that state, and identify the user-approved follow-up (such as a
+   new PR or reopening) instead of mutating the old branch. Read every unresolved
+   review thread across all review passes, including replies, plus the PR
+   conversation and compact check statuses. Fetch logs only for failed checks
+   being investigated. Do not filter by newest review id - older unresolved
+   threads remain actionable. Prefer a PR tool; use
+   [thread-workflow.md](thread-workflow.md) for the `gh` fallback.
 
    Automated reviewers (e.g. Copilot) post asynchronously - on open, on push, or
    when requested - a minute or two after the trigger. If one was requested but
@@ -87,16 +90,18 @@ Stop and ask one short yes/no question.
    commit`, or `git push`.
 5. **Wait** for an explicit publishing verb (see "Recognizing approval"
    above).
-6. **Only then** stage by path, commit with a message that summarizes the
-   round of changes, and push. The staging/commit/push mechanics are the
-   same as in the `create-pr` skill (its "Commit changes" and "Push the
-   branch" steps).
+6. **Only then** recheck that the PR is open before staging or committing. Commit
+  the round, then confirm the PR is still open immediately before each remote
+  write in steps 6-8; abort and report if it is not. Push using the mechanics in
+  the `create-pr` skill.
 7. **Reply in-thread, then resolve.** These are PR write actions. Follow repository
    guidance; when it does not bundle them with push/update approval, get explicit
-  approval. For each thread:
-   - **Fixed** - one line on what changed (reference the commit or behavior).
-   - **False positive / won't-fix** - the rationale or the evidence. Leave a
-     thread open only to invite a human onto a contested point, and say so.
+  approval. Refresh each targeted thread before writing: skip one already
+  resolved, and reclassify one with new replies. Write one scoped reply per
+  thread: state what changed for a fix, or give the evidence for a false positive
+  or won't-fix. Do not combine answers across threads or post the review summary
+  to the PR conversation. Leave a thread open only to invite a human onto a
+  contested point, and say so.
    Verify both operations; a reply does not resolve a thread. Report what you did.
 8. **Re-request review when non-trivial.** This is another PR write action, so
    follow the same approval policy. After real code changes, request a fresh pass
@@ -104,8 +109,12 @@ Stop and ask one short yes/no question.
    nit) to avoid an endless trickle, and say which you did.
 
 **When to stop.** Later auto-review passes drift toward nits and false positives.
-Once comments stop being substantive, stop re-requesting, say so, and let the
-user merge.
+Before calling the PR ready, confirm it is open, non-draft, mergeable, required
+checks and reviews are satisfied, no review threads remain unresolved, and the
+latest requested or automatic review has completed. Account for every actionable
+PR-conversation comment with a response or recorded disposition as well.
+Otherwise report what is pending. Once comments stop being substantive, stop
+re-requesting and let the user merge.
 
 ## When you've already violated the rule
 
