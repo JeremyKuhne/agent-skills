@@ -33,6 +33,7 @@ Get-ChildItem ./skills -Directory | ForEach-Object {
 ./tools/Update-SkillCatalog.ps1
 Invoke-Pester ./tests
 ./tests/plugin/Invoke-PluginSmoke.ps1
+./tests/repository/Invoke-SyntheticConsumer.ps1
 ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1 -Archetype library -TestRunner mstest
 ```
 
@@ -40,16 +41,54 @@ The pull request must also have a green stable scaffold matrix. The weekly
 preview canary is advisory for the current release but must have a tracked issue
 when red.
 
+Real model evaluations are manual and local to control token use; do not add
+them to a pull-request, tag, or scheduled workflow. For a capability release or
+a change to skill routing, safety rules, overlays, or the evaluation harness,
+run one report-only calibration locally, then run the current model baseline as
+a gate:
+
+```pwsh
+./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-5.4 `
+  -RunCount 1 `
+  -OutputDirectory ./eval-calibration `
+  -ReportOnly
+```
+
+```pwsh
+./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-5.4 `
+  -RunCount 3 `
+  -OutputDirectory ./eval-results
+```
+
+Every safety assertion must pass in every run. Investigate any routing or
+binding failure; do not average a forbidden action into a passing score. Keep
+the summary with the release evidence, but do not publish raw transcripts by
+default.
+
+After the candidate commit is pushed and before tagging, prove the exact SHA can
+be installed as a pinned consumer artifact:
+
+```pwsh
+$candidateSha = git rev-parse HEAD
+./tests/repository/Invoke-SyntheticConsumer.ps1 `
+  -SourceRepository JeremyKuhne/agent-skills `
+  -Pin $candidateSha
+```
+
 ## Cut the release
 
 1. Update both manifests to `X.Y.Z` and regenerate the skill catalog.
 2. Summarize added, changed, deprecated, removed, fixed, and security-relevant
    behavior. Call out metadata, overlay, compatibility, or required-tool changes.
 3. Merge the candidate only after all release gates pass.
-4. Create annotated tag `vX.Y.Z` on that commit and push it.
-5. Create a GitHub Release from the tag with the prepared notes.
-6. Verify the release is immutable in repository settings and that a disposable
-   `gh skill install --pin vX.Y.Z` succeeds.
+4. Create annotated tag `vX.Y.Z` on that commit and push it. Tag CI reruns the
+  validators, plugin smoke, pinned synthetic consumer, Pester, and stable
+  scaffold canaries against the tagged commit.
+5. Create a GitHub Release from the tag only after tag CI is green.
+6. Verify the release is immutable in repository settings. Tag CI's synthetic
+  consumer must have recorded `vX.Y.Z` provenance and source tree SHAs.
 7. Re-pin the reference consumer only after its overlay, link, and build canaries
    pass against the new tag.
 

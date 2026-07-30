@@ -9,8 +9,9 @@ source and a GitHub Copilot CLI plugin marketplace.
 
 > **Status: pre-1.0 and in active fleet use.** The repository currently ships 18
 > shared skill cores and two reviewer agents. Deterministic source,
-> isolated-install, plugin, and scaffold gates are in place; model behavioral
-> evaluations remain future work.
+> isolated-install, plugin, scaffold, and synthetic-consumer gates are in place.
+> A `create-pr` model-evaluation vertical slice is operational; portfolio-wide
+> routing and outcome coverage remain future work.
 
 ## The model
 

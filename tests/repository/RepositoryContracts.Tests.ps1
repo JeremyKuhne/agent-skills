@@ -40,18 +40,6 @@ BeforeAll {
         return @($value -split ',' | ForEach-Object { $_.Trim() })
     }
 
-    function Visit-SkillRequirement ([string] $skillName, [hashtable] $states, [hashtable] $recordsByName) {
-        if ($states[$skillName] -eq 'visited') { return }
-        if ($states[$skillName] -eq 'visiting') { throw "Required-skill cycle includes '$skillName'." }
-
-        $states[$skillName] = 'visiting'
-        $record = $recordsByName[$skillName]
-        foreach ($requiredName in (Get-RelationshipNames $record.Metadata.requires)) {
-            Visit-SkillRequirement $requiredName $states $recordsByName
-        }
-        $states[$skillName] = 'visited'
-    }
-
     $script:SkillRecords = @(Get-ChildItem -LiteralPath $script:SkillsRoot -Directory |
         Where-Object { Test-Path (Join-Path $_.FullName 'SKILL.md') } |
         Sort-Object Name |
@@ -119,11 +107,25 @@ Describe 'Skill catalog contracts' {
         $recordsByName = @{}
         foreach ($record in $script:SkillRecords) { $recordsByName[$record.Name] = $record }
         $states = @{}
+        $visitRequirement = $null
+        $visitRequirement = {
+            param([string] $skillName)
+
+            if ($states[$skillName] -eq 'visited') { return }
+            if ($states[$skillName] -eq 'visiting') { throw "Required-skill cycle includes '$skillName'." }
+
+            $states[$skillName] = 'visiting'
+            foreach ($requiredName in (Get-RelationshipNames $recordsByName[$skillName].Metadata.requires)) {
+                & $visitRequirement $requiredName
+            }
+            $states[$skillName] = 'visited'
+        }
         foreach ($skillName in $script:SkillNames) {
-            { Visit-SkillRequirement $skillName $states $recordsByName } | Should -Not -Throw
+            { & $visitRequirement $skillName } | Should -Not -Throw
         }
     }
 }
+
 
 Describe 'Agent contracts' {
     It 'catalogs every agent exactly once' {
@@ -229,5 +231,57 @@ Describe 'Workflow pin contracts' {
                 $line | Should -Match '@<SHA>\s+#\s+v\d'
             }
         }
+    }
+}
+
+Describe 'Workflow execution contracts' {
+    BeforeAll {
+        $script:CiWorkflow = Get-Content -LiteralPath (Join-Path $script:RepoRoot '.github/workflows/ci.yml') -Raw
+        $script:FullCiWorkflow = Get-Content -LiteralPath (Join-Path $script:RepoRoot '.github/workflows/full-ci.yml') -Raw
+        $script:AllWorkflowText = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot '.github/workflows') -Filter '*.yml' -File |
+            Sort-Object Name |
+            ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+
+        function Get-WorkflowJobBody ([string] $workflow, [string] $jobName) {
+            $escapedJobName = [regex]::Escape($jobName)
+            $match = [regex]::Match(
+                $workflow,
+                "(?ms)^  ${escapedJobName}:\r?\n(?<body>.*?)(?=^  [a-z0-9-]+:\r?$|\z)")
+            if (-not $match.Success) { throw "Workflow job '$jobName' was not found." }
+            return $match.Groups['body'].Value
+        }
+    }
+
+    It 'limits ordinary CI to main, release tags, and main pull requests' {
+        $script:CiWorkflow | Should -Match "(?ms)^on:\r?\n  push:\r?\n    branches: \[main\]\r?\n    tags: \['v\*'\]\r?\n  pull_request:\r?\n    branches: \[main\]"
+    }
+
+    It 'runs release-critical artifact gates for tag pushes' {
+        foreach ($jobName in @('validate', 'scaffold-linux', 'scaffold-windows')) {
+            Get-WorkflowJobBody $script:CiWorkflow $jobName |
+                Should -Not -Match "startsWith\(github\.ref, 'refs/tags/'\)" -Because "$jobName must run against the tagged commit"
+        }
+    }
+
+    It 'runs the full stable Linux scaffold matrix on the weekly schedule' {
+        $script:FullCiWorkflow | Should -Match '(?m)^  schedule:\s*$'
+        foreach ($jobName in @('scaffold-linux', 'scaffold-linux-x64')) {
+            Get-WorkflowJobBody $script:FullCiWorkflow $jobName |
+                Should -Not -Match "github\.event_name == 'workflow_dispatch'" -Because "$jobName is part of scheduled Full CI"
+        }
+    }
+
+    It 'exercises a pinned synthetic consumer on tag pushes' {
+        $validateJob = Get-WorkflowJobBody $script:CiWorkflow 'validate'
+
+        $validateJob | Should -Match 'Invoke-SyntheticConsumer\.ps1'
+        $validateJob | Should -Match '-SourceRepository \$env:SOURCE_REPOSITORY'
+        $validateJob | Should -Match '-Pin \$env:SOURCE_PIN'
+    }
+
+    It 'keeps real model evaluations out of GitHub Actions' {
+        $script:AllWorkflowText | Should -Not -Match 'Invoke-SkillEvals\.ps1'
+        $script:AllWorkflowText | Should -Not -Match 'COPILOT_GITHUB_TOKEN'
+        $script:AllWorkflowText | Should -Not -Match '(?m)^\s+copilot\s+(?:-p|--prompt)\b'
     }
 }

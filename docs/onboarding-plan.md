@@ -127,10 +127,11 @@ relationships.
   the repository's work:
   `engineering-baseline`, `dotnet-polyfills`, `framework-jit-optimization`,
   `scratch-buffer-strategy`, `performance-testing`, `fuzz-testing`,
-  `roslyn-analyzers`, and `il-copy-inspection`.
-- **Source-promoted .NET additions** - `cswin32-interop` and `cswin32-com` are
-  present on `main` but require the next release before pinned vendoring. The COM
-  skill declares the interop skill as a hard dependency.
+  `roslyn-analyzers`, `il-copy-inspection`, and, for CsWin32 repositories,
+  `cswin32-interop` and `cswin32-com`. The COM skill declares the interop skill
+  as a hard dependency.
+- **Released GitHub domain** - `github-actions-cost-optimization` applies when a
+  repository needs an evidence-based Actions cost audit.
 - **Tool-shipped** - vendor from the tool's own repo, not here: a standalone
   tool's skill (for example `filtrace`), vendored from that tool's repo, for any
   repo that uses the tool.
