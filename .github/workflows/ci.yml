@@ -54,7 +54,6 @@ jobs:
 
   validate:
     name: Validate skills, format, and links
-    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-slim
     timeout-minutes: 15
     steps:
@@ -102,9 +101,25 @@ jobs:
         shell: pwsh
         run: ./tests/plugin/Invoke-PluginSmoke.ps1
 
+      - name: Exercise synthetic consumer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_PIN: ${{ github.ref_name }}
+          SOURCE_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if ($env:SOURCE_REF_TYPE -eq 'tag') {
+            ./tests/repository/Invoke-SyntheticConsumer.ps1 `
+              -SourceRepository $env:SOURCE_REPOSITORY `
+              -Pin $env:SOURCE_PIN
+          }
+          else {
+            ./tests/repository/Invoke-SyntheticConsumer.ps1
+          }
+
   scaffold-linux:
     name: Scaffold (Linux ARM64)
-    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     steps:
@@ -147,7 +162,6 @@ jobs:
 
   scaffold-windows:
     name: Scaffold (Windows multi-target)
-    if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
     runs-on: windows-latest
     timeout-minutes: 15
     steps:

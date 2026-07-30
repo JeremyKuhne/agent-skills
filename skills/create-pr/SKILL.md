@@ -31,6 +31,12 @@ once the user supplies an explicit publishing verb - `commit`, `push`,
 the user on changes" rules in `AGENTS.md`) for the canonical rule and the
 recurring not-approval phrasings.
 
+Branch-name confirmation is a separate prerequisite, not part of publish
+approval. If the current branch is `main`, do not choose or create a branch
+until the user confirms its name. In a non-interactive run where confirmation
+cannot be requested, stop and report the proposed name; never infer confirmation
+from the request to open a PR.
+
 Before running this workflow, walk through the `pre-pr-self-review` checklist -
 it catches the test, allocation, overflow-arithmetic, and TFM-phrasing mistakes
 that repeatedly cost a review round-trip. If the change polyfills a .NET API for
@@ -63,6 +69,9 @@ Decide the PR base:
   before creating it. Offer the suggested kebab-case name and a way to enter a
   different name. If the host has no structured question tool, ask in chat.
   Known client adapters are in [host-adapters.md](host-adapters.md).
+- **Do not run `git switch -c`, `git checkout -b`, or `git branch <name>` until
+  that confirmation is received.** If the host cannot ask in the current mode,
+  stop with the proposed branch name.
 - Use `git switch -c <branch>` to move uncommitted changes onto the new
   branch.
 - If already on a non-`main` branch, keep using it.
