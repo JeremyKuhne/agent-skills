@@ -117,7 +117,7 @@ function Resolve-SkillEvalCopilotPath {
     [CmdletBinding()]
     param()
 
-    $commands = @(Get-Command copilot -CommandType Application -All -ErrorAction Stop)
+    $commands = @(Get-Command copilot -CommandType Application -All -ErrorAction SilentlyContinue)
     $preferred = @(if ($IsWindows) {
         $commands | Where-Object { $_.Name -ceq 'copilot.exe' } | Select-Object -First 1
     }
@@ -276,7 +276,7 @@ function New-SkillEvalContext {
         [string] $RunDirectory
     )
 
-    $gitPath = (Get-Command git -CommandType Application -ErrorAction Stop).Source
+    $gitPath = [string]@(Get-Command git -CommandType Application -All -ErrorAction Stop)[0].Source
     $workspace = Join-Path $RunDirectory 'workspace'
     $pluginDirectory = Join-Path $RunDirectory 'plugin'
     $shimDirectory = Join-Path $RunDirectory 'shims'

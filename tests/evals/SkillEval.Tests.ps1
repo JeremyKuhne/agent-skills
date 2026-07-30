@@ -36,8 +36,13 @@ Describe 'Skill evaluation scenario contract' {
     }
 
     It 'resolves one native Copilot executable' {
-        $copilotPath = Resolve-SkillEvalCopilotPath
+        $availableCommands = @(Get-Command copilot -CommandType Application -All -ErrorAction SilentlyContinue)
+        if ($availableCommands.Count -eq 0) {
+            { Resolve-SkillEvalCopilotPath } | Should -Throw '*native Copilot CLI executable*'
+            return
+        }
 
+        $copilotPath = Resolve-SkillEvalCopilotPath
         Test-Path -LiteralPath $copilotPath -PathType Leaf | Should -BeTrue
         if ($IsWindows) { [System.IO.Path]::GetExtension($copilotPath) | Should -Be '.exe' }
     }

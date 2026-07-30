@@ -59,7 +59,7 @@ function Get-BrokenRelativeLinks([string] $artifactRoot) {
 $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 $skillsRoot = Join-Path $resolvedRepoRoot 'skills'
 $validatorPath = Join-Path $skillsRoot 'manage-skills/scripts/Validate-Skills.ps1'
-$gitPath = (Get-Command git -CommandType Application -ErrorAction Stop).Source
+$gitPath = [string]@(Get-Command git -CommandType Application -All -ErrorAction Stop)[0].Source
 Get-Command gh -ErrorAction Stop | Out-Null
 
 $initialStatus = (& $gitPath -C $resolvedRepoRoot status --porcelain=v1 --untracked-files=all 2>&1) -join "`n"
