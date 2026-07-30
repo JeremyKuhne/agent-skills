@@ -60,7 +60,7 @@ catalog.
 | Reviewer agents | 2 |
 | Markdown files inside skill directories | 72 |
 | Production PowerShell entry points | 6, including the model-evaluation runner |
-| Pester suite | Pester 5.7.1 reported 95 discovered; 94 passed and 1 platform-specific test skipped on Windows |
+| Pester suite | Pester 5.7.1 reported 96 discovered; 95 passed and 1 platform-specific test skipped on Windows |
 | Latest published GitHub release | Immutable `v0.12.0`, published 2026-07-27 |
 | Plugin and marketplace version | `0.13.0` candidate, aligned; latest published release remains `v0.12.0` |
 | Core size | Median `SKILL.md` is 134 total lines; the largest are 214, 202, and 173 lines |
@@ -96,7 +96,7 @@ the GitHub release API, and the installed Copilot CLI help.
 
 ### Verified on this baseline
 
-- The local Pester 5.7.1 run discovered 95 tests and completed with 94 passing,
+- The local Pester 5.7.1 run discovered 96 tests and completed with 95 passing,
   no failures, and one case-sensitivity test skipped on Windows.
 - CI enumerates `skills/*/`, fails an empty match, runs the strict bundled
   validator, and pins `skills-ref` to `0.1.5`.

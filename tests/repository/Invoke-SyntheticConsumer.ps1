@@ -78,11 +78,18 @@ $sourceRecords = @(Get-ChildItem -LiteralPath $skillsRoot -Directory |
     })
 if ($sourceRecords.Count -eq 0) { throw 'No source skills were found.' }
 
-$consumerRoot = Join-Path $OutputDirectory 'consumer'
-$installRoot = Join-Path $consumerRoot '.agents/skills'
-New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
-
+$outputDirectoryCreated = $false
 try {
+    if (Test-Path -LiteralPath $OutputDirectory) {
+        throw "Output directory already exists; choose a new path: $OutputDirectory"
+    }
+    New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+    $outputDirectoryCreated = $true
+
+    $consumerRoot = Join-Path $OutputDirectory 'consumer'
+    $installRoot = Join-Path $consumerRoot '.agents/skills'
+    New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
+
     foreach ($record in $sourceRecords) {
         $installOutput = if ($SourceRepository) {
             & gh skill install $SourceRepository "skills/$($record.Name)" --pin $Pin --dir $installRoot --agent github-copilot --force 2>&1
@@ -189,7 +196,7 @@ try {
     return $summary
 }
 finally {
-    if (-not $Keep) {
+    if (-not $Keep -and $outputDirectoryCreated) {
         Remove-Item -LiteralPath $OutputDirectory -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
