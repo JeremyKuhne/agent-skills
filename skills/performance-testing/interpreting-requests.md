@@ -90,10 +90,9 @@ does not rescue it.
 5. **Verify in stages.** Run the narrow correctness check and short benchmark
   screen, then the real-scenario product pilot. Only a survivor earns the full
   benchmark on both TFMs, retained product confirmation against the actual gate,
-  and candidate before/after attribution
-  ([investigation-workflow](investigation-workflow.md)). Confirm nothing regressed,
-  especially `Allocated` and the other TFM. A faster wall clock with the targeted
-  frame unchanged is noise or a different win; say so.
+  and candidate before/after attribution ([investigation workflow](investigation-workflow.md)).
+  Confirm nothing regressed, especially `Allocated` and the other TFM. A faster
+  wall clock with the targeted frame unchanged is noise or a different win; say so.
 6. **Report and offer the next drill.** Show the before/after for both TFMs and
    the line-level evidence, then suggest the logical follow-up.
 

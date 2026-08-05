@@ -20,10 +20,10 @@ because a local hit changes the recommendation entirely.
    gh skill search <terms> --repo JeremyKuhne/agent-skills
    ```
 
-   Anything here is curated and pre-vetted. When `gh` is unavailable, browse
-   `https://github.com/JeremyKuhne/agent-skills/tree/main/skills`, read candidate
-   descriptions and metadata, and record the release tag or commit for a later
-   pinned manual install. Do not treat the moving `main` branch as the pin.
+    Anything here is curated and pre-vetted. When `gh` is unavailable, browse the
+    commons repository's `skills/` directory, read candidate descriptions and
+    metadata, and record the release tag or commit for a later pinned manual install.
+    Do not treat the moving default branch as the pin.
 
 3. **Public catalogs.** Search the wider ecosystem - the awesome-copilot
    collection, `anthropics/skills`, and the registry:
