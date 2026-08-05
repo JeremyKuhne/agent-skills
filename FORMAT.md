@@ -136,6 +136,10 @@ GitHub Copilot (VS Code, CLI, cloud agent) and Claude Code, and installable with
 Skill Markdown must not contain HTML entities. Write the character directly or
 use plain words instead; Unicode text is valid.
 
+Wrapped prose inside a list item must stay on the paragraph's starting column.
+CommonMark accepts lazy or deeper indentation and standard markdownlint does not
+enforce consistent prose alignment; the bundled skill validator does.
+
 Run the strict bundled policy and the reference specification validator:
 
 ```pwsh

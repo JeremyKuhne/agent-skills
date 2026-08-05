@@ -43,8 +43,8 @@ NativeAOT path, while a `ComWrappers` implementation can be AOT-compatible.
 ## Workflow
 
 1. **In Win32 metadata?** If yes, add the interface name to `NativeMethods.txt`
-  and CsWin32 generates it. If not (for example, Setup Configuration or a
-  private / third-party interface), define a manual struct in its own file - see
+   and CsWin32 generates it. If not (for example, Setup Configuration or a
+   private / third-party interface), define a manual struct in its own file - see
    [manual-structs.md](manual-structs.md).
 2. **Lifetime:** `using ComScope<T> scope = new();` for every transient **owned**
    COM reference, and free every owned COM `BSTR` out-param (`SysFreeString` /
@@ -60,15 +60,15 @@ NativeAOT path, while a `ComWrappers` implementation can be AOT-compatible.
    the API expects `T**` / `void**` when the concrete scope provides those
    conversions.
 5. **Match the caller's error contract.** If the top-level consumer treats COM
-  failure as a documented "absent" result, helpers may return `default` /
-  `false`; otherwise call `.ThrowOnFailure()`. Do not change a shared helper's
-  contract merely because one caller catches `COMException`. See the parity
-  table in
+   failure as a documented "absent" result, helpers may return `default` /
+   `false`; otherwise call `.ThrowOnFailure()`. Do not change a shared helper's
+   contract merely because one caller catches `COMException`. See the parity
+   table in
    [migration-and-testing.md](migration-and-testing.md).
 6. **Gate .NET 10-only COM features with `#if NET`.** `ComWrappers`-based CCW
-  support is unavailable on .NET Framework. Generated `IComIID` works on both
-  supported runtime families with CsWin32 0.3.287 or later; see
-  [comiid-and-cls.md](comiid-and-cls.md).
+   support is unavailable on .NET Framework. Generated `IComIID` works on both
+   supported runtime families with CsWin32 0.3.287 or later; see
+   [comiid-and-cls.md](comiid-and-cls.md).
 7. **Compose across packages** at the owner boundary. The owner implements
    generated partial hooks and publishes shared COM structs; extenders add
    behavior with extension blocks or uniquely named CCW providers. See

@@ -83,7 +83,7 @@ each holding the single underlying primitive - the same pattern as CsWin32's
 cost nothing at the boundary. Conversions follow the typedef hierarchy:
 **implicit** widening to the base (always safe), **explicit** narrowing (opt-in,
 because the C side cannot enforce the kind at the cast site). Check the native
-header for the canonical validation primitives before writing `IsNil` / `IsValid`
-- the encoding often hides in macros (for `mdToken`, `IsNilToken` tests the rid
-half, `RidFromToken(tk) == 0`, not the whole value, and a per-type nil such as
-`mdAssemblyNil = 0x20000000` is the table tag, not `0`).
+header for the canonical validation primitives before writing `IsNil` /
+`IsValid` - the encoding often hides in macros (for `mdToken`, `IsNilToken` tests
+the rid half, `RidFromToken(tk) == 0`, not the whole value, and a per-type nil
+such as `mdAssemblyNil = 0x20000000` is the table tag, not `0`).

@@ -114,6 +114,12 @@ on the canonical repo's `main` but not in your branch will fail.
 - No trailing whitespace.
 - No whitespace-only lines (a "blank" line must be truly empty).
 - Tabs are forbidden in Markdown bodies.
+- **Wrapped prose in a list item must stay on the paragraph's starting column.**
+  For common markers, continuation text starts under the content: three spaces
+  after an ordered `1.` marker and two after an unordered `-` marker. CommonMark
+  accepts lazy or deeper indentation, so standard markdownlint does not catch
+  inconsistent prose alignment. Inspect
+  changed list paragraphs and run the repository's skill validator when available.
 - **Files must end with a single newline character** (markdownlint MD047).
   The validator flags a *missing* trailing newline (it checks the file ends
   with `\n`, not that there is exactly one); markdownlint enforces the full
@@ -127,8 +133,9 @@ on the canonical repo's `main` but not in your branch will fail.
 **Always run the validator before declaring a review complete or pushing
 agent-file changes.** It catches mirror drift, missing/invalid frontmatter,
 `SKILL.md` naming mistakes, missing trailing newlines, and trailing/empty-line
-whitespace - the same rules CI enforces. Run it in plain mode to validate, and
-in fix mode (`-Fix`) to regenerate the mirror after editing `AGENTS.md`.
+whitespace and list-continuation indentation - the same rules CI enforces. Run it
+in plain mode to validate, and in fix mode (`-Fix`) to regenerate the mirror after
+editing `AGENTS.md`.
 
 The validator does **not** reproduce markdownlint's full rule set. After it
 passes, sanity-check that your Markdown:

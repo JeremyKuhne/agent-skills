@@ -164,14 +164,14 @@ publishing verb.** Do not run them silently:
 - `gh repo create <owner>/<name> --public --source . --remote origin`
 - `git init && git add -A && git commit -m "Initial scaffold" && git push -u origin main`
 - For a private repository, enable GitHub Code Security before the first pull
-    request. If it is unavailable, replace CodeQL with a supported scanner.
+  request. If it is unavailable, replace CodeQL with a supported scanner.
 - Branch protection / ruleset on `main`: require `build`, strict up-to-date
-    branches or a merge queue, and either CodeQL code-scanning results at
-    documented thresholds or the replacement scanner's status check; require pull
-    requests with no bypass path; block force-push and deletion. If a bypass path
-    is required, restore default-branch push validation in CI, CodeQL or its
-    replacement, and the agent mirror first. Emit the exact `gh api` call or
-    ruleset JSON for review.
+  branches or a merge queue, and either CodeQL code-scanning results at
+  documented thresholds or the replacement scanner's status check; require pull
+  requests with no bypass path; block force-push and deletion. If a bypass path
+  is required, restore default-branch push validation in CI, CodeQL or its
+  replacement, and the agent mirror first. Emit the exact `gh api` call or
+  ruleset JSON for review.
 - Enable secret scanning and push protection (GitHub repo Settings > Security).
 - Register the trusted-publishing policy on nuget.org before the first publish.
 
