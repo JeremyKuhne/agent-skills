@@ -27,7 +27,7 @@ plus a thin repo-specific **overlay**:
 The commons is **bidirectional**: a generic improvement made in any repo flows
 back here (when plausible - upstreaming is never automatic), while a repo-specific
 tweak stays in that repo's overlay. The lifecycle is driven by the `manage-skills`
-skill (`find` / `build` / `update`).
+skill (`find` / `build` / `review` / `update` / `retire`).
 
 ## Consuming a skill
 
