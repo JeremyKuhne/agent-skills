@@ -115,6 +115,180 @@ Describe 'Validate-Skills.ps1' {
         }
     }
 
+    Context 'Markdown list continuation indentation' {
+        It 'accepts consistent paragraphs, nested lists, and fenced examples' {
+            $dir = New-SkillFixture -Name 'good-list-indentation' -Frontmatter (@(
+                    'name: good-list-indentation'
+                    'description: A skill with lists.'
+                ) -join "`n") -Body @'
+# Good list indentation
+
+1. The first paragraph starts here
+   and keeps its indentation.
+
+   A later paragraph starts here
+   and also keeps its indentation.
+
+   - A nested item starts here
+     and keeps its own indentation.
+
+   ```text
+  Indentation inside a fence is literal.
+   ```
+
+A top-level paragraph after the list remains valid.
+'@
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 0 -Because $r.Output
+            $r.Output | Should -Match 'All 1 skill'
+        }
+
+        It 'adjusts the content column when ordered items cross from 9 to 10' {
+            [string] $threeSpaces = ' ' * 3
+            [string] $fourSpaces = ' ' * 4
+            $body = @(
+                '# Two-digit ordered list'
+                ''
+                '9. The ninth item starts here'
+                "${threeSpaces}and continues at three spaces."
+                '10. The tenth item starts here'
+                "${fourSpaces}and continues at four spaces."
+                ''
+                "${fourSpaces}A later paragraph also starts at four spaces"
+                "${fourSpaces}and keeps that indentation."
+            ) -join "`n"
+            $skillDirectory = New-SkillFixture -Name 'two-digit-list' -Frontmatter (@(
+                    'name: two-digit-list'
+                    'description: A skill with a two-digit ordered list.'
+                ) -join "`n") -Body $body
+
+            $result = Invoke-Validator -Arguments @($skillDirectory)
+
+            $result.ExitCode | Should -Be 0 -Because $result.Output
+            $result.Output | Should -Match 'All 1 skill'
+        }
+
+        It 'rejects a two-digit item continuation indented for a one-digit marker' {
+            [string] $threeSpaces = ' ' * 3
+            $body = @(
+                '# Under-indented two-digit item'
+                ''
+                '10. The tenth item starts here'
+                "${threeSpaces}but continues at only three spaces."
+            ) -join "`n"
+            $skillDirectory = New-SkillFixture -Name 'under-indented-two-digit-list' -Frontmatter (@(
+                    'name: under-indented-two-digit-list'
+                    'description: A skill with an under-indented two-digit item.'
+                ) -join "`n") -Body $body
+
+            $result = Invoke-Validator -Arguments @($skillDirectory)
+
+            $result.ExitCode | Should -Be 1
+            $result.Output | Should -Match 'list continuation is indented 3 spaces; align it with the paragraph''s 4-space indentation'
+        }
+
+        It 'rejects a later two-digit list paragraph one space right of its content column' {
+            [string] $fiveSpaces = ' ' * 5
+            $body = @(
+                '# Over-indented two-digit paragraph'
+                ''
+                '10. The tenth item starts here'
+                ''
+                "${fiveSpaces}This paragraph starts at five spaces instead of four."
+            ) -join "`n"
+            $skillDirectory = New-SkillFixture -Name 'over-indented-two-digit-paragraph' -Frontmatter (@(
+                    'name: over-indented-two-digit-paragraph'
+                    'description: A skill with an over-indented two-digit paragraph.'
+                ) -join "`n") -Body $body
+
+            $result = Invoke-Validator -Arguments @($skillDirectory)
+
+            $result.ExitCode | Should -Be 1
+            $result.Output | Should -Match 'list paragraph starts at 5 spaces; align prose with the list item''s 4-space content column'
+        }
+
+        It 'rejects an under-indented continuation in a later list paragraph' {
+            $dir = New-SkillFixture -Name 'bad-list-indentation' -Frontmatter (@(
+                    'name: bad-list-indentation'
+                    'description: A skill with a malformed list.'
+                ) -join "`n")
+            Set-Content -LiteralPath (Join-Path $dir 'detail.md') -NoNewline -Value @'
+# Bad list indentation
+
+1. Install the selected revision.
+
+   Without the helper, copy the complete
+  directory and preserve its metadata.
+'@
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'detail.md:\d+ list continuation is indented 2 spaces; align it with the paragraph''s 3-space indentation'
+        }
+
+        It 'rejects an over-indented continuation in a list paragraph' {
+            $dir = New-SkillFixture -Name 'over-indented-list' -Frontmatter (@(
+                    'name: over-indented-list'
+                    'description: A skill with a shifted continuation.'
+                ) -join "`n") -Body @'
+# Over-indented list
+
+1. This paragraph starts at the content column
+    but its continuation moves one space right.
+'@
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'list continuation is indented 4 spaces; align it with the paragraph''s 3-space indentation'
+        }
+
+        It 'rejects a later list paragraph that starts left of the content column' {
+            $dir = New-SkillFixture -Name 'bad-list-paragraph-start' -Frontmatter (@(
+                    'name: bad-list-paragraph-start'
+                    'description: A skill with a shifted list paragraph.'
+                ) -join "`n") -Body @'
+# Bad list paragraph start
+
+1. Install the selected revision.
+
+  This paragraph starts one space too far left.
+'@
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'list paragraph starts at 2 spaces; indent it to the list item''s 3-space content column or move it to column 0'
+        }
+
+        It 'rejects a later list prose paragraph that starts right of the content column' {
+            $dir = New-SkillFixture -Name 'over-indented-list-paragraph' -Frontmatter (@(
+                    'name: over-indented-list-paragraph'
+                    'description: A skill with an over-indented list paragraph.'
+                ) -join "`n") -Body @'
+# Over-indented list paragraph
+
+1. Install the selected revision.
+
+     This prose starts at five spaces instead of three.
+'@
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'list paragraph starts at 5 spaces; align prose with the list item''s 3-space content column'
+        }
+
+        It 'rejects an accidental list marker followed by a lazy continuation' {
+            $dir = New-SkillFixture -Name 'lazy-list-continuation' -Frontmatter (@(
+                    'name: lazy-list-continuation'
+                    'description: A skill with an accidental list.'
+                ) -join "`n") -Body @'
+# Lazy list continuation
+
+This sentence wraps before its dash
+- and accidentally starts a list.
+The next line is a lazy continuation.
+'@
+            $r = Invoke-Validator -Arguments @($dir)
+            $r.ExitCode | Should -Be 1
+            $r.Output | Should -Match 'list continuation is indented 0 spaces; align it with the paragraph''s 2-space indentation'
+        }
+    }
+
     Context 'portfolio metadata and overlays' {
         It 'rejects missing portfolio metadata in strict mode' {
             $dir = New-SkillFixture -Name 'missing-policy' -Frontmatter (@(

@@ -19,21 +19,21 @@ catalog - is the failure mode this path exists to prevent. Always run
    gh skill install JeremyKuhne/agent-skills <skill> --pin vX.Y.Z
    ```
 
-    Read the selected revision's `metadata.requires` and install its complete
-    transitive requirement closure at the same pin; `gh skill install` installs
-    only the named skill. Review each requirement's applicability and source before
-    installing it.
+   Read the selected revision's `metadata.requires` and install its complete
+   transitive requirement closure at the same pin; `gh skill install` installs only
+   the named skill. Review each requirement's applicability and source before
+   installing it.
 
    `--pin` records the exact version so later `update --all` runs skip it until
    you deliberately re-pin. The install writes provenance frontmatter (source
    repo, ref, and tree SHA); commit it.
 
    Without `gh`, check out or download the exact tag/commit, copy the complete
-  directory for the skill and each transitive requirement (not only each
-  `SKILL.md`), preserve or add provenance metadata for that immutable revision, add
-  the local overlay, and compare every copied file list and hash against the source
-  before running the validators. If an exact revision or complete file set cannot
-  be obtained, keep vendoring blocked.
+   directory for the skill and each transitive requirement (not only each
+   `SKILL.md`), preserve or add provenance metadata for that immutable revision, add
+   the local overlay, and compare every copied file list and hash against the source
+   before running the validators. If an exact revision or complete file set cannot
+   be obtained, keep vendoring blocked.
 4. **In a public catalog** -> do not build from scratch. Apply the security gate
    below. If it is good, vendor it; if it is close but imperfect, fork it into the
    commons and vendor that. A mediocre public skill is usually worth adapting over

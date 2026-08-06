@@ -1,11 +1,11 @@
 # Analyzer performance
 
-Detail for the [roslyn-analyzers](SKILL.md) skill. An analyzer is not batch tooling
-- it runs **inside the IDE on every keystroke**, concurrently with every other
-analyzer, on the UI-latency path. A slow analyzer does not just slow itself; it
-degrades typing responsiveness across the whole solution. The Roslyn SDK guidance
-is blunt about it: *an analyzer should exit as quickly as possible, doing minimal
-work.* Treat the in-IDE per-edit budget as the design constraint.
+Detail for the [roslyn-analyzers](SKILL.md) skill. An analyzer is not batch
+tooling - it runs **inside the IDE on every keystroke**, concurrently with every
+other analyzer, on the UI-latency path. A slow analyzer does not just slow itself;
+it degrades typing responsiveness across the whole solution. The Roslyn SDK
+guidance is blunt about it: *an analyzer should exit as quickly as possible, doing
+minimal work.* Treat the in-IDE per-edit budget as the design constraint.
 
 ## The cardinal rule: cheap filter first, semantics last
 

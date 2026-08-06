@@ -126,7 +126,7 @@ Only a candidate that passes the first two stages earns broader confirmation:
 - use the full/default benchmark job and inspect complete error/allocation columns;
 - run cold and warm forms when setup/cache state can change the answer;
 - confirm the real product scenario at the repository's retained-run rigor and
-   require the actual predeclared product gate, not the pilot's plausibility cutoff;
+  require the actual predeclared product gate, not the pilot's plausibility cutoff;
 - validate every supported target framework and the repository's correctness gates.
 
 If two controlled reruns still miss the repository's noise/CV limit, stop as
@@ -317,11 +317,11 @@ The workflow is complete when all applicable checks pass:
   enough query-level evidence.
 - The ledger preserves rejected variants and explains the final decision.
 - An opt-in BenchmarkDotNet child build references the assembly built from the
-   recorded oracle commit and hash, semantic-parity checks pass on fresh state, and
-   an ordinary build has no oracle surface.
+  recorded oracle commit and hash, semantic-parity checks pass on fresh state, and
+  an ordinary build has no oracle surface.
 - A clean checkout plus the retained dirty-source bundle reconstructs and verifies
-   every source and input byte needed for the run; its explicit allowlist contains
-   no secret, unauthorized, or unrelated content.
+  every source and input byte needed for the run; its explicit allowlist contains
+  no secret, unauthorized, or unrelated content.
 - The retained command, non-secret environment, runtime/JIT, OS/architecture,
-   target framework, job, and profiler scope identify the execution environment
-   closely enough to rerun the same experiment.
+  target framework, job, and profiler scope identify the execution environment
+  closely enough to rerun the same experiment.
