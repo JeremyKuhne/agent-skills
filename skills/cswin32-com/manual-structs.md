@@ -21,6 +21,7 @@ internal unsafe struct IPrivateService : IComIID
         get
         {
             // 00112233-4455-6677-8899-AABBCCDDEEFF in native Guid layout.
+            // In a ReadOnlySpan<byte> initializer, the compiler emits the bytes as RVA data (no runtime allocation).
             ReadOnlySpan<byte> data = new byte[]
             {
                 0x33, 0x22, 0x11, 0x00,
