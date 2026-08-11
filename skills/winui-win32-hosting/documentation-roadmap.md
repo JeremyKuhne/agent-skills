@@ -21,7 +21,11 @@ Each document must:
 
 ## Priority 0: make first hosting successful
 
-### End-to-end .NET Win32 host walkthrough
+### [End-to-end .NET Win32 host walkthrough](end-to-end-walkthrough.md)
+
+**Status:** Implemented with a bundled code-only sample. Release x64 and ARM64
+builds pass. Interactive startup, input, resize, clean shutdown, and clean-machine
+deployment remain acceptance gates.
 
 **Gap:** Existing material provides API pages and a C++ sample, but not one concise
 code-only .NET walkthrough for an existing Win32 message loop.
@@ -34,7 +38,12 @@ pretranslation, focus, disposal, and queue shutdown.
 **Acceptance:** The published sample builds from CLI for x64 and ARM64, runs on a
 clean machine, accepts keyboard/pointer input, resizes, and exits cleanly.
 
-### Host topology and ownership state machine
+### [Host topology and ownership state machine](host-topology-and-ownership.md)
+
+**Status:** Implemented with object, state, and sequence diagrams plus terminal
+state tests for consuming frameworks. The bundled sample proves initialization,
+normal close, and disposal through its implementation; rollback and reparenting
+remain consumer integration gates.
 
 **Gap:** API reference does not show parent HWND, wrapper HWND, site-bridge HWND,
 `DesktopWindowXamlSource`, `DesktopChildSiteBridge`, `ContentIsland`, `XamlRoot`,
@@ -46,7 +55,12 @@ partial-construction rollback, dispatcher shutdown, and reparenting state machin
 **Acceptance:** Every arrow names ownership, thread, unit/origin, and disposal
 responsibility; tests cover every terminal state.
 
-### Message and focus routing cookbook
+### [Message and focus routing cookbook](message-and-focus-routing.md)
+
+**Status:** Implemented with message ordering, entry/exit algorithms, correlation
+handling, multiple-island and HWND-descendant rules, and an explicit automation
+sequence. The bundled sample implements pretranslation and initial entry; full
+mixed native/XAML traversal remains a consuming-framework gate.
 
 **Gap:** `ContentPreTranslateMessage`, native dialog navigation, `NavigateFocus`,
 `TakeFocusRequested`, correlation IDs, and reverse traversal are documented in
@@ -59,7 +73,12 @@ prevention.
 **Acceptance:** Automated traversal crosses native-before, several XAML stops,
 and native-after in both directions without changing activation unexpectedly.
 
-### DPI and coordinate-space cookbook
+### [DPI and coordinate-space cookbook](dpi-and-coordinate-spaces.md)
+
+**Status:** Implemented with origin/unit tables, conversion formulas, Per-Monitor
+V2 sequencing, OLE/popup/composition boundaries, diagnostics, and automated/manual
+matrices. The multi-monitor 100%-300% matrix remains pending suitable hardware or
+virtual displays.
 
 **Gap:** No single guide maps physical screen pixels, parent-client pixels,
 site-bridge coordinates, XAML effective pixels, element-relative points, and
@@ -136,7 +155,7 @@ complete HWND-host migration story.
 ## Authoring sequence
 
 1. Freeze a minimal raw sample and integration harness as executable truth.
-2. Write the Priority 0 documents from that sample.
+2. Write the Priority 0 documents from that sample. **Completed.**
 3. Add code extraction tests so snippets compile against the declared package.
 4. Run the architecture, DPI, focus, deployment, and shutdown matrices.
 5. Publish repository-local docs and gather user failure reports.
@@ -181,10 +200,12 @@ Use this shape for each page:
 
 ## Tracking table
 
-Keep a repository-local table with these columns:
-
 | Document | Priority | Owner | Evidence sample | Automated gate | Manual matrix | Upstream destination | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| [End-to-end walkthrough](end-to-end-walkthrough.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | x64/ARM64 Release build | Startup, normal close, interactive input and resize, clean machine | Microsoft Learn / WindowsAppSDK-Samples | Implemented; manual gates pending |
+| [Topology and ownership](host-topology-and-ownership.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds only | Initialization, normal close, rollback, parent destruction, reparenting | WinUI design notes / Microsoft Learn | Implemented; consumer terminal-state tests pending |
+| [Message and focus routing](message-and-focus-routing.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds only | Pretranslation, initial focus, full forward/reverse mixed traversal | Microsoft Learn / WindowsAppSDK-Samples | Implemented; consumer traversal gate pending |
+| [DPI and coordinates](dpi-and-coordinate-spaces.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds and conversion/unit contract | 100%-300% ordered monitor pairs | Microsoft Learn | Implemented; mixed-monitor matrix pending |
 
 Do not mark a document complete because prose exists. Mark it complete when its
 sample, cited package version, tests, clean-machine path, and declared manual checks

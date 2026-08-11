@@ -35,6 +35,15 @@ cross-framework integration, not a cross-platform UI abstraction.
 
 ## Detailed guides
 
+- [end-to-end-walkthrough.md](end-to-end-walkthrough.md) - build and run a
+  code-only raw HWND host from project setup through deterministic shutdown.
+- [host-topology-and-ownership.md](host-topology-and-ownership.md) - diagrams,
+  ownership table, lifecycle terminal states, rollback, and reparenting.
+- [message-and-focus-routing.md](message-and-focus-routing.md) - message-pump
+  ordering and complete native/XAML Tab and focus stitching.
+- [dpi-and-coordinate-spaces.md](dpi-and-coordinate-spaces.md) - physical/view
+  pixel conversions, site-bridge sizing, Per-Monitor V2 transitions, and test
+  matrix.
 - [project-setup.md](project-setup.md) - project shape, package roles, manifest,
   runtime bootstrap, architecture, and deployment.
 - [host-lifecycle.md](host-lifecycle.md) - process/thread ownership,

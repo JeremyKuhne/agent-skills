@@ -3,6 +3,12 @@
 Use this catalog to start research. Always confirm the selected stable Windows App
 SDK package because API availability and deployment behavior change by release.
 
+The bundled Priority 0 guides and sample were verified against Windows App SDK
+2.3.1 and WinUI source commit
+[`29ebf098f70df518b57b754130bc94004be8c6bc`](https://github.com/microsoft/microsoft-ui-xaml/tree/29ebf098f70df518b57b754130bc94004be8c6bc).
+Moving-branch links below are discovery entry points; pin the exact commit again
+when updating an implementation claim.
+
 ## Packages
 
 | Resource | Use |
