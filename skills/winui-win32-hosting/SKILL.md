@@ -44,6 +44,12 @@ cross-framework integration, not a cross-platform UI abstraction.
 - [dpi-and-coordinate-spaces.md](dpi-and-coordinate-spaces.md) - physical/view
   pixel conversions, site-bridge sizing, Per-Monitor V2 transitions, and test
   matrix.
+- [mixed-ole-and-xaml-drag-drop.md](mixed-ole-and-xaml-drag-drop.md) - choose
+  routed XAML, island-manager, or classic OLE ownership and preserve transfer,
+  reentrancy, text-edit, and teardown correctness.
+- [island-pointer-and-cursor.md](island-pointer-and-cursor.md) - bind the shared
+  island pointer source, coexist with class handling, track terminal event paths,
+  and restore cursor ownership across unload and reparenting.
 - [project-setup.md](project-setup.md) - project shape, package roles, manifest,
   runtime bootstrap, architecture, and deployment.
 - [host-lifecycle.md](host-lifecycle.md) - process/thread ownership,

@@ -5,7 +5,9 @@ host can look correct while still being unusable.
 
 Use [message and focus routing](message-and-focus-routing.md) for the complete Tab
 algorithm and [DPI and coordinate spaces](dpi-and-coordinate-spaces.md) for unit
-and origin conversions.
+and origin conversions. Use [island pointer and cursor behavior](island-pointer-and-cursor.md)
+for the full pointer state machine and [mixed OLE and XAML drag/drop](mixed-ole-and-xaml-drag-drop.md)
+for transport, target ownership, reentrancy, and editable-text transactions.
 
 ## Applies to
 
@@ -64,10 +66,14 @@ stops, hosted HWND content such as WebView2 if present, and native-after.
 
 ## Pointer and cursor input
 
+See [island pointer and cursor behavior](island-pointer-and-cursor.md) before
+subscribing below XAML's routed-event layer.
+
 Use routed XAML pointer events for ordinary controls. Use
 `InputPointerSource.GetForIsland(contentIsland)` only when the host must observe
 input before or outside XAML element routing. Acquire it after the element has a
-live `XamlRoot.ContentIsland`, and release it when that island unloads.
+live `XamlRoot.ContentIsland`; unsubscribe and drop the cached reference when that
+island unloads.
 
 Text controls and other class handlers may mark pointer events handled and capture
 the pointer. Register routed handlers with `handledEventsToo` when observation is
@@ -152,6 +158,9 @@ or screen-magnifier checks.
 
 ## Drag and drop
 
+See [mixed OLE and XAML drag/drop](mixed-ole-and-xaml-drag-drop.md) for the full
+ownership, lifecycle, text-edit transaction, and validation recipe.
+
 ### Choose the correct layer
 
 For ordinary XAML content:
@@ -162,12 +171,13 @@ For ordinary XAML content:
   `Drop` events.
 - Use `DragEventArgs.GetPosition(target)` for target-relative coordinates.
 
-`UIElement.StartDragAsync` is a XAML adapter over
-`Microsoft.UI.Input.DragDrop.DragOperation.StartAsync` using the island's
-existing `DragDropManager`. `CXamlIslandRoot` already registers the manager's
-`TargetRequested` handler and comments that only one handler should exist. Do not
-add a second target handler for ordinary XAML; doing so replaces or bypasses
-XAML hit testing and routed events.
+At the WinUI source commit pinned in [sources.md](sources.md),
+`UIElement.StartDragAsync` adapts to
+`Microsoft.UI.Input.DragDrop.DragOperation.StartAsync` using the manager retained
+by the island root. `CXamlIslandRoot` registers one `TargetRequested` handler for
+XAML and removes it on disconnect. This is source-observed architecture, not a
+public extension contract. Do not acquire another manager merely to customize
+ordinary XAML hit testing or routed events.
 
 Use `DragDropManager` and `IDropOperationTarget` directly only when implementing a
 custom content-island framework layer that intentionally owns target routing.

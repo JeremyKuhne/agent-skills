@@ -126,24 +126,48 @@ UIA/screenshot capture, and a failure-signature decision table.
 
 ## Priority 2: advanced interop
 
-### Mixed OLE and XAML drag/drop
+### [Mixed OLE and XAML drag/drop](mixed-ole-and-xaml-drag-drop.md)
+
+**Status:** Guide written with layer-selection, ownership, registration,
+reentrancy, editable-text, feedback, lifecycle, and validation guidance. Native
+OLE text drops into a WinUI target and source rebinding after reparenting were
+measured in a consuming framework. The portable skill has no bundled
+mixed-transfer harness; the complete direction/device matrix remains pending.
 
 **Gap:** The supported XAML and OLE contracts are known, but there is no
 end-to-end implementation guide validated across native and WinUI text sources
 and targets.
 
-Document XAML's routed drag layer versus `DragDropManager`, system/OLE
+**Content:** XAML's routed drag layer versus `DragDropManager`, system/OLE
 interoperability, nested-loop behavior, site-bridge target registration, data-object
 ownership, source UI limitations, editable-text move transactions, caret rendering,
-and reparent/shutdown cleanup. Publish a prescriptive implementation recipe only
-after automated and manual behavior is stable across native and WinUI sources and
-targets.
+and reparent/shutdown cleanup. Keep unvalidated branches diagnostic; add a bundled,
+prescriptive implementation recipe only after behavior is stable across native and
+WinUI sources and targets.
 
-### Island-scoped pointer and cursor behavior
+**Acceptance (pending):** Real-window automation and manual checks cover native-to-XAML,
+XAML-to-native, same-island, cross-island, Copy, Move, cancellation, reparenting,
+active-drag teardown, DPI, and bounded malformed data.
 
-Document `InputPointerSource`, `ContentIsland` availability, class-handled routed
+### [Island-scoped pointer and cursor behavior](island-pointer-and-cursor.md)
+
+**Status:** Guide written with API-layer selection, source identity, documented
+event sequences, class-handled routing, capture, cursor ownership, coordinates,
+reparenting, diagnostics, and a device matrix. Mouse cursor and source rebinding
+behavior were measured in a consuming framework; touch, pen, and cross-island
+routing remain manual gates.
+
+**Gap:** API reference lists island input members but does not connect XAML class
+handling, terminal pointer routes, cursor ownership, source replacement, and
+multi-device validation into a host lifecycle.
+
+**Content:** `InputPointerSource`, `ContentIsland` availability, class-handled routed
 events, capture transfer, pointer IDs, cursor lifetime, touch/pen differences, and
 Loaded/Unloaded rebinding.
+
+**Acceptance (pending):** Retained traces cover every documented terminal path for mouse,
+touch, and pen; cursor restoration; multiple simultaneous pointers and islands;
+unload/reload; reparenting; stale-event rejection; and DPI transitions.
 
 ### Windowless island migration watch
 
@@ -163,7 +187,8 @@ complete HWND-host migration story.
    samples, linking reproducible evidence.
 7. Propose upstream documentation contributions only with explicit repository and
    publishing approval.
-8. Add Priority 1 and Priority 2 pages as their validation gates become real.
+8. Add Priority 1 and the remaining Priority 2 pages as their validation gates
+   become real.
 9. Review every Windows App SDK upgrade for stale screenshots, properties,
    package names, source paths, and future/stable API boundaries.
 
@@ -206,6 +231,8 @@ Use this shape for each page:
 | [Topology and ownership](host-topology-and-ownership.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds only | Initialization, normal close, rollback, parent destruction, reparenting | WinUI design notes / Microsoft Learn | Implemented; consumer terminal-state tests pending |
 | [Message and focus routing](message-and-focus-routing.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds only | Pretranslation, initial focus, full forward/reverse mixed traversal | Microsoft Learn / WindowsAppSDK-Samples | Implemented; consumer traversal gate pending |
 | [DPI and coordinates](dpi-and-coordinate-spaces.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds and conversion/unit contract | 100%-300% ordered monitor pairs | Microsoft Learn | Implemented; mixed-monitor matrix pending |
+| [Mixed OLE and XAML drag/drop](mixed-ole-and-xaml-drag-drop.md) | 2 | Skill core | No bundled mixed-transfer harness | Portfolio and link validation | Direction/device/effect/lifecycle matrix | Microsoft Learn / WindowsAppSDK-Samples | Guide written; transfer matrix pending |
+| [Island pointer and cursor](island-pointer-and-cursor.md) | 2 | Skill core | No bundled pointer harness | Portfolio and link validation | Mouse/touch/pen/island matrix | Microsoft Learn / WindowsAppSDK-Samples | Guide written; device matrix pending |
 
 Do not mark a document complete because prose exists. Mark it complete when its
 sample, cited package version, tests, clean-machine path, and declared manual checks
