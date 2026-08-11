@@ -28,6 +28,7 @@ host-read location) with `gh skill install`.
 | [engineering-baseline](./engineering-baseline/SKILL.md) | "create a new repository" / "scaffold a CLI tool or library" with CI, packaging, and governance, or "ensure this repo follows modern engineering best practices" / "audit this repository" / "bring this repo up to standard" | Portable core with an optional overlay. Nine-domain assessment plus tested greenfield scaffolding; remote actions require confirmation. |
 | [github-actions-cost-optimization](./github-actions-cost-optimization/SKILL.md) | "reduce CI cost / spend / minutes", optimize GitHub Actions triggers, matrices, runners, caches, artifacts, or automatic versus scheduled/manual checks | Portable core with an optional overlay. Models actual and normalized Actions cost without weakening validation; application runtime performance remains `performance-testing`. |
 | [code-comprehension](./code-comprehension/SKILL.md) | "review this for readability", "is this too complex", "reduce nesting / cognitive load", "what is a reasonable method length / parameter count / nesting depth", judging whether code will be hard to understand | Portable core with an optional overlay. Bundles research and binds local style in the overlay. |
+| [winui-win32-hosting](./winui-win32-hosting/SKILL.md) | "host WinUI in Win32", "embed a WinUI control in an HWND", set up or debug `DesktopWindowXamlSource`, XAML Islands, dispatcher/message/focus/DPI/airspace/accessibility/packaging/lifetime integration | Portable core with an optional overlay. Includes project setup, host lifecycle, boundary behavior, investigation methods, official source map, and a missing-documentation roadmap. |
 
 ## Portfolio contract
 
@@ -53,4 +54,5 @@ host-read location) with `gh skill install`.
 | [roslyn-analyzers](./roslyn-analyzers/SKILL.md) | `dotnet-project-gated` | `optional-overlay` | `local-write` | `canary` | - | `performance-testing`, `security-review`, `pre-pr-self-review`, `il-copy-inspection` |
 | [scratch-buffer-strategy](./scratch-buffer-strategy/SKILL.md) | `dotnet-framework` | `optional-overlay` | `advisory` | `canary` | - | `performance-testing`, `framework-jit-optimization` |
 | [security-review](./security-review/SKILL.md) | `universal` | `optional-overlay` | `local-write` | `canary` | - | `pre-pr-self-review`, `performance-testing`, `fuzz-testing` |
+| [winui-win32-hosting](./winui-win32-hosting/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `cswin32-com`, `cswin32-interop`, `security-review` |
 <!-- portfolio-matrix:end -->
