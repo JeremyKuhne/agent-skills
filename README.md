@@ -7,7 +7,7 @@ vendors pinned, provenance-stamped copies of the skills it needs.
 It is both a [`gh skill`](https://docs.github.com/copilot/reference/copilot-cli-reference/cli-plugin-reference)
 source and a GitHub Copilot CLI plugin marketplace.
 
-> **Status: pre-1.0 and in active fleet use.** The repository currently ships 18
+> **Status: pre-1.0 and in active fleet use.** The repository currently ships 19
 > shared skill cores and two reviewer agents. Deterministic source,
 > isolated-install, plugin, scaffold, and synthetic-consumer gates are in place.
 > A `create-pr` model-evaluation vertical slice is operational; portfolio-wide

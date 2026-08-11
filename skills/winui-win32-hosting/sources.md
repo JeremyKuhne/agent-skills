@@ -1,0 +1,142 @@
+# Packages, documentation, and source map
+
+Use this catalog to start research. Always confirm the selected stable Windows App
+SDK package because API availability and deployment behavior change by release.
+
+## Packages
+
+| Resource | Use |
+| --- | --- |
+| [`Microsoft.WindowsAppSDK` on NuGet](https://www.nuget.org/packages/Microsoft.WindowsAppSDK/) | Supported metapackage, versions, dependencies, and project links. |
+| [Windows App SDK release channels](https://learn.microsoft.com/windows/apps/windows-app-sdk/release-channels) | Current/maintenance support and stable, preview, experimental boundaries. |
+| [`Microsoft.Windows.CsWin32`](https://www.nuget.org/packages/Microsoft.Windows.CsWin32/) | Optional Win32 projection source generator. |
+| [CsWin32 source](https://github.com/microsoft/CsWin32) | Generator configuration, metadata behavior, and issues. |
+
+Reference the Windows App SDK metapackage directly. Treat component packages and
+build-tool packages in its transitive graph as implementation detail unless the
+application directly consumes one under a documented contract.
+
+## Setup and deployment documentation
+
+- [Deployment architecture](https://learn.microsoft.com/windows/apps/windows-app-sdk/deployment-architecture)
+- [Use the runtime from unpackaged apps](https://learn.microsoft.com/windows/apps/windows-app-sdk/use-windows-app-sdk-run-time)
+- [Deploy framework-dependent unpackaged apps](https://learn.microsoft.com/windows/apps/windows-app-sdk/deploy-unpackaged-apps)
+- [Windows App SDK downloads](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads)
+- [Bootstrapper API](https://learn.microsoft.com/windows/apps/windows-app-sdk/api-reference/cs-bootstrapper-apis/)
+- [Project properties and auto-initializers](https://learn.microsoft.com/windows/apps/package-and-deploy/project-properties)
+- [Application manifests](https://learn.microsoft.com/windows/win32/sbscs/application-manifests)
+- [Per-Monitor V2 DPI awareness](https://learn.microsoft.com/windows/win32/hidpi/dpi-awareness-context)
+
+## Hosting APIs
+
+- [`DesktopWindowXamlSource`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.desktopwindowxamlsource)
+- [`DesktopWindowXamlSource.Initialize`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.desktopwindowxamlsource.initialize)
+- [`DesktopWindowXamlSource.NavigateFocus`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.desktopwindowxamlsource.navigatefocus)
+- [`WindowsXamlManager.InitializeForCurrentThread`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.windowsxamlmanager.initializeforcurrentthread)
+- [`DispatcherQueueController.CreateOnCurrentThread`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.dispatching.dispatcherqueuecontroller.createoncurrentthread)
+- [`DesktopChildSiteBridge`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.content.desktopchildsitebridge)
+- [`XamlRoot`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.xamlroot)
+- [`InputPointerSource`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource)
+- [`ContentIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.content.contentisland)
+- [`Win32Interop`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.win32interop)
+
+API reference pages describe members but do not form a complete host recipe. Pair
+them with the design notes and sample below.
+
+## Official samples
+
+- [Windows App SDK Islands samples](https://github.com/microsoft/WindowsAppSDK-Samples/tree/main/Samples/Islands)
+- [SimpleIslandApp sample page](https://learn.microsoft.com/samples/microsoft/windowsappsdk-samples/simpleislandapp/)
+- [Windows App SDK installer sample](https://github.com/microsoft/WindowsAppSDK-Samples/tree/main/Samples/Installer)
+- [WinUI Gallery](https://github.com/microsoft/WinUI-Gallery) for control behavior and theme resources, not Win32 host ownership.
+
+Keep a minimal copy of the current official island sample as an oracle. Do not let a
+large application framework become the only reproduction.
+
+## WinUI design notes
+
+The most detailed hosting documentation lives in the WinUI source repository under
+[`docs/design-notes/xaml-islands`](https://github.com/microsoft/microsoft-ui-xaml/tree/main/docs/design-notes/xaml-islands), not only on Microsoft Learn:
+
+- [`desktopwindowxamlsource.md`](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-islands/desktopwindowxamlsource.md): reviewed API spec, startup/shutdown, custom `Application`, focus, and removed legacy interop.
+- [`xaml-islands-and-dispatcherqueue.md`](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-islands/xaml-islands-and-dispatcherqueue.md): queue ownership, custom pumps, pretranslation, and organized shutdown.
+- [`xaml-island-focus-navigation.md`](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-islands/xaml-island-focus-navigation.md): native/XAML Tab stitching and focus internals.
+- [`xaml-island-impl.md`](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-islands/xaml-island-impl.md): thread tree, island roots, `XamlRoot`, popup association, and useful breakpoints.
+- [`xaml-island-type.md`](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-islands/xaml-island-type.md): `DesktopWindowXamlSource` versus lower-level island composition.
+- [`windowless-xaml-islands.md`](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-islands/windowless-xaml-islands.md): future/windowless topology and `ChildSiteLink`.
+- [`xaml-islands.md`](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-islands/xaml-islands.md): terminology and roadmap context.
+
+Pin the repository commit when relying on implementation or roadmap language.
+Statements that an API "will eventually" replace another are design direction, not
+proof that the replacement is stable in the package being used.
+
+## WinUI implementation source
+
+Start from [`microsoft/microsoft-ui-xaml`](https://github.com/microsoft/microsoft-ui-xaml) and inspect these paths at the package-corresponding commit where possible:
+
+- `dxaml/xcp/dxaml/lib/DesktopWindowXamlSource_partial.cpp`
+- `dxaml/xcp/core/core/elements/XamlIslandRoot.cpp`
+- `dxaml/xcp/dxaml/lib/StartDragAsyncOperation.cpp`
+- `dxaml/xcp/dxaml/lib/DropOperationTarget.cpp`
+- `dxaml/xcp/dxaml/lib/AutomaticDragHelper.cpp`
+- `dxaml/xcp/core/native/text/Controls/TextBoxBase.cpp`
+- `dxaml/xcp/core/native/text/Controls/TextServicesHost.cpp`
+- `dxaml/xcp/core/native/text/Controls/RichEditOleCallback.cpp`
+- focus manager and content-root adapter sources under `dxaml/xcp/components` and
+  `dxaml/xcp/core`.
+
+Useful implementation breakpoints named by the design notes include
+`DesktopWindowXamlSource::InitializeImpl`, `CXamlIslandRoot::InitializeCommon`,
+`CXamlIslandRoot::PreTranslateMessage`, `CXamlIslandRoot::OnIslandGotFocus`, and
+`CFocusManager::UpdateFocus`.
+
+## Windows App SDK source
+
+Use [`microsoft/WindowsAppSDK`](https://github.com/microsoft/WindowsAppSDK) for:
+
+- bootstrapper and .NET wrapper implementation;
+- dynamic dependency and deployment specifications;
+- runtime package layout and installer behavior;
+- dispatcher, content, input, windowing, and platform API contracts that are not
+  implemented in the WinUI repository;
+- issues and discussions for runtime activation, packaging, and architecture
+  failures.
+
+Important starting paths include `dev/Bootstrap`, `dev/DynamicDependency`,
+`specs/Deployment`, and installer tests. Some `Microsoft.UI.Input` or platform
+implementation is not published; stop at the public contract rather than inventing
+an internal explanation.
+
+## Native platform documentation
+
+Use Microsoft Win32 documentation for:
+
+- window creation, child styles, z-order, focus, dialog navigation, message loops,
+  and DPI;
+- COM apartment initialization and reference counting;
+- OLE `DoDragDrop`, `RegisterDragDrop`, `IDataObject`, `IDropSource`, and
+  `IDropTarget`;
+- `FORMATETC`, `STGMEDIUM`, global memory, and clipboard formats;
+- UI Automation fragment roots, runtime IDs, control types, and patterns.
+
+Prefer Windows SDK metadata and headers over copying declarations from samples.
+
+## Corroborating applications
+
+A Microsoft application using WinUI does not prove its primary control is a WinUI
+control. For example, modern Notepad uses WinUI/XAML for surrounding UI but hosts a
+native Microsoft 365 `RichEditD2DPT` editor. See the RichEdit team's
+[Windows 11 Notepad](https://devblogs.microsoft.com/math-in-office/windows-11-notepad/)
+article. Package manifests, signed binaries, imports, WinMD, and runtime window
+classes can corroborate architecture, but private behavior is not a supported API.
+
+## Freshness checklist
+
+Before applying this catalog:
+
+1. Record the installed package version and stable-channel support status.
+2. Resolve the package graph and runtime architecture again.
+3. Pin source links to a commit for any implementation claim.
+4. Check whether formerly experimental island APIs are stable in current metadata.
+5. Re-run the official sample and a clean-machine deployment.
+6. Label unverified future direction and unavailable source explicitly.
