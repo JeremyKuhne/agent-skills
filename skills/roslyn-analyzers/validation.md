@@ -131,6 +131,43 @@ and verify that a compiling mutation of the fix makes the test fail. A deep-inpu
 test that never reaches the former recursion depth, or a semantic test whose source
 does not exercise the guarded null/constructed shape, pins nothing.
 
+## Validate false positives on real code
+
+Unit tests establish behavior on cases you anticipated; they do not measure the
+false-positive rate on code you did not design. Before enabling a rule by default,
+run it against at least one large, representative codebase that does not already
+conform to the rule by construction.
+
+Triage every report from a bounded run:
+
+1. Record the repository revision, analyzer revision, configuration, and total
+   compilations or projects analyzed.
+2. Classify each report as actionable, intentional pattern, analyzer defect,
+   duplicate/noise, or uncertain. Preserve representative source shapes without
+   copying proprietary code into fixtures.
+3. Convert every analyzer defect and important uncertain shape into a focused
+   positive or negative test before changing the implementation.
+4. Rerun the same revision and configuration. Compare report counts and every
+   classification that should not have changed.
+
+Treat default severity as an evidence claim. A clean unit suite is insufficient to
+justify enabling a warning broadly; use the observed precision, impact, and cost of
+remediation. If the sample is too small or domain-specific, ship disabled by
+default and state what evidence is still missing.
+
+## Prove no-fix contexts explicitly
+
+For every source shape where the analyzer reports but the fixer must decline, use
+the code-fix harness to assert zero registered actions. Do not infer this from an
+unchanged fixed document: that result cannot distinguish "no action offered" from
+an action that ran and returned its input.
+
+Keep the matching analyzer assertion in the same fixture or a paired test. This
+proves that diagnostic eligibility remains broader than fix eligibility. Include
+metadata-only declarations, stale or malformed diagnostic properties, missing
+additional locations, unsupported syntax shapes, and semantic preconditions that
+cannot be re-established in the current document when those cases apply.
+
 ## Run in Debug and Release
 
 Run `dotnet test -c Release`, not just Debug, before declaring the analyzer done.

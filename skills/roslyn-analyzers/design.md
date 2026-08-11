@@ -211,7 +211,11 @@ document.
 
 Carry analyzer-derived facts needed by the fixer in `Diagnostic.Properties` or
 additional `Location`s. `DiagnosticDescriptor.CustomTags` describe the rule and
-are shared by every report; they are not per-diagnostic data.
+are shared by every report; they are not per-diagnostic data. Use stable property
+keys and values that survive diagnostic serialization; pass source spans as
+additional locations rather than encoding positions into strings. The fixer must
+validate transported values against the current document because diagnostics can
+outlive the snapshot that produced them.
 
 ### Disclose semantic-changing fixes
 
@@ -220,6 +224,12 @@ fix may intentionally change behavior, but its action title must include
 `(may change semantics)` and its before/after tests must demonstrate the changed
 interpretation. When both interpretations are useful, offer separate actions with
 distinct titles and equivalence keys rather than silently choosing one.
+
+The fix owns the validity of the target shape it creates. Make a reasonable effort
+to produce code that binds and compiles for the supported input, including required
+parentheses, conversions, imports, and trivia. It need not repair unrelated errors
+already present elsewhere in the document. Test intentional error-recovery inputs
+with the expected compiler diagnostics so this boundary is explicit.
 
 ### Code fixes go in a SEPARATE assembly (RS1022)
 
@@ -267,6 +277,10 @@ with "Could not find a part of the path ...\<root>.analyzers.codefixes\...".
 - [ ] Cached descriptor + cached `SupportedDiagnostics`; `messageFormat` args, not interpolation.
 - [ ] Diagnostic reported at the tightest location.
 - [ ] Diagnostic and fix eligibility are evaluated independently.
+- [ ] Per-diagnostic fixer data uses stable properties or additional locations and
+  is revalidated against the current document.
 - [ ] Semantic-changing actions disclose the change in their title.
+- [ ] The fix produces a valid target shape without claiming to repair unrelated
+  compiler errors.
 - [ ] FixAll provider is justified by the edit shape and tested for conflicts.
 - [ ] New rule ID recorded in `AnalyzerReleases.Unshipped.md`.

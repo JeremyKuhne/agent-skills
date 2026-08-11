@@ -85,9 +85,9 @@ library it guards (`<root>` is the library project name):
    `IOperation`-vs-syntax rules in [design.md](design.md). Copy the shape of a
    known-good analyzer. For declaration-wide rules, also read
    [symbol-actions.md](symbol-actions.md).
-4. **Validate** with positive, negative, and boundary cases per
-   [validation.md](validation.md). Include malformed semantic state and adversarial
-   depth where applicable. Run in Debug *and* Release.
+4. **Validate.** Follow [validation.md](validation.md), including malformed state,
+   adversarial depth, and real-code triage before enabling by default. Run Debug
+   and Release.
 5. **Check performance** against the in-IDE budget in [performance.md](performance.md):
    cheap syntactic filter first, semantic model only after, and cache lifetime and
    cardinality made explicit. Enable concurrent execution only with stateless code.
@@ -115,7 +115,7 @@ library it guards (`<root>` is the library project name):
   immutable release history, release promotion, and the `RS20xx` diagnostics.
 - [validation.md](validation.md) - testing: the `Microsoft.CodeAnalysis.Testing`
   markup harness, a lightweight in-memory harness, malformed/deep-input coverage,
-  the coverage checklist, and the dogfood probe.
+  explicit no-fix contexts, real-code false-positive triage, and the dogfood probe.
 - [performance.md](performance.md) - the in-IDE performance budget, the cheap-first
   rule, cache lifetime and cardinality, traversal/allocation hygiene, and how to
   measure with `ReportAnalyzer`.
