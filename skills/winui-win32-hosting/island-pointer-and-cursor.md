@@ -7,16 +7,17 @@ click, manipulation, or capture behavior unless the application owns the control
 
 ## Applies to
 
-- Windows App SDK 2.3.1 on Windows 10 version 1809 or later.
+- Windows App SDK 1.7 or later on Windows 10 version 1809 or later.
 - Framework-dependent, unpackaged deployment.
 - `DesktopWindowXamlSource` content with a live `XamlRoot.ContentIsland`.
 - Mouse, touch, and pen input on the XAML-owning STA thread.
 - x64 lifecycle and reparenting behavior measured in a consuming framework.
 - The consuming framework builds for ARM64; touch and pen remain manual gates.
+- API and source-observed behavior checked against Windows App SDK 2.3.1.
 
-`InputPointerSource.GetForIsland` is available in Windows App SDK 1.4 and later.
-Re-check metadata and event contracts before adapting this guide to another
-release line.
+`InputPointerSource.GetForIsland` is available in Windows App SDK 1.4, but the
+`XamlRoot.ContentIsland` access used by this host recipe begins in 1.7. Re-check
+metadata and event contracts before adapting the recipe to another release line.
 
 The [bundled minimal host](assets/minimal-host/README.md) establishes the island
 lifecycle but does not attach a lower-level pointer observer or cursor policy.
@@ -65,24 +66,83 @@ thread unless a documented API explicitly supports another model.
 
 ## Acquire only after load
 
-An element can exist before it has a `XamlRoot`, and a root can exist before its
-`ContentIsland` is available. Attach from `Loaded`, and retry a later load instead
-of treating absence as a permanent failure.
+An element can exist before it has a `XamlRoot`. Subscribe before it enters the
+tree, attach from `Loaded`, and keep the handler until attachment succeeds. If a
+loaded element has a root but no usable island yet, enqueue one dispatcher retry;
+re-subscribing to `Loaded` from inside its handler does not retry the current load.
 
 ```csharp
-private void TryAttach(FrameworkElement element)
+private InputPointerSource? _inputSource;
+private bool _attachRetryQueued;
+private bool _disposed;
+private long _attachmentGeneration;
+
+private void ElementLoaded(object sender, RoutedEventArgs eventArgs)
 {
-    if (element.XamlRoot?.ContentIsland is not { } contentIsland)
+    FrameworkElement element = (FrameworkElement)sender;
+    if (_disposed)
+    {
+        return;
+    }
+
+    element.Unloaded -= ElementUnloaded;
+    element.Unloaded += ElementUnloaded;
+    if (TryAttach(element))
     {
         element.Loaded -= ElementLoaded;
-        element.Loaded += ElementLoaded;
         return;
+    }
+
+    if (_attachRetryQueued)
+    {
+        return;
+    }
+
+    long generation = _attachmentGeneration;
+    _attachRetryQueued = true;
+    if (!element.DispatcherQueue.TryEnqueue(() =>
+    {
+        if (_disposed || generation != _attachmentGeneration)
+        {
+            return;
+        }
+
+        _attachRetryQueued = false;
+        if (element.IsLoaded && TryAttach(element))
+        {
+            element.Loaded -= ElementLoaded;
+        }
+    }))
+    {
+        if (generation == _attachmentGeneration)
+        {
+            _attachRetryQueued = false;
+        }
+    }
+}
+
+private bool TryAttach(FrameworkElement element)
+{
+    if (_disposed)
+    {
+        return false;
+    }
+
+    if (_inputSource is not null)
+    {
+        return true;
+    }
+
+    if (!element.IsLoaded
+        || element.XamlRoot?.ContentIsland is not { } contentIsland)
+    {
+        return false;
     }
 
     InputPointerSource? inputSource = InputPointerSource.GetForIsland(contentIsland);
     if (inputSource is null)
     {
-        return;
+        return false;
     }
 
     inputSource.PointerPressed += InputSourcePointerPressed;
@@ -90,8 +150,45 @@ private void TryAttach(FrameworkElement element)
     inputSource.PointerRoutedAway += InputSourcePointerRoutedAway;
     inputSource.PointerRoutedReleased += InputSourcePointerEnded;
     element.Unloaded += ElementUnloaded;
+    _inputSource = inputSource;
+    return true;
+}
+
+private void ElementUnloaded(object sender, RoutedEventArgs eventArgs)
+{
+    FrameworkElement element = (FrameworkElement)sender;
+    InvalidatePendingAttach();
+    DetachInputSource(element);
+    if (!_disposed)
+    {
+        element.Loaded -= ElementLoaded;
+        element.Loaded += ElementLoaded;
+    }
+}
+
+private void DisposeInputServices(FrameworkElement element)
+{
+    _disposed = true;
+    InvalidatePendingAttach();
+    element.Loaded -= ElementLoaded;
+    DetachInputSource(element);
+}
+
+private void InvalidatePendingAttach()
+{
+    _attachmentGeneration++;
+    _attachRetryQueued = false;
 }
 ```
+
+`DetachInputSource` removes every source and routed handler, restores the borrowed
+cursor, disposes owned cursors, removes `ElementUnloaded`, clears `_inputSource`,
+and resets gesture state. Source replacement and unload increment the attachment
+generation; terminal cleanup sets `_disposed` before doing the same. The one queued
+retry checks those values and `IsLoaded`, so it cannot attach after invalidation.
+A false `TryEnqueue` result means dispatcher shutdown has begun, so do not create
+another queue merely to finish attachment. If the retry cannot attach, the
+retained `Loaded` handler tries again only after a later unload/reload cycle.
 
 Make attachment transactional. If any subscription or cursor creation throws,
 unsubscribe everything already attached, restore the original cursor, dispose

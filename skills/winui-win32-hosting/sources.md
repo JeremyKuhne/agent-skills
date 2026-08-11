@@ -42,6 +42,7 @@ application directly consumes one under a documented contract.
 - [`DispatcherQueueController.CreateOnCurrentThread`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.dispatching.dispatcherqueuecontroller.createoncurrentthread)
 - [`DesktopChildSiteBridge`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.content.desktopchildsitebridge)
 - [`XamlRoot`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.xamlroot)
+- [`XamlRoot.ContentIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.xamlroot.contentisland)
 - [`InputPointerSource`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource)
 - [`InputPointerSource.GetForIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource.getforisland)
 - [`InputPointerSource.Cursor`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource.cursor)
@@ -144,6 +145,7 @@ Prefer Windows SDK metadata and headers over copying declarations from samples.
 For classic OLE drag/drop, start with:
 
 - [`OleInitialize`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-oleinitialize)
+- [`OleUninitialize`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-oleuninitialize)
 - [`DoDragDrop`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-dodragdrop)
 - [`RegisterDragDrop`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-registerdragdrop)
 - [`RevokeDragDrop`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-revokedragdrop)

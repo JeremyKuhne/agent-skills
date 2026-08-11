@@ -134,9 +134,8 @@ OLE text drops into a WinUI target and source rebinding after reparenting were
 measured in a consuming framework. The portable skill has no bundled
 mixed-transfer harness; the complete direction/device matrix remains pending.
 
-**Gap:** The supported XAML and OLE contracts are known, but there is no
-end-to-end implementation guide validated across native and WinUI text sources
-and targets.
+**Gap:** The guide exists, but no bundled portable harness validates every native
+and WinUI source/target direction, effect, device, reparenting, and teardown path.
 
 **Content:** XAML's routed drag layer versus `DragDropManager`, system/OLE
 interoperability, nested-loop behavior, site-bridge target registration, data-object
@@ -157,9 +156,9 @@ reparenting, diagnostics, and a device matrix. Mouse cursor and source rebinding
 behavior were measured in a consuming framework; touch, pen, and cross-island
 routing remain manual gates.
 
-**Gap:** API reference lists island input members but does not connect XAML class
-handling, terminal pointer routes, cursor ownership, source replacement, and
-multi-device validation into a host lifecycle.
+**Gap:** No bundled harness retains complete mouse, touch, pen, and cross-island
+event traces or proves cursor restoration and stale-event rejection across source
+replacement.
 
 **Content:** `InputPointerSource`, `ContentIsland` availability, class-handled routed
 events, capture transfer, pointer IDs, cursor lifetime, touch/pen differences, and

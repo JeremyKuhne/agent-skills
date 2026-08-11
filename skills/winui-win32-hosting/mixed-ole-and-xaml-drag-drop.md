@@ -6,13 +6,17 @@ target routing, visual feedback, and data mutation as separate decisions.
 
 ## Applies to
 
-- Windows App SDK 2.3.1, framework-dependent unpackaged applications on
+- Windows App SDK 1.7 or later, framework-dependent unpackaged applications on
   Windows 10 version 1809 or later.
 - .NET 10 on an STA thread with an HWND-backed WinUI island.
 - Routed XAML drag/drop, the Windows Runtime drag broker, and classic OLE
   `DoDragDrop` interoperability.
 - x64 behavior measured in a consuming framework; ARM64 builds but mixed transfer
   behavior remains a manual gate.
+- API and source-observed behavior checked against Windows App SDK 2.3.1.
+
+The drag/drop primitives described here begin in Windows App SDK 1.4, but the
+`XamlRoot.ContentIsland` access used by this host recipe begins in 1.7.
 
 The [bundled minimal host](assets/minimal-host/README.md) does not implement
 drag/drop. Use it to establish the host lifecycle, then add one drag layer at a

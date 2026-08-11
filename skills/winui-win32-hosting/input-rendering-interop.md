@@ -179,6 +179,10 @@ XAML and removes it on disconnect. This is source-observed architecture, not a
 public extension contract. Do not acquire another manager merely to customize
 ordinary XAML hit testing or routed events.
 
+Do not call `RegisterDragDrop` on the XAML-owned site-bridge HWND. That collides
+with XAML's target ownership; use routed XAML events for that surface. Register
+classic OLE only on a separate, application-owned native target HWND.
+
 Use `DragDropManager` and `IDropOperationTarget` directly only when implementing a
 custom content-island framework layer that intentionally owns target routing.
 
@@ -202,8 +206,8 @@ OLE requirements include:
 - correct `IDataObject` formats, `FORMATETC`, `STGMEDIUM`, allocator, and
   `ReleaseStgMedium` ownership;
 - `IDropSource.QueryContinueDrag` and feedback HRESULTs;
-- `RegisterDragDrop`/`RevokeDragDrop` against the actual hit-test HWND, often the
-  site-bridge HWND rather than a managed wrapper;
+- `RegisterDragDrop`/`RevokeDragDrop` against the application-owned native
+  hit-test HWND, not an obscured wrapper or XAML-owned site bridge;
 - revocation before source replacement, parent destruction, or dispatcher
   shutdown;
 - callback data that cannot escape its documented lifetime.
