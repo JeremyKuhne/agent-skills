@@ -38,10 +38,13 @@ application directly consumes one under a documented contract.
 - [`DesktopWindowXamlSource`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.desktopwindowxamlsource)
 - [`DesktopWindowXamlSource.Initialize`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.desktopwindowxamlsource.initialize)
 - [`DesktopWindowXamlSource.NavigateFocus`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.desktopwindowxamlsource.navigatefocus)
+- [`DesktopWindowXamlSource.ShouldConstrainPopupsToWorkArea`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.desktopwindowxamlsource.shouldconstrainpopupstoworkarea)
 - [`WindowsXamlManager.InitializeForCurrentThread`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.hosting.windowsxamlmanager.initializeforcurrentthread)
 - [`DispatcherQueueController.CreateOnCurrentThread`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.dispatching.dispatcherqueuecontroller.createoncurrentthread)
 - [`DesktopChildSiteBridge`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.content.desktopchildsitebridge)
+- [`DesktopSiteBridge.WindowId`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.content.desktopsitebridge.windowid)
 - [`XamlRoot`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.xamlroot)
+- [`UIElement.XamlRoot`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.uielement.xamlroot)
 - [`XamlRoot.ContentIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.xamlroot.contentisland)
 - [`InputPointerSource`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource)
 - [`InputPointerSource.GetForIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource.getforisland)
@@ -52,6 +55,36 @@ application directly consumes one under a documented contract.
 
 API reference pages describe members but do not form a complete host recipe. Pair
 them with the design notes and sample below.
+
+## Popup, airspace, and native windowing
+
+- [`FlyoutBase.ShouldConstrainToRootBounds`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.controls.primitives.flyoutbase.shouldconstraintorootbounds)
+- [`SetWindowPos`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos)
+- [Child windows](https://learn.microsoft.com/windows/win32/winmsg/window-features#child-windows)
+- [Window styles](https://learn.microsoft.com/windows/win32/winmsg/window-styles)
+- [`GetWindowThreadProcessId`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getwindowthreadprocessid)
+- [`EnumChildWindows`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-enumchildwindows)
+- [`Graphics.CopyFromScreen`](https://learn.microsoft.com/dotnet/api/system.drawing.graphics.copyfromscreen)
+
+## Accessibility and UI Automation
+
+- [UI Automation tree overview](https://learn.microsoft.com/windows/win32/winauto/uiauto-treeoverview)
+- [UI Automation control patterns](https://learn.microsoft.com/windows/win32/winauto/uiauto-controlpatternsoverview)
+- [`AutomationProperties`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.automation.automationproperties)
+- [`FrameworkElementAutomationPeer`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.automation.peers.frameworkelementautomationpeer)
+- [Accessibility testing](https://learn.microsoft.com/windows/apps/design/accessibility/accessibility-testing)
+- [Contrast themes](https://learn.microsoft.com/windows/apps/design/accessibility/high-contrast-themes)
+- [Accessibility Insights for Windows](https://accessibilityinsights.io/docs/windows/overview/)
+- [Inspect](https://learn.microsoft.com/windows/win32/winauto/inspect-objects)
+
+## Integration testing and diagnostics
+
+- [`Process.WaitForExitAsync`](https://learn.microsoft.com/dotnet/api/system.diagnostics.process.waitforexitasync)
+- [`Process.Kill(Boolean)`](https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill)
+- [Collect user-mode dumps](https://learn.microsoft.com/windows/win32/wer/collecting-user-mode-dumps)
+- [WinDbg symbol path](https://learn.microsoft.com/windows-hardware/drivers/debugger/symbol-path)
+- [WinDbg source path](https://learn.microsoft.com/windows-hardware/drivers/debugger/source-path)
+- [WinDbg `.reload`](https://learn.microsoft.com/windows-hardware/drivers/debuggercmds/-reload--reload-module-)
 
 ## Drag/drop APIs
 

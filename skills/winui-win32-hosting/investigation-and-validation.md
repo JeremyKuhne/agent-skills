@@ -3,6 +3,10 @@
 Use this page when documentation is incomplete, behavior differs by machine, or a
 host abstraction fails without a useful managed exception.
 
+Use [testing-and-diagnostics-runbook.md](testing-and-diagnostics-runbook.md) when
+building or operating the subprocess protocol, timeout/cleanup controller,
+artifact capture, stage triage, or WinDbg workflow described here.
+
 ## Evidence ladder
 
 Work from the narrowest authoritative source outward:
@@ -131,6 +135,9 @@ broken.
 | Drag reaches island but no routed XAML event | A second low-level `TargetRequested` handler may have replaced XAML's target. |
 
 ## Integration harness
+
+The complete controller, protocol, artifact, cleanup, and debugger recipe is in
+[testing-and-diagnostics-runbook.md](testing-and-diagnostics-runbook.md).
 
 Run each lifecycle-sensitive scenario in a fresh subprocess. XAML process state,
 `Application.Current`, dispatcher shutdown, and native registrations make repeated

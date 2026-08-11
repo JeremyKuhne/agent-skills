@@ -7,7 +7,10 @@ Use [message and focus routing](message-and-focus-routing.md) for the complete T
 algorithm and [DPI and coordinate spaces](dpi-and-coordinate-spaces.md) for unit
 and origin conversions. Use [island pointer and cursor behavior](island-pointer-and-cursor.md)
 for the full pointer state machine and [mixed OLE and XAML drag/drop](mixed-ole-and-xaml-drag-drop.md)
-for transport, target ownership, reentrancy, and editable-text transactions.
+for transport, target ownership, reentrancy, and editable-text transactions. Use
+[popup, airspace, and z-order](popup-airspace-and-z-order.md) for visual ownership
+and pixel oracles, and [accessibility across islands](accessibility-across-islands.md)
+for UI Automation and assistive-technology validation.
 
 ## Applies to
 
@@ -121,6 +124,9 @@ resources with hard-coded colors merely to make one screenshot match.
 
 ## Popup and airspace behavior
 
+See [popup, airspace, and z-order](popup-airspace-and-z-order.md) for the complete
+ownership, clipping, native ordering, screenshot, and popup-edge recipe.
+
 A popup, flyout, menu, or dialog must know its island. When it cannot infer the
 owner from a live target element, set its `XamlRoot` explicitly. Decide whether
 `ShouldConstrainPopupsToWorkArea` matches the host's window-management policy.
@@ -139,6 +145,10 @@ Prove overlap and clipping with screenshots and pixel samples, not only HWND ord
 Include popups because they may use a separate bridge or compositor path.
 
 ## Accessibility
+
+See [accessibility across islands](accessibility-across-islands.md) for bounded
+external capture, pattern/focus assertions, and the manual Narrator, High Contrast,
+text-scale, and magnifier matrix.
 
 `DesktopWindowXamlSource` and its site bridge connect the XAML UI Automation
 fragment to the native window hierarchy. Validate the combined result from the

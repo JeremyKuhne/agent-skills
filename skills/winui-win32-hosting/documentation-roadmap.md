@@ -99,17 +99,49 @@ registration, `XamlControlsResources`, library dictionaries, collision precedenc
 and failure diagnosis. Include two libraries with intentional type and resource
 collisions.
 
-### Popup, airspace, and z-order
+### [Popup, airspace, and z-order](popup-airspace-and-z-order.md)
 
-Document `XamlRoot` assignment, work-area constraints, site-bridge child HWNDs,
+**Status:** Guide written with root association, work-area policy, native HWND
+ordering, parent/sibling clipping, signed coordinates, source replacement,
+screenshot pixel oracles, failure signatures, and validation matrices. Native
+sibling order and parent clipping were measured on x64 in a consuming framework.
+The portable skill has no bundled popup/airspace harness; popup-edge, mixed-DPI,
+ARM64, and assistive-magnification matrices remain pending.
+
+**Gap:** No bundled portable scene proves both native sibling orders, parent-edge
+clipping, popup-root/work-area policy, source replacement, and mixed-monitor
+placement with retained pixels and interaction evidence.
+
+**Content:** `XamlRoot` assignment, work-area constraints, site-bridge child HWNDs,
 native sibling z-order, clipping, negative positions, popup bridges, and why XAML
 `ZIndex` cannot order separate HWNDs. Back it with screenshot pixel oracles.
 
-### Accessibility across the island boundary
+**Acceptance (pending):** Known-color screenshot assertions and interaction checks
+cover both sibling orders, parent clipping, every shipped popup type, work-area
+edges, source replacement, 100%-300% DPI pairs, keyboard/focus return, High
+Contrast, Narrator, and magnifier.
 
-Document the native/XAML UIA fragment relationship, names, runtime IDs, patterns,
+### [Accessibility across the island boundary](accessibility-across-islands.md)
+
+**Status:** Guide written with provider topology, semantic properties, custom-peer
+boundaries, external bounded Control View capture, runtime-ID scope, pattern and
+focus assertions, sensitive-data handling, popup/reparenting rules, and manual
+assistive-technology scripts. Native/XAML ancestry, required patterns, and focus
+were measured on x64 in a consuming framework. The portable skill has no bundled
+UIA scenario; ARM64, High Contrast, Narrator, text-scale, magnifier, and popup
+fragment passes remain pending.
+
+**Gap:** No bundled portable process captures bounded native/XAML UI Automation
+ancestry and behavior or retains the required manual assistive-technology results.
+
+**Content:** The native/XAML UIA fragment relationship, names, runtime IDs, patterns,
 focus, HWND validation, bounded capture, and required manual High Contrast,
 Narrator, text-scale, and magnifier checks.
+
+**Acceptance (pending):** External Control/Content View captures prove ancestry,
+semantics, patterns, operations, focus, popups, source replacement, and bounded
+failure behavior; retained manual runs cover keyboard, Narrator, contrast themes,
+text scale, magnifier, localization, and supported architectures.
 
 ### Deployment and clean-machine operations
 
@@ -118,11 +150,27 @@ runtime installer chaining; VCRedist; `.winmd`; architecture matrix; servicing;
 repair/uninstall; enterprise provisioning; and diagnostics when Visual Studio hides
 missing deployment steps.
 
-### Testing and diagnostics runbook
+### [Testing and diagnostics runbook](testing-and-diagnostics-runbook.md)
 
-Document the raw oracle, subprocess scenario protocol, timeout/process-tree cleanup,
+**Status:** Guide written with controller/child/worker topology, a bounded versioned
+JSONL protocol, lifecycle vocabulary, phase deadlines, HWND validation,
+process-tree cleanup, artifact schema, raw-oracle comparison, scenario catalog,
+stage-based failure triage, tool correlation, WinDbg symbols/source/breakpoints,
+and security limits. These patterns were measured on x64 in a consuming framework.
+The portable skill bundles only the minimal-host build gate, not the described
+integration controller or retained scenario artifacts.
+
+**Gap:** No portable harness asset implements the protocol/controller and forced
+timeout, cleanup, capture, dump, and artifact-retention self-tests.
+
+**Content:** The raw oracle, subprocess scenario protocol, timeout/process-tree cleanup,
 structured lifecycle events, artifact retention, WinDbg breakpoints, source lookup,
 UIA/screenshot capture, and a failure-signature decision table.
+
+**Acceptance (pending):** A bundled or consuming harness proves success, assertion
+failure, protocol failure, capture failure, timeout, process-tree termination,
+stream drain, cleanup failure, and retained artifacts for every applicable
+scenario category and supported architecture.
 
 ## Priority 2: advanced interop
 
@@ -186,7 +234,7 @@ complete HWND-host migration story.
    samples, linking reproducible evidence.
 7. Propose upstream documentation contributions only with explicit repository and
    publishing approval.
-8. Add Priority 1 and the remaining Priority 2 pages as their validation gates
+8. Add the remaining Priority 1 and Priority 2 pages as their validation gates
    become real.
 9. Review every Windows App SDK upgrade for stale screenshots, properties,
    package names, source paths, and future/stable API boundaries.
@@ -230,6 +278,9 @@ Use this shape for each page:
 | [Topology and ownership](host-topology-and-ownership.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds only | Initialization, normal close, rollback, parent destruction, reparenting | WinUI design notes / Microsoft Learn | Implemented; consumer terminal-state tests pending |
 | [Message and focus routing](message-and-focus-routing.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds only | Pretranslation, initial focus, full forward/reverse mixed traversal | Microsoft Learn / WindowsAppSDK-Samples | Implemented; consumer traversal gate pending |
 | [DPI and coordinates](dpi-and-coordinate-spaces.md) | 0 | Skill core | [Minimal host](assets/minimal-host/README.md) | RID builds and conversion/unit contract | 100%-300% ordered monitor pairs | Microsoft Learn | Implemented; mixed-monitor matrix pending |
+| [Popup, airspace, and z-order](popup-airspace-and-z-order.md) | 1 | Skill core | No bundled popup/airspace harness | Portfolio and link validation | Pixel, popup-edge, DPI, focus, accessibility matrix | Microsoft Learn / WindowsAppSDK-Samples | Guide written; visual matrix pending |
+| [Accessibility](accessibility-across-islands.md) | 1 | Skill core | No bundled UIA scenario | Portfolio and link validation | Narrator, contrast, text-scale, magnifier, ARM64 | Microsoft Learn | Guide written; automation/manual matrices pending |
+| [Testing and diagnostics](testing-and-diagnostics-runbook.md) | 1 | Skill core | [Minimal host](assets/minimal-host/README.md) | Portfolio, link, and minimal-host build validation | Forced failure, dump, architecture, retention policy | Repository-local runbook | Guide written; portable harness pending |
 | [Mixed OLE and XAML drag/drop](mixed-ole-and-xaml-drag-drop.md) | 2 | Skill core | No bundled mixed-transfer harness | Portfolio and link validation | Direction/device/effect/lifecycle matrix | Microsoft Learn / WindowsAppSDK-Samples | Guide written; transfer matrix pending |
 | [Island pointer and cursor](island-pointer-and-cursor.md) | 2 | Skill core | No bundled pointer harness | Portfolio and link validation | Mouse/touch/pen/island matrix | Microsoft Learn / WindowsAppSDK-Samples | Guide written; device matrix pending |
 

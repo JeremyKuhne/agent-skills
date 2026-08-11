@@ -44,6 +44,15 @@ cross-framework integration, not a cross-platform UI abstraction.
 - [dpi-and-coordinate-spaces.md](dpi-and-coordinate-spaces.md) - physical/view
   pixel conversions, site-bridge sizing, Per-Monitor V2 transitions, and test
   matrix.
+- [popup-airspace-and-z-order.md](popup-airspace-and-z-order.md) - bind popups
+  to the current root, order and clip native siblings, and prove the composed
+  result with screenshot pixels.
+- [accessibility-across-islands.md](accessibility-across-islands.md) - validate
+  native/XAML UI Automation ancestry, semantics, patterns, focus, bounded capture,
+  and manual assistive-technology behavior.
+- [testing-and-diagnostics-runbook.md](testing-and-diagnostics-runbook.md) - run
+  isolated scenarios with a bounded protocol, phase deadlines, process cleanup,
+  retained artifacts, stage triage, and debugger/source workflows.
 - [mixed-ole-and-xaml-drag-drop.md](mixed-ole-and-xaml-drag-drop.md) - choose
   routed XAML, island-manager, or classic OLE ownership and preserve transfer,
   reentrancy, text-edit, and teardown correctness.
