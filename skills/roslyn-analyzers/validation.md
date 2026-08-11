@@ -87,6 +87,13 @@ For every rule, test all of:
 - **Both/all shapes** that should fire - operand on the left vs right, `==` vs `!=`,
   each `OperationKind`/`SyntaxKind` you registered.
   (`AnalyzeComparison_NullOnLeft_ReportsDiagnostic`.)
+- **Each supported language** - use separate C# and VB test methods and fixtures.
+  A language-neutral `IOperation` analyzer still receives language-specific syntax,
+  conversions, and error recovery; one language passing does not establish the
+  other.
+- **Equivalent call shapes** - for argument-sensitive rules, cover positional,
+  named, and reordered arguments, plus the target call or argument nested inside a
+  larger expression. Bind arguments by parameter identity rather than source order.
 - **Negative - already correct** - the idiomatic form the rule steers toward does
   **not** fire. (`AnalyzeComparison_IsNullPattern_ReportsNoDiagnostic`.)
 - **Negative - lookalike** - similar-but-fine code does not fire (comparing two
@@ -105,9 +112,15 @@ For every rule, test all of:
   open/close cycles; assert cache cardinality or collection where practical.
 - **Exact location** - when using the official harness, assert the span with markup,
   not just presence.
-- **The code fix** (if any) - before/after equality, that the fix is a no-op /
-  not offered when the code is already correct, and that **FixAll** produces the same
-  result across many occurrences.
+- **The code fix** (if any) - before/after equality; trivia preservation; no action
+  offered when the code is already correct, uneditable, or outside the fixer's
+  supported shapes; and explicit coverage for every known invalid rewrite context.
+  Keep diagnostic tests for those unsupported shapes to prove reporting does not
+  depend on fix eligibility. If an action may change semantics, assert its
+  `(may change semantics)` title and the intended changed interpretation.
+- **FixAll** - prove the combined result across multiple occurrences and every
+  applicable conflict shape. Read [fix-all.md](fix-all.md); include a positive
+  control that fails if only one occurrence is processed.
 
 A useful discipline from the Roslyn SDK tutorial: write the "should not fire" tests
 *first*. They are where real analyzers go wrong, because the cheap syntactic match

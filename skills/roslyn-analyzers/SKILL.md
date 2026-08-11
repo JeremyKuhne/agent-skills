@@ -106,6 +106,9 @@ library it guards (`<root>` is the library project name):
 - [design.md](design.md) - authoring rules: stateless and thread-safe, narrowest
   registration, `IOperation` over raw syntax, descriptors, release tracking, and a
   note on code-fix providers.
+- [fix-all.md](fix-all.md) - when `BatchFixer` is safe, conflict-aware document
+  edits, equivalence-key filtering, edit ordering, and tests that prove the bulk
+  path ran.
 - [symbol-actions.md](symbol-actions.md) - complete symbol coverage, names that
   cannot be fixed at the report site, and analyzer-crash diagnosis.
 - [release-tracking.md](release-tracking.md) - shipped/unshipped file format,
