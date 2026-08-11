@@ -3,6 +3,20 @@
 Use this page after the source can display content. These boundaries are where a
 host can look correct while still being unusable.
 
+Use [message and focus routing](message-and-focus-routing.md) for the complete Tab
+algorithm and [DPI and coordinate spaces](dpi-and-coordinate-spaces.md) for unit
+and origin conversions.
+
+## Applies to
+
+- HWND-backed WinUI islands in Windows App SDK 1.4 or later.
+- Native/XAML keyboard, pointer, focus, DPI, popup, airspace, accessibility, and
+  drag/drop boundaries.
+- Routed XAML APIs by default, with lower-level `ContentIsland` or OLE APIs only
+  when the application intentionally owns that boundary.
+- Real-window integration validation; unit-only behavior is not treated as proof
+  of OS registration, routing, or composition.
+
 ## Message preprocessing
 
 A custom Win32 loop must give Windows App SDK content the first opportunity to

@@ -3,6 +3,19 @@
 Use this page when implementing the hosting environment, reusable child control,
 reparenting, or shutdown behavior.
 
+See [host topology and ownership](host-topology-and-ownership.md) for the object,
+state, sequence, and reparenting diagrams that apply these rules.
+
+## Applies to
+
+- Windows App SDK 1.4 or later HWND-backed XAML islands.
+- Raw Win32 and framework wrappers that own or borrow a native UI thread and
+  dispatcher queue.
+- One process XAML `Application`, one or more sources, and deterministic
+  construction, reparenting, parent-destruction, and shutdown paths.
+- Lower-level windowless islands only where explicitly identified; their ownership
+  topology is not assumed to match `DesktopWindowXamlSource`.
+
 ## Ownership model
 
 A hosted tree crosses several owners. Name them explicitly in code and tests.

@@ -5,6 +5,18 @@ Win32 message loop and hosts WinUI 3 content. The application is Windows-only;
 "cross-framework" here means Win32 and WinUI in one process, not portability to
 other operating systems.
 
+For a complete buildable sequence, use the
+[end-to-end walkthrough](end-to-end-walkthrough.md) and its bundled
+[minimal host](assets/minimal-host/README.md).
+
+## Applies to
+
+- Windows App SDK 1.4 or later `DesktopWindowXamlSource` hosts.
+- .NET executables and libraries that participate in WinUI/Win32 integration.
+- Packaged, packaged-with-external-location, and unpackaged deployment decisions.
+- x86, x64, and ARM64 project planning; validate only the architectures the
+  product ships.
+
 ## Choose the deployment model first
 
 | Model | Runtime activation | Identity | Installer responsibility |
