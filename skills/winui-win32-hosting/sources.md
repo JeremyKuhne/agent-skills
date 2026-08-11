@@ -42,12 +42,27 @@ application directly consumes one under a documented contract.
 - [`DispatcherQueueController.CreateOnCurrentThread`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.dispatching.dispatcherqueuecontroller.createoncurrentthread)
 - [`DesktopChildSiteBridge`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.content.desktopchildsitebridge)
 - [`XamlRoot`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.xamlroot)
+- [`XamlRoot.ContentIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.xamlroot.contentisland)
 - [`InputPointerSource`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource)
+- [`InputPointerSource.GetForIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource.getforisland)
+- [`InputPointerSource.Cursor`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputpointersource.cursor)
+- [`InputSystemCursor`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.inputsystemcursor)
 - [`ContentIsland`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.content.contentisland)
 - [`Win32Interop`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.win32interop)
 
 API reference pages describe members but do not form a complete host recipe. Pair
 them with the design notes and sample below.
+
+## Drag/drop APIs
+
+- [Drag and drop overview](https://learn.microsoft.com/windows/apps/develop/data/drag-and-drop)
+- [`UIElement.StartDragAsync`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.uielement.startdragasync)
+- [`DragEventArgs.GetPosition`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.drageventargs.getposition)
+- [`DragDropManager`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.dragdrop.dragdropmanager)
+- [`DragOperation`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.dragdrop.dragoperation)
+- [`IDropOperationTarget`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.input.dragdrop.idropoperationtarget)
+- [`DragUIOverride.Clear`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.draguioverride.clear)
+- [`DataPackage`](https://learn.microsoft.com/uwp/api/windows.applicationmodel.datatransfer.datapackage)
 
 ## Official samples
 
@@ -80,14 +95,14 @@ proof that the replacement is stable in the package being used.
 
 Start from [`microsoft/microsoft-ui-xaml`](https://github.com/microsoft/microsoft-ui-xaml) and inspect these paths at the package-corresponding commit where possible:
 
-- `dxaml/xcp/dxaml/lib/DesktopWindowXamlSource_partial.cpp`
-- `dxaml/xcp/core/core/elements/XamlIslandRoot.cpp`
-- `dxaml/xcp/dxaml/lib/StartDragAsyncOperation.cpp`
-- `dxaml/xcp/dxaml/lib/DropOperationTarget.cpp`
-- `dxaml/xcp/dxaml/lib/AutomaticDragHelper.cpp`
-- `dxaml/xcp/core/native/text/Controls/TextBoxBase.cpp`
-- `dxaml/xcp/core/native/text/Controls/TextServicesHost.cpp`
-- `dxaml/xcp/core/native/text/Controls/RichEditOleCallback.cpp`
+- [`DesktopWindowXamlSource_partial.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/dxaml/lib/DesktopWindowXamlSource_partial.cpp)
+- [`XamlIslandRoot.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/core/core/elements/XamlIslandRoot.cpp)
+- [`StartDragAsyncOperation.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/dxaml/lib/StartDragAsyncOperation.cpp)
+- [`DropOperationTarget.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/dxaml/lib/DropOperationTarget.cpp)
+- [`AutomaticDragHelper.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/dxaml/lib/AutomaticDragHelper.cpp)
+- [`TextBoxBase.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/core/native/text/Controls/TextBoxBase.cpp)
+- [`TextServicesHost.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/core/native/text/Controls/TextServicesHost.cpp)
+- [`RichEditOleCallback.cpp`](https://github.com/microsoft/microsoft-ui-xaml/blob/29ebf098f70df518b57b754130bc94004be8c6bc/dxaml/xcp/core/native/text/Controls/RichEditOleCallback.cpp)
 - focus manager and content-root adapter sources under `dxaml/xcp/components` and
   `dxaml/xcp/core`.
 
@@ -126,6 +141,20 @@ Use Microsoft Win32 documentation for:
 - UI Automation fragment roots, runtime IDs, control types, and patterns.
 
 Prefer Windows SDK metadata and headers over copying declarations from samples.
+
+For classic OLE drag/drop, start with:
+
+- [`OleInitialize`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-oleinitialize)
+- [`OleUninitialize`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-oleuninitialize)
+- [`DoDragDrop`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-dodragdrop)
+- [`RegisterDragDrop`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-registerdragdrop)
+- [`RevokeDragDrop`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-revokedragdrop)
+- [`IDataObject`](https://learn.microsoft.com/windows/win32/api/objidl/nn-objidl-idataobject)
+- [`IDropSource`](https://learn.microsoft.com/windows/win32/api/oleidl/nn-oleidl-idropsource)
+- [`IDropTarget`](https://learn.microsoft.com/windows/win32/api/oleidl/nn-oleidl-idroptarget)
+- [`FORMATETC`](https://learn.microsoft.com/windows/win32/api/objidl/ns-objidl-formatetc)
+- [`STGMEDIUM`](https://learn.microsoft.com/windows/win32/api/objidl/ns-objidl-ustgmedium-r1)
+- [`ReleaseStgMedium`](https://learn.microsoft.com/windows/win32/api/ole2/nf-ole2-releasestgmedium)
 
 ## Corroborating applications
 
