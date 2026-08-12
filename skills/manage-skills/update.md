@@ -6,34 +6,63 @@ directions. The second - pushing a local improvement - is where the
 
 ## Pull: take upstream changes
 
-When a vendored skill has moved upstream in the commons, pull the change:
+First identify the canonical source and every installed project/user target. Do
+not edit a runtime copy merely because it is the first path found.
+
+When a skill has moved upstream, check before changing files:
 
 ```pwsh
-# one skill
-gh skill update <skill>
-# every unpinned vendored skill
-gh skill update --all
+gh skill update --dry-run
 ```
 
 `gh skill update` compares the local copy's provenance tree SHA against upstream
-and surfaces the difference as a normal diff. Review it like a dependency bump:
-read what changed, run the repo's agent-file checks (the frontmatter validator and
-the installed-artifact link checker), then re-pin when satisfied. Update the
-overlay's `core-pin` and re-review its bindings in the same change. A skill pinned
-with `--pin` is skipped by `--all`; bump its pin deliberately when you want its
-updates.
+and scans known host directories at project and user scope. Review each target
+like a dependency bump: read what changed, run the applicable agent-file checks,
+then re-pin when satisfied. Update an overlay's `core-pin` and re-review its
+bindings in the same change. A skill pinned with `--pin` is skipped; reinstall
+it with a new pin deliberately.
 
-Manual fallback (no `gh`): compare the local core against the commons copy at the
-recorded ref, apply the diff by hand, and update the provenance SHA.
+### Pass the pin and divergence gate
+
+Before changing any pin or provenance ref:
+
+1. enumerate the overlay and every pending-divergence record for the skill;
+2. compare each divergent file against both the current pin and candidate pin;
+3. search the candidate upstream tree and release history for the equivalent
+   change;
+4. remove a divergence record only when the candidate artifact contains it;
+5. rebase a still-needed divergence onto the candidate and update its base pin,
+   affected files, reason, and upstream status;
+6. update every overlay `core-pin` only after its bindings are reviewed against
+   the candidate;
+7. run the upstream mirror comparison and semantic cases before installing.
+
+The mirror comparison passes only when every changed core path is either present
+in the candidate artifact or named in the rebased pending-divergence record, and
+every other upstream file list and hash matches the candidate. Overlays and local
+catalog collateral are additive and must be identified separately.
+
+Stop the update if any overlay or divergence has no explicit disposition. A new
+pin with a stale base-pin record is unexplained drift, even when validation and
+the skill itself still load.
+
+`--force` overwrites locally modified tracked files but does not remove extra
+files. It therefore does not prove overlays or pending divergences are still
+valid.
+
+Manual fallback (no `gh`): compare the canonical source or installed core against
+the recorded immutable revision, apply the reviewed diff, update provenance, and
+reinstall every recorded host/scope target with file-list and hash verification.
 
 ## Push: send a local improvement to the right layer
 
 When you improve a vendored skill locally, first classify the change, then decide
 where it lives. Classification does not trigger any action on its own.
 
-- **Local deviation** - specific to this repo (a repo-only tool, a local path, a
-  repo-specific example). It belongs in the **overlay**, never in the vendored
-  core. Move the change into `overlay.md` (starting from
+- **Local deviation** - specific to this repo or user (a repo-only tool,
+  personal policy, local path, or target-specific example). It belongs in the
+  installation's **overlay**, never in the vendored core. Move the change into
+  `overlay.md` (starting from
   `assets/overlay.md.tmpl` when needed), restore the core to match upstream, and
   record the current pin in `core-pin`. No upstreaming question arises.
 - **Common** - generic, helps every consumer (a clearer phrasing of a portable
@@ -98,3 +127,10 @@ disambiguation) in the same change. Then hand off to `agent-files-review` to val
 the resulting files; semantic lifecycle review does not replace file-level review.
 If the skill is obsolete rather than changed, follow [retire.md](retire.md) instead
 of forcing removal into the update path.
+
+Then follow [install.md](install.md) to verify each effective project/user copy,
+registered source, plugin, and host path. Report any target intentionally left
+at an older pin.
+
+Run the update cases in [evaluations.md](evaluations.md), including a candidate
+pin that already contains one local divergence and another that does not.
