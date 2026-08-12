@@ -2,7 +2,7 @@
 name: manage-skills
 description: Find, build, install, review, update, retire, and share agent skills at repository or user scope. Use when asked to find a skill, build/create one, install/add/vendor one for a project or person, review its routing or workflow, update/sync it, retire/remove it, or reconcile a local change against the commons vs an overlay. Covers host-specific locations, personal-skill privacy, provenance-aware tooling, and the full skill lifecycle. For frontmatter/schema/link diagnostics, use `agent-files-review`.
 license: MIT
-compatibility: Uses host-native skill discovery. GitHub CLI 2.90 or later enables provenance-aware cross-host install and update; host CLIs and deterministic manual copies remain valid fallbacks.
+compatibility: Uses host-native skill discovery. GitHub CLI 2.90 or later enables provenance-aware cross-host install and update. The bundled user-copy installer requires PowerShell 7 and git; private GitHub sources also require GitHub CLI.
 metadata:
   portability: portable
   applicability: universal
@@ -84,6 +84,12 @@ PowerShell port of the Agent Skills spec validator - so the check runs anywhere
 the skill is vendored, without the upstream tool. Run it on the skill directory:
 `pwsh scripts/Validate-Skills.ps1 <skill-dir>`. A commons portfolio uses
 `-RequirePortfolioMetadata` to enforce its metadata and overlay contract.
+
+For deterministic user-scope copies, this skill also bundles
+[scripts/Install-UserSkill.ps1](scripts/Install-UserSkill.ps1). Read
+[install.md](install.md) and any local overlay before running it. The skill does
+not pre-approve shell access; script execution remains subject to the host's
+normal terminal/tool permission flow.
 
 For a new downstream binding, start from
 `assets/overlay.md.tmpl`, replace its skill and pin tokens, and keep every local

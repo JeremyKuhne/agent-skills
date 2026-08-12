@@ -309,8 +309,33 @@ generic installers unsuitable. A safe installer should:
 - stage the copy, compare relative file lists and cryptographic hashes, then
   replace atomically with rollback;
 - require an explicit overwrite flag;
-- write a provenance manifest that contains no sensitive local path if the
-  installed copy might ever be shared.
+- report provenance through the target ledger without injecting a sensitive
+  local path into a copy that might later be shared.
+
+This skill bundles
+[scripts/Install-UserSkill.ps1](scripts/Install-UserSkill.ps1), which implements
+that user-scope copy contract. Run it by its resolved local path after the scope,
+duplicate-name, and privacy gates pass:
+
+```pwsh
+pwsh <resolved-installer-path> `
+  -SourceSkillPath <skill-directory> `
+  -TargetHost github-copilot
+```
+
+Supported target mappings are `github-copilot`, `shared-agents`, `claude-code`,
+`codex`, `gemini-cli`, and `cursor`. `shared-agents` and `codex` both resolve to
+the neutral `~/.agents/skills/` root and are deduplicated when selected together.
+Use `-ProfileRoot` only to select another user profile root or an isolated test
+profile; host-relative destinations remain fixed beneath it.
+
+Use `-Private` for personal/private sources. It requires a local-only source or
+a GitHub repository verified as private and rejects network, synchronization,
+Git-worktree, and reparse-point boundaries. A private copy to multiple roots or
+the neutral `~/.agents/skills/` root additionally requires
+`-AllowPrivateMultiHostExposure`. Use `-Force` only after reviewing the source
+diff. The script copies complete directories, stages and hashes every target,
+and rolls back the multi-target operation before commit if a replacement fails.
 
 ## 6. Verify the effective installation
 
