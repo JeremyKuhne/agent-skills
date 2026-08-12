@@ -1,8 +1,8 @@
 ---
 name: manage-skills
-description: Find, build, review, update, retire, and share agent skills in this repo. Use when asked to find a skill, build/create one (find runs first), review its trigger routing or workflow effectiveness, update/sync it, retire/remove it, or reconcile a local change against the commons vs an overlay. Covers tiered search, find-first building, semantic invocation/workflow review, pull/push updates, and safe retirement. For frontmatter/schema/link diagnostics, use `agent-files-review`.
+description: Find, build, install, review, update, retire, and share agent skills at repository or user scope. Use when asked to find a skill, build/create one, install/add/vendor one for a project or person, review its routing or workflow, update/sync it, retire/remove it, or reconcile a local change against the commons vs an overlay. Covers host-specific locations, personal-skill privacy, provenance-aware tooling, and the full skill lifecycle. For frontmatter/schema/link diagnostics, use `agent-files-review`.
 license: MIT
-compatibility: Requires gh 2.90 or later for install and update operations; manual file comparison remains available without gh.
+compatibility: Uses host-native skill discovery. GitHub CLI 2.90 or later enables provenance-aware cross-host install and update; host CLIs and deterministic manual copies remain valid fallbacks.
 metadata:
   portability: portable
   applicability: universal
@@ -18,33 +18,38 @@ metadata:
 If `overlay.md` exists beside this file, read it before acting; it contains
 repository-specific bindings. This core remains usable without it.
 
-The lifecycle skill for the skills under a repo's `.agents/skills/`: discover one,
-add one, review whether it guides agents effectively, update or retire it, and keep
-local changes in sync with the shared set. It turns "find a skill", "build a skill",
-"is this skill effective", "update the skill", and "remove this skill" into actions
-aligned with the sharing model instead of ad-hoc edits.
+The lifecycle skill for project and personal Agent Skills: discover one, choose
+its source ownership and runtime scope, install it for the intended hosts, review
+whether it guides agents effectively, update or retire it, and keep local changes
+in sync with the shared set. It turns "find a skill", "build a skill", "install
+this for me", "add this to the repo", "is this skill effective", "update the
+skill", and "remove this skill" into actions aligned with the sharing model
+instead of ad-hoc copies.
 
-The model in one paragraph: skills are authored once as a portable **core** and
-shared through a common skills repo (the **commons**); each consuming repo holds a
-pinned, provenance-stamped **copy** plus a thin repo-specific **overlay**. The
-commons is bidirectional - a generic improvement made in any repo flows back
-upstream, while a repo-specific tweak lives only in that repo's overlay.
+Keep two decisions separate. **Source ownership** says whether a skill is portable
+and shared, repository-specific, or personal/private. **Installation scope** says
+where a host discovers a runtime copy: project, user, plugin/managed, or remote.
+A portable core can be installed at project or user scope; a private personal skill
+can remain born-local without entering a repository. The Agent Skills specification
+defines package shape, not discovery paths or precedence; each host owns those.
 
-## The five verbs
+## The six verbs
 
 | Ask | Do | Detail |
 | --- | --- | ------ |
 | "find a skill for X", "is there a skill that does X" | Tiered search (local -> commons -> public), with an applicability check for this repo. | [find.md](find.md) |
 | "build a skill for X", "create a skill" | **Run find first.** Only author new if it exists nowhere; otherwise vendor or tweak the existing one. | [build.md](build.md) |
+| "install this skill", "add this for me", "vendor this into the repo" | Choose source ownership, target surfaces, scope, and host path before selecting `gh`, a host CLI, or a script. | [install.md](install.md) |
 | "review this skill", "is this skill effective" | Review invocation, workflow closure, progressive disclosure, portability, and lifecycle placement; then hand file validation to `agent-files-review`. | [review.md](review.md) |
 | "update the skill", "sync my change", "pull skill updates" | Pull upstream drift; or push a local improvement, classified common (ask before upstreaming) vs deviation (overlay). | [update.md](update.md) |
 | "retire this skill", "remove this skill" | Find dependents and replacements first, then deprecate or remove without leaving stale routing, catalog, packaging, or validation state. | [retire.md](retire.md) |
 
-These chain: `build` always begins with `find`; `build` and `update` finish with
-`review`; and `review` finishes with `agent-files-review` for file-level validation.
-A local skill that needs a tweak follows `update` so core/overlay ownership stays
-explicit. `retire` begins with a dependency/routing inventory and finishes with a
-review of the replacement path plus `agent-files-review`.
+These chain: `build` begins with `find`; an install request runs `find` and the
+public-source security gate before `install`; `build`, `install`, and `update`
+finish with `review`; and `review` finishes with `agent-files-review` for file-level
+validation. A local skill that needs a tweak follows `update` so core/overlay
+ownership stays explicit. `retire` inventories every installed scope and host
+before removing anything.
 
 ## The golden rule
 
@@ -89,7 +94,12 @@ path and concrete cross-reference in that overlay.
 - [find.md](find.md) - the tiered search, the applicability check, and the
   recommendation report.
 - [build.md](build.md) - the find-first decision tree, the security gate for
-  public sources, and authoring a new skill (born-local vs born-shared).
+  public sources, and canonical source ownership (born-repository,
+  born-personal, or born-shared).
+- [install.md](install.md) - source ownership vs runtime scope, host locations,
+  personal-skill privacy, tool selection, verification, and lifecycle effects.
+- [evaluations.md](evaluations.md) - should/should-not install cases for scope,
+  host collisions, private skills, tooling fallbacks, updates, and retirement.
 - [review.md](review.md) - semantic and lifecycle review: invocation, agent
   execution, progressive disclosure, portability, overlap, and maintenance.
 - [update.md](update.md) - the pull (drift) and push (common vs deviation)
