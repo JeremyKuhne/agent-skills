@@ -63,9 +63,9 @@ Public skills are an instruction-injection supply chain - audits have found a
 meaningful fraction carry a critical issue (prompt injection, malicious scripts,
 exposed secrets). Before installing anything from a public source:
 
-- **Preview, do not blind-install:** `gh skill preview <owner/repo> <skill>` and
-  read the `SKILL.md`, every script, and every `references/` file - not just the
-  summary.
+- **Preview, do not blind-install:**
+  `gh skill preview <owner/repo> <skill>@<full-commit-sha>` and read the
+  `SKILL.md`, every script, and every `references/` file - not just the summary.
 - **Pin** to a tag or commit SHA; never track a moving ref.
 - **Never accept `allowed-tools` from a third party**, especially `shell` / `bash`
   - it removes the per-command confirmation. Strip it on import and let the host

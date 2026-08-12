@@ -238,10 +238,11 @@ provenance-aware updates. Its non-interactive default is Copilot at **project**
 scope.
 
 ```pwsh
-gh skill preview OWNER/REPO SKILL@FULL_COMMIT_SHA
-gh skill install OWNER/REPO SKILL --pin FULL_COMMIT_SHA `
+gh skill preview <owner/repo> <skill>@<full-commit-sha>
+gh skill install <owner/repo> <skill> --pin <full-commit-sha> `
   --agent github-copilot --scope project
-gh skill update --dry-run
+gh skill update <skill> --dry-run
+gh skill update --all --dry-run
 ```
 
 - Preview every file and script before installing.

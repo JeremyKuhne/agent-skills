@@ -12,7 +12,11 @@ not edit a runtime copy merely because it is the first path found.
 When a skill has moved upstream, check before changing files:
 
 ```pwsh
-gh skill update --dry-run
+# One skill
+gh skill update <skill> --dry-run
+
+# All installed skills
+gh skill update --all --dry-run
 ```
 
 `gh skill update` compares the local copy's provenance tree SHA against upstream

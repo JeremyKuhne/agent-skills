@@ -94,7 +94,8 @@ path and concrete cross-reference in that overlay.
 - [find.md](find.md) - the tiered search, the applicability check, and the
   recommendation report.
 - [build.md](build.md) - the find-first decision tree, the security gate for
-  public sources, and authoring a new skill (born-local vs born-shared).
+  public sources, and canonical source ownership (born-repository,
+  born-personal, or born-shared).
 - [install.md](install.md) - source ownership vs runtime scope, host locations,
   personal-skill privacy, tool selection, verification, and lifecycle effects.
 - [evaluations.md](evaluations.md) - should/should-not install cases for scope,
