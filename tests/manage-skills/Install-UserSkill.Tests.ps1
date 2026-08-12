@@ -158,23 +158,91 @@ Describe 'Install-UserSkill.ps1' {
         } | Should -Throw '*failed validation*'
     }
 
-    It 'rolls back earlier targets when a later target cannot stage' {
-        $source = New-InstallerSkill -CaseName 'rollback'
-        $targetHome = Join-Path $TestDrive 'rollback-home'
+    It 'requires git for repository boundary checks' {
+        $source = New-InstallerSkill -CaseName 'missing-git'
+        $targetHome = Join-Path $TestDrive 'missing-git-home'
         New-Item -ItemType Directory -Path $targetHome | Out-Null
+        $originalPath = $env:PATH
+
+        try {
+            $env:PATH = ''
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -WhatIf
+            } | Should -Throw '*Git is required to verify source and destination repository boundaries*'
+        }
+        finally {
+            $env:PATH = $originalPath
+        }
+    }
+
+    It 'reports a file that blocks a destination root during preflight' {
+        $source = New-InstallerSkill -CaseName 'blocked-root'
+        $targetHome = Join-Path $TestDrive 'blocked-root-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        $blocker = Join-Path $targetHome '.claude'
         [System.IO.File]::WriteAllText(
-            (Join-Path $targetHome '.claude'),
+            $blocker,
             'block',
             [System.Text.UTF8Encoding]::new($false))
 
         {
             & $script:InstallerPath `
                 -SourceSkillPath $source `
-                -TargetHost github-copilot, claude-code `
+                -TargetHost claude-code `
                 -ProfileRoot $targetHome
-        } | Should -Throw
+        } | Should -Throw "*destination path is blocked by a file: '$blocker'*"
 
-        Test-Path (Join-Path $targetHome '.copilot') | Should -BeFalse
-        Test-Path (Join-Path $targetHome '.claude') -PathType Leaf | Should -BeTrue
+        Test-Path $blocker -PathType Leaf | Should -BeTrue
+        [System.IO.File]::ReadAllText($blocker) | Should -Be 'block'
+    }
+
+    It 'restores an existing destination when a later target commit fails' {
+        $source = New-InstallerSkill -CaseName 'rollback'
+        $targetHome = Join-Path $TestDrive 'rollback-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        & $script:InstallerPath `
+            -SourceSkillPath $source `
+            -ProfileRoot $targetHome |
+            Out-Null
+
+        $copilotRoot = Join-Path $targetHome '.copilot/skills'
+        $copilotDestination = Join-Path $copilotRoot 'sample-skill'
+        $claudeRoot = Join-Path $targetHome '.claude/skills'
+        $claudeDestination = Join-Path $claudeRoot 'sample-skill'
+        $installedSkill = Join-Path $copilotDestination 'SKILL.md'
+        $originalHash = (Get-FileHash $installedSkill).Hash
+        [System.IO.File]::WriteAllText(
+            (Join-Path $source 'SKILL.md'),
+            "---`nname: sample-skill`ndescription: Updated rollback fixture.`n---`n`n# Updated`n",
+            [System.Text.UTF8Encoding]::new($false))
+
+        Mock Move-Item {
+            if ($Destination -eq $claudeDestination) {
+                throw 'Injected second-target commit failure.'
+            }
+
+            [System.IO.Directory]::Move($LiteralPath, $Destination)
+        }
+
+        {
+            & $script:InstallerPath `
+                -SourceSkillPath $source `
+                -TargetHost github-copilot, claude-code `
+                -ProfileRoot $targetHome `
+                -Force
+        } | Should -Throw '*Injected second-target commit failure*'
+
+        (Get-FileHash $installedSkill).Hash | Should -Be $originalHash
+        (Get-FileHash (Join-Path $source 'SKILL.md')).Hash |
+            Should -Not -Be $originalHash
+        Test-Path $claudeDestination | Should -BeFalse
+        foreach ($root in @($copilotRoot, $claudeRoot)) {
+            @(Get-ChildItem $root -Force -ErrorAction SilentlyContinue | Where-Object {
+                    $_.Name -match '^\.sample-skill\.install-|^sample-skill\.backup-'
+                }).Count | Should -Be 0
+        }
     }
 }

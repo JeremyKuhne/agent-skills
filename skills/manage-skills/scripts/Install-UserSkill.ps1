@@ -215,14 +215,12 @@ function Get-UserSkillsRoot {
 }
 
 function Assert-PrivateSource {
-    param([Parameter(Mandatory)] [string] $SkillRoot)
+    param(
+        [Parameter(Mandatory)] [string] $SkillRoot,
+        [Parameter(Mandatory)] [string] $GitPath
+    )
 
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($null -eq $git) {
-        throw 'Git is required to verify that the private source is not in an unverified repository.'
-    }
-
-    $sourceRepository = & git -C $SkillRoot rev-parse --show-toplevel 2>$null
+    $sourceRepository = & $GitPath -C $SkillRoot rev-parse --show-toplevel 2>$null
     if ($LASTEXITCODE -ne 0) {
         return
     }
@@ -298,8 +296,14 @@ if (Test-NetworkPath $skillRoot) {
     throw 'The source skill cannot be installed from a network share.'
 }
 
+$git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if ($null -eq $git) {
+    throw 'Git is required to verify source and destination repository boundaries.'
+}
+
 if ($Private) {
-    Assert-PrivateSource $skillRoot
+    Assert-PrivateSource $skillRoot $git.Source
 }
 
 $targets = [System.Collections.Generic.List[object]]::new()
@@ -348,13 +352,14 @@ foreach ($target in $targets) {
 
     $target.RootPreExisting = Test-Path -LiteralPath $target.Root -PathType Container
     $target.ExistingAncestor = Get-ExistingAncestor $target.Root
-    $destinationGit = Get-Command git -ErrorAction SilentlyContinue
-    if ($null -ne $destinationGit) {
-        $destinationRepository = & git -C $target.ExistingAncestor `
-            rev-parse --show-toplevel 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            throw "The destination is inside a Git worktree: '$destinationRepository'."
-        }
+    if (-not (Test-Path -LiteralPath $target.ExistingAncestor -PathType Container)) {
+        throw "The destination path is blocked by a file: '$($target.ExistingAncestor)'."
+    }
+
+    $destinationRepository = & $git.Source -C $target.ExistingAncestor `
+        rev-parse --show-toplevel 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        throw "The destination is inside a Git worktree: '$destinationRepository'."
     }
 
     if ($Private) {
