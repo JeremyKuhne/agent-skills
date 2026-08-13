@@ -85,6 +85,9 @@ Expected:
 - Does not trigger an installer prompt merely to inspect a missing CLI.
 - Uses a guarded deterministic copy script or complete manual copy.
 - Stages, hashes, and atomically replaces the complete directory.
+- Simulates a later-target staging failure and verifies that backups are
+  restored, newly created destination ancestors are removed, and pre-existing
+  paths survive.
 - Keeps the destination outside Git, sync, network, and shared roots.
 
 ## 7. Copilot CLI directory install
@@ -153,3 +156,5 @@ For a lifecycle change:
 3. Run source-aligned Markdown and relative-link checks.
 4. Compare vendored files to the base pin and reconcile the divergence ledger.
 5. Verify installed copies or registrations through each target host.
+6. Parse bundled scripts and run their isolated success, replacement, privacy,
+   deduplication, and rollback fixtures.
