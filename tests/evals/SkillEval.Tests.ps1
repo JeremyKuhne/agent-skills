@@ -302,6 +302,19 @@ Describe 'Skill evaluation command shims' {
         }
     }
 
+    It 'resolves Unix shim scripts from the wrapper location' {
+        $module = Get-Module SkillEval
+
+        foreach ($commandName in @('git', 'gh')) {
+            $wrapper = & $module { param($name) Get-SkillEvalUnixWrapper -CommandName $name } $commandName
+            $expectedCommand = 'exec pwsh -NoProfile -File "$(dirname "$0")/{0}.ps1" "$@"' -f $commandName
+
+            $wrapper | Should -Match '(?m)^#!/usr/bin/env sh\r?$'
+            $wrapper | Should -Match ([regex]::Escape($expectedCommand))
+            $wrapper | Should -Not -Match '\$PSScriptRoot'
+        }
+    }
+
     It 'serializes concurrent command evidence without corruption' {
         $processes = @(1..20 | ForEach-Object {
                 Start-Process `

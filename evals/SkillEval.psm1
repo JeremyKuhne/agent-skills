@@ -164,6 +164,19 @@ function Get-SkillEvalWorktreeSnapshot {
     return [string]"$head`n$status"
 }
 
+function Get-SkillEvalUnixWrapper {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('git', 'gh')]
+        [string] $CommandName
+    )
+
+    return (@'
+#!/usr/bin/env sh
+exec pwsh -NoProfile -File "$(dirname "$0")/{0}.ps1" "$@"
+'@ -f $CommandName)
+}
+
 function New-SkillEvalShims {
     param(
         [Parameter(Mandatory)]
@@ -289,11 +302,7 @@ pwsh -NoProfile -File "%~dp0$commandName.ps1" %*
         Set-Content -LiteralPath (Join-Path $Directory "$commandName.cmd") -Value $cmdWrapper
 
         if (-not $IsWindows) {
-            $shellWrapper = @"
-#!/usr/bin/env pwsh
-& "`$PSScriptRoot/$commandName.ps1" @args
-exit `$LASTEXITCODE
-"@
+            $shellWrapper = Get-SkillEvalUnixWrapper -CommandName $commandName
             $shellPath = Join-Path $Directory $commandName
             Set-Content -LiteralPath $shellPath -Value $shellWrapper
             & chmod +x $shellPath
