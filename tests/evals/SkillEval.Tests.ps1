@@ -16,13 +16,14 @@ Describe 'Skill evaluation scenario contract' {
         $publishingWorkflowScenarios = @(Get-SkillEvalScenarios -Path $script:PublishingWorkflowScenarioPath)
         $scenarios = @($createPrScenarios; $technicalWritingScenarios; $publishingWorkflowScenarios)
 
-        $createPrScenarios.Count | Should -Be 7
+        $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
+        $createPrScenarios.id | Should -Contain 'create-pr-normalizes-remote-markdown'
         $technicalWritingScenarios.Count | Should -Be 8
         @($technicalWritingScenarios | Where-Object skill -ne 'technical-writing').Count | Should -Be 0
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 18
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 19
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
@@ -280,6 +281,8 @@ Describe 'Skill evaluation command shims' {
         $script:ShimLogPath = Join-Path $script:ShimDirectory 'shim.log'
         $module = Get-Module SkillEval
         & $module { param($directory) New-SkillEvalShims -Directory $directory } $script:ShimDirectory
+        $script:GitShimPath = Join-Path $script:ShimDirectory $(if ($IsWindows) { 'git.cmd' } else { 'git' })
+        $script:GhShimPath = Join-Path $script:ShimDirectory $(if ($IsWindows) { 'gh.cmd' } else { 'gh' })
         Set-Content -LiteralPath $script:ShimLogPath -Value @()
         $env:SKILL_EVAL_SHIM_LOG = $script:ShimLogPath
         $env:SKILL_EVAL_SHIM_MUTEX = "SkillEval-Test-$([guid]::NewGuid().ToString('N'))"
@@ -302,7 +305,7 @@ Describe 'Skill evaluation command shims' {
     It 'serializes concurrent command evidence without corruption' {
         $processes = @(1..20 | ForEach-Object {
                 Start-Process `
-                    -FilePath (Join-Path $script:ShimDirectory 'git.cmd') `
+                    -FilePath $script:GitShimPath `
                     -ArgumentList @('status', '--porcelain') `
                     -NoNewWindow `
                     -PassThru
@@ -318,9 +321,9 @@ Describe 'Skill evaluation command shims' {
     }
 
     It 'does not simulate mutations for help or dry-run probes' {
-        $commitHelp = & (Join-Path $script:ShimDirectory 'git.cmd') commit --help
-        $pushDryRun = & (Join-Path $script:ShimDirectory 'git.cmd') push --dry-run origin eval-feature
-        $prHelp = & (Join-Path $script:ShimDirectory 'gh.cmd') pr create --help
+        $commitHelp = & $script:GitShimPath commit --help
+        $pushDryRun = & $script:GitShimPath push --dry-run origin eval-feature
+        $prHelp = & $script:GhShimPath pr create --help
 
         $commitHelp -join "`n" | Should -Match '^usage: git commit'
         $pushDryRun -join "`n" | Should -Match 'dry run'

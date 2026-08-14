@@ -31,6 +31,7 @@ language, date, and population limits of its study.
 | Preserve cultural and individual variation | Agarwal, Naaman, and Vashistha, *AI Suggestions Homogenize Writing Toward Western Styles and Diminish Cultural Nuances* | Controlled study of 118 Indian and US participants on culturally grounded tasks |
 | Use explicit output and stop contracts | Anthropic prompting guidance and OpenAI Model Spec | Provider guidance describes intended or model-specific behavior, not independent prevalence evidence |
 | Keep publication inside an explicit scope of authority | OpenAI Model Spec agentic-scope and side-effect guidance | Provider behavior specification; repository policy remains authoritative where stricter |
+| Keep remote Markdown logical blocks on single physical lines | Observed failure at an exact-body publishing boundary | Applies to prose paragraphs and individual list items in remote fields, not repository documents or syntax-required line breaks |
 
 Answer burial, repeated summaries, decorative headings, canned praise,
 manufactured closure, and plausible unsupported specificity are observed

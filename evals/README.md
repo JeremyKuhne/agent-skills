@@ -8,12 +8,13 @@ failures remain blocking.
 
 ## Current vertical slices
 
-`scenarios/create-pr.json` covers seven behaviors:
+`scenarios/create-pr.json` covers eight behaviors:
 
 - a positive create-PR request;
 - a readability-review near miss;
 - dirty `main` without publish approval;
 - explicit commit and push approval on a feature branch;
+- normalization of hard-wrapped remote Markdown;
 - correction of an unsupported validation claim;
 - a blocked exact commit message whose claims lack evidence; and
 - an overlay-loading sentinel.

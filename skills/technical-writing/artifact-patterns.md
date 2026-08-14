@@ -62,6 +62,12 @@ actually ran and known gaps, then surface compatibility, risk, and review focus.
 Use bullets for discrete validation results and numbered review-focus items when
 their order or priority matters.
 
+Format the body as remote Markdown, not as a hard-wrapped repository document.
+Keep each prose paragraph and each individual list item on one physical source
+line. Use line breaks only between logical blocks or where Markdown syntax or
+content requires them, such as headings, separate list items, tables, and fenced
+code blocks.
+
 Do not fill every repository template section when it carries no information.
 Do not call work low risk, comprehensive, fixed, or fully tested without the
 evidence that establishes that claim.

@@ -182,6 +182,11 @@ Call the host's pull-request creation capability with:
   immediately before the pull-request creation call. If a rebase, material diff
   change, or validation result changes the evidence, update the candidate and
   rerun the review.
+- Normalize the exact outgoing body for GitHub's remote Markdown field before
+  the creation call. Keep each prose paragraph and each individual list item on
+  one physical source line. Use line breaks only between logical blocks or where
+  Markdown syntax or content requires them; do not carry source-document hard
+  wrapping into the published body.
 - If the user has not supplied a title/body, propose one and confirm before
   creating. This confirmation remains separate from commit/push approval.
 
