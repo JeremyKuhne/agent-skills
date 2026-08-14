@@ -90,6 +90,10 @@ Author it to the repo's `FORMAT.md`:
   `{{CORE_PIN}}`, then add only repository-specific bindings.
 - Add a row to the catalog `README.md` inventory in the same change, and a
   disambiguation entry if the trigger phrasing competes with an existing skill.
+- Once behavior and routing are complete, run `technical-writing` in revise
+  mode over the human- and agent-facing text. Preserve literal trigger phrases,
+  normative force, tool and file names, permission boundaries, and stop
+  conditions. Do not let a clarity edit change the workflow silently.
 - Validate the `SKILL.md` frontmatter with the bundled
   [scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1) in strict portfolio
   mode, then run the repo's remaining agent-file checks (the installed-artifact

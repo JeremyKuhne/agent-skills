@@ -9,7 +9,7 @@ metadata:
   binding: optional-overlay
   risk: remote-write
   maturity: canary
-  requires: none
+  requires: technical-writing
   related: manage-skills, security-review, create-pr, github-actions-cost-optimization
 ---
 
@@ -34,6 +34,11 @@ validated packages with rich metadata), **released** deterministically from tags
 skills and the agent-file gates. The [baseline](baseline.md) is that standard as
 a checklist; the [citation catalog](references/best-practices.md) is the *why*
 behind every line.
+
+Use the required `technical-writing` skill for scored reports, governance prose,
+repository descriptions, and remote checklists. This skill owns the baseline,
+evidence, remediation, and remote-action approval. The writing pass cannot turn
+an unverified setting into a finding or a proposed action into permission.
 
 ## When to use
 
@@ -99,6 +104,10 @@ publishing verb before executing:
 This mirrors the publish boundary in the repository's own agent guidance: the
 work of preparing a change is authorized by the request; the publish is not.
 When in doubt, stop and ask one yes/no question.
+
+Run `technical-writing` pre-publication mode on the exact public text and remote
+checklist after local validation stabilizes. A `Ready` result does not cross
+this boundary.
 
 ## Related skills
 

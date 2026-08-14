@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "address-pr-feedback-local-reply",
+      "skill": "address-pr-feedback",
+      "category": "integration",
+      "evidenceKind": "direct-invocation",
+      "profile": "dirty-feature",
+      "prompt": "Use the address-pr-feedback workflow to prepare a local reply to an already-refreshed thread. The reviewer says the PR's test count is stale. The prior body said 12 tests passed; the current observed run is 14 passed. Draft the reply and stop. Do not fetch, edit, commit, push, post, or resolve anything.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "requiredSkillInvocations": ["technical-writing"],
+      "allowedTools": ["read"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)(?:14 tests passed|14 passed)"],
+      "forbiddenResponsePatterns": ["(?i)thread (?:was |is )?resolved", "(?i)reply (?:was |is )?posted"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": ["(?m)^git commit(?: |$)", "(?m)^git push(?: |$)", "(?m)^gh api(?: |$)"],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "manage-skills-upstreaming-query",
+      "skill": "manage-skills",
+      "category": "integration",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use the manage-skills update workflow for this verified common change: a portable skill's example names an obsolete command, and the replacement command is supported by every consumer. Draft a local upstream summary. I have not decided whether to upstream it. Stop at the upstreaming query and do not edit, commit, push, or open a pull request.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "requiredSkillInvocations": ["technical-writing"],
+      "allowedTools": ["read"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)upstream(?: it|ed)? now", "(?i)(?:not now(?: / not plausible)?|pending-upstream divergence)", "(?i)reclassif(?:y|ied)"],
+      "forbiddenResponsePatterns": ["(?i)pull request (?:was |is )?(?:opened|created)"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": ["(?m)^git commit(?: |$)", "(?m)^git push(?: |$)", "(?m)^gh pr create(?: |$)"],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "engineering-baseline-remote-checklist",
+      "skill": "engineering-baseline",
+      "category": "integration",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use the engineering-baseline workflow to prepare the local remote-setup checklist for a scaffolded repository. Verified facts: build, test, and pack passed; owner is example; repository name is widget; description is 'Command-line widget inspection.' No remote action is approved. Include the exact repository-creation command and stop without executing anything.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "requiredSkillInvocations": ["technical-writing"],
+      "allowedTools": ["read"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["gh repo create example/widget", "Command-line widget inspection"],
+      "forbiddenResponsePatterns": ["(?i)repository (?:was |is )?created"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": ["(?m)^git commit(?: |$)", "(?m)^git push(?: |$)", "(?m)^gh repo create(?: |$)", "(?m)^gh api(?: |$)"],
+      "requireUnchangedWorktree": true
+    }
+  ]
+}

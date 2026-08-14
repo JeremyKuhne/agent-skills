@@ -103,6 +103,20 @@ Describe 'Skill catalog contracts' {
         }
     }
 
+    It 'requires technical-writing for every remote-write workflow' {
+        $remoteWriteRecords = @($script:SkillRecords | Where-Object { $_.Metadata.risk -eq 'remote-write' })
+
+        @($remoteWriteRecords.Name | Sort-Object) | Should -Be @(
+            'address-pr-feedback',
+            'create-pr',
+            'engineering-baseline',
+            'manage-skills')
+        foreach ($record in $remoteWriteRecords) {
+            Get-RelationshipNames $record.Metadata.requires |
+                Should -Contain 'technical-writing' -Because "$($record.Name) publishes human-facing text"
+        }
+    }
+
     It 'has an acyclic required-skill graph' {
         $recordsByName = @{}
         foreach ($record in $script:SkillRecords) { $recordsByName[$record.Name] = $record }

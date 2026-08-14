@@ -1,6 +1,6 @@
 ---
 name: pre-pr-self-review
-description: Self-review checklist - plus an agentic review pass (a read-only reviewer persona over the diff) - before opening a PR. Use before invoking `create-pr`, when reviewing your own draft, or when a reviewer flags issues that should have been caught earlier. Codifies recurring mistakes from multi-targeted polyfill work - missing tests for new public surface, unchecked length sums, null-pointer foot-guns from `MemoryMarshal.GetReference` on empty spans, drift from `ArgumentNullException.ThrowIfNull` and `checked()` conventions, TFM phrasing errors, and stale PR descriptions.
+description: Self-review checklist - plus an agentic review pass (a read-only reviewer persona over the diff) - before opening a PR. Use before invoking `create-pr`, when reviewing your own code change or PR candidate, or when a reviewer flags issues that should have been caught earlier. Codifies recurring mistakes from multi-targeted polyfill work - missing tests for new public surface, unchecked length sums, null-pointer foot-guns from `MemoryMarshal.GetReference` on empty spans, drift from `ArgumentNullException.ThrowIfNull` and `checked()` conventions, TFM phrasing errors, and stale PR descriptions.
 license: MIT
 compatibility: Requires git plus the repository's build, test, and agent-file validation commands.
 metadata:
@@ -10,7 +10,7 @@ metadata:
   risk: local-write
   maturity: canary
   requires: none
-  related: create-pr, address-pr-feedback, security-review, performance-testing
+  related: create-pr, address-pr-feedback, security-review, performance-testing, technical-writing
 ---
 
 # Pre-PR self-review
@@ -108,6 +108,10 @@ patterns in a `polyfill-correctness` overlay companion):
 If the change is not in the Framework-only tree, skip to section 3.
 
 ## 3. PR description matches reality
+
+This section checks the description's factual correspondence to the diff. Use
+`technical-writing` for the final reader-facing structure, audience, tone,
+authority, and concision pass; neither review substitutes for the other.
 
 - TFM phrasing: name the polyfill's *target* TFM (the framework target,
   e.g. `net472`) distinctly from the TFM the tests merely *run* on (e.g.

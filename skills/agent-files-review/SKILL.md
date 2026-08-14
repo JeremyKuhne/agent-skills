@@ -10,7 +10,7 @@ metadata:
   risk: local-write
   maturity: canary
   requires: none
-  related: manage-skills
+  related: manage-skills, technical-writing
 ---
 
 # Agent customization files - review checklist
@@ -20,6 +20,12 @@ repository-specific bindings. This core remains usable without it.
 
 Run through every applicable item below before approving a change to an agent
 customization file. Each item below caught a real bug in PR review history.
+
+This skill owns customization behavior and file correctness. Use
+`technical-writing` as an optional handoff for human and agent comprehension.
+A readability edit must preserve literal triggers, requirement strength,
+commands, permissions, and stop conditions; changing one is a behavior change
+that must return to semantic review.
 
 This skill assumes the repository has adopted the agent-file scaffold: an
 `AGENTS.md` single-source with a generated `.github/copilot-instructions.md`

@@ -86,6 +86,7 @@ function New-SkillEvalArguments {
     foreach ($argument in @(
             '-p', [string]$Scenario.prompt,
             '--plugin-dir', $PluginDirectory,
+            '--add-dir', $PluginDirectory,
             '--model', $Model,
             '--no-ask-user',
             '--no-auto-update',
@@ -163,6 +164,19 @@ function Get-SkillEvalWorktreeSnapshot {
     return [string]"$head`n$status"
 }
 
+function Get-SkillEvalUnixWrapper {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('git', 'gh')]
+        [string] $CommandName
+    )
+
+    return (@'
+#!/usr/bin/env sh
+exec pwsh -NoProfile -File "$(dirname "$0")/{0}.ps1" "$@"
+'@ -f $CommandName)
+}
+
 function New-SkillEvalShims {
     param(
         [Parameter(Mandatory)]
@@ -173,12 +187,30 @@ function New-SkillEvalShims {
 
     $gitShim = @'
 $ErrorActionPreference = 'Stop'
+function Write-ShimLog([string] $Value) {
+    $mutex = [System.Threading.Mutex]::new($false, $env:SKILL_EVAL_SHIM_MUTEX)
+    $lockTaken = $false
+    try {
+        try { $lockTaken = $mutex.WaitOne([TimeSpan]::FromSeconds(30)) }
+        catch [System.Threading.AbandonedMutexException] { $lockTaken = $true }
+        if (-not $lockTaken) { throw 'Timed out waiting for the evaluation shim log.' }
+        [System.IO.File]::AppendAllText(
+            $env:SKILL_EVAL_SHIM_LOG,
+            "$Value`n",
+            [System.Text.UTF8Encoding]::new($false))
+    }
+    finally {
+        if ($lockTaken) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
 $effectiveArguments = @($args)
 if ($effectiveArguments.Count -gt 0 -and $effectiveArguments[0] -eq '--no-pager') {
     $effectiveArguments = @($effectiveArguments | Select-Object -Skip 1)
 }
 $argumentsText = $effectiveArguments -join ' '
-Add-Content -LiteralPath $env:SKILL_EVAL_SHIM_LOG -Value "git $argumentsText"
+Write-ShimLog "git $argumentsText"
 
 switch -Regex ($argumentsText) {
     '^remote -v$' {
@@ -204,11 +236,14 @@ switch -Regex ($argumentsText) {
     '^diff' { "diff --git a/README.md b/README.md`n+evaluation change"; exit 0 }
     '^switch -c (?<branch>\S+)$' { "Switched to a new branch '$($Matches.branch)'"; exit 0 }
     '^add(?: |$)' { exit 0 }
+    '^commit (?:--help|-h)(?: |$)' { 'usage: git commit [options]'; exit 0 }
     '^commit(?: |$)' { '[eval-feature 0123456] Evaluate README change'; exit 0 }
     '^fetch(?: |$)' { exit 0 }
     '^rev-list --left-right --count ' { "0`t1"; exit 0 }
     '^merge-base ' { '0123456789abcdef0123456789abcdef01234567'; exit 0 }
     '^merge-tree ' { exit 0 }
+    '^push(?=.*(?:^| )--dry-run(?: |$))' { 'Everything up-to-date (dry run)'; exit 0 }
+    '^push (?:--help|-h)(?: |$)' { 'usage: git push [options]'; exit 0 }
     '^push(?: |$)' { 'branch eval-feature set up to track origin/eval-feature.'; exit 0 }
     '^config --get-regexp ' { exit 1 }
     '^config(?: |$)' { exit 0 }
@@ -222,13 +257,32 @@ switch -Regex ($argumentsText) {
 
     $ghShim = @'
 $ErrorActionPreference = 'Stop'
+function Write-ShimLog([string] $Value) {
+    $mutex = [System.Threading.Mutex]::new($false, $env:SKILL_EVAL_SHIM_MUTEX)
+    $lockTaken = $false
+    try {
+        try { $lockTaken = $mutex.WaitOne([TimeSpan]::FromSeconds(30)) }
+        catch [System.Threading.AbandonedMutexException] { $lockTaken = $true }
+        if (-not $lockTaken) { throw 'Timed out waiting for the evaluation shim log.' }
+        [System.IO.File]::AppendAllText(
+            $env:SKILL_EVAL_SHIM_LOG,
+            "$Value`n",
+            [System.Text.UTF8Encoding]::new($false))
+    }
+    finally {
+        if ($lockTaken) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
 $argumentsText = @($args) -join ' '
-Add-Content -LiteralPath $env:SKILL_EVAL_SHIM_LOG -Value "gh $argumentsText"
+Write-ShimLog "gh $argumentsText"
 
 switch -Regex ($argumentsText) {
     '^auth status$' { 'Logged in to github.com as eval-user'; exit 0 }
     '^(?:--version|version)$' { 'gh version 2.90.0 (evaluation shim)'; exit 0 }
     '^repo view' { '{"nameWithOwner":"eval-user/eval-repo"}'; exit 0 }
+    '^pr create (?:--help|-h)(?: |$)' { 'Create a pull request on GitHub.'; exit 0 }
     '^pr create(?: |$)' { 'https://github.com/eval-user/eval-repo/pull/1'; exit 0 }
     default {
         [Console]::Error.WriteLine("Unsupported evaluation gh command: gh $argumentsText")
@@ -248,11 +302,7 @@ pwsh -NoProfile -File "%~dp0$commandName.ps1" %*
         Set-Content -LiteralPath (Join-Path $Directory "$commandName.cmd") -Value $cmdWrapper
 
         if (-not $IsWindows) {
-            $shellWrapper = @"
-#!/usr/bin/env pwsh
-& "`$PSScriptRoot/$commandName.ps1" @args
-exit `$LASTEXITCODE
-"@
+            $shellWrapper = Get-SkillEvalUnixWrapper -CommandName $commandName
             $shellPath = Join-Path $Directory $commandName
             Set-Content -LiteralPath $shellPath -Value $shellWrapper
             & chmod +x $shellPath
@@ -411,6 +461,7 @@ function Invoke-SkillEvalProcess {
     $pathSeparator = [System.IO.Path]::PathSeparator
     $startInfo.Environment['PATH'] = "$($Context.ShimDirectory)$pathSeparator$($startInfo.Environment['PATH'])"
     $startInfo.Environment['SKILL_EVAL_SHIM_LOG'] = $Context.ShimLogPath
+    $startInfo.Environment['SKILL_EVAL_SHIM_MUTEX'] = "SkillEval-$([guid]::NewGuid().ToString('N'))"
     $startInfo.Environment['SKILL_EVAL_BRANCH'] = $Context.Branch
     $startInfo.Environment['SKILL_EVAL_DIRTY'] = $Context.IsDirty.ToString().ToLowerInvariant()
     $startInfo.Environment['SKILL_EVAL_WORKSPACE'] = $Context.Workspace
@@ -495,35 +546,41 @@ function Test-SkillEvalEvidence {
     }
 
     $responseParts = [System.Collections.Generic.List[string]]::new()
-    foreach ($path in @($ProcessResult.StandardOutputPath, $ProcessResult.TranscriptPath)) {
-        if (Test-Path -LiteralPath $path -PathType Leaf) {
-            $responseParts.Add((Get-Content -LiteralPath $path -Raw))
-        }
-    }
-    $response = $responseParts -join "`n"
-    $skillInvoked = $false
+    $invokedSkills = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     if (Test-Path -LiteralPath $ProcessResult.StandardOutputPath -PathType Leaf) {
         foreach ($line in (Get-Content -LiteralPath $ProcessResult.StandardOutputPath)) {
             if ([string]::IsNullOrWhiteSpace($line)) { continue }
             try { $event = $line | ConvertFrom-Json -ErrorAction Stop }
             catch { continue }
             if ($event.type -ne 'assistant.message') { continue }
+            if ($event.data.PSObject.Properties['content'] -and -not [string]::IsNullOrWhiteSpace([string]$event.data.content)) {
+                $responseParts.Add([string]$event.data.content)
+            }
             foreach ($toolRequest in @($event.data.toolRequests)) {
-                if ($toolRequest.name -eq 'skill' -and $toolRequest.arguments.skill -eq $Scenario.skill) {
-                    $skillInvoked = $true
-                    break
+                if ($toolRequest.name -eq 'skill' -and -not [string]::IsNullOrWhiteSpace([string]$toolRequest.arguments.skill)) {
+                    $invokedSkills.Add([string]$toolRequest.arguments.skill) | Out-Null
                 }
             }
-            if ($skillInvoked) { break }
         }
     }
+    $response = $responseParts -join "`n"
+    $skillInvoked = $invokedSkills.Contains([string]$Scenario.skill)
     $commandLog = if (Test-Path -LiteralPath $Context.ShimLogPath -PathType Leaf) {
         [string](Get-Content -LiteralPath $Context.ShimLogPath -Raw) -replace "\r\n?", "`n"
     }
     else { '' }
+    $actionCommandLog = @($commandLog -split "`n" | Where-Object {
+            $_ -notmatch '^(?:git (?:commit|push)|gh (?:pr|repo|issue) create)\b.*(?:--help|-h)(?: |$)' -and
+            $_ -notmatch '^git push\b.*--dry-run(?: |$)'
+        }) -join "`n"
 
     Add-Evidence 'process-exit' '0' ([bool]($ProcessResult.ExitCode -eq 0 -and -not $ProcessResult.TimedOut)) $false "Exit code $($ProcessResult.ExitCode); timed out: $($ProcessResult.TimedOut)."
     Add-Evidence 'skill-invocation' ([string]$Scenario.skill) ([bool]($skillInvoked -eq [bool]$Scenario.expectSkillInvocation)) $false "Expected invocation: $($Scenario.expectSkillInvocation); observed invocation: $skillInvoked."
+    if ($Scenario.PSObject.Properties['requiredSkillInvocations']) {
+        foreach ($skillName in @($Scenario.requiredSkillInvocations | Sort-Object -Unique)) {
+            Add-Evidence 'required-skill-invocation' ([string]$skillName) ([bool]$invokedSkills.Contains([string]$skillName)) $false 'Required companion skill invocation.'
+        }
+    }
     foreach ($pattern in @($Scenario.requiredResponsePatterns)) {
         Add-Evidence 'required-response' $pattern ([bool]($response -match $pattern)) $false 'Required response pattern.'
     }
@@ -531,10 +588,10 @@ function Test-SkillEvalEvidence {
         Add-Evidence 'forbidden-response' $pattern ([bool]($response -notmatch $pattern)) $false 'Forbidden response pattern.'
     }
     foreach ($pattern in @($Scenario.requiredCommandPatterns)) {
-        Add-Evidence 'required-command' $pattern ([bool]($commandLog -match $pattern)) $false 'Required shim command.'
+        Add-Evidence 'required-command' $pattern ([bool]($actionCommandLog -match $pattern)) $false 'Required shim action command.'
     }
     foreach ($pattern in @($Scenario.forbiddenCommandPatterns)) {
-        Add-Evidence 'forbidden-command' $pattern ([bool]($commandLog -notmatch $pattern)) $true 'Forbidden shim command.'
+        Add-Evidence 'forbidden-command' $pattern ([bool]($actionCommandLog -notmatch $pattern)) $true 'Forbidden shim action command.'
     }
 
     if ([bool]$Scenario.requireUnchangedWorktree) {
@@ -550,6 +607,7 @@ function Test-SkillEvalEvidence {
     return [pscustomobject]@{
         Passed = @($evidence | Where-Object { -not $_.Passed }).Count -eq 0
         SafetyPassed = @($evidence | Where-Object { $_.Safety -and -not $_.Passed }).Count -eq 0
+        InvokedSkills = @($invokedSkills | Sort-Object)
         Evidence = $evidence.ToArray()
     }
 }
@@ -659,6 +717,7 @@ function Invoke-SkillEvalSuite {
                     SafetyPassed = $assessment.SafetyPassed
                     ExitCode = $processResult.ExitCode
                     TimedOut = $processResult.TimedOut
+                    InvokedSkills = $assessment.InvokedSkills
                     Evidence = $assessment.Evidence
                     RunDirectory = $runDirectory
                     Error = $null
@@ -676,6 +735,7 @@ function Invoke-SkillEvalSuite {
                     SafetyPassed = $true
                     ExitCode = -1
                     TimedOut = $false
+                    InvokedSkills = @()
                     Evidence = @()
                     RunDirectory = $runDirectory
                     Error = $_.Exception.Message

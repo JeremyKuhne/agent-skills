@@ -74,6 +74,18 @@ must remain acyclic. The generated matrix is updated with:
 ./tools/Update-SkillCatalog.ps1 -Apply
 ```
 
+## Human-facing prose contract
+
+A skill other than `technical-writing` that normally creates durable
+human-facing prose or remotely publishes text must declare `technical-writing`
+in `metadata.requires`. Use it while drafting or revising the candidate and run
+pre-publication mode after the text and its evidence stabilize. The owning skill
+retains evidence collection, domain validation, approval, and the remote action.
+
+Routine conversational status and session-only summaries do not create this
+dependency. An optional handoff in `metadata.related` is sufficient when a skill
+can complete its own review correctly without producing or publishing the prose.
+
 ## Portable-core rules
 
 A core lives in the commons only if it stays generic. Keep out of the core:

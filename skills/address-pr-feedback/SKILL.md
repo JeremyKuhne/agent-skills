@@ -4,13 +4,13 @@ description: Address feedback on an existing pull request - review comments, req
 license: MIT
 compatibility: Requires git and either a GitHub integration or authenticated gh for remote pull-request operations.
 metadata:
-  portability: portable
-  applicability: git-github
-  binding: optional-overlay
-  risk: remote-write
-  maturity: canary
-  requires: none
-  related: create-pr, pre-pr-self-review, agent-files-review
+   portability: portable
+   applicability: git-github
+   binding: optional-overlay
+   risk: remote-write
+   maturity: canary
+   requires: technical-writing
+   related: create-pr, pre-pr-self-review, agent-files-review
 ---
 
 # Address PR feedback
@@ -32,6 +32,10 @@ authorizes you to *edit*:
 Repository guidance is the source of truth for commit/push approval. Re-read it
 at the start of every invocation when present; this skill is a reminder, not a
 replacement.
+
+Use the required `technical-writing` skill for follow-up commit messages, thread
+replies, and manually composed review requests. It reviews local candidate text;
+this workflow retains approval and every remote action.
 
 ## Recognizing approval
 
@@ -86,30 +90,36 @@ Stop and ask one short yes/no question.
 3. **Edit files.** Make the code changes. Run the build and any relevant
    tests. The applicable validation rules are still the `pre-pr-self-review`
    checklist - a follow-up round needs the same checks as the initial PR.
-4. **Stop. Describe.** Summarize what you changed, why, and what (if
-   anything) you chose not to act on. Do **not** run `git add`, `git
-   commit`, or `git push`.
+4. **Stop. Describe and draft.** Summarize what changed, why, and what (if
+   anything) you chose not to act on. Prepare each candidate thread reply
+   locally, one concern or disposition per reply, from the current thread,
+   diff, and observed validation. Run `technical-writing` in draft or revise
+   mode. Do **not** run `git add`, `git commit`, or `git push`, and do not post
+   the replies.
 5. **Wait** for an explicit publishing verb (see "Recognizing approval"
    above).
-6. **Only then** recheck that the PR is open before staging or committing. Commit
-   the round, then confirm the PR is still open immediately before each remote
-   write in steps 6-8; abort and report if it is not. Push using the mechanics in
-   the `create-pr` skill.
+6. **Only then** recheck that the PR is open before staging or committing.
+   Derive the follow-up commit message from the actual round and run
+   `technical-writing` pre-publication mode on it. Commit the round, then confirm
+   the PR is still open immediately before each remote write in steps 6-8; abort
+   and report if it is not. Push using the mechanics in the `create-pr` skill.
 7. **Reply in-thread, then resolve.** These are PR write actions. Follow repository
    guidance; when it does not bundle them with push/update approval, get explicit
    approval. Refresh each targeted thread before writing: skip one already
-   resolved, and reclassify one with new replies. Write one scoped reply per
-   thread: state what changed for a fix, or give the evidence for a false positive
-   or won't-fix. Do not combine answers across threads or post the review summary
-   to the PR conversation. Leave a thread open only to invite a human onto a
-   contested point, and say so.
+   resolved, and reclassify one with new replies. If the thread or candidate
+   changed, update the reply. Run `technical-writing` pre-publication mode on the
+   exact reply after that refresh. State what changed for a fix, or give the
+   evidence for a false positive or won't-fix. Do not combine answers across
+   threads or post the review summary to the PR conversation. Leave a thread
+   open only to invite a human onto a contested point, and say so.
    Verify both operations; a reply does not resolve a thread. Report what you did.
 8. **Get the next review when non-trivial.** If the repository automatically
    reviews pushes, never request or re-request review; let the automatic pass run
    without polling. Otherwise, after real code changes, request a fresh pass from
-   the same reviewer using the repository's PR-write approval policy. Skip a
-   manual request for trivial rounds (typo, reword, one-line nit), and say which
-   path applies.
+   the same reviewer using the repository's PR-write approval policy. Run
+   `technical-writing` on any manually composed request immediately before
+   sending it. Skip a manual request for trivial rounds (typo, reword, one-line
+   nit), and say which path applies.
 
 **When to stop.** Later auto-review passes drift toward nits and false positives.
 Before calling the PR ready, confirm it is open, non-draft, mergeable, required

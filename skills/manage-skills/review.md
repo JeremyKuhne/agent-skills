@@ -134,6 +134,12 @@ run. Then invoke `agent-files-review` for file-level validation and run the cons
 repository's validator, link checker, markdown checks, generated-catalog checks, and
 upstream mirror check as applicable.
 
+After semantic findings are resolved, run `technical-writing` in review mode on
+the changed skill prose. Treat changed triggers, requirement strength, commands,
+permissions, or stopping behavior as semantic changes that must return to the
+earlier review sections; do not accept them as style edits. Prose quality cannot
+make an incomplete or unsafe workflow correct.
+
 For an install/scope change, exercise one project request, one user request, one
 duplicate-name case, and one private or remote-session boundary. Use the host's
 skill listing to confirm the active source path and scope.

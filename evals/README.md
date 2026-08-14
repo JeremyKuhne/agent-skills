@@ -6,20 +6,34 @@ real model scenarios are manual and local-only to avoid unbudgeted CI token use.
 Use `-ReportOnly` for local calibration; safety and harness-infrastructure
 failures remain blocking.
 
-## Current vertical slice
+## Current vertical slices
 
-`scenarios/create-pr.json` covers five behaviors:
+`scenarios/create-pr.json` covers eight behaviors:
 
 - a positive create-PR request;
 - a readability-review near miss;
 - dirty `main` without publish approval;
 - explicit commit and push approval on a feature branch;
+- normalization of hard-wrapped remote Markdown;
+- correction of an unsupported validation claim;
+- a blocked exact commit message whose claims lack evidence; and
 - an overlay-loading sentinel.
 
+`scenarios/technical-writing.json` covers eight direct behaviors: explicit
+drafting, meaning-preserving revision, abstention when facts are missing,
+first-person authority, pre-publication review without action, code-readability
+and machine-format near misses, and an overlay sentinel.
+
+`scenarios/publishing-workflows.json` covers local-only integration with
+`address-pr-feedback`, `manage-skills`, and `engineering-baseline`. These cases
+require both the owning workflow and `technical-writing` to invoke while
+forbidding the remote action.
+
 Copilot CLI 1.0.63 emits structured JSONL when the model invokes the `skill`
-tool. Positive cases require a `create-pr` invocation and the near miss forbids
-one. A unique token exists only in the injected `create-pr` overlay, providing a
-separate assertion that the selected core loaded its repository binding.
+tool. Positive cases require their primary skill invocation, and cross-skill
+cases can require companion invocations. Near misses forbid the primary skill.
+A unique token exists only in each injected overlay, providing a separate
+assertion that the selected core loaded its repository binding.
 
 Each run creates a fresh git repository and a minimal copy of the plugin. Fake
 `git` and `gh` executables are first on the Copilot child process `PATH`; they
@@ -58,11 +72,33 @@ Run one scenario while developing the harness:
   -ReportOnly
 ```
 
+Select another scenario document explicitly:
+
+```pwsh
+./evals/Invoke-SkillEvals.ps1 `
+  -ScenarioPath ./evals/scenarios/technical-writing.json `
+  -RunCount 1 `
+  -ReportOnly
+```
+
+The runner loads one scenario document per invocation. Run all three documents
+for a capability release that changes technical-writing or a publishing
+workflow.
+
 By default reports go to a unique temporary directory. `summary.json` and
 `summary.md` contain the aggregate result; each run retains its invocation,
 stdout, stderr, transcript, shim log, and scored evidence. Prompts and
 transcripts remain local and are not uploaded automatically. Retain an aggregate
 summary with release evidence when needed, then remove local run artifacts.
+
+## Human A/B review
+
+Keep generated comparisons and condition keys under ignored `artifacts/`. Before
+asking the user to choose among A/B pairs, provide a clickable Markdown link to
+the exact comparison document in chat. Do not make the reviewer locate the file
+from a plain path or terminal output. Keep the randomized condition key hidden
+until every choice is recorded, then report the candidate-versus-baseline result
+and retain only the aggregate evidence needed for the release decision.
 
 ## Result policy
 
