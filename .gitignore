@@ -9,4 +9,5 @@ node_modules/
 .lycheecache
 
 # Local scratch
+/artifacts/
 /scratch/

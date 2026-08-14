@@ -96,6 +96,14 @@ common, and the options:
 Default to asking even when the change looks obviously common and obviously worth
 sharing. Nothing about upstreaming happens without an explicit decision.
 
+Before presenting an upstream summary or publishing an approved commons change,
+run `technical-writing` against the current diff and lifecycle disposition.
+Review pending-divergence text locally when upstreaming is deferred. For an
+approved PR, run pre-publication mode on the exact title and body immediately
+before creation; rerun it if the candidate, diff, validation, or upstream state
+changes. A successful prose review does not answer the upstreaming query or
+authorize the PR.
+
 ## The golden rule and its mechanics
 
 *Never let a vendored core diverge silently.* A vendored core is a mirror of

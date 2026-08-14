@@ -9,7 +9,7 @@ metadata:
   binding: optional-overlay
   risk: remote-write
   maturity: canary
-  requires: agent-files-review
+  requires: agent-files-review, technical-writing
   related: none
 ---
 
@@ -77,6 +77,13 @@ Whatever the verb, the result must satisfy the repo's authoring rules
 (`FORMAT.md`) and then pass `agent-files-review`, which owns the file-level
 checks - frontmatter, mirror sync, whitespace, and the validator and link
 checker. Don't restate those rules here.
+
+Use the required `technical-writing` skill after behavior and routing are
+settled. It owns human and agent comprehension, grounding, and reader cost;
+this skill retains lifecycle placement and semantic correctness, while
+`agent-files-review` retains file correctness. A prose pass must preserve
+literal trigger phrases, requirement strength, tool names, permission
+boundaries, and stop conditions.
 
 For the `SKILL.md` frontmatter check specifically, this skill bundles
 [scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1) - a dependency-free
