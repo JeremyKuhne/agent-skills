@@ -2,6 +2,7 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 BeforeAll {
+    . (Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1')
     $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path
     $script:SkillsRoot = Join-Path $script:RepoRoot 'skills'
     $script:AgentsRoot = Join-Path $script:RepoRoot 'agents'
@@ -48,6 +49,12 @@ BeforeAll {
 }
 
 Describe 'Skill catalog contracts' {
+    It 'ships the shared installed-artifact test helper' {
+        Test-Path -LiteralPath (
+            Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1') -PathType Leaf |
+            Should -BeTrue
+    }
+
     It 'contains exactly one catalog link for every source skill' {
         $catalog = Get-Content -LiteralPath (Join-Path $script:SkillsRoot 'README.md') -Raw
         $inventory = ($catalog -split [regex]::Escape('<!-- portfolio-matrix:start -->'), 2)[0]
@@ -117,7 +124,7 @@ Describe 'Skill catalog contracts' {
         }
     }
 
-    It 'keeps user voice lifecycle public and personalized profiles private' {
+    It 'permits public-source provenance while keeping personalized content private' {
         $userVoice = @($script:SkillRecords | Where-Object Name -eq 'user-voice')
         $userVoice.Count | Should -Be 1
         $userVoice[0].Metadata.risk | Should -Be 'local-write'
@@ -132,9 +139,45 @@ Describe 'Skill catalog contracts' {
         Get-RelationshipNames $technicalWriting.Metadata.related |
             Should -Contain 'user-voice'
 
-        $userVoiceSource = @(Get-ChildItem $userVoice[0].Directory -File -Recurse |
-            ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-        $userVoiceSource | Should -Not -Match '(?i)jeremy[- ]kuhne|JeremyKuhne'
+        Get-SkillArtifactPrivacyContent $userVoice[0].Directory |
+            Should -Not -Match '(?i)jeremy[- ]kuhne|JeremyKuhne'
+
+        $installedFixture = Join-Path $TestDrive 'provenance-bearing-user-voice'
+        New-Item -ItemType Directory -Path $installedFixture | Out-Null
+                $fixtureSkillPath = Join-Path $installedFixture 'SKILL.md'
+                $fixtureContent = @'
+---
+name: user-voice
+description: Generic lifecycle fixture.
+metadata:
+  github-path: skills/user-voice
+  github-pinned: 0123456789012345678901234567890123456789
+  github-ref: 0123456789012345678901234567890123456789
+    github-repo: https://github.com/JeremyKuhne/agent-skills
+  github-tree-sha: 0123456789012345678901234567890123456789
+---
+
+# User voice
+
+Generic lifecycle content.
+'@
+        [System.IO.File]::WriteAllText($fixtureSkillPath, $fixtureContent)
+        (Get-SkillArtifactDocument $fixtureSkillPath).Frontmatter |
+            Should -Match 'JeremyKuhne'
+        Get-SkillArtifactPrivacyContent $installedFixture |
+            Should -Not -Match 'JeremyKuhne'
+
+        Add-Content -LiteralPath $fixtureSkillPath `
+            -Value "`nPrivate profile subject: JeremyKuhne"
+        Get-SkillArtifactPrivacyContent $installedFixture |
+            Should -Match 'JeremyKuhne'
+
+        [System.IO.File]::WriteAllText($fixtureSkillPath, $fixtureContent)
+        [System.IO.File]::WriteAllText(
+            (Join-Path $installedFixture 'private-resource.md'),
+            'Private profile subject: JeremyKuhne')
+        Get-SkillArtifactPrivacyContent $installedFixture |
+            Should -Match 'JeremyKuhne'
     }
 
     It 'has an acyclic required-skill graph' {

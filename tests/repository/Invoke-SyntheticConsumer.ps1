@@ -11,6 +11,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1')
+
 if ([string]::IsNullOrWhiteSpace($SourceRepository) -xor [string]::IsNullOrWhiteSpace($Pin)) {
     throw 'SourceRepository and Pin must be supplied together.'
 }
@@ -120,18 +122,46 @@ try {
         }
 
         $installedDirectory = Join-Path $installRoot $record.Name
-        $installedContent = Get-Content -LiteralPath (Join-Path $installedDirectory 'SKILL.md') -Raw
+        $installedSkillPath = Join-Path $installedDirectory 'SKILL.md'
+        $actualProvenance = Get-SkillArtifactProvenance $installedSkillPath
         if ($SourceRepository) {
-            $pinPattern = "(?m)^\s+github-pinned:\s*$([regex]::Escape($Pin))\r?$"
-            if ($installedContent -notmatch $pinPattern) {
-                throw "Installed '$($record.Name)' does not record pin '$Pin'."
+            $treeOutput = @(& $gitPath -C $resolvedRepoRoot rev-parse `
+                    "$Pin`:skills/$($record.Name)" 2>&1)
+            if ($LASTEXITCODE -ne 0 -or $treeOutput.Count -ne 1 -or
+                [string]$treeOutput[0] -cnotmatch '^[0-9a-f]{40}$') {
+                throw "Could not resolve the source tree for '$($record.Name)' at '$Pin': $($treeOutput -join "`n")"
             }
-            if ($installedContent -notmatch '(?m)^\s+github-tree-sha:\s*[0-9a-f]{40}\r?$') {
-                throw "Installed '$($record.Name)' does not record a source tree SHA."
+            $expectedProvenance = [ordered]@{
+                'github-path' = "skills/$($record.Name)"
+                'github-pinned' = $Pin
+                'github-ref' = $Pin
+                'github-repo' = "https://github.com/$SourceRepository"
+                'github-tree-sha' = [string]$treeOutput[0]
             }
         }
-        elseif ($installedContent -notmatch '(?m)^\s+local-path:\s*\S.*\r?$') {
-            throw "Installed '$($record.Name)' does not record its local source path."
+        else {
+            $expectedProvenance = [ordered]@{
+                'local-path' = (Resolve-Path -LiteralPath (
+                    Join-Path $skillsRoot $record.Name)).Path
+            }
+        }
+        $provenanceKeyDifference = @(
+            Compare-Object @($expectedProvenance.Keys) @($actualProvenance.Keys))
+        if ($provenanceKeyDifference.Count -gt 0) {
+            throw "Installed '$($record.Name)' provenance fields differ: $($provenanceKeyDifference | Out-String)"
+        }
+        foreach ($field in $expectedProvenance.Keys) {
+            if ([string]$actualProvenance[$field] -cne
+                [string]$expectedProvenance[$field]) {
+                throw "Installed '$($record.Name)' records $field '$($actualProvenance[$field])'; expected '$($expectedProvenance[$field])'."
+            }
+        }
+
+        if ($record.Name -ceq 'user-voice') {
+            $privacyContent = Get-SkillArtifactPrivacyContent $installedDirectory
+            if ($privacyContent -match '(?i)jeremy[- ]kuhne|JeremyKuhne') {
+                throw "Installed 'user-voice' body or bundled resources contain profile-subject identity."
+            }
         }
 
         if ($record.Binding -in @('optional-overlay', 'required-overlay')) {

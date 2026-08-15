@@ -6,9 +6,15 @@ Lead with findings ordered by consequence.
 
 - Prove canonical ownership, source visibility, installed copies, active host
   paths, duplicate names, file lists, and hashes.
-- Reject raw source, exact private provenance, PII, identifying internal detail,
-  reversible redactions, absolute user paths, public/internal repositories, and
-  unapproved hosts or synchronization.
+- Reject raw source, exact private provenance, profile-subject identity, PII,
+  identifying internal detail, reversible redactions, absolute user paths,
+  public/internal repositories, and unapproved hosts or synchronization.
+- For a vendored public lifecycle core, verify installer-generated
+  `github-repo`, `github-ref`, `github-pinned`, `github-path`, and
+  `github-tree-sha` fields separately. They identify the reviewed public source,
+  not the profile subject. Review source-authored discovery metadata for generic
+  routing, then run the profile-content privacy scan over the body and bundled
+  resources rather than the provenance-bearing header.
 - Treat deterministic scanning and semantic privacy review as independent hard
   gates. The user then approves the de-identified profile during read-back.
 - Verify consent matches provider, host, account, source, retention, schema,

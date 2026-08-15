@@ -120,7 +120,21 @@ Expected:
 - Re-reviews and updates the overlay pin only after binding verification.
 - Stops if any record lacks a disposition.
 
-## 9. Retire a registered user source
+## 9. Provenance-stamped mirror comparison
+
+Setup:
+
+- `gh skill install` reorders `SKILL.md` frontmatter, adds source provenance,
+  and normalizes the frontmatter/body boundary.
+
+Expected:
+
+- Accepts verified generated provenance and serialization differences.
+- Requires source-authored frontmatter values and the normalized body to match.
+- Requires an exact source manifest and byte-identical non-`SKILL.md` resources.
+- Reports any other difference as core drift.
+
+## 10. Retire a registered user source
 
 Prompt:
 
@@ -133,7 +147,7 @@ Expected:
 - Removes only approved copies, settings, and retained artifacts.
 - Verifies the host no longer lists the retired target.
 
-## 10. Remote availability request
+## 11. Remote availability request
 
 Prompt:
 

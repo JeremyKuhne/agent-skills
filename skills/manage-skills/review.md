@@ -150,7 +150,9 @@ overlay and pending divergence at the candidate pin.
 
 For a changed vendored skill, verify both sides:
 
-- local comparison against the provenance pin makes additional drift visible;
+- local normalized mirror comparison against the provenance pin makes
+  additional drift visible without treating generated provenance or YAML
+  serialization as a core edit;
 - upstream comparison shows whether each recorded divergence remains at the candidate
   pin, and records are removed once that artifact contains the change.
 

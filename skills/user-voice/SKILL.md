@@ -17,8 +17,8 @@ metadata:
 
 Create and maintain a private skill that realizes current, verified content in
 the user's approved best voice. This core owns profile lifecycle and audit. It
-contains no natural person's profile, source material, identity, or private
-example.
+contains no natural person's profile, source material, profile-subject identity,
+or private example.
 
 ## Hard boundaries
 
@@ -78,7 +78,7 @@ example.
 5. **Audit for best-self voice.** General grounding, authority, comprehension,
    accountability, and tone controls outrank observed habits. Ask the user to
    approve a safer rendering; mark unresolved contexts unsupported.
-6. **Generate the private runtime package.** Use the generic name `user-voice-profile`. Exclude raw sources, URLs, manifests, transcripts, identity, and maintenance scratch. Keep discovery metadata generic. Build the runtime copy from the approved canonical profile; never maintain both by hand.
+6. **Generate the private runtime package.** Use the generic name `user-voice-profile`. Exclude raw sources, URLs, manifests, transcripts, profile-subject identity, and maintenance scratch. Keep discovery metadata generic. Build the runtime copy from the approved canonical profile; never maintain both by hand.
 7. **Validate before install.** Run deterministic package checks, semantic
    privacy review, user read-back, hard-gate behavior cases, and source/install
    inventory. All must pass independently.
