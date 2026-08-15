@@ -68,6 +68,15 @@ BeforeAll {
 }
 
 Describe 'Installed skill artifacts' {
+    AfterEach {
+        foreach ($directoryName in @('[source-skill]', '[installed-skill]')) {
+            $directoryPath = Join-Path $TestDrive $directoryName
+            if (Test-Path -LiteralPath $directoryPath) {
+                Remove-Item -LiteralPath $directoryPath -Recurse -Force
+            }
+        }
+    }
+
     It 'normalizes only installer-generated provenance when comparing a mirror' {
         $source = Join-Path $TestDrive '[source-skill]'
         $installed = Join-Path $TestDrive '[installed-skill]'

@@ -49,6 +49,13 @@ BeforeAll {
 }
 
 Describe 'Skill catalog contracts' {
+    AfterEach {
+        $fixturePath = Join-Path $TestDrive '[provenance-bearing-user-voice]'
+        if (Test-Path -LiteralPath $fixturePath) {
+            Remove-Item -LiteralPath $fixturePath -Recurse -Force
+        }
+    }
+
     It 'ships the shared installed-artifact test helper' {
         Test-Path -LiteralPath (
             Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1') -PathType Leaf |
