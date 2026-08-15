@@ -117,6 +117,26 @@ Describe 'Skill catalog contracts' {
         }
     }
 
+    It 'keeps user voice lifecycle public and personalized profiles private' {
+        $userVoice = @($script:SkillRecords | Where-Object Name -eq 'user-voice')
+        $userVoice.Count | Should -Be 1
+        $userVoice[0].Metadata.risk | Should -Be 'local-write'
+        Get-RelationshipNames $userVoice[0].Metadata.requires |
+            Should -Contain 'manage-skills'
+
+        Test-Path -LiteralPath (Join-Path $script:SkillsRoot 'user-voice-profile') |
+            Should -BeFalse
+        $technicalWriting = @($script:SkillRecords | Where-Object Name -eq 'technical-writing')[0]
+        Get-RelationshipNames $technicalWriting.Metadata.requires |
+            Should -Not -Contain 'user-voice-profile'
+        Get-RelationshipNames $technicalWriting.Metadata.related |
+            Should -Contain 'user-voice'
+
+        $userVoiceSource = @(Get-ChildItem $userVoice[0].Directory -File -Recurse |
+            ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+        $userVoiceSource | Should -Not -Match '(?i)jeremy[- ]kuhne|JeremyKuhne'
+    }
+
     It 'has an acyclic required-skill graph' {
         $recordsByName = @{}
         foreach ($record in $script:SkillRecords) { $recordsByName[$record.Name] = $record }

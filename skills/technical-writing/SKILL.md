@@ -9,7 +9,7 @@ metadata:
   risk: local-write
   maturity: canary
   requires: none
-  related: agent-files-review, code-comprehension, pre-pr-self-review
+  related: agent-files-review, code-comprehension, pre-pr-self-review, user-voice
 ---
 
 # Technical writing
@@ -111,6 +111,15 @@ or it names a specific contribution or relationship fact.
    decision, or authorized action. State, evidence, impact, response, and next
    checkpoint are diagnostics, not mandatory fields; include one only when it
    changes the reader's decision.
+
+For first-person prose attributed to the current user, invoke an available
+personal skill named `user-voice-profile` after step 4 fixes the output contract.
+Give it the same grounding and authority boundaries, then resume with its local
+candidate. If that skill is unavailable or rejects the context, continue with
+general writing. Never infer a profile from another person's skill or merge
+several plausible profiles without asking which one applies.
+The profile must return its candidate rather than reinvoking this workflow;
+resume the existing pass so composition cannot recurse.
 
 ## Pre-publication gate
 

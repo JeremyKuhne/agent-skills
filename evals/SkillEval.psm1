@@ -331,7 +331,9 @@ function New-SkillEvalContext {
     $pluginDirectory = Join-Path $RunDirectory 'plugin'
     $shimDirectory = Join-Path $RunDirectory 'shims'
     $shimLogPath = Join-Path $RunDirectory 'shim.log'
-    New-Item -ItemType Directory -Path $workspace, $pluginDirectory | Out-Null
+    $sandboxHome = Join-Path $RunDirectory 'sandbox-home'
+    $copilotHome = Join-Path $RunDirectory 'copilot-home'
+    New-Item -ItemType Directory -Path $workspace, $pluginDirectory, $sandboxHome, $copilotHome | Out-Null
 
     & $gitPath -C $workspace init --initial-branch=main *> $null
     if ($LASTEXITCODE -ne 0) { throw "Could not initialize evaluation repository in '$workspace'." }
@@ -359,6 +361,33 @@ function New-SkillEvalContext {
         $overlayTarget = Join-Path $pluginDirectory "skills/$($Scenario.skill)/overlay.md"
         Copy-Item -LiteralPath $overlaySource -Destination $overlayTarget
     }
+    $hasPersonalSkillFixture = $false
+    if ($Scenario.PSObject.Properties['personalSkillFixturePath'] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Scenario.personalSkillFixturePath)) {
+        $fixtureInput = [string]$Scenario.personalSkillFixturePath
+        if ([System.IO.Path]::IsPathRooted($fixtureInput)) {
+            throw 'Personal skill fixture paths must be relative to the evaluation root.'
+        }
+        $fixtureRoot = (Resolve-Path -LiteralPath (Join-Path $EvalRoot 'fixtures')).Path
+        $personalSkillSource = (Resolve-Path -LiteralPath (Join-Path $EvalRoot $fixtureInput)).Path
+        $pathComparison = if ($IsWindows) {
+            [System.StringComparison]::OrdinalIgnoreCase
+        }
+        else { [System.StringComparison]::Ordinal }
+        $fixturePrefix = $fixtureRoot.TrimEnd(
+            [System.IO.Path]::DirectorySeparatorChar,
+            [System.IO.Path]::AltDirectorySeparatorChar) +
+            [System.IO.Path]::DirectorySeparatorChar
+        if (-not $personalSkillSource.StartsWith($fixturePrefix, $pathComparison) -or
+            -not (Test-Path -LiteralPath $personalSkillSource -PathType Container)) {
+            throw "Personal skill fixture '$fixtureInput' must be a directory under '$fixtureRoot'."
+        }
+        $personalSkillRoot = Join-Path $copilotHome 'skills'
+        $personalSkillTarget = Join-Path $personalSkillRoot (Split-Path -Leaf $personalSkillSource)
+        New-Item -ItemType Directory -Path $personalSkillRoot -Force | Out-Null
+        Copy-Item -LiteralPath $personalSkillSource -Destination $personalSkillTarget -Recurse
+        $hasPersonalSkillFixture = $true
+    }
 
     New-SkillEvalShims -Directory $shimDirectory
     Set-Content -LiteralPath $shimLogPath -Value @()
@@ -372,6 +401,9 @@ function New-SkillEvalContext {
         ShimLogPath = $shimLogPath
         Branch = $branch
         IsDirty = $isDirty
+        SandboxHome = $sandboxHome
+        CopilotHome = $copilotHome
+        HasPersonalSkillFixture = $hasPersonalSkillFixture
         BaselineWorktree = $baselineWorktree
         RunDirectory = $RunDirectory
     }
@@ -468,8 +500,7 @@ function Invoke-SkillEvalProcess {
     $startInfo.Environment['CI'] = 'true'
     $startInfo.Environment['NO_COLOR'] = '1'
     $startInfo.Environment['COPILOT_AUTO_UPDATE'] = 'false'
-    $sandboxHome = Join-Path $Context.RunDirectory 'sandbox-home'
-    New-Item -ItemType Directory -Path $sandboxHome | Out-Null
+    $sandboxHome = $Context.SandboxHome
     $startInfo.Environment['HOME'] = $sandboxHome
     $startInfo.Environment['USERPROFILE'] = $sandboxHome
     $startInfo.Environment['APPDATA'] = Join-Path $sandboxHome 'appdata'
@@ -485,10 +516,8 @@ function Invoke-SkillEvalProcess {
     $startInfo.Environment.Remove('GIT_ASKPASS') | Out-Null
     $startInfo.Environment.Remove('SSH_ASKPASS') | Out-Null
     $startInfo.Environment.Remove('SSH_AUTH_SOCK') | Out-Null
-    if ($IsolateCopilotHome) {
-        $copilotHome = Join-Path $Context.RunDirectory 'copilot-home'
-        New-Item -ItemType Directory -Path $copilotHome | Out-Null
-        $startInfo.Environment['COPILOT_HOME'] = $copilotHome
+    if ($IsolateCopilotHome -or $Context.HasPersonalSkillFixture) {
+        $startInfo.Environment['COPILOT_HOME'] = $Context.CopilotHome
     }
     elseif (-not $startInfo.Environment.ContainsKey('COPILOT_HOME')) {
         $userProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
@@ -579,6 +608,11 @@ function Test-SkillEvalEvidence {
     if ($Scenario.PSObject.Properties['requiredSkillInvocations']) {
         foreach ($skillName in @($Scenario.requiredSkillInvocations | Sort-Object -Unique)) {
             Add-Evidence 'required-skill-invocation' ([string]$skillName) ([bool]$invokedSkills.Contains([string]$skillName)) $false 'Required companion skill invocation.'
+        }
+    }
+    if ($Scenario.PSObject.Properties['forbiddenSkillInvocations']) {
+        foreach ($skillName in @($Scenario.forbiddenSkillInvocations | Sort-Object -Unique)) {
+            Add-Evidence 'forbidden-skill-invocation' ([string]$skillName) (-not $invokedSkills.Contains([string]$skillName)) $false 'Forbidden companion skill invocation.'
         }
     }
     foreach ($pattern in @($Scenario.requiredResponsePatterns)) {

@@ -86,6 +86,24 @@ Routine conversational status and session-only summaries do not create this
 dependency. An optional handoff in `metadata.related` is sufficient when a skill
 can complete its own review correctly without producing or publishing the prose.
 
+## Personal profile contract
+
+A portable core may create or audit a personal profile, but the personalized
+output is a separate born-personal skill. Never add a natural person's profile,
+source samples, identity, private evidence, migration output, or installed
+runtime package under `skills/`, plugin assets, project skill roots, tests, or
+public artifacts. Public fixtures must be entirely synthetic.
+
+Keep canonical personal source local-only by default or in a GitHub repository
+whose `PRIVATE` visibility is verified at the current operation. Install a
+reviewed complete copy only at personal user scope. Do not encode the private
+runtime package in public `metadata.requires` or `metadata.related`; use a
+generic optional runtime convention and preserve a no-profile fallback.
+
+The shared core may contain generic templates, scanners, and lifecycle policy.
+Discovery metadata and templates must contain no user name, source path,
+private URL, profile trait, or identifying example.
+
 ## Portable-core rules
 
 A core lives in the commons only if it stays generic. Keep out of the core:

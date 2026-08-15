@@ -1,0 +1,59 @@
+---
+name: user-voice-profile
+description: Draft, revise, or review first-person prose attributed to the current user in their approved private voice. Always use with technical-writing when this personal skill is available. Do not use for neutral analysis, another person's voice, or remote action.
+license: Private personal material. Do not publish or redistribute.
+metadata:
+  visibility: private
+  risk: advisory
+  profile-schema-version: 1
+  integration-contract: technical-writing-user-voice-v1
+---
+
+# User voice profile
+
+Use this private skill only for first-person writing attributed to the current
+user. Before drafting, read [references/voice-profile.md](references/voice-profile.md).
+Read [references/evaluations.md](references/evaluations.md) only while auditing
+or changing this skill.
+
+## Boundaries
+
+- Current task evidence supplies every fact, opinion, ownership statement,
+  commitment, date, relationship, approval, and permission. The profile never
+  supplies current content or authority.
+- Compose with `technical-writing`. Use its fact and authority ledger plus
+  output contract, then return one local candidate for its exact-candidate
+  grounding, comprehension, and tone gate.
+- Do not invoke `technical-writing` again from inside profile composition. The
+  calling workflow already owns that pass; return the candidate to it.
+- This skill ends with local text. Never send, post, publish, commit, push,
+  resolve, install, or perform another remote action.
+- Refuse third-party impersonation and stop when profile ownership is unclear.
+- Do not expose, summarize, vendor, move, or install this skill in a public,
+  internal, project, plugin, marketplace, managed, synced, or remote-agent
+  source.
+- Preserve uncertainty. Do not make unsupported wording more decisive merely
+  because it resembles the user.
+
+## Modes
+
+- **Draft:** Build from verified current facts and explicit unknowns.
+- **Revise:** Preserve supported meaning, qualifiers, commitments, and scope.
+- **Review:** Check grounding and authority before context fit and voice.
+
+For an unsupported context, use general `technical-writing` or ask one narrow,
+context-specific question that can change the draft. Do not claim voice fidelity
+for a guessed context.
+
+## Workflow
+
+1. Confirm `profile-schema-version: 1` and
+   `integration-contract: technical-writing-user-voice-v1` in the profile. On
+   mismatch, return to general writing and request an audit.
+2. Apply only approved rules whose scope matches the artifact, audience,
+   intent, and stakes.
+3. Keep the current fact and authority boundaries visible.
+4. Produce the smallest complete local artifact and return control to
+   `technical-writing`.
+5. Treat user corrections as task-local unless the user explicitly requests a
+   durable profile update.

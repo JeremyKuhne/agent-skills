@@ -19,15 +19,21 @@ failures remain blocking.
 - a blocked exact commit message whose claims lack evidence; and
 - an overlay-loading sentinel.
 
-`scenarios/technical-writing.json` covers eight direct behaviors: explicit
+`scenarios/technical-writing.json` covers nine direct behaviors: explicit
 drafting, meaning-preserving revision, abstention when facts are missing,
-first-person authority, pre-publication review without action, code-readability
-and machine-format near misses, and an overlay sentinel.
+first-person authority, composition with an isolated personal voice profile,
+pre-publication review without action, code-readability and machine-format near
+misses, and an overlay sentinel.
 
 `scenarios/publishing-workflows.json` covers local-only integration with
 `address-pr-feedback`, `manage-skills`, and `engineering-baseline`. These cases
 require both the owning workflow and `technical-writing` to invoke while
 forbidding the remote action.
+
+`scenarios/user-voice.json` covers eight direct behaviors: consent before
+source access, a manual copy/paste data handoff, public-destination refusal,
+untrusted report rejection, best-self tone filtering, third-party impersonation
+refusal, separate private GitHub approval gates, and non-destructive migration.
 
 Copilot CLI 1.0.63 emits structured JSONL when the model invokes the `skill`
 tool. Positive cases require their primary skill invocation, and cross-skill
@@ -81,9 +87,9 @@ Select another scenario document explicitly:
   -ReportOnly
 ```
 
-The runner loads one scenario document per invocation. Run all three documents
-for a capability release that changes technical-writing or a publishing
-workflow.
+The runner loads one scenario document per invocation. Run all four documents
+for a capability release that changes `technical-writing`, `user-voice`, its
+private-profile composition contract, or a publishing workflow.
 
 By default reports go to a unique temporary directory. `summary.json` and
 `summary.md` contain the aggregate result; each run retains its invocation,

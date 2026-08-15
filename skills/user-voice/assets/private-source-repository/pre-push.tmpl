@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+scanner="$repo_root/.private-voice/Test-UserVoiceRepository.ps1"
+
+if [ ! -f "$scanner" ]; then
+  echo "Private voice repository scanner is missing." >&2
+  exit 1
+fi
+
+exec pwsh -NoProfile -File "$scanner" \
+  -RepositoryPath "$repo_root" \
+  -RequirePrivateGitHub \
+  -ScanHistory \
+  -RequirePrePushHook
