@@ -41,10 +41,24 @@ Before changing any pin or provenance ref:
    the candidate;
 7. run the upstream mirror comparison and semantic cases before installing.
 
-The mirror comparison passes only when every changed core path is either present
-in the candidate artifact or named in the rebased pending-divergence record, and
-every other upstream file list and hash matches the candidate. Overlays and local
-catalog collateral are additive and must be identified separately.
+For an installer-produced artifact, normalize only the installer boundary. The
+mirror comparison passes when:
+
+- the installed manifest equals the source manifest plus declared overlays or
+  pending-divergence files;
+- every source resource other than `SKILL.md` is byte-identical;
+- every source-authored frontmatter field has the same parsed value;
+- the normalized `SKILL.md` body is identical after line-ending and
+  frontmatter-boundary normalization; and
+- generated `github-repo`, `github-ref`, `github-pinned`, `github-path`,
+  `github-tree-sha`, or `local-path` metadata matches the reviewed source and
+  target.
+
+Do not compare a provenance-stamped `SKILL.md` by raw file hash: `gh skill`
+reserializes frontmatter and may remove the blank line after its closing
+delimiter. Treat any other field, body, resource, or manifest difference as
+drift. Overlays and local catalog collateral are additive and must be identified
+separately.
 
 Stop the update if any overlay or divergence has no explicit disposition. A new
 pin with a stale base-pin record is unexplained drift, even when validation and
@@ -120,10 +134,10 @@ fine; an unexplained one is the alarm. What makes this enforceable:
 
 - **Provenance frontmatter** on every vendored copy records the source repo, ref,
   and tree SHA it was installed from.
-- **The drift check** (`gh skill update`, or the tree-SHA comparison in CI)
-  compares the local core against that recorded upstream. Unexplained drift - a
-  local core that no longer matches its pin and has no corresponding upstream PR -
-  is the alarm that an improvement was written into the wrong layer.
+- **The drift check** (`gh skill update`, or the normalized mirror comparison in
+  CI) compares the local core against that recorded upstream. Unexplained drift
+  - a local core that no longer matches its pin and has no corresponding upstream
+  PR - is the alarm that an improvement was written into the wrong layer.
 
 So the discipline is mechanical: if the drift check lights up and there is no
 upstream PR in flight and no recorded pending-upstream note, the change was a local

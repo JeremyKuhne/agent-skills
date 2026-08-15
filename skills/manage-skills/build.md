@@ -36,8 +36,11 @@ the named skill. Review each requirement's applicability and source before
 installing it.
 
 `--pin` records the exact version so later updates skip it until you deliberately
-re-pin. The install writes provenance frontmatter (source repo, ref, and tree
-SHA). Commit a project copy; keep a user copy outside project source control.
+re-pin. The install reserializes `SKILL.md` frontmatter and adds provenance
+metadata (source repo, ref, pin, path, and tree SHA). Commit a project copy; keep
+a user copy outside project source control. Compare installed artifacts with the
+normalized mirror contract in [update.md](update.md), not a raw `SKILL.md` file
+hash.
 
 Without `gh`, check out or download the exact tag/commit, copy the complete
 directory for the skill and each transitive requirement (not only each

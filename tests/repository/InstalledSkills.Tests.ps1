@@ -2,6 +2,7 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 BeforeAll {
+    . (Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1')
     $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path
     $script:SkillsRoot = Join-Path $script:RepoRoot 'skills'
     $script:ValidatorPath = Join-Path $script:SkillsRoot 'manage-skills/scripts/Validate-Skills.ps1'
@@ -67,6 +68,92 @@ BeforeAll {
 }
 
 Describe 'Installed skill artifacts' {
+    AfterEach {
+        foreach ($directoryName in @('[source-skill]', '[installed-skill]')) {
+            $directoryPath = Join-Path $TestDrive $directoryName
+            if (Test-Path -LiteralPath $directoryPath) {
+                Remove-Item -LiteralPath $directoryPath -Recurse -Force
+            }
+        }
+    }
+
+    It 'normalizes only installer-generated provenance when comparing a mirror' {
+        $source = Join-Path $TestDrive '[source-skill]'
+        $installed = Join-Path $TestDrive '[installed-skill]'
+        New-Item -ItemType Directory -Path $source, $installed | Out-Null
+        $sourceContent = @'
+---
+name: fixture
+description: Mirror fixture.
+license: MIT
+metadata:
+  portability: portable
+  risk: advisory
+---
+
+# Fixture
+
+Body.
+'@
+    $installedContent = @'
+---
+description: Mirror fixture.
+license: MIT
+metadata:
+    github-path: skills/fixture
+    github-pinned: 0123456789012345678901234567890123456789
+    github-ref: 0123456789012345678901234567890123456789
+    github-repo: https://github.com/example/skills
+    github-tree-sha: 0123456789012345678901234567890123456789
+    portability: portable
+    risk: advisory
+name: fixture
+---
+# Fixture
+
+Body.
+'@
+        $sourceSkill = Join-Path $source 'SKILL.md'
+        $installedSkill = Join-Path $installed 'SKILL.md'
+        [System.IO.File]::WriteAllText(
+            $sourceSkill,
+            $sourceContent.Replace("`r`n", "`n").Replace("`n", "`r`n"))
+        [System.IO.File]::WriteAllText(
+            $installedSkill,
+            $installedContent.Replace("`r`n", "`n"))
+        [System.IO.File]::WriteAllText((Join-Path $source 'resource.bin'), 'same')
+        [System.IO.File]::WriteAllText((Join-Path $installed 'resource.bin'), 'same')
+
+        @(Get-SkillArtifactMirrorDifferences $source $installed).Count |
+            Should -Be 0
+
+        [System.IO.File]::WriteAllText((Join-Path $installed 'overlay.md'), '# Local')
+        Get-SkillArtifactMirrorDifferences $source $installed |
+            Should -Contain "[manifest] unexpected 'overlay.md'"
+        @(Get-SkillArtifactMirrorDifferences `
+                -SourceDirectory $source `
+                -InstalledDirectory $installed `
+                -AllowedInstalledFile 'overlay.md').Count |
+            Should -Be 0
+        Remove-Item -LiteralPath (Join-Path $installed 'overlay.md')
+
+        [System.IO.File]::WriteAllText(
+            $installedSkill,
+            $installedContent.Replace('risk: advisory', 'risk: local-write'))
+        Get-SkillArtifactMirrorDifferences $source $installed |
+            Should -Match '^\[frontmatter\]'
+
+        [System.IO.File]::WriteAllText($installedSkill, $installedContent)
+        Add-Content -LiteralPath $installedSkill -Value "`nMaterial drift."
+        Get-SkillArtifactMirrorDifferences $source $installed |
+            Should -Contain '[body] SKILL.md body differs from source'
+
+        [System.IO.File]::WriteAllText($installedSkill, $installedContent)
+        [System.IO.File]::WriteAllText((Join-Path $installed 'resource.bin'), 'changed')
+        Get-SkillArtifactMirrorDifferences $source $installed |
+            Should -Contain "[resource] 'resource.bin' differs from source"
+    }
+
     It 'expands the complete transitive required-skill closure' {
         $skillsRoot = Join-Path $TestDrive 'required-skills'
         foreach ($skill in @(
@@ -126,11 +213,15 @@ Describe 'Installed skill artifacts' {
             }
 
             $installedPrimary = Join-Path $installRoot $sourceDirectory.Name
-            foreach ($sourceFile in (Get-ChildItem $sourceDirectory.FullName -File -Recurse)) {
-                $relativePath = [System.IO.Path]::GetRelativePath($sourceDirectory.FullName, $sourceFile.FullName)
-                Test-Path -LiteralPath (Join-Path $installedPrimary $relativePath) |
-                    Should -BeTrue -Because "$($sourceDirectory.Name) install must include $relativePath"
-            }
+            $installedSkillPath = Join-Path $installedPrimary 'SKILL.md'
+            $provenance = Get-SkillArtifactProvenance $installedSkillPath
+            @($provenance.Keys) | Should -Be @('local-path')
+            $provenance['local-path'] | Should -Be $sourceDirectory.FullName `
+                -Because "$($sourceDirectory.Name) must record its exact local source path"
+            $mirrorDifferences = @(Get-SkillArtifactMirrorDifferences `
+                    $sourceDirectory.FullName $installedPrimary)
+            $mirrorDifferences.Count | Should -Be 0 `
+                -Because "$($sourceDirectory.Name) mirror differs: $($mirrorDifferences -join '; ')"
 
             $validatorOutput = & pwsh -NoProfile -File $script:ValidatorPath $installRoot -RequirePortfolioMetadata -Quiet 2>&1
             $LASTEXITCODE | Should -Be 0 -Because "$($sourceDirectory.Name) installed metadata must be valid: $validatorOutput"
