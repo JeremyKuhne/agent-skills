@@ -1,0 +1,79 @@
+You are collecting de-identified evidence for a private user voice profile.
+Do not create or install a skill. Do not return source text.
+
+The current user approved this bounded source-analysis handoff.
+
+## Authorized source scope
+
+- Source classes: {{SOURCE_CLASSES}}
+- Time or era bands: {{ERA_BANDS}}
+- Channels and audiences: {{CHANNELS_AND_AUDIENCES}}
+- Excluded sources or topics: {{EXCLUSIONS}}
+- Raw model-provider access approved: {{PROVIDER_ACCESS}}
+- Consent ID: {{CONSENT_ID}}
+- Consent schema: {{CONSENT_SCHEMA}}
+- Analysis provider: {{ANALYSIS_PROVIDER}}
+- Analysis host: {{ANALYSIS_HOST}}
+- Consent expiry: {{CONSENT_EXPIRY}}
+- Retention: transient analysis only
+
+If provider access is `no`, stop before reading raw material. If it is `yes`,
+state the provider disclosure and ask for one final confirmation before access.
+
+## Analysis task
+
+1. Inspect only material authored by the current user inside the authorized
+   source scope.
+2. Remove headers, addresses, quoted replies, signatures, templates, logs,
+   collaborator text, attachments, and accidental formatting.
+3. Compare the user across channels, audiences, intents, topics, and eras.
+4. Separate durable voice, context register, mechanics, desired evolution,
+   current content, authority, and accidental signal.
+5. Prefer user-selected exemplars and revision pairs over ordinary history.
+6. Identify counterevidence, unsupported contexts, and possible AI influence.
+7. Exclude blame, sarcasm, rhetorical pressure, ambiguous force, and other tone
+   hazards from candidate rules. Preserve only their legitimate substance.
+8. Create no export or persistent raw-text note. Delete transient extracts
+   after analysis.
+
+If you cannot enforce the authorized scope with your tools, stop and return a
+report whose `Recommended follow-up` section states that limitation. Do not
+widen the source search.
+
+## Return contract
+
+Return only raw Markdown, with no code fence or prose before or after it. Use
+exactly these top-level headings:
+
+# User voice evidence report
+## Contract
+## Coverage
+## Candidate rules
+## Counterevidence and conflicts
+## Mechanics
+## Unsupported contexts
+## Tone hazards excluded
+## Recommended follow-up
+## Deletion attestation
+
+Under `Contract`, include exactly:
+
+- `schema_version: 1`
+- `report_id:` a new opaque identifier
+- `consent_id: {{CONSENT_ID}}`
+- `consent_schema: {{CONSENT_SCHEMA}}`
+- `analysis_provider: {{ANALYSIS_PROVIDER}}`
+- `analysis_host: {{ANALYSIS_HOST}}`
+- `consent_expiry: {{CONSENT_EXPIRY}}`
+- `provenance: agent-derived, user-unconfirmed`
+- `raw_source_retained: no`
+- `private_identifiers_included: no`
+
+For each candidate rule, include a rule ID, claim, scope, evidence class,
+confidence, supporting count band, counterexample count band, and observable
+check. Use only `1-2`, `3-5`, `6-10`, or `10+` count bands.
+
+Never include names, addresses, usernames, organizations, customers, projects,
+repositories, products, code names, message subjects, exact dates, source
+paths, URLs, issue or build numbers, quotations, distinctive phrases, hashes,
+credentials, raw text, or reversible redactions.

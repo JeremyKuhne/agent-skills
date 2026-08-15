@@ -29,6 +29,7 @@ host-read location) with `gh skill install`.
 | [github-actions-cost-optimization](./github-actions-cost-optimization/SKILL.md) | "reduce CI cost / spend / minutes", optimize GitHub Actions triggers, matrices, runners, caches, artifacts, or automatic versus scheduled/manual checks | Portable core with an optional overlay. Models actual and normalized Actions cost without weakening validation; application runtime performance remains `performance-testing`. |
 | [code-comprehension](./code-comprehension/SKILL.md) | "review this for readability", "is this too complex", "reduce nesting / cognitive load", "what is a reasonable method length / parameter count / nesting depth", judging whether code will be hard to understand | Portable core with an optional overlay. Bundles research and binds local style in the overlay. |
 | [technical-writing](./technical-writing/SKILL.md) | "draft this issue", "rewrite this email", "tighten this explanation", "review this note before publishing"; creating durable human-facing prose; the final text check before a publishing workflow | Portable core with an optional overlay. Draft, revise, review, and pre-publication modes; grounding and authority remain hard gates, and the skill never publishes. |
+| [user-voice](./user-voice/SKILL.md) | "capture how I write", "build my voice profile", "hand voice research to another agent", "audit / migrate / install my private voice skill", connect a personal voice profile to technical-writing | Portable lifecycle and privacy workflow. Creates only local private candidates, audits verified private source and user-scope installation, and keeps every personalized profile out of the commons. |
 | [winui-win32-hosting](./winui-win32-hosting/SKILL.md) | "host WinUI in Win32", "embed a WinUI control in an HWND", set up or debug `DesktopWindowXamlSource`, XAML Islands, dispatcher/message/focus/DPI/airspace/accessibility/packaging/lifetime integration | Portable core with an optional overlay. Includes a build-tested raw host, four Priority 0 guides, deeper boundary guidance, an official source map, and the remaining documentation roadmap. |
 
 ## Routing boundaries
@@ -40,6 +41,14 @@ customization behavior and file correctness, and `pre-pr-self-review` for code,
 test, and diff-to-PR factual checks. When more than one applies, settle the
 domain facts and behavior first, then run the prose review. The workflow that
 publishes the artifact keeps its own approval gate and remote action.
+
+`user-voice` owns the lifecycle of a private personal profile: consented source
+capture, manual data-gathering handoff, de-identification, audit, migration,
+private source controls, personal installation, and retirement. It does not
+draft ordinary prose. `technical-writing` owns the shared fact, authority,
+comprehension, and tone gates and conditionally invokes an installed personal
+`user-voice-profile` for attributed first-person realization. The personalized
+runtime skill is never a commons core or public dependency.
 
 ## Portfolio contract
 
@@ -65,6 +74,7 @@ publishes the artifact keeps its own approval gate and remote action.
 | [roslyn-analyzers](./roslyn-analyzers/SKILL.md) | `dotnet-project-gated` | `optional-overlay` | `local-write` | `canary` | - | `performance-testing`, `security-review`, `pre-pr-self-review`, `il-copy-inspection` |
 | [scratch-buffer-strategy](./scratch-buffer-strategy/SKILL.md) | `dotnet-framework` | `optional-overlay` | `advisory` | `canary` | - | `performance-testing`, `framework-jit-optimization` |
 | [security-review](./security-review/SKILL.md) | `universal` | `optional-overlay` | `local-write` | `canary` | - | `pre-pr-self-review`, `performance-testing`, `fuzz-testing` |
-| [technical-writing](./technical-writing/SKILL.md) | `universal` | `optional-overlay` | `local-write` | `canary` | - | `agent-files-review`, `code-comprehension`, `pre-pr-self-review` |
+| [technical-writing](./technical-writing/SKILL.md) | `universal` | `optional-overlay` | `local-write` | `canary` | - | `agent-files-review`, `code-comprehension`, `pre-pr-self-review`, `user-voice` |
+| [user-voice](./user-voice/SKILL.md) | `universal` | `none` | `local-write` | `experimental` | `manage-skills` | - |
 | [winui-win32-hosting](./winui-win32-hosting/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `cswin32-com`, `cswin32-interop`, `security-review` |
 <!-- portfolio-matrix:end -->

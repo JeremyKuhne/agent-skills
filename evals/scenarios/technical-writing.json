@@ -10,6 +10,7 @@
       "prompt": "Draft a short stakeholder update from only these facts: status is Investigating; Linux package validation is blocked; the signed package contains the wrong native asset; the first affected build is unknown; the current action is comparing manifests; the next update is after that comparison. Do not assign an owner or date. Return only the draft.",
       "runCount": 3,
       "expectSkillInvocation": true,
+      "forbiddenSkillInvocations": ["user-voice-profile"],
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?i)\\binvestigating\\b", "(?i)first affected build"],
@@ -67,6 +68,25 @@
       "forbiddenResponsePatterns": ["(?i)(?:our|my) bug", "(?i)we own", "(?i)I(?:'|’)ll fix", "(?i)release is"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^git commit(?: |$)", "(?m)^git push(?: |$)"],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "technical-writing-personal-profile-composition",
+      "skill": "technical-writing",
+      "category": "integration",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use the technical-writing workflow to draft a first-person status note from only these verified statements: 'I reproduced the failure on Linux.' and 'The initiating change is not known.' No ownership, fix, timing, or publication is authorized. Apply the current user's personal voice profile if one is available. Return only the local draft.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "requiredSkillInvocations": ["user-voice-profile"],
+      "personalSkillFixturePath": "fixtures/user-voice-profile",
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["SYNTHETIC_VOICE_OBSERVED", "(?i)I reproduced the failure on Linux", "(?i)initiating change is not known"],
+      "forbiddenResponsePatterns": ["(?i)(?:our|my) bug", "(?i)I(?:'|’)ll fix", "(?i)next update", "(?i)published|posted"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": ["(?m)^git commit(?: |$)", "(?m)^git push(?: |$)", "(?m)^gh (?:pr|issue) create(?: |$)"],
       "requireUnchangedWorktree": true
     },
     {

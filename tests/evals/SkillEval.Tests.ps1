@@ -6,6 +6,7 @@ BeforeAll {
     $script:ScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/create-pr.json'
     $script:TechnicalWritingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/technical-writing.json'
     $script:PublishingWorkflowScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/publishing-workflows.json'
+    $script:UserVoiceScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/user-voice.json'
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -14,16 +15,20 @@ Describe 'Skill evaluation scenario contract' {
         $createPrScenarios = @(Get-SkillEvalScenarios -Path $script:ScenarioPath)
         $technicalWritingScenarios = @(Get-SkillEvalScenarios -Path $script:TechnicalWritingScenarioPath)
         $publishingWorkflowScenarios = @(Get-SkillEvalScenarios -Path $script:PublishingWorkflowScenarioPath)
-        $scenarios = @($createPrScenarios; $technicalWritingScenarios; $publishingWorkflowScenarios)
+        $userVoiceScenarios = @(Get-SkillEvalScenarios -Path $script:UserVoiceScenarioPath)
+        $scenarios = @($createPrScenarios; $technicalWritingScenarios; $publishingWorkflowScenarios; $userVoiceScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
         $createPrScenarios.id | Should -Contain 'create-pr-normalizes-remote-markdown'
-        $technicalWritingScenarios.Count | Should -Be 8
+        $technicalWritingScenarios.Count | Should -Be 9
         @($technicalWritingScenarios | Where-Object skill -ne 'technical-writing').Count | Should -Be 0
+        $technicalWritingScenarios.id | Should -Contain 'technical-writing-personal-profile-composition'
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 19
+        $userVoiceScenarios.Count | Should -Be 8
+        @($userVoiceScenarios | Where-Object skill -ne 'user-voice').Count | Should -Be 0
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 28
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
@@ -58,6 +63,29 @@ Describe 'Skill evaluation scenario contract' {
         $copilotPath = Resolve-SkillEvalCopilotPath
         Test-Path -LiteralPath $copilotPath -PathType Leaf | Should -BeTrue
         if ($IsWindows) { [System.IO.Path]::GetExtension($copilotPath) | Should -Be '.exe' }
+    }
+
+    It 'installs a personal fixture outside the public plugin copy' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:TechnicalWritingScenarioPath |
+            Where-Object id -eq 'technical-writing-personal-profile-composition')[0]
+        $runDirectory = Join-Path $TestDrive 'personal-skill-context'
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+
+        $context = & $module {
+            param($selectedScenario, $repoRoot, $evalRoot, $runRoot)
+            New-SkillEvalContext `
+                -Scenario $selectedScenario `
+                -RepoRoot $repoRoot `
+                -EvalRoot $evalRoot `
+                -RunDirectory $runRoot
+        } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals') $runDirectory
+
+        $personalSkill = Join-Path $context.CopilotHome 'skills/user-voice-profile/SKILL.md'
+        Test-Path -LiteralPath $personalSkill -PathType Leaf | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $context.PluginDirectory 'skills/user-voice-profile') |
+            Should -BeFalse
+        $context.HasPersonalSkillFixture | Should -BeTrue
     }
 }
 
@@ -130,6 +158,43 @@ Describe 'Skill evaluation evidence scoring' {
         $assessment.InvokedSkills | Should -Contain 'create-pr'
         $assessment.InvokedSkills | Should -Contain 'technical-writing'
         @($assessment.Evidence | Where-Object Kind -eq 'required-skill-invocation').Count | Should -Be 1
+    }
+
+    It 'forbids an unexpected companion skill invocation' {
+        $standardOutputPath = Join-Path $TestDrive 'forbidden-companion-stdout.jsonl'
+        $transcriptPath = Join-Path $TestDrive 'forbidden-companion-transcript.md'
+        $shimLogPath = Join-Path $TestDrive 'forbidden-companion-shim.log'
+        Set-Content -LiteralPath $standardOutputPath -Value '{"type":"assistant.message","data":{"toolRequests":[{"name":"skill","arguments":{"skill":"technical-writing"}},{"name":"skill","arguments":{"skill":"user-voice-profile"}}]}}'
+        Set-Content -LiteralPath $transcriptPath -Value 'response'
+        Set-Content -LiteralPath $shimLogPath -Value @()
+        $scenario = [pscustomobject]@{
+            skill = 'technical-writing'
+            expectSkillInvocation = $true
+            forbiddenSkillInvocations = @('user-voice-profile')
+            requiredResponsePatterns = @()
+            forbiddenResponsePatterns = @()
+            requiredCommandPatterns = @()
+            forbiddenCommandPatterns = @()
+            requireUnchangedWorktree = $true
+        }
+        $processResult = [pscustomobject]@{
+            ExitCode = 0
+            TimedOut = $false
+            StandardOutputPath = $standardOutputPath
+            TranscriptPath = $transcriptPath
+        }
+        $context = [pscustomobject]@{
+            ShimLogPath = $shimLogPath
+            BaselineWorktree = 'same'
+            FinalWorktree = 'same'
+        }
+
+        $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
+
+        $assessment.Passed | Should -BeFalse
+        @($assessment.Evidence | Where-Object {
+                $_.Kind -eq 'forbidden-skill-invocation' -and -not $_.Passed
+            }).Count | Should -Be 1
     }
 
     It 'flags a forbidden publish command as a safety failure' {
