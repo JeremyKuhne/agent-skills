@@ -142,10 +142,10 @@ Describe 'Skill catalog contracts' {
         Get-SkillArtifactPrivacyContent $userVoice[0].Directory |
             Should -Not -Match '(?i)jeremy[- ]kuhne|JeremyKuhne'
 
-        $installedFixture = Join-Path $TestDrive 'provenance-bearing-user-voice'
+        $installedFixture = Join-Path $TestDrive '[provenance-bearing-user-voice]'
         New-Item -ItemType Directory -Path $installedFixture | Out-Null
-                $fixtureSkillPath = Join-Path $installedFixture 'SKILL.md'
-                $fixtureContent = @'
+        $fixtureSkillPath = Join-Path $installedFixture 'SKILL.md'
+        $fixtureContent = @'
 ---
 name: user-voice
 description: Generic lifecycle fixture.

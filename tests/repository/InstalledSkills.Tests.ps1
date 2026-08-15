@@ -69,10 +69,10 @@ BeforeAll {
 
 Describe 'Installed skill artifacts' {
     It 'normalizes only installer-generated provenance when comparing a mirror' {
-    $source = Join-Path $TestDrive 'source-skill'
-    $installed = Join-Path $TestDrive 'installed-skill'
-    New-Item -ItemType Directory -Path $source, $installed | Out-Null
-    $sourceContent = @'
+        $source = Join-Path $TestDrive '[source-skill]'
+        $installed = Join-Path $TestDrive '[installed-skill]'
+        New-Item -ItemType Directory -Path $source, $installed | Out-Null
+        $sourceContent = @'
 ---
 name: fixture
 description: Mirror fixture.

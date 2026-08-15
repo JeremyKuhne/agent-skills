@@ -98,7 +98,7 @@ function Get-SkillArtifactPrivacyContent([string] $SkillDirectory) {
     $document = Get-SkillArtifactDocument (Join-Path $SkillDirectory 'SKILL.md')
     return @(
         $document.Body
-        Get-ChildItem $SkillDirectory -File -Recurse |
+        Get-ChildItem -LiteralPath $SkillDirectory -File -Recurse |
             Where-Object Name -ne 'SKILL.md' |
             ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
     ) -join "`n"
@@ -111,7 +111,7 @@ function Get-SkillArtifactMirrorDifferences(
     $sourceRoot = (Resolve-Path -LiteralPath $SourceDirectory).Path
     $installedRoot = (Resolve-Path -LiteralPath $InstalledDirectory).Path
     $differences = [System.Collections.Generic.List[string]]::new()
-    $sourceFiles = @(Get-ChildItem $sourceRoot -File -Recurse)
+    $sourceFiles = @(Get-ChildItem -LiteralPath $sourceRoot -File -Recurse)
     $sourceManifest = @($sourceFiles | ForEach-Object {
             [System.IO.Path]::GetRelativePath(
                 $sourceRoot,
@@ -119,7 +119,7 @@ function Get-SkillArtifactMirrorDifferences(
         } | Sort-Object)
     $expectedManifest = @(($sourceManifest + @($AllowedInstalledFile)) |
         Sort-Object -Unique)
-    $installedManifest = @(Get-ChildItem $installedRoot -File -Recurse |
+    $installedManifest = @(Get-ChildItem -LiteralPath $installedRoot -File -Recurse |
         ForEach-Object {
             [System.IO.Path]::GetRelativePath(
                 $installedRoot,
@@ -157,8 +157,8 @@ function Get-SkillArtifactMirrorDifferences(
             }
             continue
         }
-        if ((Get-FileHash $sourceFile.FullName -Algorithm SHA256).Hash -cne
-            (Get-FileHash $installedPath -Algorithm SHA256).Hash) {
+        if ((Get-FileHash -LiteralPath $sourceFile.FullName -Algorithm SHA256).Hash -cne
+            (Get-FileHash -LiteralPath $installedPath -Algorithm SHA256).Hash) {
             $differences.Add("[resource] '$relativePath' differs from source")
         }
     }
