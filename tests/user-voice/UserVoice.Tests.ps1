@@ -240,6 +240,34 @@ Describe 'Private profile scaffolding' {
         Test-Path -LiteralPath $target | Should -BeFalse
     }
 
+    It 'scans target history before the first private-Git scaffold' {
+        $repository = Join-Path $TestDrive 'historical-source-repository'
+        New-TestGitRepository $repository
+        $target = Join-Path $repository 'private-profile'
+        Write-Utf8File (Join-Path $target 'message.eml') 'raw source'
+        & git -C $repository add private-profile/message.eml
+        & git -C $repository commit --quiet -m 'Add raw source'
+        Remove-Item -LiteralPath $target -Recurse
+        & git -C $repository add -u
+        & git -C $repository commit --quiet -m 'Remove raw source'
+        & git -C $repository remote add origin https://github.com/example/private-voice.git
+        $fakeBin = Join-Path $TestDrive 'historical-source-gh'
+        New-FakeGh -Directory $fakeBin -Visibility PRIVATE
+        $scriptPath = Join-Path $script:SkillRoot 'scripts/New-UserVoiceProfile.ps1'
+        $originalPath = $env:PATH
+        $env:PATH = "$fakeBin$([System.IO.Path]::PathSeparator)$originalPath"
+        try {
+            $result = Invoke-UserVoiceScript -Script $scriptPath -Arguments @(
+                '-MaintenanceRoot', $target,
+                '-PrivateGitHubSource')
+        }
+        finally { $env:PATH = $originalPath }
+
+        $result.ExitCode | Should -Be 1
+        $result.Output | Should -Match '\[raw-source\]'
+        Test-Path -LiteralPath $target | Should -BeFalse
+    }
+
     It 'builds the runtime copy only after consent and audit approval' {
         $root = Join-Path $TestDrive 'approved-profile'
         $scaffold = Join-Path $script:SkillRoot 'scripts/New-UserVoiceProfile.ps1'
@@ -302,6 +330,19 @@ Describe 'Private repository scanning' {
         $result.Output | Should -Match '\[raw-source\]'
     }
 
+    It 'rejects WSL-mounted absolute user paths' {
+        $root = Join-Path $TestDrive 'wsl-absolute-path'
+        New-Item -ItemType Directory -Path $root | Out-Null
+        Write-Utf8File (Join-Path $root 'profile.md') 'Source: /mnt/c/Users/person/private-profile.md'
+        $scanner = Join-Path $script:SkillRoot 'scripts/Test-UserVoiceRepository.ps1'
+
+        $result = Invoke-UserVoiceScript -Script $scanner -Arguments @(
+            '-RepositoryPath', $root)
+
+        $result.ExitCode | Should -Be 1
+        $result.Output | Should -Match '\[absolute-path\]'
+    }
+
     It 'finds a prohibited raw path that was deleted from the current tree' {
         $root = Join-Path $TestDrive 'history'
         New-TestGitRepository $root
@@ -359,6 +400,26 @@ Describe 'Private repository scanning' {
                 '-RequirePrivateGitHub',
                 '-ExpectedOwner', 'example')
         }
+        finally { $env:PATH = $originalPath }
+
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+    }
+
+    It 'uses the GitHub CLI application when a function shadows gh' {
+        $root = Join-Path $TestDrive 'shadowed-gh-remote'
+        New-TestGitRepository $root
+        & git -C $root remote add origin https://github.com/example/private-voice.git
+        $fakeBin = Join-Path $TestDrive 'shadowed-gh'
+        New-FakeGh -Directory $fakeBin -Visibility PRIVATE
+        $scanner = Join-Path $script:SkillRoot 'scripts/Test-UserVoiceRepository.ps1'
+        $wrapper = Join-Path $TestDrive 'invoke-shadowed-gh.ps1'
+        Write-Utf8File $wrapper @"
+function gh { '{"visibility":"PUBLIC","owner":{"login":"example"},"name":"private-voice"}' }
+& '$($scanner.Replace("'", "''"))' -RepositoryPath '$($root.Replace("'", "''"))' -RequirePrivateGitHub -ExpectedOwner example
+"@
+        $originalPath = $env:PATH
+        $env:PATH = "$fakeBin$([System.IO.Path]::PathSeparator)$originalPath"
+        try { $result = Invoke-UserVoiceScript -Script $wrapper }
         finally { $env:PATH = $originalPath }
 
         $result.ExitCode | Should -Be 0 -Because $result.Output

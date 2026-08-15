@@ -100,12 +100,9 @@ if ($null -ne $git) {
             '-NoProfile',
             '-File', $repositoryValidator,
             '-RepositoryPath', $gitRoot[0],
-            '-RequirePrivateGitHub')
-        if (Test-Path -LiteralPath $target) {
-            $repositoryArguments += @(
-                '-ContentPath', $target,
-                '-ScanHistory')
-        }
+            '-RequirePrivateGitHub',
+            '-ContentPath', $target,
+            '-ScanHistory')
         & $pwsh @repositoryArguments
         if ($LASTEXITCODE -ne 0) {
             throw 'The Git source could not be verified as private.'

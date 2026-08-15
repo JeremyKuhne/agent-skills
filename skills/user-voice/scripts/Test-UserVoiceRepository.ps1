@@ -25,7 +25,7 @@ function Test-Content([string] $content, [string] $source) {
     $checks = @(
         @{ Category = 'private-identifier'; Pattern = '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'; Message = 'email address' },
         @{ Category = 'secret'; Pattern = '(?i)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9_]{20,}\b|\bAKIA[0-9A-Z]{16}\b'; Message = 'secret material' },
-        @{ Category = 'absolute-path'; Pattern = '(?m)(?:[A-Za-z]:\\(?:Users|repos)\\|/(?:Users|home)/)'; Message = 'absolute user path' },
+        @{ Category = 'absolute-path'; Pattern = '(?im)(?:[A-Z]:\\(?:Users|repos)\\|/(?:Users|home)/|/mnt/[a-z]/(?:Users|repos)/)'; Message = 'absolute user path' },
         @{ Category = 'patch-artifact'; Pattern = '(?m)^\*\*\* (?:Add|Update|Delete) File:'; Message = 'patch control text' })
     foreach ($check in $checks) {
         if ($content -match $check.Pattern) {
@@ -86,27 +86,34 @@ $rootPrefix = [System.IO.Path]::GetFullPath($root).TrimEnd(
     [System.IO.Path]::AltDirectorySeparatorChar) +
     [System.IO.Path]::DirectorySeparatorChar
 $scanRoots = [System.Collections.Generic.List[string]]::new()
+$workingScanRoots = [System.Collections.Generic.List[string]]::new()
 if ($ContentPath) {
     foreach ($contentInput in $ContentPath) {
         $candidate = if ([System.IO.Path]::IsPathRooted($contentInput)) {
             [System.IO.Path]::GetFullPath($contentInput)
         }
         else { [System.IO.Path]::GetFullPath((Join-Path $root $contentInput)) }
-        if (-not (Test-Path -LiteralPath $candidate)) {
-            Add-RepositoryError 'content-scope' "Content path does not exist: '$contentInput'."
-            continue
-        }
         if (-not ($candidate.Equals($root, $pathComparison) -or
                 $candidate.StartsWith($rootPrefix, $pathComparison))) {
             Add-RepositoryError 'content-scope' "Content path escapes the repository: '$contentInput'."
             continue
         }
+        if (Test-Path -LiteralPath $candidate) {
+            $workingScanRoots.Add($candidate)
+        }
+        elseif (-not $ScanHistory) {
+            Add-RepositoryError 'content-scope' "Content path does not exist: '$contentInput'."
+            continue
+        }
         $scanRoots.Add($candidate)
     }
 }
-else { $scanRoots.Add($root) }
+else {
+    $scanRoots.Add($root)
+    $workingScanRoots.Add($root)
+}
 
-$workingFiles = @($scanRoots | ForEach-Object {
+$workingFiles = @($workingScanRoots | ForEach-Object {
         if (Test-Path -LiteralPath $_ -PathType Leaf) {
             Get-Item -LiteralPath $_ -Force
         }
@@ -158,7 +165,8 @@ if ($isGitRepository -and $ScanHistory) {
 }
 
 if ($isGitRepository -and $RequirePrivateGitHub) {
-    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    $gh = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
     if ($null -eq $gh) {
         Add-RepositoryError 'visibility' 'GitHub CLI is required to verify private visibility.'
     }
@@ -176,7 +184,7 @@ if ($isGitRepository -and $RequirePrivateGitHub) {
                 Add-RepositoryError 'visibility' "Remote '$url' is not a verifiable GitHub repository."
                 continue
             }
-            $detailsJson = @(& gh repo view $repository --json visibility,owner,name 2>$null) -join "`n"
+            $detailsJson = @(& $gh.Source repo view $repository --json visibility,owner,name 2>$null) -join "`n"
             if ($LASTEXITCODE -ne 0) {
                 Add-RepositoryError 'visibility' "Could not verify GitHub repository '$repository'."
                 continue

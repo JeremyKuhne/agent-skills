@@ -87,6 +87,31 @@ Describe 'Skill evaluation scenario contract' {
             Should -BeFalse
         $context.HasPersonalSkillFixture | Should -BeTrue
     }
+
+    It 'rejects a personal fixture path outside the fixtures directory' {
+        $scenario = [pscustomobject]@{
+            profile = 'clean-feature'
+            skill = 'technical-writing'
+            personalSkillFixturePath = '../skills/technical-writing'
+        }
+        $runDirectory = Join-Path $TestDrive 'escaped-personal-skill-context'
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evalRoot, $runRoot)
+                New-SkillEvalContext `
+                    -Scenario $selectedScenario `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evalRoot `
+                    -RunDirectory $runRoot
+            } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals') $runDirectory
+        } | Should -Throw '*must be a directory under*fixtures*'
+        Test-Path -LiteralPath (
+            Join-Path $runDirectory 'copilot-home/skills/technical-writing') |
+            Should -BeFalse
+    }
 }
 
 Describe 'Skill evaluation evidence scoring' {

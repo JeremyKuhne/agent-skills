@@ -364,7 +364,24 @@ function New-SkillEvalContext {
     $hasPersonalSkillFixture = $false
     if ($Scenario.PSObject.Properties['personalSkillFixturePath'] -and
         -not [string]::IsNullOrWhiteSpace([string]$Scenario.personalSkillFixturePath)) {
-        $personalSkillSource = (Resolve-Path -LiteralPath (Join-Path $EvalRoot ([string]$Scenario.personalSkillFixturePath))).Path
+        $fixtureInput = [string]$Scenario.personalSkillFixturePath
+        if ([System.IO.Path]::IsPathRooted($fixtureInput)) {
+            throw 'Personal skill fixture paths must be relative to the evaluation root.'
+        }
+        $fixtureRoot = (Resolve-Path -LiteralPath (Join-Path $EvalRoot 'fixtures')).Path
+        $personalSkillSource = (Resolve-Path -LiteralPath (Join-Path $EvalRoot $fixtureInput)).Path
+        $pathComparison = if ($IsWindows) {
+            [System.StringComparison]::OrdinalIgnoreCase
+        }
+        else { [System.StringComparison]::Ordinal }
+        $fixturePrefix = $fixtureRoot.TrimEnd(
+            [System.IO.Path]::DirectorySeparatorChar,
+            [System.IO.Path]::AltDirectorySeparatorChar) +
+            [System.IO.Path]::DirectorySeparatorChar
+        if (-not $personalSkillSource.StartsWith($fixturePrefix, $pathComparison) -or
+            -not (Test-Path -LiteralPath $personalSkillSource -PathType Container)) {
+            throw "Personal skill fixture '$fixtureInput' must be a directory under '$fixtureRoot'."
+        }
         $personalSkillRoot = Join-Path $copilotHome 'skills'
         $personalSkillTarget = Join-Path $personalSkillRoot (Split-Path -Leaf $personalSkillSource)
         New-Item -ItemType Directory -Path $personalSkillRoot -Force | Out-Null
