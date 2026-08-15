@@ -145,22 +145,22 @@ Describe 'Skill catalog contracts' {
         $installedFixture = Join-Path $TestDrive '[provenance-bearing-user-voice]'
         New-Item -ItemType Directory -Path $installedFixture | Out-Null
         $fixtureSkillPath = Join-Path $installedFixture 'SKILL.md'
-        $fixtureContent = @'
----
-name: user-voice
-description: Generic lifecycle fixture.
-metadata:
-  github-path: skills/user-voice
-  github-pinned: 0123456789012345678901234567890123456789
-  github-ref: 0123456789012345678901234567890123456789
-    github-repo: https://github.com/JeremyKuhne/agent-skills
-  github-tree-sha: 0123456789012345678901234567890123456789
----
-
-# User voice
-
-Generic lifecycle content.
-'@
+                $fixtureContent = @(
+                        '---'
+                        'name: user-voice'
+                        'description: Generic lifecycle fixture.'
+                        'metadata:'
+                        '  github-path: skills/user-voice'
+                        '  github-pinned: 0123456789012345678901234567890123456789'
+                        '  github-ref: 0123456789012345678901234567890123456789'
+                        '  github-repo: https://github.com/JeremyKuhne/agent-skills'
+                        '  github-tree-sha: 0123456789012345678901234567890123456789'
+                        '---'
+                        ''
+                        '# User voice'
+                        ''
+                        'Generic lifecycle content.'
+                ) -join "`n"
         [System.IO.File]::WriteAllText($fixtureSkillPath, $fixtureContent)
         (Get-SkillArtifactDocument $fixtureSkillPath).Frontmatter |
             Should -Match 'JeremyKuhne'
