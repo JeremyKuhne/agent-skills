@@ -72,6 +72,19 @@ Describe 'Skill catalog contracts' {
         @(Compare-Object ($script:SkillNames | Sort-Object) ($catalogNames | Sort-Object)).Count | Should -Be 0
     }
 
+    It 'makes repository creation discoverable without cataloging the local workflow' {
+        $readme = Get-Content -LiteralPath (Join-Path $script:RepoRoot 'README.md') -Raw
+        $catalog = Get-Content -LiteralPath (Join-Path $script:SkillsRoot 'README.md') -Raw
+        $localWorkflow = Join-Path $script:RepoRoot (
+            '.agents/skills/create-skill-repo/SKILL.md')
+
+        Test-Path -LiteralPath $localWorkflow -PathType Leaf | Should -BeTrue
+        $readme | Should -Match 'How do I create my own\s+skill repository\?'
+        $readme | Should -Match '\]\(\.agents/skills/create-skill-repo/SKILL\.md\)'
+        $readme | Should -Match 'intentionally absent from the \[shared skill\s+catalog\]'
+        $catalog | Should -Not -Match 'create-skill-repo'
+    }
+
     It 'keeps the generated portfolio matrix current' {
         $generator = Join-Path $script:RepoRoot 'tools/Update-SkillCatalog.ps1'
         $output = & pwsh -NoProfile -File $generator 2>&1

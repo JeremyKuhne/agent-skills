@@ -1,0 +1,27 @@
+#Requires -Version 7.2
+[CmdletBinding()]
+param([string] $Root = (Split-Path $PSScriptRoot -Parent))
+
+$errors = [System.Collections.Generic.List[string]]::new()
+$rootPath = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+foreach ($file in Get-ChildItem -LiteralPath $Root -Filter '*.md' -File -Recurse) {
+    $content = Get-Content -LiteralPath $file.FullName -Raw
+    foreach ($match in [regex]::Matches(
+            $content,
+            '\[[^\]]+\]\((?<target>[^)#]+)(?:#[^)]+)?\)')) {
+        $target = [uri]::UnescapeDataString($match.Groups['target'].Value)
+        if ($target -match '^[a-z]+:') { continue }
+        $resolved = [System.IO.Path]::GetFullPath((Join-Path $file.DirectoryName $target))
+        if ($resolved -ne $rootPath -and -not $resolved.StartsWith(
+                "$rootPath$([System.IO.Path]::DirectorySeparatorChar)",
+                [System.StringComparison]::OrdinalIgnoreCase)) {
+            $errors.Add("$($file.FullName): relative link escapes the repository: '$target'")
+            continue
+        }
+        if (-not (Test-Path -LiteralPath $resolved)) {
+            $errors.Add("$($file.FullName): missing relative link target '$target'")
+        }
+    }
+}
+if ($errors.Count -gt 0) { throw ($errors -join "`n") }
+Write-Host 'All relative Markdown links resolve.'

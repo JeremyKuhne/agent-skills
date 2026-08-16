@@ -1,0 +1,22 @@
+#Requires -Version 7.2
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+
+BeforeAll {
+    $script:Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+    $script:Plugin = Get-Content (Join-Path $script:Root 'plugin.json') -Raw |
+        ConvertFrom-Json
+}
+
+Describe 'Plugin manifest' {
+    It 'has a valid identity and existing components' {
+        $script:Plugin.name | Should -Match '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        $script:Plugin.version | Should -Match '^\d+\.\d+\.\d+'
+        $script:Plugin.repository | Should -Match '^https://'
+        foreach ($component in @($script:Plugin.skills) +
+            @($script:Plugin.agents) + @($script:Plugin.mcpServers)) {
+            if ($component) {
+                Test-Path (Join-Path $script:Root $component) | Should -BeTrue
+            }
+        }
+    }
+}

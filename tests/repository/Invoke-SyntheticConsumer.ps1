@@ -92,12 +92,33 @@ try {
     $installRoot = Join-Path $consumerRoot '.agents/skills'
     New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 
+    $localSkillsRoot = $skillsRoot
+    if (-not $SourceRepository) {
+        $localSkillsRoot = Join-Path $OutputDirectory 'source-skills'
+        New-Item -ItemType Directory -Path $localSkillsRoot | Out-Null
+        $candidateFiles = @(& $gitPath -C $resolvedRepoRoot ls-files `
+                --cached --others --exclude-standard -- 'skills')
+        if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate local candidate skill files.' }
+        foreach ($relativePath in $candidateFiles) {
+            $sourcePath = Join-Path $resolvedRepoRoot $relativePath
+            if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { continue }
+            $skillsRelativePath = [System.IO.Path]::GetRelativePath(
+                $skillsRoot,
+                $sourcePath)
+            $candidatePath = Join-Path $localSkillsRoot $skillsRelativePath
+            New-Item -ItemType Directory -Path (Split-Path $candidatePath -Parent) `
+                -Force | Out-Null
+            Copy-Item -LiteralPath $sourcePath -Destination $candidatePath
+        }
+    }
+
     foreach ($record in $sourceRecords) {
         $installOutput = if ($SourceRepository) {
             & gh skill install $SourceRepository "skills/$($record.Name)" --pin $Pin --dir $installRoot --agent github-copilot --force 2>&1
         }
         else {
-            & gh skill install $resolvedRepoRoot $record.Name --from-local --dir $installRoot --agent github-copilot --force 2>&1
+            $localSource = Join-Path $localSkillsRoot $record.Name
+            & gh skill install $localSource $record.Name --from-local --dir $installRoot --agent github-copilot --force 2>&1
         }
         if ($LASTEXITCODE -ne 0) {
             throw "Could not install '$($record.Name)':`n$($installOutput -join "`n")"
@@ -142,7 +163,7 @@ try {
         else {
             $expectedProvenance = [ordered]@{
                 'local-path' = (Resolve-Path -LiteralPath (
-                    Join-Path $skillsRoot $record.Name)).Path
+                    Join-Path $localSkillsRoot $record.Name)).Path
             }
         }
         $provenanceKeyDifference = @(

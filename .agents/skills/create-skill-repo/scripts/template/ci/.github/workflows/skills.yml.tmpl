@@ -1,0 +1,24 @@
+name: Skills validation
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser
+      - name: Validate repository
+        shell: pwsh
+        run: ./tools/Validate-Repository.ps1
+      - name: Test repository contracts
+        shell: pwsh
+        run: Invoke-Pester ./tests

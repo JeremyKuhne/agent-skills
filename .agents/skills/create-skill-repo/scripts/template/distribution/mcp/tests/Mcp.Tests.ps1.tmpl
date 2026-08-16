@@ -1,0 +1,14 @@
+#Requires -Version 7.2
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+
+Describe 'MCP manifest' {
+    It 'uses the typed server collection shape' {
+        $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+        $manifest = Get-Content (Join-Path $root '.mcp.json') -Raw |
+            ConvertFrom-Json
+        $manifest.PSObject.Properties.Name | Should -Contain 'mcpServers'
+        foreach ($property in $manifest.mcpServers.PSObject.Properties) {
+            @('http', 'stdio') | Should -Contain $property.Value.type
+        }
+    }
+}

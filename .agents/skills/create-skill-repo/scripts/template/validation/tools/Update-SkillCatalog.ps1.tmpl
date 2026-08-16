@@ -1,0 +1,33 @@
+#Requires -Version 7.2
+[CmdletBinding()]
+param(
+    [string] $SkillsRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) 'skills'),
+    [switch] $Apply
+)
+
+if (-not (Test-Path -LiteralPath $SkillsRoot)) { return }
+$catalogPath = Join-Path $SkillsRoot 'README.md'
+$catalog = Get-Content -LiteralPath $catalogPath -Raw
+$start = '<!-- skill-catalog:start -->'
+$end = '<!-- skill-catalog:end -->'
+$rows = @('| Skill | Description |', '| --- | --- |')
+foreach ($directory in Get-ChildItem -LiteralPath $SkillsRoot -Directory | Sort-Object Name) {
+    $skillPath = Join-Path $directory.FullName 'SKILL.md'
+    if (-not (Test-Path -LiteralPath $skillPath)) { continue }
+    $content = Get-Content -LiteralPath $skillPath -Raw
+    $description = [regex]::Match(
+        $content,
+        '(?m)^description:\s*(?<value>.+)$').Groups['value'].Value.Trim().Trim("'", '"')
+    $rows += "| [$($directory.Name)](./$($directory.Name)/SKILL.md) | $description |"
+}
+$replacement = "$start`n$($rows -join "`n")`n$end"
+$pattern = "(?s)$([regex]::Escape($start)).*?$([regex]::Escape($end))"
+$updated = [regex]::Replace($catalog, $pattern, $replacement)
+if ($Apply) {
+    [System.IO.File]::WriteAllText(
+        $catalogPath,
+        $updated,
+        [System.Text.UTF8Encoding]::new($false))
+} elseif ($updated -cne $catalog) {
+    throw 'The generated skill catalog is stale. Run tools/Update-SkillCatalog.ps1 -Apply.'
+}

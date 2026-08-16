@@ -1,0 +1,15 @@
+#Requires -Version 7.2
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+
+Describe 'Custom agents' {
+    It 'ships at least one described agent with tools' {
+        $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+        $agents = @(Get-ChildItem (Join-Path $root 'agents') -Filter '*.agent.md')
+        $agents.Count | Should -BeGreaterThan 0
+        foreach ($agent in $agents) {
+            $content = Get-Content $agent.FullName -Raw
+            $content | Should -Match '(?m)^description:\s*\S'
+            $content | Should -Match '(?m)^tools:\s*\['
+        }
+    }
+}

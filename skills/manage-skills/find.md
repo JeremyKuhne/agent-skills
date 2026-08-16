@@ -21,9 +21,12 @@ A project hit does not satisfy "install this for me everywhere"; a user hit does
 not prove the repository carries the skill for teammates or remote agents.
 Follow [install.md](install.md) for the host matrix.
 
-### 2. The commons
+### 2. Configured upstream sources
 
-Search the shared skills repo:
+If the installed overlay declares an ordered upstream source policy, search each
+organization, private, or shared source in that order and record its trust
+boundary. A private source must not appear in public output. Unless the overlay
+explicitly changes or removes it, include the shared commons:
 
 ```pwsh
 gh skill search <terms> --repo JeremyKuhne/agent-skills
@@ -33,6 +36,10 @@ Anything here is curated and pre-vetted. When `gh` is unavailable, browse the
 commons repository's `skills/` directory, read candidate descriptions and
 metadata, and record the release tag or commit for a later pinned manual install.
 Do not treat the moving default branch as the pin.
+
+Do not infer equal trust from ordering. Organization and private sources still
+need their declared review policy; an unknown source remains untrusted even when
+it appears before the default commons.
 
 ### 3. Public catalogs
 

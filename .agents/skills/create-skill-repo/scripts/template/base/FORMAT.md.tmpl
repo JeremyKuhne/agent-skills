@@ -1,0 +1,58 @@
+# Agent Skills format
+
+Each canonical skill lives at `skills/<name>/SKILL.md`. The directory name must
+match the frontmatter `name`. Keep portable workflow rules in the core and
+repository-specific paths and conventions in a sibling `overlay.md`.
+
+Use this source shape:
+
+```text
+skills/
+  <skill-name>/
+    SKILL.md
+    <detail>.md
+    assets/
+    references/
+    scripts/
+```
+
+Start `SKILL.md` with:
+
+```yaml
+---
+name: skill-name
+description: What the skill does and the literal requests that should invoke it.
+license: MIT
+metadata:
+  portability: portable
+  applicability: universal
+  binding: optional-overlay
+  risk: advisory
+  maturity: canary
+  requires: none
+  related: none
+---
+```
+
+`name` uses lowercase letters, digits, and hyphens and matches its directory.
+The description is the routing surface. `requires` names hard dependencies;
+`related` names optional handoffs. Relationship names must resolve and the
+required graph must remain acyclic.
+
+An overlay-aware portable core reads `overlay.md` when present. Its overlay
+starts with the matching core and immutable review pin:
+
+```yaml
+---
+core: skill-name
+core-pin: v1.2.3
+---
+```
+
+Vendored runtime copies under `.agents/skills/` are immutable upstream mirrors.
+Record local bindings in overlays and preserve source repository, revision,
+pin, path, and tree-SHA provenance.
+
+Run `./tools/Validate-Repository.ps1` and `Invoke-Pester ./tests` when those
+tools are present. Regenerate a source catalog with
+`./tools/Update-SkillCatalog.ps1 -Apply`.

@@ -67,9 +67,12 @@ Two axes decide the buckets, and they are independent:
 ## 4. Stage 2 - Scaffold (greenfield repos only)
 
 A repo with no `.agents/` (a greenfield repo) needs the consumer scaffolding stood
-up before it can vendor. Copy from an already-onboarded repo and trim (the exact
-filenames below are this fleet's convention, not a requirement - a repo may wire
-them differently and record that in its overlay):
+up before it can vendor. In this commons, use the repository-local
+[create-skill-repo](../.agents/skills/create-skill-repo/SKILL.md) workflow in
+consumer or hybrid mode and select the applicable validation and CI tiers. It
+conducts the identity, location, client, starter-skill, upstream,
+infrastructure, and publication decisions before writing. The exact filenames
+below remain this fleet's convention rather than an Agent Skills requirement:
 
 - `.agents/skills/` with a `README.md` catalog and a `FORMAT.md`.
 - A frontmatter validator and an offline link checker (conventionally

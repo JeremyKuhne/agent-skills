@@ -200,15 +200,34 @@ Body.
         & gh skill --help *> $null
         $LASTEXITCODE | Should -Be 0 -Because 'gh 2.90 or later with the skill command is required'
 
-        foreach ($sourceDirectory in (Get-ChildItem -LiteralPath $script:SkillsRoot -Directory | Sort-Object Name)) {
+        $candidateSkillsRoot = Join-Path $TestDrive '[candidate-skills]'
+        New-Item -ItemType Directory -Path $candidateSkillsRoot | Out-Null
+        $candidateFiles = @(& git -C $script:RepoRoot ls-files `
+                --cached --others --exclude-standard -- 'skills')
+        $LASTEXITCODE | Should -Be 0
+        foreach ($relativePath in $candidateFiles) {
+            $sourcePath = Join-Path $script:RepoRoot $relativePath
+            if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) { continue }
+            $skillsRelativePath = [System.IO.Path]::GetRelativePath(
+                $script:SkillsRoot,
+                $sourcePath)
+            $candidatePath = Join-Path $candidateSkillsRoot $skillsRelativePath
+            New-Item -ItemType Directory -Path (Split-Path $candidatePath -Parent) `
+                -Force | Out-Null
+            Copy-Item -LiteralPath $sourcePath -Destination $candidatePath
+        }
+
+        foreach ($sourceDirectory in (Get-ChildItem -LiteralPath $candidateSkillsRoot -Directory | Sort-Object Name)) {
             $skillPath = Join-Path $sourceDirectory.FullName 'SKILL.md'
             if (-not (Test-Path -LiteralPath $skillPath)) { continue }
 
             $installRoot = Join-Path $TestDrive $sourceDirectory.Name
             New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
-            $installNames = @($sourceDirectory.Name) + @(Get-RequiredSkillClosure $sourceDirectory.Name $script:SkillsRoot)
+            $installNames = @($sourceDirectory.Name) + @(
+                Get-RequiredSkillClosure $sourceDirectory.Name $candidateSkillsRoot)
             foreach ($installName in ($installNames | Sort-Object -Unique)) {
-                & gh skill install $script:RepoRoot $installName --from-local --dir $installRoot --agent github-copilot --force *> $null
+                $installSource = Join-Path $candidateSkillsRoot $installName
+                & gh skill install $installSource $installName --from-local --dir $installRoot --agent github-copilot --force *> $null
                 $LASTEXITCODE | Should -Be 0 -Because "$($sourceDirectory.Name) must install with declared requirement '$installName'"
             }
 
