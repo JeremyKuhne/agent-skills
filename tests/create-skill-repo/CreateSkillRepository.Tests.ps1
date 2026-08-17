@@ -7,6 +7,10 @@ BeforeAll {
         '.agents/skills/create-skill-repo/scripts/New-SkillRepository.ps1')
     $script:Decisions = Join-Path $script:RepoRoot (
         '.agents/skills/create-skill-repo/decisions.md')
+    $script:Skill = Join-Path $script:RepoRoot (
+        '.agents/skills/create-skill-repo/SKILL.md')
+    $script:Publishing = Join-Path $script:RepoRoot (
+        '.agents/skills/create-skill-repo/publishing.md')
 }
 
 Describe 'Decision interview' {
@@ -44,6 +48,16 @@ Describe 'Decision interview' {
         $content | Should -Match 'Use the recommended search order'
         $content | Should -Match 'Customize where skills are found'
         $content | Should -Match 'Do not expose a private source URL in public output'
+    }
+
+    It 'routes upstream-order questions and composes public checklists' {
+        $skill = Get-Content -LiteralPath $script:Skill -Raw
+        $publishing = Get-Content -LiteralPath $script:Publishing -Raw
+
+        $skill | Should -Match 'explain or choose an upstream search order for skills'
+        $skill | Should -Match 'Invoke `technical-writing` before drafting'
+        $publishing | Should -Match 'Invoke `technical-writing` before drafting the remote checklist'
+        $publishing | Should -Match '(?s)Reading writing guidance\s+is not an invocation'
     }
 }
 

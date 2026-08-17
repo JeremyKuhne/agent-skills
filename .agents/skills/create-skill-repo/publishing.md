@@ -5,9 +5,11 @@ validation pass. A local creation request does not authorize this phase.
 
 ## Prepare
 
-Run the required writing workflow in pre-publication mode over the exact
-repository description, README, governance text, commit message, and remote
-checklist. Re-run it when generated content or validation evidence changes.
+Invoke `technical-writing` before drafting the remote checklist, even when the
+user asks only to prepare commands and take no action. Reading writing guidance
+is not an invocation. Run its pre-publication mode over the exact repository
+description, README, governance text, commit message, and remote checklist.
+Re-run it when generated content or validation evidence changes.
 
 Present exact proposed actions for review:
 
