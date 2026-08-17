@@ -79,7 +79,7 @@ Describe 'Skill catalog contracts' {
             '.agents/skills/create-skill-repo/SKILL.md')
 
         Test-Path -LiteralPath $localWorkflow -PathType Leaf | Should -BeTrue
-        $readme | Should -Match 'How do I create my own\s+skill repository\?'
+        $readme | Should -Match 'If you want to create a skill repository'
         $readme | Should -Match '\]\(\.agents/skills/create-skill-repo/SKILL\.md\)'
         $readme | Should -Match 'intentionally absent from the \[shared skill\s+catalog\]'
         $catalog | Should -Not -Match 'create-skill-repo'

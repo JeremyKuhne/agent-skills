@@ -31,9 +31,8 @@ skill (`find` / `build` / `review` / `update` / `retire`).
 
 ## Creating your own skill repository
 
-If you are browsing this repository and wondering **"How do I create my own
-skill repository?"**, clone or open this repository in GitHub Copilot and ask
-that question. The repository-local
+If you want to create a skill repository, clone or open this repository in
+GitHub Copilot and ask that question. The repository-local
 [`create-skill-repo`](.agents/skills/create-skill-repo/SKILL.md) workflow will:
 
 1. explain how original skills are published and how other repositories use
@@ -50,8 +49,7 @@ or release requires separate approval.
 
 This workflow is intentionally absent from the [shared skill
 catalog](skills/README.md): it depends on this commons repository's templates
-and conventions and is not installed with the plugin. The link above remains
-available to people browsing this repository.
+and conventions and is not installed with the plugin.
 
 ## Consuming a skill
 
