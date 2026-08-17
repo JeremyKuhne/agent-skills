@@ -103,8 +103,11 @@ if (Test-Path -LiteralPath $voicePath -PathType Leaf) {
             Add-ProfileError 'missing-boundary' 'Schema version 2 requires profile-version.'
         }
         if ($profileSchemaVersion -eq '2') {
-            if ($voice -match '(?m)^- (?:installation|installation-status|active-runtime|installed-path|rollback-version):') {
-                Add-ProfileError 'volatile-lifecycle' 'Schema version 2 voice-profile.md cannot contain current installation, active-runtime, path, or rollback fields.'
+            if ($voice -match '(?m)^- (?:installation|installation-status|active-runtime|installed-path|rollback-version|profile-disposition|build-status):') {
+                Add-ProfileError 'volatile-lifecycle' 'Schema version 2 voice-profile.md cannot contain current build, installation, active-runtime, path, rollback, or disposition fields.'
+            }
+            if ($voice -match '(?im)^(?:#{1,6}\s*)?(?:approved, but not built, installed, or active|approved and ready to install|installed and checked|not installed|pending build|pending installation)\s*:?\s*$') {
+                Add-ProfileError 'volatile-lifecycle' 'Schema version 2 voice-profile.md cannot describe current build or installation state in profile prose.'
             }
             $ruleMatches = @([regex]::Matches(
                     $voice,

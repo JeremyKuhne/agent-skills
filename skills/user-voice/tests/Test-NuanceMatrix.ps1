@@ -64,6 +64,24 @@ try {
         '-File', (Join-Path $scripts 'Test-UserVoiceProfile.ps1'),
         '-ProfilePath', $volatileRuntime,
         '-AllowDraft')
+    $dispositionRuntime = Join-Path $testRoot 'disposition-runtime'
+    Copy-Item -LiteralPath $runtime -Destination $dispositionRuntime -Recurse
+    Add-Content -LiteralPath (Join-Path $dispositionRuntime 'references/voice-profile.md') `
+        -Value '- profile-disposition: approved-pending-build'
+    Invoke-RequiredFailure 'Volatile profile disposition' @(
+        '-NoProfile',
+        '-File', (Join-Path $scripts 'Test-UserVoiceProfile.ps1'),
+        '-ProfilePath', $dispositionRuntime,
+        '-AllowDraft')
+    $lifecycleProseRuntime = Join-Path $testRoot 'lifecycle-prose-runtime'
+    Copy-Item -LiteralPath $runtime -Destination $lifecycleProseRuntime -Recurse
+    Add-Content -LiteralPath (Join-Path $lifecycleProseRuntime 'references/voice-profile.md') `
+        -Value "`n## Current state`n`nApproved, but not built, installed, or active:`n"
+    Invoke-RequiredFailure 'Volatile lifecycle prose' @(
+        '-NoProfile',
+        '-File', (Join-Path $scripts 'Test-UserVoiceProfile.ps1'),
+        '-ProfilePath', $lifecycleProseRuntime,
+        '-AllowDraft')
     Invoke-RequiredSuccess 'Default matrix' @(
         '-NoProfile',
         '-File', (Join-Path $scripts 'Test-UserVoiceNuanceMatrix.ps1'),
