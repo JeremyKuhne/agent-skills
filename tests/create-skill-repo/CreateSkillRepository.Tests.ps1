@@ -136,8 +136,12 @@ Describe 'New-SkillRepository' {
             Should -Not -Throw
         $generatedTests = Invoke-Pester (Join-Path $root 'tests') -PassThru
         $generatedTests.FailedCount | Should -Be 0
-        { & (Join-Path $root 'tests/Invoke-PluginSmoke.ps1') } |
-            Should -Not -Throw
+        $pluginSmoke = Join-Path $root 'tests/Invoke-PluginSmoke.ps1'
+        if (Get-Command copilot -ErrorAction SilentlyContinue) {
+            { & $pluginSmoke } | Should -Not -Throw
+        } else {
+            { & $pluginSmoke } | Should -Throw '*Copilot CLI is required*'
+        }
     }
 
     It 'creates only the documented Claude runtime root for Claude-only consumers' {
@@ -270,7 +274,7 @@ exit 1
         }
         $oldPath = $env:PATH
         try {
-            $env:PATH = "$shimRoot;$oldPath"
+            $env:PATH = "$shimRoot$([IO.Path]::PathSeparator)$oldPath"
             & $script:Scaffold -Root $root -Name pending-skills `
                 -Description 'Pending skills.' -Role consumer `
                 -Infrastructure validated -Visibility local -Audience person `

@@ -414,6 +414,11 @@ $validateRuntimeCommands = @($runtimeTargets | ForEach-Object {
 $manageOverlayTargets = @($runtimeTargets | ForEach-Object {
     "- ``$($_.RelativePath)/manage-skills/overlay.md``"
 }) -join "`n"
+$marketplaceName = if ([string]::IsNullOrWhiteSpace($Owner)) {
+    ''
+} else {
+    "$($Owner.ToLowerInvariant())-$Name"
+}
 
 $tokens = @{
     NAME = $Name
@@ -442,7 +447,7 @@ $tokens = @{
     OWNER_JSON = ConvertTo-JsonScalar $Owner
     OWNER_URL_JSON = ConvertTo-JsonScalar $ownerUrl
     REPOSITORY_URL_JSON = ConvertTo-JsonScalar $repositoryUrl
-    MARKETPLACE_NAME_JSON = ConvertTo-JsonScalar "$($Owner.ToLowerInvariant())-$Name"
+    MARKETPLACE_NAME_JSON = ConvertTo-JsonScalar $marketplaceName
     PLUGIN_AGENTS = $pluginAgents
     PLUGIN_MCP = $pluginMcp
     PLUGIN_SMOKE_STEPS = $pluginSmokeSteps.TrimEnd()
