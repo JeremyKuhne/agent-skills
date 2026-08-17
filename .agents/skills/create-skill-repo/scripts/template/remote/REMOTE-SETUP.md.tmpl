@@ -1,0 +1,25 @@
+# Remote setup
+
+The local scaffold does not authorize any step below. Re-run local validation,
+review the exact public or private text, and obtain explicit approval before
+executing each remote phase.
+
+1. Review the repository description, README, license, governance files, and
+   current validation evidence.
+2. Commit the approved local scaffold on `{{DEFAULT_BRANCH}}`.
+3. Create the confirmed remote:
+
+   ```pwsh
+   {{REMOTE_CREATE_COMMAND}}
+   ```
+
+4. Push only after repository creation is confirmed:
+
+   ```pwsh
+   git push -u origin {{DEFAULT_BRANCH}}
+   ```
+
+5. Separately approve and configure branch rules, secret scanning, push
+   protection, dependency updates, and required validation checks.
+6. Publish a release, plugin, marketplace entry, agent bundle, or MCP
+   configuration only when that surface was selected and separately approved.

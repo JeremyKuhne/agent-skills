@@ -30,6 +30,15 @@ misses, and an overlay sentinel.
 require both the owning workflow and `technical-writing` to invoke while
 forbidding the remote action.
 
+`scenarios/create-skill-repo.json` contains seven scenarios for the
+repository-local bootstrap workflow. They cover novice-oriented role
+explanations, a name-derived sibling destination, question-first handling of an
+underspecified request, routing one-skill creation to `manage-skills`,
+local-only consumption language, the future effect of upstream search order,
+private-upstream containment, and the public remote-action boundary. The runner
+stages this skill under the fixture's `.agents/skills/`; it is not copied into
+the published plugin fixture.
+
 `scenarios/user-voice.json` covers eight direct behaviors: consent before
 source access, a manual copy/paste data handoff, public-destination refusal,
 untrusted report rejection, best-self tone filtering, third-party impersonation
@@ -87,7 +96,7 @@ Select another scenario document explicitly:
   -ReportOnly
 ```
 
-The runner loads one scenario document per invocation. Run all four documents
+The runner loads one scenario document per invocation. Run all five documents
 for a capability release that changes `technical-writing`, `user-voice`, its
 private-profile composition contract, or a publishing workflow.
 

@@ -29,6 +29,28 @@ back here (when plausible - upstreaming is never automatic), while a repo-specif
 tweak stays in that repo's overlay. The lifecycle is driven by the `manage-skills`
 skill (`find` / `build` / `review` / `update` / `retire`).
 
+## Creating your own skill repository
+
+If you want to create a skill repository, clone or open this repository in
+GitHub Copilot and ask that question. The repository-local
+[`create-skill-repo`](.agents/skills/create-skill-repo/SKILL.md) workflow will:
+
+1. explain how original skills are published and how other repositories use
+  version-pinned copies;
+2. ask what you want to author, consume, validate, and distribute in small,
+  plain-language batches;
+3. recommend a destination and starter configuration;
+4. show the complete proposed files and commands before writing; and
+5. scaffold and validate the new repository locally after you confirm it.
+
+Creating files locally does not publish anything. Creating a GitHub repository,
+pushing commits, applying settings, or publishing a plugin, marketplace entry,
+or release requires separate approval.
+
+This workflow is intentionally absent from the [shared skill
+catalog](skills/README.md): it depends on this commons repository's templates
+and conventions and is not installed with the plugin.
+
 ## Consuming a skill
 
 With the GitHub CLI (>= 2.90, needs `gh auth login`):
@@ -82,6 +104,7 @@ CI-tested Claude plugin-marketplace install.
 | `plugin.json` | GitHub Copilot CLI plugin manifest (skills + agents + MCP). |
 | `.github/plugin/marketplace.json` | Marketplace listing so the plugin is installable by name. |
 | `.mcp.json` | MCP servers the skills rely on (`microsoft-learn`, NuGet). |
+| `.agents/skills/create-skill-repo/` | Repository-local workflow for creating a separate Agent Skills repository; not part of the shared catalog or plugin. |
 | `FORMAT.md` | The skill file format authors follow when contributing a core. |
 | `RELEASING.md` | Shared SemVer, release gates, and immutable-tag procedure. |
 | `CONTRIBUTING.md` | How to author and validate a shared skill core. |

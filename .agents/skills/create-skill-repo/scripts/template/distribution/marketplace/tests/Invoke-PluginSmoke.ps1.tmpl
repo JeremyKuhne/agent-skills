@@ -1,0 +1,92 @@
+#Requires -Version 7.2
+[CmdletBinding()]
+param([string] $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+if (-not (Get-Command copilot -ErrorAction SilentlyContinue)) {
+    throw 'Copilot CLI is required for the plugin smoke test.'
+}
+
+$plugin = Get-Content (Join-Path $RepoRoot 'plugin.json') -Raw | ConvertFrom-Json
+$marketplace = Get-Content (
+    Join-Path $RepoRoot '.github/plugin/marketplace.json') -Raw | ConvertFrom-Json
+$marketplaceName = [string] $marketplace.name
+$pluginSpecification = "$($plugin.name)@$marketplaceName"
+$expectedSkills = if ($plugin.PSObject.Properties['skills']) {
+    @(Get-ChildItem (Join-Path $RepoRoot 'skills') -Filter 'SKILL.md' -File -Recurse).Count
+} else { 0 }
+$expectedAgents = if ($plugin.PSObject.Properties['agents']) {
+    @(Get-ChildItem (Join-Path $RepoRoot 'agents') -Filter '*.agent.md' -File).Count
+} else { 0 }
+$expectedMcpConfigs = if ($plugin.PSObject.Properties['mcpServers']) { 1 } else { 0 }
+
+$temporaryHome = Join-Path ([System.IO.Path]::GetTempPath()) (
+    "copilot-plugin-smoke-$([guid]::NewGuid().ToString('N'))")
+New-Item -ItemType Directory -Path $temporaryHome | Out-Null
+$environmentNames = @(
+    'HOME',
+    'USERPROFILE',
+    'APPDATA',
+    'LOCALAPPDATA',
+    'COPILOT_HOME',
+    'COPILOT_CACHE_HOME')
+$savedEnvironment = @{}
+foreach ($name in $environmentNames) {
+    $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
+
+try {
+    $env:HOME = $temporaryHome
+    $env:USERPROFILE = $temporaryHome
+    $env:APPDATA = Join-Path $temporaryHome 'AppData/Roaming'
+    $env:LOCALAPPDATA = Join-Path $temporaryHome 'AppData/Local'
+    $env:COPILOT_HOME = Join-Path $temporaryHome '.copilot'
+    $env:COPILOT_CACHE_HOME = Join-Path $temporaryHome 'cache'
+
+    $marketplaceOutput = & copilot plugin marketplace add $RepoRoot 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Marketplace registration failed:`n$marketplaceOutput"
+    }
+    $installOutput = & copilot plugin install $pluginSpecification 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Plugin install failed:`n$installOutput" }
+
+    $installedRoot = Join-Path $env:COPILOT_HOME (
+        "installed-plugins/$marketplaceName/$($plugin.name)")
+    if (-not (Test-Path $installedRoot -PathType Container)) {
+        throw "Installed plugin root not found: $installedRoot"
+    }
+    $installedSkills = @(
+        Get-ChildItem (Join-Path $installedRoot 'skills') `
+            -Filter 'SKILL.md' -File -Recurse -ErrorAction SilentlyContinue).Count
+    $installedAgents = @(
+        Get-ChildItem (Join-Path $installedRoot 'agents') `
+            -Filter '*.agent.md' -File -Recurse -ErrorAction SilentlyContinue).Count
+    $installedMcpConfigs = [int] (Test-Path (Join-Path $installedRoot '.mcp.json'))
+
+    if ($installedSkills -ne $expectedSkills) {
+        throw "Plugin installed $installedSkills skills; expected $expectedSkills."
+    }
+    if ($installedAgents -ne $expectedAgents) {
+        throw "Plugin installed $installedAgents agents; expected $expectedAgents."
+    }
+    if ($installedMcpConfigs -ne $expectedMcpConfigs) {
+        throw "Plugin installed $installedMcpConfigs MCP configs; expected $expectedMcpConfigs."
+    }
+    Write-Host (
+        "Plugin smoke passed: $installedSkills skills, $installedAgents agents, " +
+        "$installedMcpConfigs MCP configs.")
+} finally {
+    foreach ($name in $environmentNames) {
+        if ($null -eq $savedEnvironment[$name]) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+        } else {
+            [Environment]::SetEnvironmentVariable(
+                $name,
+                $savedEnvironment[$name],
+                'Process')
+        }
+    }
+    Remove-Item $temporaryHome -Recurse -Force -ErrorAction SilentlyContinue
+}

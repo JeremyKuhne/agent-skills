@@ -7,6 +7,7 @@ BeforeAll {
     $script:TechnicalWritingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/technical-writing.json'
     $script:PublishingWorkflowScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/publishing-workflows.json'
     $script:UserVoiceScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/user-voice.json'
+    $script:CreateSkillRepoScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/create-skill-repo.json'
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -16,7 +17,8 @@ Describe 'Skill evaluation scenario contract' {
         $technicalWritingScenarios = @(Get-SkillEvalScenarios -Path $script:TechnicalWritingScenarioPath)
         $publishingWorkflowScenarios = @(Get-SkillEvalScenarios -Path $script:PublishingWorkflowScenarioPath)
         $userVoiceScenarios = @(Get-SkillEvalScenarios -Path $script:UserVoiceScenarioPath)
-        $scenarios = @($createPrScenarios; $technicalWritingScenarios; $publishingWorkflowScenarios; $userVoiceScenarios)
+        $createSkillRepoScenarios = @(Get-SkillEvalScenarios -Path $script:CreateSkillRepoScenarioPath)
+        $scenarios = @($createPrScenarios; $technicalWritingScenarios; $publishingWorkflowScenarios; $userVoiceScenarios; $createSkillRepoScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -28,7 +30,15 @@ Describe 'Skill evaluation scenario contract' {
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
         $userVoiceScenarios.Count | Should -Be 8
         @($userVoiceScenarios | Where-Object skill -ne 'user-voice').Count | Should -Be 0
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 28
+        $createSkillRepoScenarios.Count | Should -Be 7
+        @($createSkillRepoScenarios | Where-Object skill -ne 'create-skill-repo').Count |
+            Should -Be 0
+        $createSkillRepoScenarios.id | Should -Contain 'create-one-skill-routes-to-manage-skills'
+        $createSkillRepoScenarios.id |
+            Should -Contain 'create-skill-repo-recommends-derived-location'
+        $createSkillRepoScenarios.id |
+            Should -Contain 'create-skill-repo-explains-upstream-order'
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 35
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
@@ -86,6 +96,29 @@ Describe 'Skill evaluation scenario contract' {
         Test-Path -LiteralPath (Join-Path $context.PluginDirectory 'skills/user-voice-profile') |
             Should -BeFalse
         $context.HasPersonalSkillFixture | Should -BeTrue
+    }
+
+    It 'stages a repository-local skill outside the plugin copy' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:CreateSkillRepoScenarioPath)[0]
+        $runDirectory = Join-Path $TestDrive 'project-skill-context'
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+
+        $context = & $module {
+            param($selectedScenario, $repoRoot, $evalRoot, $runRoot)
+            New-SkillEvalContext `
+                -Scenario $selectedScenario `
+                -RepoRoot $repoRoot `
+                -EvalRoot $evalRoot `
+                -RunDirectory $runRoot
+        } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals') $runDirectory
+
+        Test-Path -LiteralPath (
+            Join-Path $context.Workspace '.agents/skills/create-skill-repo/SKILL.md') `
+            -PathType Leaf | Should -BeTrue
+        Test-Path -LiteralPath (
+            Join-Path $context.PluginDirectory 'skills/create-skill-repo') |
+            Should -BeFalse
     }
 
     It 'rejects a personal fixture path outside the fixtures directory' {

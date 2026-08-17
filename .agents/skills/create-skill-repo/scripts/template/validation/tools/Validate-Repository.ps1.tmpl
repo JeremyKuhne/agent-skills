@@ -1,0 +1,16 @@
+#Requires -Version 7.2
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot -Parent
+$validator = Join-Path $PSScriptRoot 'Validate-Skills.ps1'
+{{VALIDATE_SOURCE}}
+{{VALIDATE_RUNTIME}}
+& (Join-Path $PSScriptRoot 'Update-SkillCatalog.ps1')
+& (Join-Path $PSScriptRoot 'Test-SkillLinks.ps1') -Root $root
+Push-Location -LiteralPath $root
+try {
+	& npx --yes markdownlint-cli2@0.23.2 --config .markdownlint.jsonc '**/*.md'
+	if ($LASTEXITCODE -ne 0) { throw 'Markdown lint failed.' }
+} finally {
+	Pop-Location
+}
+Write-Host 'Repository validation passed.'

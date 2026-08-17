@@ -1,0 +1,12 @@
+#Requires -Version 7.2
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+
+Describe 'Behavioral evaluation scenarios' {
+    It 'has uniquely named scenarios with prompts' {
+        $path = Join-Path $PSScriptRoot '../evals/scenarios/repository.json'
+        $document = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $scenarios = @($document.scenarios)
+        @($scenarios.id | Group-Object | Where-Object Count -gt 1).Count | Should -Be 0
+        @($scenarios | Where-Object { -not $_.id -or -not $_.prompt }).Count | Should -Be 0
+    }
+}

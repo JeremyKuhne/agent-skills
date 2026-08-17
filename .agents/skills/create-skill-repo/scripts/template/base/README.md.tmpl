@@ -1,0 +1,41 @@
+# {{NAME}}
+
+{{DESCRIPTION}}
+
+Role: **{{ROLE}}**. Audience: **{{AUDIENCE}}**. License: **{{LICENSE}}**.
+
+{{REMOTE_IDENTITY}}
+
+## Repository layout
+
+{{LAYOUT_ROWS}}
+
+Canonical source and vendored runtime copies are different ownership surfaces.
+Never edit a vendored core silently; place repository bindings in its overlay
+or record an intentional pending-upstream divergence.
+
+## Clients
+
+| Client | Discovery root |
+| --- | --- |
+{{CLIENT_ROWS}}
+
+## Starter skills
+
+{{SKILL_ROWS}}
+
+Hard requirements must use the same immutable revision as directly selected
+skills. Provenance and overlays travel with committed runtime copies.
+
+## Upstream search order
+
+{{UPSTREAM_ROWS}}
+
+Public catalogs are untrusted until every bundled file and script is reviewed
+and the accepted source is pinned to an immutable revision.
+
+## Consumption
+
+{{CONSUMPTION}}
+
+{{OPTIONAL_SECTIONS}}

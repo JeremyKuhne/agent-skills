@@ -1,0 +1,67 @@
+#Requires -Version 7.2
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+
+BeforeAll {
+    $script:Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+}
+
+Describe 'Skill repository contract' {
+    It 'has the selected {{ROLE}} role roots' {
+        $sourceExpected = '{{ROLE}}' -in @('source', 'hybrid')
+        (Test-Path (Join-Path $script:Root 'skills')) | Should -Be $sourceExpected
+        (Test-Path (Join-Path $script:Root '.agents/skills')) |
+            Should -Be {{EXPECT_SHARED_RUNTIME}}
+        (Test-Path (Join-Path $script:Root '.claude/skills')) |
+            Should -Be {{EXPECT_CLAUDE_RUNTIME}}
+    }
+
+    It 'contains no unresolved tokens in scaffold-owned files' {
+        $content = Get-ChildItem -LiteralPath $script:Root -File -Recurse |
+            Where-Object {
+                $relative = [System.IO.Path]::GetRelativePath(
+                    $script:Root,
+                    $_.FullName).Replace('\', '/')
+                $relative -notmatch '^(?:skills|\.agents/skills|\.claude/skills)/'
+            } |
+            Where-Object Extension -in @('.md', '.json', '.yml', '.ps1') |
+            ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }
+        $content -join "`n" | Should -Not -Match '\{\{[A-Z][A-Z_]+\}\}'
+    }
+
+    It 'records every selected runtime skill as installed or pending' {
+        $runtimeRoots = {{RUNTIME_ROOTS_PS}}
+        $skills = {{RESOLVED_SKILLS_PS}}
+        $pendingPath = Join-Path $script:Root 'PENDING-SKILL-INSTALLS.md'
+        $pending = if (Test-Path $pendingPath) {
+            Get-Content $pendingPath -Raw
+        } else { '' }
+
+        foreach ($runtimeRoot in $runtimeRoots) {
+            foreach ($skill in $skills) {
+                $skillPath = Join-Path $script:Root "$runtimeRoot/$skill/SKILL.md"
+                if (Test-Path $skillPath) {
+                    $content = Get-Content $skillPath -Raw
+                    $content |
+                        Should -Match '(?m)^\s+github-pinned:\s*\S'
+                    $requiresMatch = [regex]::Match(
+                        $content,
+                        '(?m)^\s+requires:\s*(?<value>[^\r\n]+)\r?$')
+                    if ($requiresMatch.Success -and
+                        $requiresMatch.Groups['value'].Value.Trim() -ne 'none') {
+                        foreach ($requiredSkill in (
+                                $requiresMatch.Groups['value'].Value -split ',' |
+                                ForEach-Object { $_.Trim() })) {
+                            $skills | Should -Contain $requiredSkill
+                            Test-Path (Join-Path $script:Root (
+                                    "$runtimeRoot/$requiredSkill/SKILL.md")) |
+                                Should -BeTrue
+                        }
+                    }
+                } else {
+                    $pending | Should -Match ([regex]::Escape($skill))
+                    $pending | Should -Match ([regex]::Escape($runtimeRoot))
+                }
+            }
+        }
+    }
+}

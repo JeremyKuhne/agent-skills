@@ -1,0 +1,16 @@
+#Requires -Version 7.2
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+
+Describe 'Plugin marketplace manifest' {
+    It 'matches plugin identity and version' {
+        $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+        $plugin = Get-Content (Join-Path $root 'plugin.json') -Raw | ConvertFrom-Json
+        $marketplace = Get-Content (
+            Join-Path $root '.github/plugin/marketplace.json') -Raw | ConvertFrom-Json
+        $entry = @($marketplace.plugins | Where-Object name -eq $plugin.name)
+        $entry.Count | Should -Be 1
+        $entry[0].version | Should -Be $plugin.version
+        $entry[0].source | Should -Be './'
+        $marketplace.metadata.version | Should -Be $plugin.version
+    }
+}

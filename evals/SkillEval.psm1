@@ -356,6 +356,12 @@ function New-SkillEvalContext {
     foreach ($component in @('plugin.json', '.mcp.json', 'skills', 'agents')) {
         Copy-Item -LiteralPath (Join-Path $RepoRoot $component) -Destination $pluginDirectory -Recurse
     }
+    $projectSkillSource = Join-Path $RepoRoot ".agents/skills/$($Scenario.skill)"
+    if (Test-Path -LiteralPath $projectSkillSource -PathType Container) {
+        $projectSkillsRoot = Join-Path $workspace '.agents/skills'
+        New-Item -ItemType Directory -Path $projectSkillsRoot -Force | Out-Null
+        Copy-Item -LiteralPath $projectSkillSource -Destination $projectSkillsRoot -Recurse
+    }
     if ($Scenario.PSObject.Properties['overlayPath'] -and -not [string]::IsNullOrWhiteSpace([string]$Scenario.overlayPath)) {
         $overlaySource = (Resolve-Path -LiteralPath (Join-Path $EvalRoot ([string]$Scenario.overlayPath))).Path
         $overlayTarget = Join-Path $pluginDirectory "skills/$($Scenario.skill)/overlay.md"
