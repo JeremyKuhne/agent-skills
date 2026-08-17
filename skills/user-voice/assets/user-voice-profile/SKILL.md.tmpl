@@ -5,7 +5,7 @@ license: Private personal material. Do not publish or redistribute.
 metadata:
   visibility: private
   risk: advisory
-  profile-schema-version: 1
+  profile-schema-version: 2
   integration-contract: technical-writing-user-voice-v1
 ---
 
@@ -21,11 +21,11 @@ or changing this skill.
 - Current task evidence supplies every fact, opinion, ownership statement,
   commitment, date, relationship, approval, and permission. The profile never
   supplies current content or authority.
-- Compose with `technical-writing`. Use its fact and authority ledger plus
-  output contract, then return one local candidate for its exact-candidate
-  grounding, comprehension, and tone gate.
+- Compose with `technical-writing`. Use the same verified facts, permission
+  limits, and requested output, then return one local draft for its final fact,
+  clarity, and tone check.
 - Do not invoke `technical-writing` again from inside profile composition. The
-  calling workflow already owns that pass; return the candidate to it.
+  calling workflow already owns that pass; return the draft to it.
 - This skill ends with local text. Never send, post, publish, commit, push,
   resolve, install, or perform another remote action.
 - Refuse third-party impersonation and stop when profile ownership is unclear.
@@ -38,7 +38,7 @@ or changing this skill.
 ## Modes
 
 - **Draft:** Build from verified current facts and explicit unknowns.
-- **Revise:** Preserve supported meaning, qualifiers, commitments, and scope.
+- **Revise:** Preserve supported meaning, qualifiers, commitments, and limits.
 - **Review:** Check grounding and authority before context fit and voice.
 
 For an unsupported context, use general `technical-writing` or ask one narrow,
@@ -47,13 +47,13 @@ for a guessed context.
 
 ## Workflow
 
-1. Confirm `profile-schema-version: 1` and
+1. Confirm `profile-schema-version: 2` and
    `integration-contract: technical-writing-user-voice-v1` in the profile. On
    mismatch, return to general writing and request an audit.
-2. Apply only approved rules whose scope matches the artifact, audience,
-   intent, and stakes.
+2. Apply only approved, active rules that match the kind of writing, audience,
+   purpose, and stakes.
 3. Keep the current fact and authority boundaries visible.
-4. Produce the smallest complete local artifact and return control to
+4. Produce the smallest complete local draft and return control to
    `technical-writing`.
-5. Treat user corrections as task-local unless the user explicitly requests a
-   durable profile update.
+5. Apply a user correction only to this request unless the user explicitly asks
+  to review it as a lasting profile change.

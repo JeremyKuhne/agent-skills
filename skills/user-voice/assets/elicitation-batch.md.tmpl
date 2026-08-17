@@ -1,0 +1,77 @@
+# User voice elicitation batch
+
+- batch-schema-version: 1
+- draft-profile-version: {{PROFILE_VERSION}}
+- batch-kind: preference
+- client-model-condition: {{CLIENT_MODEL_CONDITION}}
+- sealed-before-presentation: yes
+- raw-output-retention: transient-delete
+
+## case-001
+
+- case-kind: preference
+- nuance-context-id: {{CONTEXT_ID_1}}
+- draft-rule-id: {{RULE_ID_1}}
+- draft-profile-version: {{PROFILE_VERSION}}
+- controlled-contrast: {{CONTROLLED_CONTRAST_1}}
+- candidate-placement: a
+- order: a-first
+- option-a-contract-hash: {{CONTRACT_HASH_1}}
+- option-b-contract-hash: {{CONTRACT_HASH_1}}
+- option-a-hard-gates: passed
+- option-b-hard-gates: passed
+- exact-identity: not-applicable
+- manual-option: allowed
+- hard-gates: passed
+- profile-outcome: uncollected
+- attributed-nuance: uncollected
+- impact: high
+- state: sealed
+- result: uncollected
+- resolution: pending
+
+## case-002
+
+- case-kind: preference
+- nuance-context-id: {{CONTEXT_ID_2}}
+- draft-rule-id: {{RULE_ID_2}}
+- draft-profile-version: {{PROFILE_VERSION}}
+- controlled-contrast: {{CONTROLLED_CONTRAST_2}}
+- candidate-placement: b
+- order: b-first
+- option-a-contract-hash: {{CONTRACT_HASH_2}}
+- option-b-contract-hash: {{CONTRACT_HASH_2}}
+- option-a-hard-gates: passed
+- option-b-hard-gates: passed
+- exact-identity: not-applicable
+- manual-option: allowed
+- hard-gates: passed
+- profile-outcome: uncollected
+- attributed-nuance: uncollected
+- impact: high
+- state: sealed
+- result: uncollected
+- resolution: pending
+
+## case-003
+
+- case-kind: preference
+- nuance-context-id: {{CONTEXT_ID_3}}
+- draft-rule-id: {{RULE_ID_3}}
+- draft-profile-version: {{PROFILE_VERSION}}
+- controlled-contrast: {{CONTROLLED_CONTRAST_3}}
+- candidate-placement: a
+- order: b-first
+- option-a-contract-hash: {{CONTRACT_HASH_3}}
+- option-b-contract-hash: {{CONTRACT_HASH_3}}
+- option-a-hard-gates: passed
+- option-b-hard-gates: passed
+- exact-identity: not-applicable
+- manual-option: allowed
+- hard-gates: passed
+- profile-outcome: uncollected
+- attributed-nuance: uncollected
+- impact: high
+- state: sealed
+- result: uncollected
+- resolution: pending

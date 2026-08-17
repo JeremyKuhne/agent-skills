@@ -19,6 +19,9 @@ param(
     [Parameter(Mandatory)]
     [string] $ConsentExpiry,
 
+    [ValidateSet('1', '2')]
+    [string] $RequiredReportSchema,
+
     [string[]] $ForbiddenLiteral
 )
 
@@ -72,6 +75,7 @@ if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
 }
 
 $content = [System.IO.File]::ReadAllText($reportPath)
+$reportSchemaVersion = $null
 $expectedHeadings = @(
     '# User voice evidence report',
     '## Contract',
@@ -96,7 +100,7 @@ if ($null -eq $contractSection) {
 else {
     $contract = Get-ListFields $contractSection
     $expectedContract = [ordered]@{
-        schema_version = '1'
+        schema_version = $null
         report_id = $null
         consent_id = $ConsentId
         consent_schema = $ConsentSchema
@@ -112,7 +116,19 @@ else {
             Add-ReportError 'unexpected-field' "Contract field '$key' is missing."
             continue
         }
-        if ($key -eq 'report_id') {
+        if ($key -eq 'schema_version') {
+            if ($contract[$key] -notin @('1', '2')) {
+                Add-ReportError 'unexpected-field' 'schema_version must be 1 or 2.'
+            }
+            else {
+                $reportSchemaVersion = $contract[$key]
+                if ($RequiredReportSchema -and
+                    $reportSchemaVersion -cne $RequiredReportSchema) {
+                    Add-ReportError 'unexpected-field' "schema_version must be $RequiredReportSchema for this handoff."
+                }
+            }
+        }
+        elseif ($key -eq 'report_id') {
             if ($contract[$key] -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_-]{7,63}$') {
                 Add-ReportError 'unexpected-field' 'report_id must be an opaque 8-64 character identifier.'
             }
@@ -145,12 +161,27 @@ if ($null -eq $coverageSection) {
 }
 else {
     $coverage = Get-ListFields $coverageSection
-    Test-ExactFields $coverage @(
-        'source_classes',
-        'channels',
-        'audiences',
-        'era_bands',
-        'authorship_mix') 'Coverage'
+    $expectedCoverage = if ($reportSchemaVersion -eq '2') {
+        @(
+            'source_classes',
+            'channels',
+            'audiences',
+            'relationships',
+            'intents_and_stakes',
+            'lengths_and_formality',
+            'topics',
+            'era_bands',
+            'authorship_mix')
+    }
+    else {
+        @(
+            'source_classes',
+            'channels',
+            'audiences',
+            'era_bands',
+            'authorship_mix')
+    }
+    Test-ExactFields $coverage $expectedCoverage 'Coverage'
 }
 
 $rulesSection = Get-ReportSection 'Candidate rules'
@@ -185,7 +216,7 @@ else {
         }
         foreach ($countField in @('supporting_count_band', 'counterexample_count_band')) {
             if ($rule.ContainsKey($countField) -and
-                $rule[$countField] -notin @('1-2', '3-5', '6-10', '10+')) {
+                $rule[$countField] -notin @('none', '1-2', '3-5', '6-10', '10+')) {
                 Add-ReportError 'unexpected-field' "Candidate rule '$ruleId' has an unsupported $countField."
             }
         }
