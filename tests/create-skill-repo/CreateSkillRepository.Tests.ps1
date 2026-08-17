@@ -115,6 +115,13 @@ Describe 'New-SkillRepository' {
         Test-Path (Join-Path $root '.mcp.json') | Should -BeTrue
         Test-Path (Join-Path $root 'evals/scenarios/repository.json') | Should -BeTrue
 
+        $releaseWorkflow = Get-Content (
+            Join-Path $root '.github/workflows/release.yml') -Raw
+        $releaseWorkflow | Should -Match '(?m)^ {6}- name: Install Copilot CLI$'
+        $releaseWorkflow | Should -Match '(?m)^ {6}- name: Smoke-test plugin installation$'
+        $releaseWorkflow | Should -Match '(?m)^ {8}run: npm install --global @github/copilot@1\.0\.63$'
+        $releaseWorkflow | Should -Match '(?m)^ {8}run: \./tests/Invoke-PluginSmoke\.ps1$'
+
         $plugin = Get-Content (Join-Path $root 'plugin.json') -Raw | ConvertFrom-Json
         $marketplace = Get-Content (
             Join-Path $root '.github/plugin/marketplace.json') -Raw | ConvertFrom-Json

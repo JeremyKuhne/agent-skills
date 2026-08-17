@@ -400,13 +400,13 @@ $pluginMcp = if ($DistributionSurfaces -contains 'mcp') {
     ",`n  `"mcpServers`": `".mcp.json`""
 } else { '' }
 $pluginSmokeSteps = if ($DistributionSurfaces -contains 'marketplace') {
-        @'
-            - name: Install Copilot CLI
-                run: npm install --global @github/copilot@1.0.63
-            - name: Smoke-test plugin installation
-                shell: pwsh
-                run: ./tests/Invoke-PluginSmoke.ps1
-'@
+    @(
+        '      - name: Install Copilot CLI'
+        '        run: npm install --global @github/copilot@1.0.63'
+        '      - name: Smoke-test plugin installation'
+        '        shell: pwsh'
+        '        run: ./tests/Invoke-PluginSmoke.ps1'
+    ) -join "`n"
 } else { '' }
 $validateRuntimeCommands = @($runtimeTargets | ForEach-Object {
     "& `$validator (Join-Path `$root '$($_.RelativePath)')"
