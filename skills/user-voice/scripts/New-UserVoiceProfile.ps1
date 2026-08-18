@@ -152,6 +152,7 @@ try {
     }
     $canonicalVoice = Join-Path $staging 'voice-profile.md'
     Copy-Template (Join-Path $runtimeAssets 'voice-profile.md.tmpl') $canonicalVoice $tokens
+    Copy-Template (Join-Path $assets 'nuance-matrix.md.tmpl') (Join-Path $staging 'nuance-matrix.md') @{}
     Copy-Item -LiteralPath $canonicalVoice -Destination (Join-Path $references 'voice-profile.md')
     Copy-Template (Join-Path $runtimeAssets 'SKILL.md.tmpl') (Join-Path $runtime 'SKILL.md') @{}
     Copy-Template (Join-Path $runtimeAssets 'evaluations.md.tmpl') (Join-Path $references 'evaluations.md') @{}
@@ -167,12 +168,12 @@ try {
         [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText(
         (Join-Path $staging 'audit-results.md'),
-        "# Audit results`n`n- deterministic-package-check: not-run`n- semantic-privacy-review: not-run`n- user-read-back: not-approved`n",
+        "# Audit results`n`n- deterministic-package-check: not-run`n- source-confirmation-check: not-run`n- nuance-matrix-check: not-run`n- elicitation-high-impact-results: unresolved`n- transient-cleanup-check: not-run`n- section-review: not-approved`n- release-review: not-run`n- semantic-privacy-review: not-run`n- user-read-back: not-approved`n",
         [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText(
         (Join-Path $staging '.user-voice-maintenance.json'),
         ([ordered]@{
-                schemaVersion = 1
+            schemaVersion = 2
                 runtimeDirectory = 'user-voice-profile'
                 profileStatus = 'draft-unapproved'
             } | ConvertTo-Json) + "`n",
@@ -187,6 +188,8 @@ try {
         New-Item -ItemType Directory -Path $privateTools | Out-Null
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UserVoiceRepository.ps1') -Destination $privateTools
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UserVoiceProfile.ps1') -Destination $privateTools
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UserVoiceNuanceMatrix.ps1') -Destination $privateTools
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UserVoiceTransientCleanup.ps1') -Destination $privateTools
     }
 
     $pwsh = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
@@ -194,6 +197,10 @@ try {
         -ProfilePath $runtime `
         -AllowDraft
     if ($LASTEXITCODE -ne 0) { throw 'The generated runtime candidate failed validation.' }
+    & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-UserVoiceNuanceMatrix.ps1') `
+        -Path (Join-Path $staging 'nuance-matrix.md') `
+        -ProfilePath $canonicalVoice
+    if ($LASTEXITCODE -ne 0) { throw 'The generated nuance matrix failed validation.' }
 
     if ($PSCmdlet.ShouldProcess($target, 'Create private user voice maintenance root')) {
         if (Test-Path -LiteralPath $target) {

@@ -13,7 +13,7 @@
       "requiredSkillInvocations": ["technical-writing"],
       "allowedTools": ["read"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?i)(?:14 tests passed|14 passed)"],
+      "requiredResponsePatterns": ["(?i)(?:14 tests passed|14 passed|passed 14 tests)"],
       "forbiddenResponsePatterns": ["(?i)thread (?:was |is )?resolved", "(?i)reply (?:was |is )?posted"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^git commit(?: |$)", "(?m)^git push(?: |$)", "(?m)^gh api(?: |$)"],

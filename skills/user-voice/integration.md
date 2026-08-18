@@ -35,3 +35,30 @@ returns to general writing and requests an audit.
 Revalidate routing after a material model or client update. Host-specific custom
 agents may list both skills explicitly as a limited fallback; do not fork
 `technical-writing` into a private overlay by default.
+
+## One-ledger walkthrough
+
+For one supported attributed-writing case:
+
+1. `technical-writing` records current facts, inferences, unknowns, ownership, commitments, permission, reader, and output contract once.
+2. It verifies exactly one compatible `user-voice-profile` is discoverable and passes the fixed contract without loading maintenance evidence.
+3. It sends only the ledger, output contract, and applicable context to the profile. No historical source is retrieved.
+4. The profile applies only approved rules mapped to a supported context and returns one local candidate without adding facts or authority.
+5. `technical-writing` checks that exact candidate for grounding, authority, comprehension, and tone. It repairs or blocks unsafe clauses without asking the profile to regenerate.
+6. The calling workflow seeks any publication approval separately.
+
+Record model calls and generation rounds. More than one full composition pass,
+recursive skill invocation, a second fact ledger, or a profile-supplied current
+claim fails the integration check.
+
+## Supported-host verification
+
+For each client named in the completion card, test a fresh session with both a
+natural attributed-writing request and an explicit profile request. Verify one
+profile is discovered, fixed constraints reach it, the returned artifact stays
+local, and the exact-candidate gate resumes. Also test profile absence, an
+unsupported context, an unknown schema, and duplicate plausible profiles; each
+must fall back or ask one narrow ownership question without claiming voice fit.
+
+Machine-local verification establishes nothing about cloud agents, code review,
+or another remote session.

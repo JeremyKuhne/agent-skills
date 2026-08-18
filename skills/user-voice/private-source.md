@@ -27,11 +27,20 @@ Prepare and audit locally. Hand repository creation and push to `manage-skills`:
 4. Inspect owner, remotes, collaborators, applications, Actions, Pages,
    releases, packages, and forking policy. Disable unused surfaces where the
    account permits.
-5. Obtain a new push approval naming destination, branch, staged file manifest
-   and hashes, commit message and author, and push command.
-6. Before every push, run the repository scanner directly and verify the
+5. Before asking to commit, explain in plain language what behavior changes,
+   which kinds of writing become ready or remain off, what evidence supports
+   the change, any material loss or unresolved gap, and what the commit does
+   not authorize. Then link the exact staged manifest and hashes, name the
+   author, message, and command, and obtain approval for that local commit only.
+   A file list, hash table, version label, or command is audit detail; none is a
+   useful substitute for the change explanation.
+6. After the commit, obtain a separate push approval naming the private
+   destination, branch, exact commit, and push command. Explain that pushing
+   copies the reviewed private history to that destination and identify any
+   exposure boundary that changes. Commit approval never authorizes a push.
+7. Before every push, run the repository scanner directly and verify the
    reviewed pre-push hook is enabled, present, executable, and self-tested.
-7. Re-query visibility before every later push, install, update, export, or
+8. Re-query visibility before every later push, install, update, export, or
    migration. Cached private state is not evidence.
 
 The workflow must refuse public, internal, wrong-owner, or unverifiable
@@ -64,3 +73,45 @@ Retirement inventories canonical source, registered roots, copied installs,
 aliases, backups, and every host first. Remove only approved targets, verify
 absence through each host, and apply the user's retention decision to the
 private maintenance root.
+
+## Move to another machine
+
+Generate a private, reviewed guide from
+[assets/setup-windows.md.tmpl](assets/setup-windows.md.tmpl) or
+[assets/setup-posix.md.tmpl](assets/setup-posix.md.tmpl). Resolve every token;
+do not store a generated guide in the public core. Name the client, source
+method, exact checked source version, sign-in boundary, installer with privacy
+and rollback checks, actual install folder, check command, and reload step.
+
+Use `scripts/New-UserVoiceSetupGuide.ps1` to resolve the selected template. The
+generator accepts only a full commit for private GitHub or a reviewed manifest
+SHA-256 for local transfer, emits commands for review, and performs no clone,
+copy, authentication, installation, or remote action.
+
+Support only:
+
+- cloning a currently verified private GitHub source at the exact checked version; or
+- a user-approved secure local transfer with a reviewed manifest and hashes.
+
+The destination machine repeats source visibility, repository scan, installer,
+manifest, hash, and host-discovery checks. Authentication occurs in the
+provider's own interface; never place credentials in the guide. A local install
+does not reach cloud agents, code review, or another remote session.
+
+## Record the finished version
+
+Record the draft, reviewed main copy, installed copy, and rollback versions plus
+the exact source and installed file lists. Replace the active copy only after
+the exact draft is approved and installation is separately authorized.
+Verify one active profile after replacement. A rollback restores the last
+verified package; it never activates legacy and current profiles together.
+
+After an approved install or rollback, run
+`scripts/Test-UserVoiceInstallation.ps1` against the reviewed source and
+installed directories with every applicable discovery root and
+`-RequireSingleActiveProfile`. Manifest, hash, runtime validation, or duplicate
+discovery failure blocks completion.
+
+Report the user-facing profile version and next review trigger. Keep schema IDs,
+commit hashes, and filesystem detail in advanced audit output unless they change
+the user's decision.

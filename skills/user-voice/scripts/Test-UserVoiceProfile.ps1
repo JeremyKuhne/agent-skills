@@ -7,6 +7,8 @@ param(
 
     [switch] $AllowDraft,
 
+    [string] $VoiceProfileOverridePath,
+
     [string[]] $ForbiddenLiteral
 )
 
@@ -24,6 +26,15 @@ if (-not (Test-Path -LiteralPath $profileRoot -PathType Container)) {
     throw "The profile directory does not exist: '$ProfilePath'."
 }
 $profileRoot = (Resolve-Path -LiteralPath $profileRoot).Path
+$voiceProfileOverride = $null
+if ($VoiceProfileOverridePath) {
+    $voiceProfileOverride = $ExecutionContext.SessionState.Path.
+        GetUnresolvedProviderPathFromPSPath($VoiceProfileOverridePath)
+    if (-not (Test-Path -LiteralPath $voiceProfileOverride -PathType Leaf)) {
+        throw "The voice profile override does not exist: '$VoiceProfileOverridePath'."
+    }
+    $voiceProfileOverride = (Resolve-Path -LiteralPath $voiceProfileOverride).Path
+}
 
 $expectedFiles = @(
     'INSTALL.md',
@@ -52,6 +63,8 @@ foreach ($item in (Get-ChildItem -LiteralPath $profileRoot -Recurse -Force)) {
 
 $skillPath = Join-Path $profileRoot 'SKILL.md'
 $voicePath = Join-Path $profileRoot 'references/voice-profile.md'
+$skillSchemaVersion = $null
+$profileSchemaVersion = $null
 if (Test-Path -LiteralPath $skillPath -PathType Leaf) {
     $skill = [System.IO.File]::ReadAllText($skillPath)
     if ($skill -notmatch '(?m)^name:\s*user-voice-profile\s*$') {
@@ -60,8 +73,19 @@ if (Test-Path -LiteralPath $skillPath -PathType Leaf) {
     if ($skill -notmatch '(?m)^description:.*current user') {
         Add-ProfileError 'discovery-metadata' 'The runtime description must be generic and current-user scoped.'
     }
+    $skillSchemaMatch = [regex]::Match(
+        $skill,
+        '(?m)^\s*profile-schema-version:\s*(?<version>[0-9]+)\s*$')
+    if (-not $skillSchemaMatch.Success) {
+        Add-ProfileError 'missing-boundary' 'SKILL.md is missing profile-schema-version.'
+    }
+    else {
+        $skillSchemaVersion = $skillSchemaMatch.Groups['version'].Value
+        if ($skillSchemaVersion -notin @('1', '2')) {
+            Add-ProfileError 'unsupported-schema' "SKILL.md uses unsupported profile schema '$skillSchemaVersion'."
+        }
+    }
     foreach ($requiredText in @(
-            'profile-schema-version: 1',
             'integration-contract: technical-writing-user-voice-v1',
             'Compose with `technical-writing`',
             'This skill ends with local text',
@@ -73,9 +97,57 @@ if (Test-Path -LiteralPath $skillPath -PathType Leaf) {
 }
 
 if (Test-Path -LiteralPath $voicePath -PathType Leaf) {
-    $voice = [System.IO.File]::ReadAllText($voicePath)
+    $voice = [System.IO.File]::ReadAllText($(if ($voiceProfileOverride) {
+                $voiceProfileOverride
+            }
+            else { $voicePath }))
+    $profileSchemaMatch = [regex]::Match(
+        $voice,
+        '(?m)^- profile-schema-version:\s*(?<version>[0-9]+)\s*$')
+    if (-not $profileSchemaMatch.Success) {
+        Add-ProfileError 'missing-boundary' 'voice-profile.md is missing profile-schema-version.'
+    }
+    else {
+        $profileSchemaVersion = $profileSchemaMatch.Groups['version'].Value
+        if ($profileSchemaVersion -notin @('1', '2')) {
+            Add-ProfileError 'unsupported-schema' "voice-profile.md uses unsupported profile schema '$profileSchemaVersion'."
+        }
+        elseif ($profileSchemaVersion -eq '2' -and
+            $voice -notmatch '(?m)^- profile-version:\s*\S+\s*$') {
+            Add-ProfileError 'missing-boundary' 'Schema version 2 requires profile-version.'
+        }
+        if ($profileSchemaVersion -eq '2') {
+            if ($voice -match '(?m)^- (?:installation|installation-status|active-runtime|installed-path|rollback-version|profile-disposition|build-status):') {
+                Add-ProfileError 'volatile-lifecycle' 'Schema version 2 voice-profile.md cannot contain current build, installation, active-runtime, path, rollback, or disposition fields.'
+            }
+            if ($voice -match '(?im)^(?:#{1,6}\s*)?(?:approved, but not built, installed, or active|approved and ready to install|installed and checked|not installed|pending build|pending installation)\s*:?\s*$') {
+                Add-ProfileError 'volatile-lifecycle' 'Schema version 2 voice-profile.md cannot describe current build or installation state in profile prose.'
+            }
+            $ruleMatches = @([regex]::Matches(
+                    $voice,
+                    '(?ms)^### (?<id>rule-[0-9]{3})\r?\n(?<body>.*?)(?=^### |^## |\z)'))
+            foreach ($ruleMatch in $ruleMatches) {
+                $ruleId = $ruleMatch.Groups['id'].Value
+                $ruleBody = $ruleMatch.Groups['body'].Value
+                $runtimeMatch = [regex]::Match(
+                    $ruleBody,
+                    '(?m)^- runtime-status:\s*(?<value>\S+)\s*$')
+                $approvalMatch = [regex]::Match(
+                    $ruleBody,
+                    '(?m)^- user-approved:\s*(?<value>\S+)\s*$')
+                if (-not $runtimeMatch.Success -or
+                    $runtimeMatch.Groups['value'].Value -notin @('inactive', 'active')) {
+                    Add-ProfileError 'invalid-rule' "Schema version 2 rule '$ruleId' requires runtime-status inactive or active."
+                }
+                elseif ($runtimeMatch.Groups['value'].Value -eq 'active' -and
+                    (-not $approvalMatch.Success -or
+                        $approvalMatch.Groups['value'].Value -ne 'yes')) {
+                    Add-ProfileError 'invalid-rule' "Active rule '$ruleId' must be user approved."
+                }
+            }
+        }
+    }
     foreach ($requiredText in @(
-            'profile-schema-version: 1',
             'integration-contract: technical-writing-user-voice-v1',
             'This profile shapes form only')) {
         if (-not $voice.Contains($requiredText, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -87,8 +159,19 @@ if (Test-Path -LiteralPath $voicePath -PathType Leaf) {
     }
 }
 
+if ($null -ne $skillSchemaVersion -and
+    $null -ne $profileSchemaVersion -and
+    $skillSchemaVersion -cne $profileSchemaVersion) {
+    Add-ProfileError 'schema-mismatch' 'SKILL.md and voice-profile.md use different profile schema versions.'
+}
+
 $allText = @($actualFiles | ForEach-Object {
-        [System.IO.File]::ReadAllText((Join-Path $profileRoot $_))
+        if ($_ -ceq 'references/voice-profile.md' -and $voiceProfileOverride) {
+            [System.IO.File]::ReadAllText($voiceProfileOverride)
+        }
+        else {
+            [System.IO.File]::ReadAllText((Join-Path $profileRoot $_))
+        }
     }) -join "`n"
 $checks = @(
     @{ Category = 'private-identifier'; Pattern = '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'; Message = 'Email addresses are not allowed.' },

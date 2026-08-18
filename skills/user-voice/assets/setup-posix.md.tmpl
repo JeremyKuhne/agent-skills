@@ -1,0 +1,38 @@
+# Private user voice setup for POSIX
+
+- Client: {{CLIENT}}
+- Source method: {{SOURCE_METHOD}}
+- Checked source version: {{SOURCE_REVISION}}
+- Install location: {{TARGET_DESCRIPTION}}
+
+## What stays private
+
+This guide installs one private profile for the named local client. It does not
+make the profile available to cloud agents, code review, or remote sessions. Do
+not place credentials in this guide, shell history, or an agent conversation.
+
+## Get and check the source
+
+{{SOURCE_STEPS}}
+
+## Install
+
+From a trusted shell with PowerShell 7, run the reviewed installer with its
+privacy and rollback checks:
+
+```bash
+pwsh '{{INSTALLER_PATH}}' \
+  -SourceSkillPath '{{RUNTIME_PATH}}' \
+  -TargetHost '{{TARGET_HOST}}' \
+  -Private
+```
+
+Use `-Force` only after reviewing the exact replacement diff and obtaining a
+separate install approval.
+
+## Check the installation
+
+{{VERIFY_STEPS}}
+
+Compare the source and installed file lists and each SHA-256 hash. Reload the
+named client, then verify that a fresh session finds one `user-voice-profile`.

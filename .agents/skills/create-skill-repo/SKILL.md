@@ -1,6 +1,6 @@
 ---
 name: create-skill-repo
-description: Create or scaffold a new repository for authoring, vendoring, validating, and distributing Agent Skills. Use when asked to "create a skill repo", "create a skills repository", "set up a team skill commons", or initialize a local, private, or public repository whose primary product is Agent Skills. Guides repository identity, location, role, clients, starter skill sets, upstream sources, infrastructure, distribution, and publication decisions. For creating one skill inside an existing repository, use the skill-lifecycle workflow instead.
+description: Create or scaffold a new repository for authoring, vendoring, validating, and distributing Agent Skills. Use when asked to "create a skill repo", "create a skills repository", "set up a team skill commons", explain or choose an upstream search order for skills, or initialize a local, private, or public repository whose primary product is Agent Skills. Guides repository identity, location, role, clients, starter skill sets, upstream sources, infrastructure, distribution, and publication decisions. For creating one skill inside an existing repository, use the skill-lifecycle workflow instead.
 license: MIT
 compatibility: Local scaffolding requires PowerShell 7.2 and git. Validated tiers use Node.js with npx for pinned Markdown lint and Pester 5 or later. Vendoring uses GitHub CLI 2.90 or later; remote publication requires authenticated gh.
 metadata:
@@ -40,9 +40,10 @@ hybrid, vendoring, and distribution only with their practical meaning.
    required writing workflow over the generated README after technical facts
    stabilize.
 5. If private or public GitHub publication was selected, follow
-   [publishing.md](publishing.md). Show exact actions and obtain separate
-   approval before creating a remote, committing, pushing, applying settings,
-   or publishing a release or marketplace entry.
+  [publishing.md](publishing.md). Invoke `technical-writing` before drafting
+  the remote checklist; reading its guidance is not an invocation. Show exact
+  actions and obtain separate approval before creating a remote, committing,
+  pushing, applying settings, or publishing a release or marketplace entry.
 
 ## Boundaries
 

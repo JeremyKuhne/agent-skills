@@ -31,3 +31,16 @@ jobs:
           ./.private-voice/Test-UserVoiceProfile.ps1
           -ProfilePath ./user-voice-profile
           -AllowDraft
+
+      - name: Audit private nuance matrix
+        shell: pwsh
+        run: >-
+          ./.private-voice/Test-UserVoiceNuanceMatrix.ps1
+          -Path ./nuance-matrix.md
+          -ProfilePath ./voice-profile.md
+
+      - name: Verify transient cleanup
+        shell: pwsh
+        run: >-
+          ./.private-voice/Test-UserVoiceTransientCleanup.ps1
+          -MaintenanceRoot .

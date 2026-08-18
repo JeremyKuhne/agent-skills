@@ -41,6 +41,10 @@ BeforeAll {
             SOURCE_CLASSES = 'published writing and sent correspondence'
             CHANNELS = 'technical discussion and professional correspondence'
             AUDIENCES = 'expert peer and broad technical audience'
+            RELATIONSHIPS = 'peer review and maintainer discussion'
+            INTENTS_AND_STAKES = 'technical correction with moderate stakes'
+            LENGTHS_AND_FORMALITY = 'short and medium-form professional writing'
+            TOPICS = 'software design and maintenance'
             ERA_BANDS = 'earlier baseline and recent human-only'
             AUTHORSHIP_MIX = 'human-only and labeled assisted'
             ABSTRACT_WRITING_DECISION = 'Lead with the controlling constraint.'
@@ -95,26 +99,58 @@ Describe 'User voice package assets' {
             'SKILL.md',
             'audit.md',
             'capture.md',
+            'completion.md',
+            'discovery.md',
+            'elicitation.md',
             'handoff.md',
             'integration.md',
+            'interaction.md',
             'migration.md',
+            'nuance-analysis.md',
             'private-source.md',
             'profile-schema.md',
             'assets/data-gathering-handoff.md.tmpl',
+            'assets/elicitation-batch.md.tmpl',
             'assets/evidence-report.md.tmpl',
+            'assets/examples/rights-reviewed-fixtures.md',
+            'assets/nuance-matrix.md.tmpl',
             'assets/private-source-repository/gitignore.tmpl',
             'assets/private-source-repository/pre-push.tmpl',
             'assets/private-source-repository/private-voice-audit.yml.tmpl',
+            'assets/setup-posix.md.tmpl',
+            'assets/setup-windows.md.tmpl',
+            'assets/source-capability.md.tmpl',
+            'assets/three-way-comparison.md.tmpl',
             'assets/user-voice-profile/INSTALL.md.tmpl',
             'assets/user-voice-profile/SKILL.md.tmpl',
             'assets/user-voice-profile/evaluations.md.tmpl',
             'assets/user-voice-profile/voice-profile.md.tmpl',
+            'scripts/Convert-UserVoiceEvidenceReport.ps1',
+            'scripts/New-UserVoiceCompletionCard.ps1',
             'scripts/New-UserVoiceMigration.ps1',
             'scripts/New-UserVoiceProfile.ps1',
+            'scripts/New-UserVoiceSetupGuide.ps1',
             'scripts/Build-UserVoiceProfile.ps1',
+            'scripts/Test-UserVoiceElicitationBatch.ps1',
             'scripts/Test-UserVoiceEvidenceReport.ps1',
+            'scripts/Test-UserVoiceInstallation.ps1',
+            'scripts/Test-UserVoiceNuanceMatrix.ps1',
             'scripts/Test-UserVoiceProfile.ps1',
-            'scripts/Test-UserVoiceRepository.ps1')
+            'scripts/Test-UserVoiceRepository.ps1',
+            'scripts/Test-UserVoiceSourceCapability.ps1',
+            'scripts/Test-UserVoiceTargetedAnalysis.ps1',
+            'scripts/Test-UserVoiceThreeWayComparison.ps1',
+            'scripts/Test-UserVoiceTransientCleanup.ps1',
+            'tests/Run-Tests.ps1',
+            'tests/Test-Elicitation.ps1',
+            'tests/Test-EvidenceTransport.ps1',
+            'tests/Test-LifecycleOutputs.ps1',
+            'tests/Test-NuanceMatrix.ps1',
+            'tests/Test-RepositoryPath.ps1',
+            'tests/Test-SourceCapability.ps1',
+            'tests/Test-TargetedAnalysis.ps1',
+            'tests/Test-ThreeWayComparison.ps1',
+            'tests/Test-WorkflowContracts.ps1')
         $actual = @(Get-ChildItem -LiteralPath $script:SkillRoot -File -Recurse |
             ForEach-Object {
                 [System.IO.Path]::GetRelativePath($script:SkillRoot, $_.FullName).
@@ -132,6 +168,18 @@ Describe 'User voice package assets' {
         $privateWorkflow | Should -Match 'GH_TOKEN:\s*\$\{\{ github\.token \}\}'
         $privateWorkflow | Should -Match 'Test-UserVoiceRepository\.ps1[\s\S]*-RequirePrivateGitHub[\s\S]*-ScanHistory'
         $privateWorkflow | Should -Match 'Test-UserVoiceProfile\.ps1[\s\S]*-ProfilePath ./user-voice-profile'
+        $privateWorkflow | Should -Match 'Test-UserVoiceNuanceMatrix\.ps1[\s\S]*-Path ./nuance-matrix\.md'
+        $privateWorkflow | Should -Match 'Test-UserVoiceTransientCleanup\.ps1[\s\S]*-MaintenanceRoot \.'
+    }
+}
+
+Describe 'Portable workflow acceptance suite' {
+    It 'passes every bundled behavior contract' {
+        $runner = Join-Path $script:SkillRoot 'tests/Run-Tests.ps1'
+        $result = Invoke-UserVoiceScript -Script $runner
+
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        $result.Output | Should -Match 'OK user voice workflow tests: 9'
     }
 }
 
@@ -294,6 +342,12 @@ Describe 'Private profile scaffolding' {
         $audit = Get-Content -LiteralPath $auditPath -Raw
         $audit = $audit.
             Replace('deterministic-package-check: not-run', 'deterministic-package-check: passed').
+            Replace('source-confirmation-check: not-run', 'source-confirmation-check: passed').
+            Replace('nuance-matrix-check: not-run', 'nuance-matrix-check: passed').
+            Replace('elicitation-high-impact-results: unresolved', 'elicitation-high-impact-results: resolved').
+            Replace('transient-cleanup-check: not-run', 'transient-cleanup-check: passed').
+            Replace('section-review: not-approved', 'section-review: approved').
+            Replace('release-review: not-run', 'release-review: passed').
             Replace('semantic-privacy-review: not-run', 'semantic-privacy-review: passed').
             Replace('user-read-back: not-approved', 'user-read-back: approved')
         Write-Utf8File $auditPath $audit

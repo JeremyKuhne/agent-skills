@@ -1,13 +1,18 @@
-You are collecting de-identified evidence for a private user voice profile.
+You are finding writing samples and returning a privacy-protected summary for a
+private user voice profile.
 Do not create or install a skill. Do not return source text.
 
-The current user approved this bounded source-analysis handoff.
+The current user approved the limits below.
 
-## Authorized source scope
+## What you may read
 
 - Source classes: {{SOURCE_CLASSES}}
 - Time or era bands: {{ERA_BANDS}}
-- Channels and audiences: {{CHANNELS_AND_AUDIENCES}}
+- Channels and kinds of writing: {{CHANNELS_AND_ARTIFACTS}}
+- Audiences and relationships: {{AUDIENCES_AND_RELATIONSHIPS}}
+- Purposes and stakes: {{INTENTS_AND_STAKES}}
+- Lengths and formality: {{LENGTHS_AND_FORMALITY}}
+- Topic categories: {{TOPIC_CATEGORIES}}
 - Excluded sources or topics: {{EXCLUSIONS}}
 - Raw model-provider access approved: {{PROVIDER_ACCESS}}
 - Consent ID: {{CONSENT_ID}}
@@ -15,35 +20,60 @@ The current user approved this bounded source-analysis handoff.
 - Analysis provider: {{ANALYSIS_PROVIDER}}
 - Analysis host: {{ANALYSIS_HOST}}
 - Consent expiry: {{CONSENT_EXPIRY}}
-- Retention: transient analysis only
+- What may be kept: temporary reading only
 
 If provider access is `no`, stop before reading raw material. If it is `yes`,
 state the provider disclosure and ask for one final confirmation before access.
 
-## Analysis task
+## First: find and confirm samples
 
-1. Inspect only material authored by the current user inside the authorized
-   source scope.
+1. State exactly which authorized categories this client and account can and
+   cannot inspect. Do not guess access.
+2. Search only accessible approved categories and propose a short sample set
+   balanced across channel, kind of writing, audience, relationship, purpose,
+   stakes, length, formality, topic, and era.
+3. Show enough local context for recognition without copying source into a new
+   file. Ask the user to confirm that they wrote it, who it was for, whether it
+   represents how they want to write now, and whether another person, a
+   template, translation, or AI materially shaped it.
+4. Stop and wait for confirmation of each sample. Do not analyze rejected or
+   unconfirmed material.
+
+## Second: analyze confirmed samples
+
+1. Inspect only confirmed material authored by the current user inside the
+   approved limits.
 2. Remove headers, addresses, quoted replies, signatures, templates, logs,
    collaborator text, attachments, and accidental formatting.
-3. Compare the user across channels, audiences, intents, topics, and eras.
-4. Separate durable voice, context register, mechanics, desired evolution,
-   current content, authority, and accidental signal.
-5. Prefer user-selected exemplars and revision pairs over ordinary history.
-6. Identify counterevidence, unsupported contexts, and possible AI influence.
+3. Compare the writing across channels, kinds of writing, audiences,
+   relationships, purposes, stakes, lengths, formality, topics, and time ranges.
+4. Separate lasting writing choices, differences by situation, structure and
+   punctuation, desired changes, current content and authority, and accidental
+   habits.
+5. Prefer user-selected examples and revision pairs over ordinary history.
+6. Identify examples that do not fit, uses without enough evidence, and
+   possible AI influence.
 7. Exclude blame, sarcasm, rhetorical pressure, ambiguous force, and other tone
-   hazards from candidate rules. Preserve only their legitimate substance.
-8. Create no export or persistent raw-text note. Delete transient extracts
+   problems from proposed rules. Preserve only their useful substance.
+8. Create no export or saved raw-text note. Delete temporary extracts
    after analysis.
 
-If you cannot enforce the authorized scope with your tools, stop and return a
+If you cannot stay within the approved limits with your tools, stop and return a
 report whose `Recommended follow-up` section states that limitation. Do not
 widen the source search.
 
 ## Return contract
 
-Return only raw Markdown, with no code fence or prose before or after it. Use
-exactly these top-level headings:
+Return transport: {{RETURN_TRANSPORT}}
+
+For `raw-markdown` or `attachment`, return only the report with no code fence or
+prose before or after it. For `m365`, place the report between exactly one pair
+of these markers on separate lines:
+
+USER-VOICE-REPORT-BEGIN
+USER-VOICE-REPORT-END
+
+The report uses exactly these top-level headings:
 
 # User voice evidence report
 ## Contract
@@ -58,7 +88,7 @@ exactly these top-level headings:
 
 Under `Contract`, include exactly:
 
-- `schema_version: 1`
+- `schema_version: 2`
 - `report_id:` a new opaque identifier
 - `consent_id: {{CONSENT_ID}}`
 - `consent_schema: {{CONSENT_SCHEMA}}`
@@ -72,6 +102,10 @@ Under `Contract`, include exactly:
 For each candidate rule, include a rule ID, claim, scope, evidence class,
 confidence, supporting count band, counterexample count band, and observable
 check. Use only `1-2`, `3-5`, `6-10`, or `10+` count bands.
+
+Under `Coverage`, include exactly `source_classes`, `channels`, `audiences`,
+`relationships`, `intents_and_stakes`, `lengths_and_formality`, `topics`,
+`era_bands`, and `authorship_mix` using broad categories and count bands only.
 
 Never include names, addresses, usernames, organizations, customers, projects,
 repositories, products, code names, message subjects, exact dates, source

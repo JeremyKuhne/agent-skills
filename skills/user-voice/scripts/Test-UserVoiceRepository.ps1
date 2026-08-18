@@ -67,7 +67,9 @@ if ($null -eq $git) { throw 'Git is required to audit a voice source repository.
 
 $gitRoot = @(& $git.Source -C $root rev-parse --show-toplevel 2>$null)
 $isGitRepository = $LASTEXITCODE -eq 0 -and $gitRoot.Count -gt 0
-if ($isGitRepository) { $root = [string]$gitRoot[0] }
+if ($isGitRepository) {
+    $root = [System.IO.Path]::GetFullPath([string] $gitRoot[0])
+}
 elseif ($RequirePrivateGitHub -or $ScanHistory -or $RequirePrePushHook) {
     Add-RepositoryError 'not-git' 'A Git repository is required for the requested checks.'
 }
