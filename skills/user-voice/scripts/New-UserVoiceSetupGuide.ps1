@@ -47,8 +47,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Assert-SafeValue([string] $value, [string] $name) {
+    $unsafeCharacters = [char[]] @(
+        [char] 0,
+        [char] 10,
+        [char] 13,
+        [char] 39,
+        [char] 96)
     if ([string]::IsNullOrWhiteSpace($value) -or
-        $value -match "[\r\n`0'`]" ) {
+        $value.IndexOfAny($unsafeCharacters) -ge 0) {
         throw "$name contains an unsupported character or is empty."
     }
 }
@@ -90,6 +96,7 @@ $templatePath = Join-Path $assets $(if ($Platform -eq 'Windows') {
     }
     else { 'setup-posix.md.tmpl' })
 $template = [System.IO.File]::ReadAllText($templatePath)
+$markdownFence = '```'
 
 if ($SourceMethod -eq 'PrivateGitHub') {
     $sourceOwner = ($SourceLocation -split '/', 2)[0]
@@ -105,16 +112,16 @@ if ($SourceMethod -eq 'PrivateGitHub') {
 2. Verify the repository is owned as expected and reports exactly `PRIVATE`.
 3. Clone and detach at the reviewed commit:
 
-```pwsh
+${markdownFence}pwsh
 gh repo view '$SourceLocation' --json visibility,owner,name
 gh repo clone '$SourceLocation' '$DestinationRoot'
 git -C '$DestinationRoot' checkout --detach '$SourceRevision'
-```
+$markdownFence
 4. Scan the checked source and all reachable history before installing:
 
-```pwsh
+${markdownFence}pwsh
 pwsh '$repositoryVerifier' -RepositoryPath '$DestinationRoot' -RequirePrivateGitHub -ScanHistory -ExpectedOwner '$sourceOwner'
-```
+$markdownFence
 "@
     }
     else {
@@ -123,16 +130,16 @@ pwsh '$repositoryVerifier' -RepositoryPath '$DestinationRoot' -RequirePrivateGit
 2. Verify the repository is owned as expected and reports exactly `PRIVATE`.
 3. Clone and detach at the reviewed commit:
 
-```bash
+${markdownFence}bash
 gh repo view '$SourceLocation' --json visibility,owner,name
 gh repo clone '$SourceLocation' '$DestinationRoot'
 git -C '$DestinationRoot' checkout --detach '$SourceRevision'
-```
+$markdownFence
 4. Scan the checked source and all reachable history before installing:
 
-```bash
+${markdownFence}bash
 pwsh '$repositoryVerifier' -RepositoryPath '$DestinationRoot' -RequirePrivateGitHub -ScanHistory -ExpectedOwner '$sourceOwner'
-```
+$markdownFence
 "@
     }
 }
@@ -155,13 +162,13 @@ $verifySteps = if ($Platform -eq 'Windows') {
 @"
 Run the exact source/install and duplicate-profile check:
 
-```pwsh
+${markdownFence}pwsh
 pwsh '$VerifierPath' `
   -SourcePath '$RuntimePath' `
   -InstalledPath '$InstalledPath' `
     -DiscoveryRoot '$discoveryRoot' `
   -RequireSingleActiveProfile
-```
+$markdownFence
 
 Reload `$Client`, start a fresh session, and verify natural and explicit attributed-writing requests both use one profile and return local text only.
 "@
@@ -170,13 +177,13 @@ else {
 @"
 Run the exact source/install and duplicate-profile check:
 
-```bash
+${markdownFence}bash
 pwsh '$VerifierPath' \
   -SourcePath '$RuntimePath' \
   -InstalledPath '$InstalledPath' \
     -DiscoveryRoot '$discoveryRoot' \
   -RequireSingleActiveProfile
-```
+$markdownFence
 
 Reload `$Client`, start a fresh session, and verify natural and explicit attributed-writing requests both use one profile and return local text only.
 "@

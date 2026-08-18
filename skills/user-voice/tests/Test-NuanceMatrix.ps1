@@ -230,6 +230,11 @@ try {
         '-File', (Join-Path $scripts 'Build-UserVoiceProfile.ps1'),
         '-MaintenanceRoot', $maintenanceRoot,
         '-WhatIf')
+    $buildScriptText = [System.IO.File]::ReadAllText(
+        (Join-Path $scripts 'Build-UserVoiceProfile.ps1'))
+    if ($buildScriptText.Contains('-WhatIf:$false', [System.StringComparison]::Ordinal)) {
+        throw 'The build script bypasses WhatIf for a file operation.'
+    }
     $runtimeProfileAfterPreflight = [System.IO.File]::ReadAllText(
         (Join-Path $runtime 'references/voice-profile.md'))
     if ($runtimeProfileAfterPreflight -cne $runtimeProfileBeforePreflight) {
@@ -244,6 +249,32 @@ try {
             Where-Object { $_.Name -like '.user-voice-profile.build-*' }).Count -gt 0) {
         throw 'The preflight retained a staging directory.'
     }
+    [System.IO.File]::WriteAllText(
+        $canonicalProfile,
+        $profileText + "`nhttps://example.invalid/private-source`n",
+        [System.Text.UTF8Encoding]::new($false))
+    Invoke-RequiredFailure 'Schema 2 prospective profile validation' @(
+        '-NoProfile',
+        '-File', (Join-Path $scripts 'Build-UserVoiceProfile.ps1'),
+        '-MaintenanceRoot', $maintenanceRoot,
+        '-WhatIf')
+    [System.IO.File]::WriteAllText(
+        $canonicalProfile,
+        $profileText,
+        [System.Text.UTF8Encoding]::new($false))
+    $approvedAudit = [System.IO.File]::ReadAllText(
+        (Join-Path $maintenanceRoot 'audit-results.md'))
+    Add-Content -LiteralPath (Join-Path $maintenanceRoot 'audit-results.md') `
+        -Value '- deterministic-package-check: duplicate'
+    Invoke-RequiredFailure 'Duplicate package-check field' @(
+        '-NoProfile',
+        '-File', (Join-Path $scripts 'Build-UserVoiceProfile.ps1'),
+        '-MaintenanceRoot', $maintenanceRoot,
+        '-WhatIf')
+    [System.IO.File]::WriteAllText(
+        (Join-Path $maintenanceRoot 'audit-results.md'),
+        $approvedAudit,
+        [System.Text.UTF8Encoding]::new($false))
     Invoke-RequiredSuccess 'Schema 2 build' @(
         '-NoProfile',
         '-File', (Join-Path $scripts 'Build-UserVoiceProfile.ps1'),

@@ -25,6 +25,19 @@ function Invoke-RequiredFailure([string] $name, [string[]] $arguments) {
 
 try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
+    $setupGuideScript = Join-Path $scripts 'New-UserVoiceSetupGuide.ps1'
+    $lfSource = [System.IO.File]::ReadAllText($setupGuideScript).
+        Replace("`r`n", "`n")
+    $tokens = $null
+    $parseErrors = $null
+    $null = [System.Management.Automation.Language.Parser]::ParseInput(
+        $lfSource,
+        [ref] $tokens,
+        [ref] $parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        throw "Setup guide script fails LF parsing: $($parseErrors.Message -join '; ')"
+    }
+
     $maintenanceRoot = Join-Path $testRoot 'maintenance'
     $null = Invoke-RequiredSuccess 'Generate maintenance root' @(
         '-NoProfile',
@@ -238,6 +251,48 @@ try {
         '-RuntimePath', (Join-Path $maintenanceRoot 'user-voice-profile'),
         '-InstalledPath', $installed,
         '-OutputPath', (Join-Path $testRoot 'invalid-guide.md'))
+
+    $unsafeClients = @(
+        "line`nbreak",
+        "quote'client",
+        'back`tick')
+    for ($index = 0; $index -lt $unsafeClients.Count; $index++) {
+        Invoke-RequiredFailure "Unsafe setup-guide value $index" @(
+            '-NoProfile',
+            '-File', (Join-Path $scripts 'New-UserVoiceSetupGuide.ps1'),
+            '-Platform', 'Posix',
+            '-SourceMethod', 'LocalTransfer',
+            '-Client', $unsafeClients[$index],
+            '-SourceRevision', ('b' * 64),
+            '-SourceLocation', '/private/transfer',
+            '-DestinationRoot', '/private/source',
+            '-InstallerPath', '/private/Install-UserSkill.ps1',
+            '-VerifierPath', '/private/Test-UserVoiceInstallation.ps1',
+            '-RuntimePath', '/private/source/user-voice-profile',
+            '-InstalledPath', '/private/home/user-voice-profile',
+            '-OutputPath', (Join-Path $testRoot "unsafe-guide-$index.md"))
+    }
+    foreach ($unsafeClient in @("carriage`rreturn", [string] [char] 0)) {
+        $rejected = $false
+        try {
+            & (Join-Path $scripts 'New-UserVoiceSetupGuide.ps1') `
+                -Platform Posix `
+                -SourceMethod LocalTransfer `
+                -Client $unsafeClient `
+                -SourceRevision ('b' * 64) `
+                -SourceLocation '/private/transfer' `
+                -DestinationRoot '/private/source' `
+                -InstallerPath '/private/Install-UserSkill.ps1' `
+                -VerifierPath '/private/Test-UserVoiceInstallation.ps1' `
+                -RuntimePath '/private/source/user-voice-profile' `
+                -InstalledPath '/private/home/user-voice-profile' `
+                -OutputPath (Join-Path $testRoot 'unsafe-direct-guide.md')
+        }
+        catch { $rejected = $true }
+        if (-not $rejected) {
+            throw 'The setup guide accepted a CR or NUL character.'
+        }
+    }
 
     Write-Host 'OK lifecycle output acceptance tests'
 }

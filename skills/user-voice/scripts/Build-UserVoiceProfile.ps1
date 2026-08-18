@@ -51,6 +51,12 @@ foreach ($requirement in @(
     )) {
     Assert-Text $auditPath $requirement.Pattern $requirement.Message
 }
+$packageCheckCount = [regex]::Matches(
+    [System.IO.File]::ReadAllText($auditPath),
+    '(?m)^- deterministic-package-check:\s*[^\r\n]+\r?$').Count
+if ($packageCheckCount -ne 1) {
+    throw 'The audit must contain exactly one deterministic-package-check field.'
+}
 
 $canonicalProfile = Join-Path $root 'voice-profile.md'
 Assert-Text $canonicalProfile '(?m)^- profile-status:\s*approved\s*$' 'The canonical profile is not approved.'
@@ -97,58 +103,67 @@ $parent = Split-Path -Parent $runtime
 $name = Split-Path -Leaf $runtime
 $staging = Join-Path $parent ".$name.build-$([guid]::NewGuid().ToString('N'))"
 $backup = Join-Path $parent ".$name.backup-$([guid]::NewGuid().ToString('N'))"
+$pwsh = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
+$profileValidator = Join-Path $PSScriptRoot 'Test-UserVoiceProfile.ps1'
 
-try {
-    Copy-Item -LiteralPath $runtime -Destination $staging -Recurse -WhatIf:$false
-    [System.IO.File]::WriteAllText(
-        (Join-Path $staging 'references/voice-profile.md'),
-        [System.IO.File]::ReadAllText($canonicalProfile).TrimEnd("`r", "`n") + "`n",
-        [System.Text.UTF8Encoding]::new($false))
-
-    $pwsh = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
-    & $pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Test-UserVoiceProfile.ps1') `
-        -ProfilePath $staging
+if ($WhatIfPreference) {
+    & $pwsh -NoProfile -File $profileValidator `
+        -ProfilePath $runtime `
+        -VoiceProfileOverridePath $canonicalProfile
     if ($LASTEXITCODE -ne 0) { throw 'The built runtime profile failed validation.' }
+    $null = $PSCmdlet.ShouldProcess($runtime, 'Replace runtime profile with approved build')
+}
+else {
+    try {
+        Copy-Item -LiteralPath $runtime -Destination $staging -Recurse
+        [System.IO.File]::WriteAllText(
+            (Join-Path $staging 'references/voice-profile.md'),
+            [System.IO.File]::ReadAllText($canonicalProfile).TrimEnd("`r", "`n") + "`n",
+            [System.Text.UTF8Encoding]::new($false))
 
-    if ($PSCmdlet.ShouldProcess($runtime, 'Replace runtime profile with approved build')) {
-        $auditContent = [System.IO.File]::ReadAllText($auditPath)
-        if ($auditContent -notmatch '(?m)^- deterministic-package-check:\s*[^\r\n]+$') {
-            throw 'The audit is missing deterministic-package-check.'
+        & $pwsh -NoProfile -File $profileValidator -ProfilePath $staging
+        if ($LASTEXITCODE -ne 0) { throw 'The built runtime profile failed validation.' }
+
+        if ($PSCmdlet.ShouldProcess($runtime, 'Replace runtime profile with approved build')) {
+            $auditContent = [System.IO.File]::ReadAllText($auditPath)
+            if ($auditContent -notmatch '(?m)^- deterministic-package-check:\s*[^\r\n]+\r?$') {
+                throw 'The audit is missing deterministic-package-check.'
+            }
+            $updatedAuditContent = [regex]::Replace(
+                $auditContent,
+                '(?m)^- deterministic-package-check:\s*[^\r\n]+\r?$',
+                '- deterministic-package-check: passed')
+            Move-Item -LiteralPath $runtime -Destination $backup
+            try {
+                Move-Item -LiteralPath $staging -Destination $runtime
+                [System.IO.File]::WriteAllText(
+                    $auditPath,
+                    $updatedAuditContent,
+                    [System.Text.UTF8Encoding]::new($false))
+                Remove-Item -LiteralPath $backup -Recurse -Force
+            }
+            catch {
+                [System.IO.File]::WriteAllText(
+                    $auditPath,
+                    $auditContent,
+                    [System.Text.UTF8Encoding]::new($false))
+                if (Test-Path -LiteralPath $runtime) {
+                    Remove-Item -LiteralPath $runtime -Recurse -Force
+                }
+                if (Test-Path -LiteralPath $backup) {
+                    Move-Item -LiteralPath $backup -Destination $runtime
+                }
+                throw
+            }
         }
-        $updatedAuditContent = [regex]::Replace(
-            $auditContent,
-            '(?m)^- deterministic-package-check:\s*[^\r\n]+$',
-            '- deterministic-package-check: passed')
-        Move-Item -LiteralPath $runtime -Destination $backup
-        try {
-            Move-Item -LiteralPath $staging -Destination $runtime
-            [System.IO.File]::WriteAllText(
-                $auditPath,
-                $updatedAuditContent,
-                [System.Text.UTF8Encoding]::new($false))
+    }
+    finally {
+        if (Test-Path -LiteralPath $staging) {
+            Remove-Item -LiteralPath $staging -Recurse -Force
+        }
+        if (Test-Path -LiteralPath $backup) {
             Remove-Item -LiteralPath $backup -Recurse -Force
         }
-        catch {
-            [System.IO.File]::WriteAllText(
-                $auditPath,
-                $auditContent,
-                [System.Text.UTF8Encoding]::new($false))
-            if (Test-Path -LiteralPath $runtime) {
-                Remove-Item -LiteralPath $runtime -Recurse -Force
-            }
-            if (Test-Path -LiteralPath $backup) {
-                Move-Item -LiteralPath $backup -Destination $runtime
-            }
-            throw
-        }
-    }
-}
-finally {
-    if (Test-Path -LiteralPath $staging) {
-        Remove-Item -LiteralPath $staging -Recurse -Force -WhatIf:$false
-    }
-    if (Test-Path -LiteralPath $backup) {
-        Remove-Item -LiteralPath $backup -Recurse -Force -WhatIf:$false
     }
 }
 

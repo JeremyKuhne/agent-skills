@@ -7,6 +7,8 @@ param(
 
     [switch] $AllowDraft,
 
+    [string] $VoiceProfileOverridePath,
+
     [string[]] $ForbiddenLiteral
 )
 
@@ -24,6 +26,15 @@ if (-not (Test-Path -LiteralPath $profileRoot -PathType Container)) {
     throw "The profile directory does not exist: '$ProfilePath'."
 }
 $profileRoot = (Resolve-Path -LiteralPath $profileRoot).Path
+$voiceProfileOverride = $null
+if ($VoiceProfileOverridePath) {
+    $voiceProfileOverride = $ExecutionContext.SessionState.Path.
+        GetUnresolvedProviderPathFromPSPath($VoiceProfileOverridePath)
+    if (-not (Test-Path -LiteralPath $voiceProfileOverride -PathType Leaf)) {
+        throw "The voice profile override does not exist: '$VoiceProfileOverridePath'."
+    }
+    $voiceProfileOverride = (Resolve-Path -LiteralPath $voiceProfileOverride).Path
+}
 
 $expectedFiles = @(
     'INSTALL.md',
@@ -86,7 +97,10 @@ if (Test-Path -LiteralPath $skillPath -PathType Leaf) {
 }
 
 if (Test-Path -LiteralPath $voicePath -PathType Leaf) {
-    $voice = [System.IO.File]::ReadAllText($voicePath)
+    $voice = [System.IO.File]::ReadAllText($(if ($voiceProfileOverride) {
+                $voiceProfileOverride
+            }
+            else { $voicePath }))
     $profileSchemaMatch = [regex]::Match(
         $voice,
         '(?m)^- profile-schema-version:\s*(?<version>[0-9]+)\s*$')
@@ -152,7 +166,12 @@ if ($null -ne $skillSchemaVersion -and
 }
 
 $allText = @($actualFiles | ForEach-Object {
-        [System.IO.File]::ReadAllText((Join-Path $profileRoot $_))
+        if ($_ -ceq 'references/voice-profile.md' -and $voiceProfileOverride) {
+            [System.IO.File]::ReadAllText($voiceProfileOverride)
+        }
+        else {
+            [System.IO.File]::ReadAllText((Join-Path $profileRoot $_))
+        }
     }) -join "`n"
 $checks = @(
     @{ Category = 'private-identifier'; Pattern = '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b'; Message = 'Email addresses are not allowed.' },
