@@ -10,7 +10,7 @@ param(
     [int] $RunCount = 0,
     [ValidateRange(1, 60)]
     [int] $TimeoutMinutes = 5,
-    [switch] $IsolateCopilotHome,
+    [switch] $IsolateCopilotHome = $true,
     [switch] $ReportOnly
 )
 
