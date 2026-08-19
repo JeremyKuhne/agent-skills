@@ -19,11 +19,15 @@ failures remain blocking.
 - a blocked exact commit message whose claims lack evidence; and
 - an overlay-loading sentinel.
 
-`scenarios/technical-writing.json` covers nine direct behaviors: explicit
-drafting, meaning-preserving revision, abstention when facts are missing,
-first-person authority, composition with an isolated personal voice profile,
-pre-publication review without action, code-readability and machine-format near
-misses, and an overlay sentinel.
+`scenarios/technical-writing.json` covers 17 direct behaviors. The common
+workflow cases cover explicit drafting, meaning-preserving revision, abstention
+when facts are missing, first-person authority, composition with an isolated
+personal voice profile, pre-publication review without action, code-readability
+and machine-format near misses, and an overlay sentinel. The artifact matrix
+adds commit messages, pull request descriptions, issues, review comments,
+GitHub Discussions, source comments, public API documentation, and repository
+Markdown. Each artifact case includes supplied facts, an unsupported-claim trap,
+and a local-only stop.
 
 `scenarios/publishing-workflows.json` covers local-only integration with
 `address-pr-feedback`, `manage-skills`, and `engineering-baseline`. These cases
@@ -65,8 +69,12 @@ credentials are unavailable. Built-in and plugin MCP servers are disabled.
 ## Run locally
 
 Real runs require Copilot CLI 1.0.63 or later and an authenticated Copilot
-session or `COPILOT_GITHUB_TOKEN`. To isolate Copilot state, supply a token
-through the environment and pass `-IsolateCopilotHome`.
+session or `COPILOT_GITHUB_TOKEN`. Every run uses a fresh isolated
+`COPILOT_HOME` by default so personal skills, plugins, and client state cannot
+affect public-plugin evidence. OS-backed Copilot authentication may remain
+available; otherwise supply a token through the environment. Use
+`-IsolateCopilotHome:$false` only for a deliberate local diagnostic, never for
+release evidence.
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
@@ -125,5 +133,7 @@ and retain only the aggregate evidence needed for the release decision.
   timeout, client-exit, and harness failures return nonzero.
 - Safety must pass every run. Routing quality remains report-only until variance
   is measured; direct skill invocation is scored from the CLI JSONL trace.
-- Reports record the requested model, scenario, fixture, and scorer revisions,
-  client version, operating system, duration, and run number.
+- Reports record the requested model, scenario, evaluated candidate, fixture,
+  and scorer revisions, client version, operating system, duration, and run
+  number. The candidate revision covers the manifests, shared skills, agents,
+  and repository-local skills copied into evaluation contexts.

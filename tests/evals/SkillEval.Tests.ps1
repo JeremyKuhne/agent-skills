@@ -23,9 +23,20 @@ Describe 'Skill evaluation scenario contract' {
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
         $createPrScenarios.id | Should -Contain 'create-pr-normalizes-remote-markdown'
-        $technicalWritingScenarios.Count | Should -Be 9
+        $technicalWritingScenarios.Count | Should -Be 17
         @($technicalWritingScenarios | Where-Object skill -ne 'technical-writing').Count | Should -Be 0
         $technicalWritingScenarios.id | Should -Contain 'technical-writing-personal-profile-composition'
+        foreach ($artifactScenario in @(
+                'technical-writing-artifact-commit-message',
+                'technical-writing-artifact-pull-request',
+                'technical-writing-artifact-issue',
+                'technical-writing-artifact-review-comment',
+                'technical-writing-artifact-discussion',
+                'technical-writing-artifact-source-comment',
+                'technical-writing-artifact-api-documentation',
+                'technical-writing-artifact-repository-documentation')) {
+            $technicalWritingScenarios.id | Should -Contain $artifactScenario
+        }
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
         $userVoiceScenarios.Count | Should -Be 8
@@ -38,7 +49,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'create-skill-repo-recommends-derived-location'
         $createSkillRepoScenarios.id |
             Should -Contain 'create-skill-repo-explains-upstream-order'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 35
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 43
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
@@ -504,6 +515,49 @@ Describe 'Skill evaluation exit policy' {
 }
 
 Describe 'Skill evaluation runner' {
+    It 'rejects candidate inputs changed during a suite' {
+        $candidateRoot = Join-Path $TestDrive 'mutable-candidate'
+        New-Item -ItemType Directory -Path @(
+            $candidateRoot,
+            (Join-Path $candidateRoot 'skills'),
+            (Join-Path $candidateRoot 'agents'),
+            (Join-Path $candidateRoot '.agents/skills')) | Out-Null
+        Set-Content -LiteralPath (Join-Path $candidateRoot 'plugin.json') `
+            -Value '{"version":"before"}'
+        Set-Content -LiteralPath (Join-Path $candidateRoot '.mcp.json') `
+            -Value '{}'
+        $env:SKILL_EVAL_MUTATION_TARGET = Join-Path $candidateRoot 'plugin.json'
+        $executor = {
+            param($invocation)
+
+            Set-Content -LiteralPath $env:SKILL_EVAL_MUTATION_TARGET `
+                -Value '{"version":"after"}'
+            Set-Content -LiteralPath $invocation.ShimLogPath -Value @()
+            return [pscustomobject]@{
+                ExitCode = 0
+                StandardOutput = '{"type":"assistant.message","data":{"content":"Investigating; first affected build is unknown.","toolRequests":[{"name":"skill","arguments":{"skill":"technical-writing"}}]}}'
+                StandardError = ''
+                Transcript = 'Investigating; first affected build is unknown.'
+            }
+        }
+
+        try {
+            {
+                Invoke-SkillEvalSuite `
+                    -RepoRoot $candidateRoot `
+                    -ScenarioPath $script:TechnicalWritingScenarioPath `
+                    -OutputDirectory (Join-Path $TestDrive 'mutable-results') `
+                    -Model fake-model `
+                    -ScenarioId technical-writing-routing-explicit-draft `
+                    -RunCount 1 `
+                    -Executor $executor
+            } | Should -Throw '*candidate inputs changed*'
+        }
+        finally {
+            Remove-Item Env:SKILL_EVAL_MUTATION_TARGET -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'runs isolated copies through an injected deterministic executor' {
         $outputDirectory = Join-Path $TestDrive 'results'
         $executor = {
@@ -511,6 +565,8 @@ Describe 'Skill evaluation runner' {
 
             $modelIndex = [Array]::IndexOf($invocation.Arguments, '--model')
             $invocation.Arguments[$modelIndex + 1] | Should -Be 'fake-model'
+            $invocation.IsolateCopilotHome | Should -BeTrue
+            $invocation.CopilotHome | Should -BeLike '*copilot-home'
             Set-Content -LiteralPath $invocation.ShimLogPath -Value @(
                 'git remote -v',
                 'git rev-parse --abbrev-ref HEAD',
@@ -542,11 +598,14 @@ Describe 'Skill evaluation runner' {
         $summary.InfrastructureFailureCount | Should -Be 0
         $summary.CopilotVersion | Should -Be 'fake-executor'
         $summary.ScenarioRevision | Should -Match '^[0-9A-F]{64}$'
+        $summary.CandidateRevision | Should -Match '^[0-9A-F]{64}$'
         $summary.FixtureRevision | Should -Match '^[0-9A-F]{64}$'
         $summary.ScorerRevision | Should -Match '^[0-9A-F]{64}$'
         @($summary.Runs | Where-Object DurationMilliseconds -lt 0).Count | Should -Be 0
         Test-Path -LiteralPath (Join-Path $outputDirectory 'summary.json') | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $outputDirectory 'summary.md') | Should -BeTrue
+        (Get-Content -LiteralPath (Join-Path $outputDirectory 'summary.md') -Raw) |
+            Should -Match ([regex]::Escape($summary.CandidateRevision))
         $summary.Runs[0].RunDirectory | Should -Not -Be $summary.Runs[1].RunDirectory
     }
 }

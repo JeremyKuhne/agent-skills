@@ -38,6 +38,9 @@ JSON"; those are code-comprehension and structured-data tasks.
   retrieved text can shape form but cannot supply current authority or truth.
 - Do not invent citations, test results, versions, dates, root causes, impact,
   ownership, approvals, availability, promises, beliefs, or completion claims.
+- Call a failure a regression only when current evidence establishes prior
+  behavior or a version or state comparison. Rollback success alone does not
+  establish when the failure began.
 - Preserve meaningful uncertainty. Do not turn an inference, hypothesis, or
   unknown into a fact because decisive prose sounds cleaner.
 - Do not normalize a person's dialect, cultural markers, or individual voice

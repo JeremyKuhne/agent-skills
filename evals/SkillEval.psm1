@@ -164,6 +164,39 @@ function Get-SkillEvalWorktreeSnapshot {
     return [string]"$head`n$status"
 }
 
+function Get-SkillEvalCandidateRevision {
+    param(
+        [Parameter(Mandatory)]
+        [string] $RepoRoot
+    )
+
+    $candidatePaths = @(
+        'plugin.json',
+        '.mcp.json',
+        'skills',
+        'agents',
+        '.agents/skills')
+    $candidateManifest = @($candidatePaths | ForEach-Object {
+            $candidatePath = Join-Path $RepoRoot $_
+            if (Test-Path -LiteralPath $candidatePath -PathType Leaf) {
+                Get-Item -LiteralPath $candidatePath
+            }
+            elseif (Test-Path -LiteralPath $candidatePath -PathType Container) {
+                Get-ChildItem -LiteralPath $candidatePath -File -Recurse
+            }
+        } |
+        Sort-Object FullName -Unique |
+        ForEach-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath(
+                $RepoRoot,
+                $_.FullName).Replace('\', '/')
+            "$relativePath`:$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)"
+        }) -join "`n"
+    return [Convert]::ToHexString(
+        [System.Security.Cryptography.SHA256]::HashData(
+            [System.Text.Encoding]::UTF8.GetBytes($candidateManifest)))
+}
+
 function Get-SkillEvalUnixWrapper {
     param(
         [Parameter(Mandatory)]
@@ -431,7 +464,7 @@ function Invoke-SkillEvalProcess {
 
         [scriptblock] $Executor,
 
-        [switch] $IsolateCopilotHome
+        [switch] $IsolateCopilotHome = $true
     )
 
     $transcriptPath = Join-Path $Context.RunDirectory 'transcript.md'
@@ -458,11 +491,15 @@ function Invoke-SkillEvalProcess {
         -Model $Model `
         -TranscriptPath $transcriptPath `
         -SecretEnvironmentNames @($secretEnvironmentNames)
+    $effectiveCopilotHomeIsolation = $IsolateCopilotHome -or
+        $Context.HasPersonalSkillFixture
     $invocation = [pscustomobject]@{
         Scenario = $Scenario
         Arguments = $arguments
         WorkingDirectory = $Context.Workspace
         PluginDirectory = $Context.PluginDirectory
+        CopilotHome = $Context.CopilotHome
+        IsolateCopilotHome = [bool] $effectiveCopilotHomeIsolation
         TranscriptPath = $transcriptPath
         StandardOutputPath = $standardOutputPath
         StandardErrorPath = $standardErrorPath
@@ -522,7 +559,7 @@ function Invoke-SkillEvalProcess {
     $startInfo.Environment.Remove('GIT_ASKPASS') | Out-Null
     $startInfo.Environment.Remove('SSH_ASKPASS') | Out-Null
     $startInfo.Environment.Remove('SSH_AUTH_SOCK') | Out-Null
-    if ($IsolateCopilotHome -or $Context.HasPersonalSkillFixture) {
+    if ($effectiveCopilotHomeIsolation) {
         $startInfo.Environment['COPILOT_HOME'] = $Context.CopilotHome
     }
     elseif (-not $startInfo.Environment.ContainsKey('COPILOT_HOME')) {
@@ -666,6 +703,10 @@ function Write-SkillEvalSummary {
     $lines.Add('# Skill evaluation summary')
     $lines.Add('')
     $lines.Add("- Model: ``$($Summary.Model)``")
+    $lines.Add("- Scenario revision: ``$($Summary.ScenarioRevision)``")
+    $lines.Add("- Candidate revision: ``$($Summary.CandidateRevision)``")
+    $lines.Add("- Fixture revision: ``$($Summary.FixtureRevision)``")
+    $lines.Add("- Scorer revision: ``$($Summary.ScorerRevision)``")
     $lines.Add("- Scenarios: $($Summary.ScenarioCount)")
     $lines.Add("- Runs: $($Summary.RunCount)")
     $lines.Add("- Passed: $($Summary.PassedCount)")
@@ -718,12 +759,13 @@ function Invoke-SkillEvalSuite {
 
         [scriptblock] $Executor,
 
-        [switch] $IsolateCopilotHome
+        [switch] $IsolateCopilotHome = $true
     )
 
     $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
     $resolvedScenarioPath = (Resolve-Path -LiteralPath $ScenarioPath).Path
     $evalRoot = (Resolve-Path -LiteralPath (Join-Path (Split-Path $resolvedScenarioPath) '..')).Path
+    $candidateRevision = Get-SkillEvalCandidateRevision -RepoRoot $resolvedRepoRoot
     New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
     $resolvedOutputDirectory = (Resolve-Path -LiteralPath $OutputDirectory).Path
     $scenarios = @(Get-SkillEvalScenarios -Path $resolvedScenarioPath)
@@ -789,10 +831,16 @@ function Invoke-SkillEvalSuite {
     }
 
     $resultArray = $results.ToArray()
+    $finalCandidateRevision = Get-SkillEvalCandidateRevision -RepoRoot $resolvedRepoRoot
+    if ($finalCandidateRevision -cne $candidateRevision) {
+        throw 'Evaluated candidate inputs changed while the suite was running.'
+    }
     $fixtureManifest = @(Get-ChildItem -LiteralPath (Join-Path $evalRoot 'fixtures') -File -Recurse |
         Sort-Object FullName |
         ForEach-Object {
-            $relativePath = [System.IO.Path]::GetRelativePath($evalRoot, $_.FullName)
+            $relativePath = [System.IO.Path]::GetRelativePath(
+                $evalRoot,
+                $_.FullName).Replace('\', '/')
             "$relativePath`:$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)"
         }) -join "`n"
     $fixtureRevision = [Convert]::ToHexString(
@@ -803,6 +851,7 @@ function Invoke-SkillEvalSuite {
         GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
         Model = $Model
         ScenarioRevision = (Get-FileHash -LiteralPath $resolvedScenarioPath -Algorithm SHA256).Hash
+        CandidateRevision = $candidateRevision
         FixtureRevision = $fixtureRevision
         ScorerRevision = (Get-FileHash -LiteralPath (Join-Path $evalRoot 'SkillEval.psm1') -Algorithm SHA256).Hash
         ScenarioCount = $scenarios.Count
