@@ -526,12 +526,12 @@ Describe 'Skill evaluation runner' {
             -Value '{"version":"before"}'
         Set-Content -LiteralPath (Join-Path $candidateRoot '.mcp.json') `
             -Value '{}'
-        $env:SKILL_EVAL_MUTATION_TARGET = Join-Path $candidateRoot 'plugin.json'
+        $env:SKILL_EVAL_MUTATION_TARGET = Join-Path $candidateRoot '.mcp.json'
         $executor = {
             param($invocation)
 
             Set-Content -LiteralPath $env:SKILL_EVAL_MUTATION_TARGET `
-                -Value '{"version":"after"}'
+                -Value '{"changed":true}'
             Set-Content -LiteralPath $invocation.ShimLogPath -Value @()
             return [pscustomobject]@{
                 ExitCode = 0

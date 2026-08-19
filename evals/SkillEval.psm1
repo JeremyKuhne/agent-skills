@@ -179,10 +179,10 @@ function Get-SkillEvalCandidateRevision {
     $candidateManifest = @($candidatePaths | ForEach-Object {
             $candidatePath = Join-Path $RepoRoot $_
             if (Test-Path -LiteralPath $candidatePath -PathType Leaf) {
-                Get-Item -LiteralPath $candidatePath
+                Get-Item -LiteralPath $candidatePath -Force
             }
             elseif (Test-Path -LiteralPath $candidatePath -PathType Container) {
-                Get-ChildItem -LiteralPath $candidatePath -File -Recurse
+                Get-ChildItem -LiteralPath $candidatePath -File -Recurse -Force
             }
         } |
         Sort-Object FullName -Unique |
