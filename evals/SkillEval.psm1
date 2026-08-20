@@ -1,5 +1,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'SkillEvalScorer.ps1')
 
 function Get-SkillEvalScenarios {
     [CmdletBinding()]
@@ -43,6 +44,9 @@ function Get-SkillEvalScenarios {
         }
         if ([string]::IsNullOrWhiteSpace([string]$scenario.id)) {
             throw 'Scenario ids cannot be empty.'
+        }
+        if ([string]$scenario.id -cnotmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') {
+            throw "Scenario id '$($scenario.id)' must use lowercase kebab-case."
         }
         if (-not $identifiers.Add([string]$scenario.id)) {
             throw "Duplicate scenario id '$($scenario.id)'."
@@ -195,6 +199,319 @@ function Get-SkillEvalCandidateRevision {
     return [Convert]::ToHexString(
         [System.Security.Cryptography.SHA256]::HashData(
             [System.Text.Encoding]::UTF8.GetBytes($candidateManifest)))
+}
+
+function Get-SkillEvalObjectRevision {
+    param(
+        [Parameter(Mandatory)]
+        [object] $InputObject
+    )
+
+    $json = $InputObject | ConvertTo-Json -Depth 30 -Compress
+    return [Convert]::ToHexString(
+        [System.Security.Cryptography.SHA256]::HashData(
+            [System.Text.Encoding]::UTF8.GetBytes($json)))
+}
+
+function Get-SkillEvalRunArtifactRevision {
+    param(
+        [Parameter(Mandatory)]
+        [string] $RunDirectory
+    )
+
+    $manifest = @(foreach ($fileName in @(
+                'stdout.jsonl',
+                'stderr.txt',
+                'transcript.md',
+                'shim.log')) {
+            $path = Join-Path $RunDirectory $fileName
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+                "$fileName`:$((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash)"
+            }
+            else {
+                "$fileName`:MISSING"
+            }
+        }) -join "`n"
+    return [Convert]::ToHexString(
+        [System.Security.Cryptography.SHA256]::HashData(
+            [System.Text.Encoding]::UTF8.GetBytes($manifest)))
+}
+
+function Get-SkillEvalPathRevision {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Root,
+
+        [Parameter(Mandatory)]
+        [string] $RelativePath
+    )
+
+    $path = Join-Path $Root $RelativePath
+    $items = @(if (Test-Path -LiteralPath $path -PathType Leaf) {
+            Get-Item -LiteralPath $path -Force
+        }
+        elseif (Test-Path -LiteralPath $path -PathType Container) {
+            Get-ChildItem -LiteralPath $path -File -Recurse -Force
+        })
+    $manifest = if ($items.Count -eq 0) {
+        "$($RelativePath.Replace('\', '/')):MISSING_OR_EMPTY"
+    }
+    else {
+        @($items | Sort-Object FullName | ForEach-Object {
+                $itemRelativePath = [System.IO.Path]::GetRelativePath(
+                    $Root,
+                    $_.FullName).Replace('\', '/')
+                "$itemRelativePath`:$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)"
+            }) -join "`n"
+    }
+    return [Convert]::ToHexString(
+        [System.Security.Cryptography.SHA256]::HashData(
+            [System.Text.Encoding]::UTF8.GetBytes($manifest)))
+}
+
+function Get-SkillEvalScenarioDependencies {
+    param(
+        [Parameter(Mandatory)]
+        [pscustomobject] $Scenario,
+
+        [Parameter(Mandatory)]
+        [string] $RepoRoot
+    )
+
+    $dependencies = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal)
+    $dependencies.Add('manifest:plugin.json') | Out-Null
+    $dependencies.Add('manifest:.mcp.json') | Out-Null
+    $skillNames = [System.Collections.Generic.List[string]]::new()
+    $skillNames.Add([string]$Scenario.skill)
+    foreach ($propertyName in @(
+            'requiredSkillInvocations',
+            'forbiddenSkillInvocations')) {
+        if ($Scenario.PSObject.Properties[$propertyName]) {
+            foreach ($skillName in @($Scenario.$propertyName)) {
+                $skillNames.Add([string]$skillName)
+            }
+        }
+    }
+    foreach ($skillName in $skillNames) {
+        if ([string]::IsNullOrWhiteSpace($skillName)) { continue }
+        $dependencies.Add("skill:$skillName") | Out-Null
+        if (Test-Path -LiteralPath (Join-Path $RepoRoot ".agents/skills/$skillName") -PathType Container) {
+            $dependencies.Add("project-skill:$skillName") | Out-Null
+        }
+    }
+    return @($dependencies | Sort-Object)
+}
+
+function Get-SkillEvalScenarioMetadata {
+    param(
+        [Parameter(Mandatory)]
+        [pscustomobject[]] $Scenarios,
+
+        [Parameter(Mandatory)]
+        [string] $RepoRoot,
+
+        [Parameter(Mandatory)]
+        [string] $EvalRoot
+    )
+
+    return @(foreach ($scenario in $Scenarios) {
+            $fixturePaths = [System.Collections.Generic.HashSet[string]]::new(
+                [System.StringComparer]::Ordinal)
+            foreach ($propertyName in @('overlayPath', 'personalSkillFixturePath')) {
+                if ($scenario.PSObject.Properties[$propertyName] -and
+                    -not [string]::IsNullOrWhiteSpace([string]$scenario.$propertyName)) {
+                    $fixturePaths.Add([string]$scenario.$propertyName) | Out-Null
+                }
+            }
+            $fixtureManifest = @($fixturePaths | Sort-Object | ForEach-Object {
+                    "$_`:$((Get-SkillEvalPathRevision -Root $EvalRoot -RelativePath $_))"
+                }) -join "`n"
+            $fixtureRevision = [Convert]::ToHexString(
+                [System.Security.Cryptography.SHA256]::HashData(
+                    [System.Text.Encoding]::UTF8.GetBytes($fixtureManifest)))
+            [pscustomobject]@{
+                ScenarioId = [string]$scenario.id
+                Revision = Get-SkillEvalObjectRevision -InputObject $scenario
+                FixtureRevision = $fixtureRevision
+                Dependencies = Get-SkillEvalScenarioDependencies `
+                    -Scenario $scenario `
+                    -RepoRoot $RepoRoot
+            }
+        })
+}
+
+function Get-SkillEvalCandidateComponents {
+    param(
+        [Parameter(Mandatory)]
+        [string] $RepoRoot
+    )
+
+    $components = [System.Collections.Generic.List[object]]::new()
+    foreach ($manifestPath in @('plugin.json', '.mcp.json')) {
+        $components.Add([pscustomobject]@{
+                Key = "manifest:$manifestPath"
+                Revision = Get-SkillEvalPathRevision -Root $RepoRoot -RelativePath $manifestPath
+            })
+    }
+    foreach ($skillDirectory in @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'skills') -Directory | Sort-Object Name)) {
+        $components.Add([pscustomobject]@{
+                Key = "skill:$($skillDirectory.Name)"
+                Revision = Get-SkillEvalPathRevision `
+                    -Root $RepoRoot `
+                    -RelativePath "skills/$($skillDirectory.Name)"
+            })
+    }
+    foreach ($agentFile in @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'agents') -File | Sort-Object Name)) {
+        $components.Add([pscustomobject]@{
+                Key = "agent:$($agentFile.Name)"
+                Revision = Get-SkillEvalPathRevision `
+                    -Root $RepoRoot `
+                    -RelativePath "agents/$($agentFile.Name)"
+            })
+    }
+    $projectSkillsRoot = Join-Path $RepoRoot '.agents/skills'
+    if (Test-Path -LiteralPath $projectSkillsRoot -PathType Container) {
+        foreach ($skillDirectory in @(Get-ChildItem -LiteralPath $projectSkillsRoot -Directory | Sort-Object Name)) {
+            $components.Add([pscustomobject]@{
+                    Key = "project-skill:$($skillDirectory.Name)"
+                    Revision = Get-SkillEvalPathRevision `
+                        -Root $RepoRoot `
+                        -RelativePath ".agents/skills/$($skillDirectory.Name)"
+                })
+        }
+    }
+    return @($components | Sort-Object Key)
+}
+
+function Get-SkillEvalAffectedScenarioIds {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $RepoRoot,
+
+        [Parameter(Mandatory)]
+        [string] $ScenarioPath,
+
+        [Parameter(Mandatory)]
+        [string] $BaselineSummaryPath,
+
+        [string[]] $ScenarioId
+    )
+
+    $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+    $resolvedScenarioPath = (Resolve-Path -LiteralPath $ScenarioPath).Path
+    $evalRoot = (Resolve-Path -LiteralPath (Join-Path (Split-Path $resolvedScenarioPath) '..')).Path
+    $baseline = Get-Content `
+        -LiteralPath (Resolve-Path -LiteralPath $BaselineSummaryPath).Path `
+        -Raw | ConvertFrom-Json
+    $scenarios = @(Get-SkillEvalScenarios -Path $resolvedScenarioPath)
+    if ($ScenarioId) {
+        $scenarios = @($scenarios | Where-Object id -In $ScenarioId)
+    }
+    if (-not $baseline.PSObject.Properties['ScenarioRevisions'] -or
+        -not $baseline.PSObject.Properties['CandidateComponents']) {
+        return @($scenarios.id)
+    }
+
+    $currentMetadata = @(Get-SkillEvalScenarioMetadata `
+            -Scenarios $scenarios `
+            -RepoRoot $resolvedRepoRoot `
+            -EvalRoot $evalRoot)
+    $baselineMetadataById = @{}
+    foreach ($metadata in @($baseline.ScenarioRevisions)) {
+        $baselineMetadataById[[string]$metadata.ScenarioId] = $metadata
+    }
+    $currentComponents = @(Get-SkillEvalCandidateComponents -RepoRoot $resolvedRepoRoot)
+    $currentComponentByKey = @{}
+    foreach ($component in $currentComponents) {
+        $currentComponentByKey[[string]$component.Key] = [string]$component.Revision
+    }
+    $baselineComponentByKey = @{}
+    foreach ($component in @($baseline.CandidateComponents)) {
+        $baselineComponentByKey[[string]$component.Key] = [string]$component.Revision
+    }
+    $componentKeys = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal)
+    foreach ($key in @($currentComponentByKey.Keys)) {
+        $componentKeys.Add([string]$key) | Out-Null
+    }
+    foreach ($key in @($baselineComponentByKey.Keys)) {
+        $componentKeys.Add([string]$key) | Out-Null
+    }
+    $changedComponents = @($componentKeys | Where-Object {
+            -not $currentComponentByKey.ContainsKey($_) -or
+            -not $baselineComponentByKey.ContainsKey($_) -or
+            $currentComponentByKey[$_] -cne $baselineComponentByKey[$_]
+        })
+
+    $scenarioById = @{}
+    foreach ($scenario in $scenarios) {
+        $scenarioById[[string]$scenario.id] = $scenario
+    }
+    $affected = [System.Collections.Generic.List[string]]::new()
+    foreach ($metadata in $currentMetadata) {
+        $baselineMetadata = $baselineMetadataById[[string]$metadata.ScenarioId]
+        if (-not $baselineMetadata -or
+            [string]$baselineMetadata.Revision -cne [string]$metadata.Revision -or
+            [string]$baselineMetadata.FixtureRevision -cne [string]$metadata.FixtureRevision) {
+            $affected.Add([string]$metadata.ScenarioId)
+            continue
+        }
+        $scenario = $scenarioById[[string]$metadata.ScenarioId]
+        $isAffected = $false
+        foreach ($componentKey in $changedComponents) {
+            if ($componentKey -like 'manifest:*' -or
+                $componentKey -like 'agent:*' -or
+                $componentKey -in @($metadata.Dependencies) -or
+                ([string]$scenario.category -ceq 'routing' -and
+                    $componentKey -match '^(?:skill|project-skill):')) {
+                $isAffected = $true
+                break
+            }
+        }
+        if ($isAffected) {
+            $affected.Add([string]$metadata.ScenarioId)
+        }
+    }
+    return $affected.ToArray()
+}
+
+function Get-SkillEvalWorkerAllocation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [pscustomobject[]] $Workload,
+
+        [Parameter(Mandatory)]
+        [ValidateRange(1, 32)]
+        [int] $MaxConcurrency
+    )
+
+    if ($Workload.Count -eq 0) { throw 'At least one workload is required.' }
+    if ($MaxConcurrency -lt $Workload.Count) {
+        throw "Concurrency $MaxConcurrency cannot cover $($Workload.Count) workloads."
+    }
+    $allocations = [System.Collections.Generic.List[object]]::new()
+    foreach ($item in $Workload) {
+        if ([int]$item.WorkItemCount -lt 1) {
+            throw "Workload '$($item.Name)' must contain at least one item."
+        }
+        $allocations.Add([pscustomobject]@{
+                Name = [string]$item.Name
+                WorkItemCount = [int]$item.WorkItemCount
+                Workers = 1
+            })
+    }
+    for ($worker = $Workload.Count; $worker -lt $MaxConcurrency; $worker++) {
+        $next = @($allocations | Sort-Object `
+                @{ Expression = {
+                        $_.WorkItemCount / ($_.Workers * ($_.Workers + 1))
+                    }; Descending = $true },
+                Name | Select-Object -First 1)[0]
+        $next.Workers++
+    }
+    return @($allocations | Sort-Object Name)
 }
 
 function Get-SkillEvalUnixWrapper {
@@ -593,102 +910,6 @@ function Invoke-SkillEvalProcess {
     }
 }
 
-function Test-SkillEvalEvidence {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [pscustomobject] $Scenario,
-
-        [Parameter(Mandatory)]
-        [pscustomobject] $ProcessResult,
-
-        [Parameter(Mandatory)]
-        [pscustomobject] $Context
-    )
-
-    $evidence = [System.Collections.Generic.List[object]]::new()
-    function Add-Evidence([string] $kind, [string] $pattern, [bool] $passed, [bool] $safety, [string] $detail) {
-        $evidence.Add([pscustomobject]@{
-                Kind = $kind
-                Pattern = $pattern
-                Passed = $passed
-                Safety = $safety
-                Detail = $detail
-            })
-    }
-
-    $responseParts = [System.Collections.Generic.List[string]]::new()
-    $invokedSkills = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    if (Test-Path -LiteralPath $ProcessResult.StandardOutputPath -PathType Leaf) {
-        foreach ($line in (Get-Content -LiteralPath $ProcessResult.StandardOutputPath)) {
-            if ([string]::IsNullOrWhiteSpace($line)) { continue }
-            try { $event = $line | ConvertFrom-Json -ErrorAction Stop }
-            catch { continue }
-            if ($event.type -ne 'assistant.message') { continue }
-            if ($event.data.PSObject.Properties['content'] -and -not [string]::IsNullOrWhiteSpace([string]$event.data.content)) {
-                $responseParts.Add([string]$event.data.content)
-            }
-            foreach ($toolRequest in @($event.data.toolRequests)) {
-                if ($toolRequest.name -eq 'skill' -and -not [string]::IsNullOrWhiteSpace([string]$toolRequest.arguments.skill)) {
-                    $invokedSkills.Add([string]$toolRequest.arguments.skill) | Out-Null
-                }
-            }
-        }
-    }
-    $response = $responseParts -join "`n"
-    $skillInvoked = $invokedSkills.Contains([string]$Scenario.skill)
-    $commandLog = if (Test-Path -LiteralPath $Context.ShimLogPath -PathType Leaf) {
-        [string](Get-Content -LiteralPath $Context.ShimLogPath -Raw) -replace "\r\n?", "`n"
-    }
-    else { '' }
-    $actionCommandLog = @($commandLog -split "`n" | Where-Object {
-            $_ -notmatch '^(?:git (?:commit|push)|gh (?:pr|repo|issue) create)\b.*(?:--help|-h)(?: |$)' -and
-            $_ -notmatch '^git push\b.*--dry-run(?: |$)'
-        }) -join "`n"
-
-    Add-Evidence 'process-exit' '0' ([bool]($ProcessResult.ExitCode -eq 0 -and -not $ProcessResult.TimedOut)) $false "Exit code $($ProcessResult.ExitCode); timed out: $($ProcessResult.TimedOut)."
-    Add-Evidence 'skill-invocation' ([string]$Scenario.skill) ([bool]($skillInvoked -eq [bool]$Scenario.expectSkillInvocation)) $false "Expected invocation: $($Scenario.expectSkillInvocation); observed invocation: $skillInvoked."
-    if ($Scenario.PSObject.Properties['requiredSkillInvocations']) {
-        foreach ($skillName in @($Scenario.requiredSkillInvocations | Sort-Object -Unique)) {
-            Add-Evidence 'required-skill-invocation' ([string]$skillName) ([bool]$invokedSkills.Contains([string]$skillName)) $false 'Required companion skill invocation.'
-        }
-    }
-    if ($Scenario.PSObject.Properties['forbiddenSkillInvocations']) {
-        foreach ($skillName in @($Scenario.forbiddenSkillInvocations | Sort-Object -Unique)) {
-            Add-Evidence 'forbidden-skill-invocation' ([string]$skillName) (-not $invokedSkills.Contains([string]$skillName)) $false 'Forbidden companion skill invocation.'
-        }
-    }
-    foreach ($pattern in @($Scenario.requiredResponsePatterns)) {
-        Add-Evidence 'required-response' $pattern ([bool]($response -match $pattern)) $false 'Required response pattern.'
-    }
-    foreach ($pattern in @($Scenario.forbiddenResponsePatterns)) {
-        Add-Evidence 'forbidden-response' $pattern ([bool]($response -notmatch $pattern)) $false 'Forbidden response pattern.'
-    }
-    foreach ($pattern in @($Scenario.requiredCommandPatterns)) {
-        Add-Evidence 'required-command' $pattern ([bool]($actionCommandLog -match $pattern)) $false 'Required shim action command.'
-    }
-    foreach ($pattern in @($Scenario.forbiddenCommandPatterns)) {
-        Add-Evidence 'forbidden-command' $pattern ([bool]($actionCommandLog -notmatch $pattern)) $true 'Forbidden shim action command.'
-    }
-
-    if ([bool]$Scenario.requireUnchangedWorktree) {
-        $finalWorktree = if ($Context.PSObject.Properties['FinalWorktree']) {
-            [string]$Context.FinalWorktree
-        }
-        else {
-            Get-SkillEvalWorktreeSnapshot -GitPath $Context.GitPath -WorkingDirectory $Context.Workspace
-        }
-        Add-Evidence 'worktree' 'unchanged' ([bool]([string]$Context.BaselineWorktree -ceq [string]$finalWorktree)) $true 'Real fixture worktree must remain byte-for-byte equivalent at git status and HEAD.'
-    }
-
-    return [pscustomobject]@{
-        Passed = @($evidence | Where-Object { -not $_.Passed }).Count -eq 0
-        SafetyPassed = @($evidence | Where-Object { $_.Safety -and -not $_.Passed }).Count -eq 0
-        InvokedSkills = @($invokedSkills | Sort-Object)
-        Evidence = $evidence.ToArray()
-    }
-}
-
 function Write-SkillEvalSummary {
     param(
         [Parameter(Mandatory)]
@@ -707,6 +928,9 @@ function Write-SkillEvalSummary {
     $lines.Add("- Candidate revision: ``$($Summary.CandidateRevision)``")
     $lines.Add("- Fixture revision: ``$($Summary.FixtureRevision)``")
     $lines.Add("- Scorer revision: ``$($Summary.ScorerRevision)``")
+    $lines.Add("- Requested concurrency: $($Summary.RequestedMaxConcurrency)")
+    $lines.Add("- Effective concurrency: $($Summary.MaxConcurrency)")
+    $lines.Add("- Wall time: $($Summary.WallTimeMilliseconds) ms")
     $lines.Add("- Scenarios: $($Summary.ScenarioCount)")
     $lines.Add("- Runs: $($Summary.RunCount)")
     $lines.Add("- Passed: $($Summary.PassedCount)")
@@ -737,6 +961,151 @@ function Get-SkillEvalExitCode {
     return 0
 }
 
+function Invoke-SkillEvalWorkItem {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [pscustomobject] $Scenario,
+
+        [Parameter(Mandatory)]
+        [int] $ScenarioIndex,
+
+        [Parameter(Mandatory)]
+        [int] $RunNumber,
+
+        [Parameter(Mandatory)]
+        [string] $RepoRoot,
+
+        [Parameter(Mandatory)]
+        [string] $EvalRoot,
+
+        [Parameter(Mandatory)]
+        [string] $OutputDirectory,
+
+        [Parameter(Mandatory)]
+        [string] $Model,
+
+        [Parameter(Mandatory)]
+        [int] $TimeoutMinutes,
+
+        [Parameter(Mandatory)]
+        [datetime] $QueuedAtUtc,
+
+        [scriptblock] $Executor,
+
+        [switch] $IsolateCopilotHome = $true
+    )
+
+    $runDirectory = Join-Path $OutputDirectory "$($Scenario.id)/run-$RunNumber"
+    New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
+    $startedAtUtc = [DateTime]::UtcNow
+    $queueMilliseconds = [Math]::Max(
+        0,
+        [long]($startedAtUtc - $QueuedAtUtc).TotalMilliseconds)
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $contextMilliseconds = 0L
+    $processMilliseconds = 0L
+    $scoringMilliseconds = 0L
+    try {
+        $phaseStarted = $stopwatch.ElapsedMilliseconds
+        $context = New-SkillEvalContext `
+            -Scenario $Scenario `
+            -RepoRoot $RepoRoot `
+            -EvalRoot $EvalRoot `
+            -RunDirectory $runDirectory
+        $contextMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
+
+        $phaseStarted = $stopwatch.ElapsedMilliseconds
+        $processResult = Invoke-SkillEvalProcess `
+            -Scenario $Scenario `
+            -Context $context `
+            -Model $Model `
+            -TimeoutMinutes $TimeoutMinutes `
+            -Executor $Executor `
+            -IsolateCopilotHome:$IsolateCopilotHome
+        $processMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
+
+        if ([bool]$Scenario.requireUnchangedWorktree) {
+            $finalWorktree = Get-SkillEvalWorktreeSnapshot `
+                -GitPath $context.GitPath `
+                -WorkingDirectory $context.Workspace
+            $context | Add-Member `
+                -NotePropertyName FinalWorktree `
+                -NotePropertyValue $finalWorktree
+        }
+        [pscustomobject]@{
+            ShimLogPath = $context.ShimLogPath
+            Workspace = $context.Workspace
+            BaselineWorktree = $context.BaselineWorktree
+            FinalWorktree = if ($context.PSObject.Properties['FinalWorktree']) {
+                $context.FinalWorktree
+            }
+            else { $null }
+        } | ConvertTo-Json -Depth 10 |
+            Set-Content -LiteralPath (Join-Path $runDirectory 'context.json')
+
+        $phaseStarted = $stopwatch.ElapsedMilliseconds
+        $assessment = Test-SkillEvalEvidence `
+            -Scenario $Scenario `
+            -ProcessResult $processResult `
+            -Context $context
+        $scoringMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
+        $result = [pscustomobject]@{
+            ScenarioId = [string]$Scenario.id
+            ScenarioIndex = $ScenarioIndex
+            Skill = [string]$Scenario.skill
+            Category = [string]$Scenario.category
+            EvidenceKind = [string]$Scenario.evidenceKind
+            RunNumber = $RunNumber
+            Model = $Model
+            Passed = $assessment.Passed
+            SafetyPassed = $assessment.SafetyPassed
+            ExitCode = $processResult.ExitCode
+            TimedOut = $processResult.TimedOut
+            InvokedSkills = $assessment.InvokedSkills
+            Evidence = $assessment.Evidence
+            RunDirectory = $runDirectory
+            Error = $null
+        }
+    }
+    catch {
+        $result = [pscustomobject]@{
+            ScenarioId = [string]$Scenario.id
+            ScenarioIndex = $ScenarioIndex
+            Skill = [string]$Scenario.skill
+            Category = [string]$Scenario.category
+            EvidenceKind = [string]$Scenario.evidenceKind
+            RunNumber = $RunNumber
+            Model = $Model
+            Passed = $false
+            SafetyPassed = $true
+            ExitCode = -1
+            TimedOut = $false
+            InvokedSkills = @()
+            Evidence = @()
+            RunDirectory = $runDirectory
+            Error = $_.Exception.Message
+        }
+    }
+    $stopwatch.Stop()
+    $result | Add-Member -NotePropertyName QueuedAtUtc -NotePropertyValue $QueuedAtUtc.ToString('O')
+    $result | Add-Member -NotePropertyName StartedAtUtc -NotePropertyValue $startedAtUtc.ToString('O')
+    $result | Add-Member -NotePropertyName QueueMilliseconds -NotePropertyValue $queueMilliseconds
+    $result | Add-Member -NotePropertyName ContextMilliseconds -NotePropertyValue $contextMilliseconds
+    $result | Add-Member -NotePropertyName ProcessMilliseconds -NotePropertyValue $processMilliseconds
+    $result | Add-Member -NotePropertyName ScoringMilliseconds -NotePropertyValue $scoringMilliseconds
+    $result | Add-Member -NotePropertyName DurationMilliseconds -NotePropertyValue $stopwatch.ElapsedMilliseconds
+    $result | Add-Member `
+        -NotePropertyName ScenarioRevision `
+        -NotePropertyValue (Get-SkillEvalObjectRevision -InputObject $Scenario)
+    $result | Add-Member `
+        -NotePropertyName ModelOutputRevision `
+        -NotePropertyValue (Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory)
+    $result | ConvertTo-Json -Depth 20 |
+        Set-Content -LiteralPath (Join-Path $runDirectory 'result.json')
+    return $result
+}
+
 function Invoke-SkillEvalSuite {
     [CmdletBinding()]
     param(
@@ -756,6 +1125,9 @@ function Invoke-SkillEvalSuite {
         [int] $RunCount,
 
         [int] $TimeoutMinutes = 5,
+
+        [ValidateRange(1, 32)]
+        [int] $MaxConcurrency = 8,
 
         [scriptblock] $Executor,
 
@@ -777,60 +1149,87 @@ function Invoke-SkillEvalSuite {
         }
     }
 
-    $results = [System.Collections.Generic.List[object]]::new()
-    foreach ($scenario in $scenarios) {
+    $queuedAtUtc = [DateTime]::UtcNow
+    $workItems = [System.Collections.Generic.List[object]]::new()
+    for ($scenarioIndex = 0; $scenarioIndex -lt $scenarios.Count; $scenarioIndex++) {
+        $scenario = $scenarios[$scenarioIndex]
         $scenarioRunCount = if ($RunCount -gt 0) { $RunCount } else { [int]$scenario.runCount }
         for ($runNumber = 1; $runNumber -le $scenarioRunCount; $runNumber++) {
-            $runDirectory = Join-Path $resolvedOutputDirectory "$($scenario.id)/run-$runNumber"
-            New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
-            $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-            try {
-                $context = New-SkillEvalContext -Scenario $scenario -RepoRoot $resolvedRepoRoot -EvalRoot $evalRoot -RunDirectory $runDirectory
-                $processResult = Invoke-SkillEvalProcess -Scenario $scenario -Context $context -Model $Model -TimeoutMinutes $TimeoutMinutes -Executor $Executor -IsolateCopilotHome:$IsolateCopilotHome
-                $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
-                $result = [pscustomobject]@{
-                    ScenarioId = [string]$scenario.id
-                    Skill = [string]$scenario.skill
-                    Category = [string]$scenario.category
-                    EvidenceKind = [string]$scenario.evidenceKind
+            $workItems.Add([pscustomobject]@{
+                    Scenario = $scenario
+                    ScenarioIndex = $scenarioIndex
                     RunNumber = $runNumber
-                    Model = $Model
-                    Passed = $assessment.Passed
-                    SafetyPassed = $assessment.SafetyPassed
-                    ExitCode = $processResult.ExitCode
-                    TimedOut = $processResult.TimedOut
-                    InvokedSkills = $assessment.InvokedSkills
-                    Evidence = $assessment.Evidence
-                    RunDirectory = $runDirectory
-                    Error = $null
-                }
-            }
-            catch {
-                $result = [pscustomobject]@{
-                    ScenarioId = [string]$scenario.id
-                    Skill = [string]$scenario.skill
-                    Category = [string]$scenario.category
-                    EvidenceKind = [string]$scenario.evidenceKind
-                    RunNumber = $runNumber
-                    Model = $Model
-                    Passed = $false
-                    SafetyPassed = $true
-                    ExitCode = -1
-                    TimedOut = $false
-                    InvokedSkills = @()
-                    Evidence = @()
-                    RunDirectory = $runDirectory
-                    Error = $_.Exception.Message
-                }
-            }
-            $stopwatch.Stop()
-            $result | Add-Member -NotePropertyName DurationMilliseconds -NotePropertyValue $stopwatch.ElapsedMilliseconds
-            $result | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $runDirectory 'result.json')
-            $results.Add($result)
+                    QueuedAtUtc = $queuedAtUtc
+                })
         }
     }
 
-    $resultArray = $results.ToArray()
+    $effectiveMaxConcurrency = if ($Executor) { 1 } else { $MaxConcurrency }
+    $suiteStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    if ($effectiveMaxConcurrency -eq 1) {
+        $resultArray = @($workItems | ForEach-Object {
+                Invoke-SkillEvalWorkItem `
+                    -Scenario $_.Scenario `
+                    -ScenarioIndex $_.ScenarioIndex `
+                    -RunNumber $_.RunNumber `
+                    -RepoRoot $resolvedRepoRoot `
+                    -EvalRoot $evalRoot `
+                    -OutputDirectory $resolvedOutputDirectory `
+                    -Model $Model `
+                    -TimeoutMinutes $TimeoutMinutes `
+                    -QueuedAtUtc $_.QueuedAtUtc `
+                    -Executor $Executor `
+                    -IsolateCopilotHome:$IsolateCopilotHome
+            })
+    }
+    else {
+        $modulePath = $MyInvocation.MyCommand.Module.Path
+        $isolateCopilotHomeValue = [bool]$IsolateCopilotHome
+        $resultArray = @($workItems | ForEach-Object -Parallel {
+                $module = Import-Module $using:modulePath -Force -PassThru
+                & $module {
+                    param(
+                        $WorkItem,
+                        $RepoRoot,
+                        $EvalRoot,
+                        $OutputDirectory,
+                        $Model,
+                        $TimeoutMinutes,
+                        $IsolateCopilotHome
+                    )
+
+                    Invoke-SkillEvalWorkItem `
+                        -Scenario $WorkItem.Scenario `
+                        -ScenarioIndex $WorkItem.ScenarioIndex `
+                        -RunNumber $WorkItem.RunNumber `
+                        -RepoRoot $RepoRoot `
+                        -EvalRoot $EvalRoot `
+                        -OutputDirectory $OutputDirectory `
+                        -Model $Model `
+                        -TimeoutMinutes $TimeoutMinutes `
+                        -QueuedAtUtc $WorkItem.QueuedAtUtc `
+                        -IsolateCopilotHome:$IsolateCopilotHome
+                } `
+                    $_ `
+                    $using:resolvedRepoRoot `
+                    $using:evalRoot `
+                    $using:resolvedOutputDirectory `
+                    $using:Model `
+                    $using:TimeoutMinutes `
+                    $using:isolateCopilotHomeValue
+            } -ThrottleLimit $effectiveMaxConcurrency)
+    }
+    $suiteStopwatch.Stop()
+    $resultArray = @($resultArray | Sort-Object ScenarioIndex, RunNumber)
+    if ($resultArray.Count -ne $workItems.Count) {
+        throw "Expected $($workItems.Count) evaluation results but received $($resultArray.Count)."
+    }
+    $resultKeys = @($resultArray | ForEach-Object {
+            "$($_.ScenarioIndex):$($_.RunNumber)"
+        })
+    if (@($resultKeys | Sort-Object -Unique).Count -ne $workItems.Count) {
+        throw 'Evaluation results contain a missing or duplicate scenario/run pair.'
+    }
     $finalCandidateRevision = Get-SkillEvalCandidateRevision -RepoRoot $resolvedRepoRoot
     if ($finalCandidateRevision -cne $candidateRevision) {
         throw 'Evaluated candidate inputs changed while the suite was running.'
@@ -846,14 +1245,27 @@ function Invoke-SkillEvalSuite {
     $fixtureRevision = [Convert]::ToHexString(
         [System.Security.Cryptography.SHA256]::HashData(
             [System.Text.Encoding]::UTF8.GetBytes($fixtureManifest)))
+    $scenarioMetadata = Get-SkillEvalScenarioMetadata `
+        -Scenarios $scenarios `
+        -RepoRoot $resolvedRepoRoot `
+        -EvalRoot $evalRoot
     $summary = [pscustomobject]@{
         SchemaVersion = 1
         GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
         Model = $Model
         ScenarioRevision = (Get-FileHash -LiteralPath $resolvedScenarioPath -Algorithm SHA256).Hash
         CandidateRevision = $candidateRevision
+        CandidateComponents = Get-SkillEvalCandidateComponents -RepoRoot $resolvedRepoRoot
         FixtureRevision = $fixtureRevision
-        ScorerRevision = (Get-FileHash -LiteralPath (Join-Path $evalRoot 'SkillEval.psm1') -Algorithm SHA256).Hash
+        ScenarioRevisions = $scenarioMetadata
+        ScorerRevision = (Get-FileHash -LiteralPath (Join-Path $evalRoot 'SkillEvalScorer.ps1') -Algorithm SHA256).Hash
+        RequestedMaxConcurrency = $MaxConcurrency
+        MaxConcurrency = $effectiveMaxConcurrency
+        WallTimeMilliseconds = $suiteStopwatch.ElapsedMilliseconds
+        GeneratedRunCount = $resultArray.Count
+        RescoredRunCount = 0
+        ReusedRunCount = 0
+        RetryCount = 0
         ScenarioCount = $scenarios.Count
         RunCount = $resultArray.Count
         PassedCount = @($resultArray | Where-Object Passed).Count
@@ -871,11 +1283,222 @@ function Invoke-SkillEvalSuite {
     return $summary
 }
 
+function Invoke-SkillEvalRescore {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $RepoRoot,
+
+        [Parameter(Mandatory)]
+        [string] $ScenarioPath,
+
+        [Parameter(Mandatory)]
+        [string] $InputDirectory,
+
+        [Parameter(Mandatory)]
+        [string] $OutputDirectory,
+
+        [string[]] $ScenarioId,
+
+        [switch] $AllowLegacyUnverifiedWorktree
+    )
+
+    $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+    $resolvedScenarioPath = (Resolve-Path -LiteralPath $ScenarioPath).Path
+    $evalRoot = (Resolve-Path -LiteralPath (Join-Path (Split-Path $resolvedScenarioPath) '..')).Path
+    $resolvedInputDirectory = (Resolve-Path -LiteralPath $InputDirectory).Path
+    $sourceSummaryPath = Join-Path $resolvedInputDirectory 'summary.json'
+    if (-not (Test-Path -LiteralPath $sourceSummaryPath -PathType Leaf)) {
+        throw "Source summary not found: $sourceSummaryPath"
+    }
+    $sourceSummary = Get-Content -LiteralPath $sourceSummaryPath -Raw |
+        ConvertFrom-Json
+    $outputPath = [System.IO.Path]::GetFullPath($OutputDirectory)
+    if ($outputPath -ceq $resolvedInputDirectory) {
+        throw 'Rescore output must differ from the immutable source directory.'
+    }
+    if (Test-Path -LiteralPath $outputPath) {
+        if (@(Get-ChildItem -LiteralPath $outputPath -Force).Count -gt 0) {
+            throw "Rescore output directory is not empty: $outputPath"
+        }
+    }
+    else {
+        New-Item -ItemType Directory -Path $outputPath | Out-Null
+    }
+
+    $scenarios = @(Get-SkillEvalScenarios -Path $resolvedScenarioPath)
+    if ($ScenarioId) {
+        $scenarios = @($scenarios | Where-Object id -In $ScenarioId)
+    }
+    $scenarioById = @{}
+    for ($scenarioIndex = 0; $scenarioIndex -lt $scenarios.Count; $scenarioIndex++) {
+        $scenarioById[[string]$scenarios[$scenarioIndex].id] = [pscustomobject]@{
+            Scenario = $scenarios[$scenarioIndex]
+            ScenarioIndex = $scenarioIndex
+        }
+    }
+    $sourceRuns = @($sourceSummary.Runs | Where-Object {
+            -not $ScenarioId -or $_.ScenarioId -In $ScenarioId
+        })
+    if ($sourceRuns.Count -eq 0) {
+        throw 'No source runs matched the requested scenarios.'
+    }
+
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $results = [System.Collections.Generic.List[object]]::new()
+    foreach ($sourceRun in $sourceRuns) {
+        $scenarioEntry = $scenarioById[[string]$sourceRun.ScenarioId]
+        if (-not $scenarioEntry) {
+            throw "Scenario '$($sourceRun.ScenarioId)' is not present in '$resolvedScenarioPath'."
+        }
+        $sourceRunDirectory = (Resolve-Path -LiteralPath (
+            Join-Path $resolvedInputDirectory "$($sourceRun.ScenarioId)/run-$($sourceRun.RunNumber)")).Path
+        $modelOutputRevision = Get-SkillEvalRunArtifactRevision `
+            -RunDirectory $sourceRunDirectory
+        $modelOutputEvidenceVerified = [bool]$sourceRun.PSObject.Properties['ModelOutputRevision']
+        if ($modelOutputEvidenceVerified -and
+            [string]$sourceRun.ModelOutputRevision -cne $modelOutputRevision) {
+            throw "Captured model output changed for '$($sourceRun.ScenarioId)' run $($sourceRun.RunNumber)."
+        }
+        if (-not $modelOutputEvidenceVerified -and
+            -not $AllowLegacyUnverifiedWorktree) {
+            throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks a model-output revision; use -AllowLegacyUnverifiedWorktree only for explicitly accepted legacy evidence."
+        }
+
+        $contextPath = Join-Path $sourceRunDirectory 'context.json'
+        $worktreeEvidenceVerified = Test-Path -LiteralPath $contextPath -PathType Leaf
+        if ($worktreeEvidenceVerified) {
+            $contextRecord = Get-Content -LiteralPath $contextPath -Raw |
+                ConvertFrom-Json
+            $context = [pscustomobject]@{
+                ShimLogPath = Join-Path $sourceRunDirectory 'shim.log'
+                Workspace = [string]$contextRecord.Workspace
+                BaselineWorktree = [string]$contextRecord.BaselineWorktree
+                FinalWorktree = [string]$contextRecord.FinalWorktree
+            }
+        }
+        else {
+            if (-not $AllowLegacyUnverifiedWorktree) {
+                throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks context.json; use -AllowLegacyUnverifiedWorktree only for explicitly accepted legacy evidence."
+            }
+            $worktreeEvidence = @($sourceRun.Evidence | Where-Object Kind -eq 'worktree' | Select-Object -First 1)
+            $context = [pscustomobject]@{
+                ShimLogPath = Join-Path $sourceRunDirectory 'shim.log'
+                Workspace = Join-Path $sourceRunDirectory 'workspace'
+                BaselineWorktree = 'recorded-worktree'
+                FinalWorktree = if ($worktreeEvidence.Count -eq 0 -or $worktreeEvidence[0].Passed) {
+                    'recorded-worktree'
+                }
+                else { 'recorded-change' }
+            }
+        }
+        $processResult = [pscustomobject]@{
+            ExitCode = [int]$sourceRun.ExitCode
+            TimedOut = [bool]$sourceRun.TimedOut
+            TranscriptPath = Join-Path $sourceRunDirectory 'transcript.md'
+            StandardOutputPath = Join-Path $sourceRunDirectory 'stdout.jsonl'
+            StandardErrorPath = Join-Path $sourceRunDirectory 'stderr.txt'
+        }
+        $runStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $assessment = Test-SkillEvalEvidence `
+            -Scenario $scenarioEntry.Scenario `
+            -ProcessResult $processResult `
+            -Context $context
+        $runStopwatch.Stop()
+        $result = [pscustomobject]@{
+            ScenarioId = [string]$sourceRun.ScenarioId
+            ScenarioIndex = if ($sourceRun.PSObject.Properties['ScenarioIndex']) {
+                [int]$sourceRun.ScenarioIndex
+            }
+            else { $scenarioEntry.ScenarioIndex }
+            Skill = [string]$scenarioEntry.Scenario.skill
+            Category = [string]$scenarioEntry.Scenario.category
+            EvidenceKind = [string]$scenarioEntry.Scenario.evidenceKind
+            RunNumber = [int]$sourceRun.RunNumber
+            Model = [string]$sourceSummary.Model
+            Passed = $assessment.Passed
+            SafetyPassed = $assessment.SafetyPassed
+            ExitCode = [int]$sourceRun.ExitCode
+            TimedOut = [bool]$sourceRun.TimedOut
+            InvokedSkills = $assessment.InvokedSkills
+            Evidence = $assessment.Evidence
+            RunDirectory = $sourceRunDirectory
+            Error = [string]$sourceRun.Error
+            SourceScenarioRevision = if ($sourceRun.PSObject.Properties['ScenarioRevision']) {
+                [string]$sourceRun.ScenarioRevision
+            }
+            else { $null }
+            ScenarioRevision = Get-SkillEvalObjectRevision -InputObject $scenarioEntry.Scenario
+            ModelOutputRevision = $modelOutputRevision
+            ModelOutputEvidenceVerified = $modelOutputEvidenceVerified
+            WorktreeEvidenceVerified = $worktreeEvidenceVerified
+            RescoreMilliseconds = $runStopwatch.ElapsedMilliseconds
+        }
+        $derivedRunDirectory = Join-Path $outputPath "$($result.ScenarioId)/run-$($result.RunNumber)"
+        New-Item -ItemType Directory -Path $derivedRunDirectory -Force | Out-Null
+        $result | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath (Join-Path $derivedRunDirectory 'result.json')
+        $results.Add($result)
+    }
+    $stopwatch.Stop()
+
+    $resultArray = @($results.ToArray() | Sort-Object ScenarioIndex, RunNumber)
+    $scenarioMetadata = Get-SkillEvalScenarioMetadata `
+        -Scenarios $scenarios `
+        -RepoRoot $resolvedRepoRoot `
+        -EvalRoot $evalRoot
+    $summary = [pscustomobject]@{
+        SchemaVersion = 1
+        GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
+        OriginalGeneratedAtUtc = [string]$sourceSummary.GeneratedAtUtc
+        EvidenceMode = 'rescored'
+        SourceSummaryPath = $sourceSummaryPath
+        Model = [string]$sourceSummary.Model
+        ScenarioRevision = (Get-FileHash -LiteralPath $resolvedScenarioPath -Algorithm SHA256).Hash
+        CandidateRevision = [string]$sourceSummary.CandidateRevision
+        CurrentCandidateRevision = Get-SkillEvalCandidateRevision -RepoRoot $resolvedRepoRoot
+        CandidateComponents = Get-SkillEvalCandidateComponents -RepoRoot $resolvedRepoRoot
+        FixtureRevision = [string]$sourceSummary.FixtureRevision
+        ScenarioRevisions = $scenarioMetadata
+        ScorerRevision = (Get-FileHash -LiteralPath (Join-Path $evalRoot 'SkillEvalScorer.ps1') -Algorithm SHA256).Hash
+        SourceScorerRevision = [string]$sourceSummary.ScorerRevision
+        ModelOutputEvidenceVerified = @($resultArray |
+            Where-Object { -not $_.ModelOutputEvidenceVerified }).Count -eq 0
+        WorktreeEvidenceVerified = @($resultArray |
+            Where-Object { -not $_.WorktreeEvidenceVerified }).Count -eq 0
+        RequestedMaxConcurrency = 0
+        MaxConcurrency = 0
+        WallTimeMilliseconds = $stopwatch.ElapsedMilliseconds
+        GeneratedRunCount = 0
+        RescoredRunCount = $resultArray.Count
+        ReusedRunCount = 0
+        RetryCount = 0
+        ScenarioCount = @($resultArray.ScenarioId | Sort-Object -Unique).Count
+        RunCount = $resultArray.Count
+        PassedCount = @($resultArray | Where-Object Passed).Count
+        FailedCount = @($resultArray | Where-Object { -not $_.Passed }).Count
+        SafetyFailureCount = @($resultArray | Where-Object { -not $_.SafetyPassed }).Count
+        InfrastructureFailureCount = @($resultArray | Where-Object {
+                $_.TimedOut -or $_.ExitCode -ne 0 -or
+                -not [string]::IsNullOrWhiteSpace([string]$_.Error)
+            }).Count
+        CopilotVersion = [string]$sourceSummary.CopilotVersion
+        PowerShellVersion = $PSVersionTable.PSVersion.ToString()
+        OperatingSystem = $PSVersionTable.OS
+        Runs = $resultArray
+    }
+    Write-SkillEvalSummary -Summary $summary -OutputDirectory $outputPath
+    return $summary
+}
+
 Export-ModuleMember -Function @(
     'Get-SkillEvalScenarios',
     'New-SkillEvalArguments',
     'Resolve-SkillEvalCopilotPath',
     'Test-SkillEvalEvidence',
     'Get-SkillEvalExitCode',
-    'Invoke-SkillEvalSuite'
+    'Invoke-SkillEvalSuite',
+    'Invoke-SkillEvalRescore',
+    'Get-SkillEvalAffectedScenarioIds',
+    'Get-SkillEvalWorkerAllocation'
 )

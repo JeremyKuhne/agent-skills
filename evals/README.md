@@ -82,6 +82,35 @@ release evidence.
   -RunCount 1
 ```
 
+Real model runs use eight isolated workers by default. Override concurrency for
+diagnostics or constrained environments:
+
+```pwsh
+./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-5.4 `
+  -RunCount 3 `
+  -MaxConcurrency 4
+```
+
+Every run owns its workspace, plugin copy, shim log, sandbox home, and
+`COPILOT_HOME`. Injected deterministic executors remain serial because their
+scriptblocks are intentionally process-local. Summaries restore scenario and
+run order after parallel completion and record requested/effective concurrency,
+wall time, queue time, setup time, model-process time, and scoring time.
+
+Run the complete five-document release matrix under one shared eight-call
+budget:
+
+```pwsh
+./evals/Invoke-SkillEvalMatrix.ps1 `
+  -Model gpt-5.4 `
+  -RunCount 3 `
+  -MaxConcurrency 8
+```
+
+The matrix allocates the worker budget by document workload and runs documents
+concurrently. It never creates more model workers than `-MaxConcurrency`.
+
 `gpt-5.4` is the current baseline. A release run may pass another concrete model
 that is available to the evaluation account; retain that model in the published
 summary rather than relying on a client default.
@@ -107,6 +136,39 @@ Select another scenario document explicitly:
 The runner loads one scenario document per invocation. Run all five documents
 for a capability release that changes `technical-writing`, `user-voice`, its
 private-profile composition contract, or a publishing workflow.
+
+For an incremental gate, use a prior summary to select only scenarios whose
+canonical definition, fixture closure, or candidate dependency closure changed:
+
+```pwsh
+./evals/Invoke-SkillEvals.ps1 `
+  -ScenarioPath ./evals/scenarios/technical-writing.json `
+  -BaselineSummaryPath ./artifacts/baseline/summary.json `
+  -RunCount 3
+```
+
+Inspect the affected identifiers without running the model:
+
+```pwsh
+./evals/Get-SkillEvalAffectedScenarios.ps1 `
+  -ScenarioPath ./evals/scenarios/technical-writing.json `
+  -BaselineSummaryPath ./artifacts/baseline/summary.json
+```
+
+When only deterministic response/command scoring changes, rescore immutable
+model output locally. The command verifies each captured output hash, writes a
+separate derived summary, and never rewrites source transcripts or JSONL:
+
+```pwsh
+./evals/Invoke-SkillEvalRescore.ps1 `
+  -ScenarioPath ./evals/scenarios/technical-writing.json `
+  -InputDirectory ./artifacts/baseline `
+  -OutputDirectory ./artifacts/rescored
+```
+
+After a rescore passes, run only each changed scenario three times to measure
+fresh model variance. Do not regenerate an unchanged document merely because a
+matcher changed.
 
 By default reports go to a unique temporary directory. `summary.json` and
 `summary.md` contain the aggregate result; each run retains its invocation,
@@ -137,3 +199,27 @@ and retain only the aggregate evidence needed for the release decision.
   and scorer revisions, client version, operating system, duration, and run
   number. The candidate revision covers the manifests, shared skills, agents,
   and repository-local skills copied into evaluation contexts.
+- `SkillEvalScorer.ps1` owns the scorer revision, so scheduler, candidate-hash,
+  and reporting changes do not invalidate captured model evidence.
+- Summaries also record canonical per-scenario revisions, fixture-closure
+  revisions, candidate component revisions, and scenario dependency closures.
+- Offline rescoring records original and current scorer revisions plus immutable
+  model-output hashes. Cached evidence is never substituted for an explicitly
+  requested fresh run.
+
+## Deterministic tests
+
+Run independent Pester files in isolated PowerShell processes:
+
+```pwsh
+./tests/Invoke-PesterShards.ps1 `
+  -Path ./tests `
+  -MaxConcurrency 4 `
+  -PesterVersion 5.7.1
+```
+
+Use `-PathPrefix` for local tool directories needed only by child processes.
+The runner writes one log/result per shard and an aggregate `summary.json`.
+Supply a previous aggregate through `-BaselineSummaryPath` to start historically
+slow shards first. Each shard has a hard process-tree timeout controlled by
+`-ShardTimeoutMinutes`.
