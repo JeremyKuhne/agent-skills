@@ -696,6 +696,29 @@ Describe 'Skill evaluation runner' {
                 -OutputDirectory (Join-Path $TestDrive 'legacy-rescore-results')
         } | Should -Throw '*lacks context.json*'
 
+        $legacyInput = Join-Path $TestDrive 'legacy-input'
+        Copy-Item -LiteralPath $outputDirectory -Destination $legacyInput -Recurse
+        $legacySummaryPath = Join-Path $legacyInput 'summary.json'
+        $legacySummary = Get-Content -LiteralPath $legacySummaryPath -Raw |
+            ConvertFrom-Json
+        foreach ($run in $legacySummary.Runs) {
+            $run.PSObject.Properties.Remove('ModelOutputRevision')
+        }
+        $legacySummary | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $legacySummaryPath
+        $legacyRescore = Invoke-SkillEvalRescore `
+            -RepoRoot $script:RepoRoot `
+            -ScenarioPath $script:ScenarioPath `
+            -InputDirectory $legacyInput `
+            -OutputDirectory (Join-Path $TestDrive 'accepted-legacy-rescore') `
+            -AllowLegacyUnverifiedEvidence
+        $legacyRescore.ModelOutputEvidenceVerified | Should -BeFalse
+        $legacyRescore.WorktreeEvidenceVerified | Should -BeFalse
+        @($legacyRescore.Runs | Where-Object { -not $_.ModelOutputEvidenceVerified }).Count |
+            Should -Be 2
+        @($legacyRescore.Runs | Where-Object { -not $_.WorktreeEvidenceVerified }).Count |
+            Should -Be 1
+
         $sameInputs = @(Get-SkillEvalAffectedScenarioIds `
                 -RepoRoot $script:RepoRoot `
                 -ScenarioPath $script:ScenarioPath `

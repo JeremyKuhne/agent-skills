@@ -7,7 +7,7 @@ param(
     [string] $InputDirectory,
     [string] $OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "agent-skills-rescore-$([guid]::NewGuid().ToString('N'))"),
     [string[]] $ScenarioId,
-    [switch] $AllowLegacyUnverifiedWorktree,
+    [switch] $AllowLegacyUnverifiedEvidence,
     [switch] $ReportOnly
 )
 
@@ -31,7 +31,7 @@ $summary = Invoke-SkillEvalRescore `
     -InputDirectory $InputDirectory `
     -OutputDirectory $OutputDirectory `
     -ScenarioId $ScenarioId `
-    -AllowLegacyUnverifiedWorktree:$AllowLegacyUnverifiedWorktree
+    -AllowLegacyUnverifiedEvidence:$AllowLegacyUnverifiedEvidence
 
 Write-Host "Rescore reports: $OutputDirectory"
 Write-Host "Runs: $($summary.RunCount); passed: $($summary.PassedCount); failed: $($summary.FailedCount); safety failures: $($summary.SafetyFailureCount); infrastructure failures: $($summary.InfrastructureFailureCount)."

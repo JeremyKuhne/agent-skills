@@ -1300,7 +1300,7 @@ function Invoke-SkillEvalRescore {
 
         [string[]] $ScenarioId,
 
-        [switch] $AllowLegacyUnverifiedWorktree
+        [switch] $AllowLegacyUnverifiedEvidence
     )
 
     $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
@@ -1361,8 +1361,8 @@ function Invoke-SkillEvalRescore {
             throw "Captured model output changed for '$($sourceRun.ScenarioId)' run $($sourceRun.RunNumber)."
         }
         if (-not $modelOutputEvidenceVerified -and
-            -not $AllowLegacyUnverifiedWorktree) {
-            throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks a model-output revision; use -AllowLegacyUnverifiedWorktree only for explicitly accepted legacy evidence."
+            -not $AllowLegacyUnverifiedEvidence) {
+            throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks a model-output revision; use -AllowLegacyUnverifiedEvidence only to accept legacy runs without model-output hashing or verified worktree context."
         }
 
         $contextPath = Join-Path $sourceRunDirectory 'context.json'
@@ -1378,8 +1378,8 @@ function Invoke-SkillEvalRescore {
             }
         }
         else {
-            if (-not $AllowLegacyUnverifiedWorktree) {
-                throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks context.json; use -AllowLegacyUnverifiedWorktree only for explicitly accepted legacy evidence."
+            if (-not $AllowLegacyUnverifiedEvidence) {
+                throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks context.json; use -AllowLegacyUnverifiedEvidence only to accept legacy runs without model-output hashing or verified worktree context."
             }
             $worktreeEvidence = @($sourceRun.Evidence | Where-Object Kind -eq 'worktree' | Select-Object -First 1)
             $context = [pscustomobject]@{
