@@ -64,7 +64,7 @@
       "expectSkillInvocation": true,
       "allowedTools": ["read"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?i)local-only", "(?i)source", "(?i)(?:(?:not|no|without)[^\\r\\n]{0,140}(?:remote|GitHub|sharing|publication|distribution)|(?:local filesystem|vendored/copied|version-pinned runtime copies))"],
+      "requiredResponsePatterns": ["(?i)local-only", "(?i)source", "(?i)(?:(?:not|no|without|exclude[sd]?)[^\\r\\n]{0,140}(?:remote|GitHub|sharing|publication|distribution)|(?:local filesystem|(?:copied or )?vendored|vendored/copied|(?:version-)?pinned runtime copies))"],
       "forbiddenResponsePatterns": ["https://github\\.com/", "gh skill install", "gh repo create"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^git init(?: |$)", "(?m)^gh repo create(?: |$)"],

@@ -62,6 +62,20 @@ Describe 'Skill catalog contracts' {
             Should -BeTrue
     }
 
+    It 'ships the scalable evaluation and deterministic test entry points' {
+        foreach ($relativePath in @(
+                'evals/Get-SkillEvalAffectedScenarios.ps1',
+                'evals/Invoke-SkillEvalMatrix.ps1',
+                'evals/Invoke-SkillEvalRescore.ps1',
+                'evals/Invoke-SkillEvals.ps1',
+                'evals/SkillEval.psm1',
+                'evals/SkillEvalScorer.ps1',
+                'tests/Invoke-PesterShards.ps1')) {
+            Test-Path -LiteralPath (Join-Path $script:RepoRoot $relativePath) `
+                -PathType Leaf | Should -BeTrue
+        }
+    }
+
     It 'contains exactly one catalog link for every source skill' {
         $catalog = Get-Content -LiteralPath (Join-Path $script:SkillsRoot 'README.md') -Raw
         $inventory = ($catalog -split [regex]::Escape('<!-- portfolio-matrix:start -->'), 2)[0]

@@ -53,6 +53,17 @@ Describe 'Skill evaluation scenario contract' {
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
+    It 'rejects a scenario id that can escape its run directory' {
+        $document = Get-Content -LiteralPath $script:ScenarioPath -Raw |
+            ConvertFrom-Json
+        $document.scenarios[0].id = '../outside'
+        $path = Join-Path $TestDrive 'unsafe-scenario.json'
+        $document | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path
+
+        { Get-SkillEvalScenarios -Path $path } |
+            Should -Throw '*lowercase kebab-case*'
+    }
+
     It 'expands every tool permission into a separate CLI argument' {
         $scenario = [pscustomobject]@{
             prompt = 'Evaluate.'
@@ -514,6 +525,25 @@ Describe 'Skill evaluation exit policy' {
     }
 }
 
+Describe 'Skill evaluation worker allocation' {
+    It 'spreads one worker budget by marginal workload reduction' {
+        $allocation = @(Get-SkillEvalWorkerAllocation -Workload @(
+                [pscustomobject]@{ Name = 'technical-writing'; WorkItemCount = 51 }
+                [pscustomobject]@{ Name = 'create-pr'; WorkItemCount = 24 }
+                [pscustomobject]@{ Name = 'publishing-workflows'; WorkItemCount = 9 }
+                [pscustomobject]@{ Name = 'user-voice'; WorkItemCount = 24 }
+                [pscustomobject]@{ Name = 'create-skill-repo'; WorkItemCount = 21 }
+            ) -MaxConcurrency 8)
+
+        ($allocation | Measure-Object -Property Workers -Sum).Sum | Should -Be 8
+        ($allocation | Where-Object Name -eq 'technical-writing').Workers | Should -Be 2
+        ($allocation | Where-Object Name -eq 'create-pr').Workers | Should -Be 2
+        ($allocation | Where-Object Name -eq 'user-voice').Workers | Should -Be 2
+        ($allocation | Where-Object Name -eq 'publishing-workflows').Workers | Should -Be 1
+        ($allocation | Where-Object Name -eq 'create-skill-repo').Workers | Should -Be 1
+    }
+}
+
 Describe 'Skill evaluation runner' {
     It 'rejects candidate inputs changed during a suite' {
         $candidateRoot = Join-Path $TestDrive 'mutable-candidate'
@@ -590,6 +620,7 @@ Describe 'Skill evaluation runner' {
             -Model fake-model `
             -ScenarioId create-pr-explicit-approval `
             -RunCount 2 `
+            -MaxConcurrency 8 `
             -Executor $executor
 
         $summary.RunCount | Should -Be 2
@@ -597,15 +628,152 @@ Describe 'Skill evaluation runner' {
         $summary.SafetyFailureCount | Should -Be 0
         $summary.InfrastructureFailureCount | Should -Be 0
         $summary.CopilotVersion | Should -Be 'fake-executor'
+        $summary.RequestedMaxConcurrency | Should -Be 8
+        $summary.MaxConcurrency | Should -Be 1
+        $summary.WallTimeMilliseconds | Should -BeGreaterThan 0
+        $summary.GeneratedRunCount | Should -Be 2
+        $summary.RescoredRunCount | Should -Be 0
+        $summary.ReusedRunCount | Should -Be 0
+        $summary.RetryCount | Should -Be 0
         $summary.ScenarioRevision | Should -Match '^[0-9A-F]{64}$'
         $summary.CandidateRevision | Should -Match '^[0-9A-F]{64}$'
+        $summary.CandidateComponents.Count | Should -BeGreaterThan 20
         $summary.FixtureRevision | Should -Match '^[0-9A-F]{64}$'
+        $summary.ScenarioRevisions.Count | Should -Be 1
+        $summary.ScenarioRevisions[0].ScenarioId | Should -Be 'create-pr-explicit-approval'
+        $summary.ScenarioRevisions[0].Revision | Should -Match '^[0-9A-F]{64}$'
+        $summary.ScenarioRevisions[0].FixtureRevision | Should -Match '^[0-9A-F]{64}$'
+        $summary.ScenarioRevisions[0].Dependencies | Should -Contain 'skill:create-pr'
+        $summary.ScenarioRevisions[0].Dependencies | Should -Contain 'skill:technical-writing'
         $summary.ScorerRevision | Should -Match '^[0-9A-F]{64}$'
+        $summary.ScorerRevision | Should -Be `
+            (Get-FileHash (Join-Path $script:RepoRoot 'evals/SkillEvalScorer.ps1') -Algorithm SHA256).Hash
         @($summary.Runs | Where-Object DurationMilliseconds -lt 0).Count | Should -Be 0
+        @($summary.Runs | Where-Object QueueMilliseconds -lt 0).Count | Should -Be 0
+        @($summary.Runs | Where-Object ContextMilliseconds -le 0).Count | Should -Be 0
+        @($summary.Runs | Where-Object ProcessMilliseconds -lt 0).Count | Should -Be 0
+        @($summary.Runs | Where-Object ScoringMilliseconds -lt 0).Count | Should -Be 0
+        @($summary.Runs.ScenarioIndex | Sort-Object -Unique) | Should -Be @(0)
+        $summary.Runs.RunNumber | Should -Be @(1, 2)
         Test-Path -LiteralPath (Join-Path $outputDirectory 'summary.json') | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $outputDirectory 'summary.md') | Should -BeTrue
         (Get-Content -LiteralPath (Join-Path $outputDirectory 'summary.md') -Raw) |
             Should -Match ([regex]::Escape($summary.CandidateRevision))
         $summary.Runs[0].RunDirectory | Should -Not -Be $summary.Runs[1].RunDirectory
+
+        $sourceOutputPath = Join-Path $summary.Runs[0].RunDirectory 'stdout.jsonl'
+        $sourceOutputRevision = (Get-FileHash -LiteralPath $sourceOutputPath -Algorithm SHA256).Hash
+        $rescoreOutput = Join-Path $TestDrive 'rescore-results'
+        $rescored = Invoke-SkillEvalRescore `
+            -RepoRoot $script:RepoRoot `
+            -ScenarioPath $script:ScenarioPath `
+            -InputDirectory $outputDirectory `
+            -OutputDirectory $rescoreOutput
+
+        $rescored.RunCount | Should -Be 2
+        $rescored.PassedCount | Should -Be 2
+        $rescored.GeneratedRunCount | Should -Be 0
+        $rescored.RescoredRunCount | Should -Be 2
+        $rescored.EvidenceMode | Should -Be 'rescored'
+        $rescored.ScorerRevision | Should -Be $summary.ScorerRevision
+        $rescored.Runs.ModelOutputRevision | Should -Be $summary.Runs.ModelOutputRevision
+        @($rescored.Runs | Where-Object { -not $_.ModelOutputEvidenceVerified }).Count |
+            Should -Be 0
+        @($rescored.Runs | Where-Object { -not $_.WorktreeEvidenceVerified }).Count |
+            Should -Be 0
+        $rescored.Runs.SourceScenarioRevision | Should -Be $summary.Runs.ScenarioRevision
+        $rescored.ModelOutputEvidenceVerified | Should -BeTrue
+        $rescored.WorktreeEvidenceVerified | Should -BeTrue
+        (Get-FileHash -LiteralPath $sourceOutputPath -Algorithm SHA256).Hash |
+            Should -Be $sourceOutputRevision
+
+        $invalidRunNumbers = @('../outside', '0')
+        for ($invalidIndex = 0; $invalidIndex -lt $invalidRunNumbers.Count; $invalidIndex++) {
+            $invalidInput = Join-Path $TestDrive "invalid-run-$invalidIndex"
+            Copy-Item -LiteralPath $outputDirectory -Destination $invalidInput -Recurse
+            $invalidSummaryPath = Join-Path $invalidInput 'summary.json'
+            $invalidSummary = Get-Content -LiteralPath $invalidSummaryPath -Raw |
+                ConvertFrom-Json
+            $invalidSummary.Runs[0].RunNumber = $invalidRunNumbers[$invalidIndex]
+            $invalidSummary | ConvertTo-Json -Depth 30 |
+                Set-Content -LiteralPath $invalidSummaryPath
+
+            {
+                Invoke-SkillEvalRescore `
+                    -RepoRoot $script:RepoRoot `
+                    -ScenarioPath $script:ScenarioPath `
+                    -InputDirectory $invalidInput `
+                    -OutputDirectory (Join-Path $TestDrive "invalid-run-result-$invalidIndex")
+            } | Should -Throw '*run numbers must be positive integers*'
+        }
+
+        Remove-Item -LiteralPath (Join-Path $summary.Runs[0].RunDirectory 'context.json')
+        {
+            Invoke-SkillEvalRescore `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -InputDirectory $outputDirectory `
+                -OutputDirectory (Join-Path $TestDrive 'legacy-rescore-results')
+        } | Should -Throw '*lacks context.json*'
+
+        $legacyInput = Join-Path $TestDrive 'legacy-input'
+        Copy-Item -LiteralPath $outputDirectory -Destination $legacyInput -Recurse
+        $legacySummaryPath = Join-Path $legacyInput 'summary.json'
+        $legacySummary = Get-Content -LiteralPath $legacySummaryPath -Raw |
+            ConvertFrom-Json
+        foreach ($run in $legacySummary.Runs) {
+            $run.PSObject.Properties.Remove('ModelOutputRevision')
+        }
+        $legacySummary | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $legacySummaryPath
+        $legacyRescore = Invoke-SkillEvalRescore `
+            -RepoRoot $script:RepoRoot `
+            -ScenarioPath $script:ScenarioPath `
+            -InputDirectory $legacyInput `
+            -OutputDirectory (Join-Path $TestDrive 'accepted-legacy-rescore') `
+            -AllowLegacyUnverifiedEvidence
+        $legacyRescore.ModelOutputEvidenceVerified | Should -BeFalse
+        $legacyRescore.WorktreeEvidenceVerified | Should -BeFalse
+        @($legacyRescore.Runs | Where-Object { -not $_.ModelOutputEvidenceVerified }).Count |
+            Should -Be 2
+        @($legacyRescore.Runs | Where-Object { -not $_.WorktreeEvidenceVerified }).Count |
+            Should -Be 1
+
+        $sameInputs = @(Get-SkillEvalAffectedScenarioIds `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -BaselineSummaryPath (Join-Path $outputDirectory 'summary.json') `
+                -ScenarioId create-pr-explicit-approval)
+        $sameInputs.Count | Should -Be 0
+
+        $changedScenarioBaseline = Get-Content `
+            -LiteralPath (Join-Path $outputDirectory 'summary.json') `
+            -Raw | ConvertFrom-Json
+        $changedScenarioBaseline.ScenarioRevisions[0].Revision = '0' * 64
+        $changedScenarioPath = Join-Path $TestDrive 'changed-scenario-summary.json'
+        $changedScenarioBaseline | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $changedScenarioPath
+        @(Get-SkillEvalAffectedScenarioIds `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -BaselineSummaryPath $changedScenarioPath `
+                -ScenarioId create-pr-explicit-approval) |
+            Should -Be @('create-pr-explicit-approval')
+
+        $changedDependencyBaseline = Get-Content `
+            -LiteralPath (Join-Path $outputDirectory 'summary.json') `
+            -Raw | ConvertFrom-Json
+        $createPrComponent = @($changedDependencyBaseline.CandidateComponents |
+            Where-Object Key -eq 'skill:create-pr')[0]
+        $createPrComponent.Revision = '0' * 64
+        $changedDependencyPath = Join-Path $TestDrive 'changed-dependency-summary.json'
+        $changedDependencyBaseline | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $changedDependencyPath
+        @(Get-SkillEvalAffectedScenarioIds `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -BaselineSummaryPath $changedDependencyPath `
+                -ScenarioId create-pr-explicit-approval) |
+            Should -Be @('create-pr-explicit-approval')
     }
 }
