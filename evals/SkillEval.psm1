@@ -1351,18 +1351,28 @@ function Invoke-SkillEvalRescore {
         if (-not $scenarioEntry) {
             throw "Scenario '$($sourceRun.ScenarioId)' is not present in '$resolvedScenarioPath'."
         }
+        $runNumber = 0
+        if ($null -eq $sourceRun.RunNumber -or
+            -not [int]::TryParse(
+                [string]$sourceRun.RunNumber,
+                [System.Globalization.NumberStyles]::None,
+                [System.Globalization.CultureInfo]::InvariantCulture,
+                [ref]$runNumber) -or
+            $runNumber -lt 1) {
+            throw "Scenario '$($sourceRun.ScenarioId)' has run number '$($sourceRun.RunNumber)'; run numbers must be positive integers."
+        }
         $sourceRunDirectory = (Resolve-Path -LiteralPath (
-            Join-Path $resolvedInputDirectory "$($sourceRun.ScenarioId)/run-$($sourceRun.RunNumber)")).Path
+            Join-Path $resolvedInputDirectory "$($sourceRun.ScenarioId)/run-$runNumber")).Path
         $modelOutputRevision = Get-SkillEvalRunArtifactRevision `
             -RunDirectory $sourceRunDirectory
         $modelOutputEvidenceVerified = [bool]$sourceRun.PSObject.Properties['ModelOutputRevision']
         if ($modelOutputEvidenceVerified -and
             [string]$sourceRun.ModelOutputRevision -cne $modelOutputRevision) {
-            throw "Captured model output changed for '$($sourceRun.ScenarioId)' run $($sourceRun.RunNumber)."
+            throw "Captured model output changed for '$($sourceRun.ScenarioId)' run $runNumber."
         }
         if (-not $modelOutputEvidenceVerified -and
             -not $AllowLegacyUnverifiedEvidence) {
-            throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks a model-output revision; use -AllowLegacyUnverifiedEvidence only to accept legacy runs without model-output hashing or verified worktree context."
+            throw "Run '$($sourceRun.ScenarioId)' $runNumber lacks a model-output revision; use -AllowLegacyUnverifiedEvidence only to accept legacy runs without model-output hashing or verified worktree context."
         }
 
         $contextPath = Join-Path $sourceRunDirectory 'context.json'
@@ -1379,7 +1389,7 @@ function Invoke-SkillEvalRescore {
         }
         else {
             if (-not $AllowLegacyUnverifiedEvidence) {
-                throw "Run '$($sourceRun.ScenarioId)' $($sourceRun.RunNumber) lacks context.json; use -AllowLegacyUnverifiedEvidence only to accept legacy runs without model-output hashing or verified worktree context."
+                throw "Run '$($sourceRun.ScenarioId)' $runNumber lacks context.json; use -AllowLegacyUnverifiedEvidence only to accept legacy runs without model-output hashing or verified worktree context."
             }
             $worktreeEvidence = @($sourceRun.Evidence | Where-Object Kind -eq 'worktree' | Select-Object -First 1)
             $context = [pscustomobject]@{
@@ -1414,7 +1424,7 @@ function Invoke-SkillEvalRescore {
             Skill = [string]$scenarioEntry.Scenario.skill
             Category = [string]$scenarioEntry.Scenario.category
             EvidenceKind = [string]$scenarioEntry.Scenario.evidenceKind
-            RunNumber = [int]$sourceRun.RunNumber
+            RunNumber = $runNumber
             Model = [string]$sourceSummary.Model
             Passed = $assessment.Passed
             SafetyPassed = $assessment.SafetyPassed

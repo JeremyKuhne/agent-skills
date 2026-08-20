@@ -687,6 +687,26 @@ Describe 'Skill evaluation runner' {
         (Get-FileHash -LiteralPath $sourceOutputPath -Algorithm SHA256).Hash |
             Should -Be $sourceOutputRevision
 
+        $invalidRunNumbers = @('../outside', '0')
+        for ($invalidIndex = 0; $invalidIndex -lt $invalidRunNumbers.Count; $invalidIndex++) {
+            $invalidInput = Join-Path $TestDrive "invalid-run-$invalidIndex"
+            Copy-Item -LiteralPath $outputDirectory -Destination $invalidInput -Recurse
+            $invalidSummaryPath = Join-Path $invalidInput 'summary.json'
+            $invalidSummary = Get-Content -LiteralPath $invalidSummaryPath -Raw |
+                ConvertFrom-Json
+            $invalidSummary.Runs[0].RunNumber = $invalidRunNumbers[$invalidIndex]
+            $invalidSummary | ConvertTo-Json -Depth 30 |
+                Set-Content -LiteralPath $invalidSummaryPath
+
+            {
+                Invoke-SkillEvalRescore `
+                    -RepoRoot $script:RepoRoot `
+                    -ScenarioPath $script:ScenarioPath `
+                    -InputDirectory $invalidInput `
+                    -OutputDirectory (Join-Path $TestDrive "invalid-run-result-$invalidIndex")
+            } | Should -Throw '*run numbers must be positive integers*'
+        }
+
         Remove-Item -LiteralPath (Join-Path $summary.Runs[0].RunDirectory 'context.json')
         {
             Invoke-SkillEvalRescore `
