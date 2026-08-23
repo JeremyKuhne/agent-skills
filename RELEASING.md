@@ -26,6 +26,8 @@ Run from a clean checkout of the candidate commit:
 
 ```pwsh
 npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"
+./tools/Validate-AgentFiles.ps1
+./tools/Test-AgentFileLinks.ps1
 ./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
 Get-ChildItem ./skills -Directory | ForEach-Object {
     npx --yes skills-ref@0.1.5 validate $_.FullName
