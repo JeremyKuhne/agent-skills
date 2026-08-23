@@ -253,21 +253,35 @@ Describe 'Cross-platform file creation behavior' {
             finally { Remove-Item -LiteralPath $root -Recurse -Force }
         }
 
-        It 'treats paths case-insensitively on Windows and case-sensitively on Unix' {
+        It 'follows the filesystem case sensitivity rather than the operating system' {
+            # Case sensitivity belongs to the filesystem. NTFS is case-insensitive by default and
+            # ext4 is case-sensitive, but macOS APFS is case-insensitive by default and any of them
+            # can be configured the other way, including per-directory on Windows. Asserting
+            # "not Windows means case-sensitive" would fail on a stock Mac.
             $root = New-TempRoot
             try {
                 $path = Join-Path $root 'casetest.txt'
                 Set-Content -LiteralPath $path -Value 'x' -NoNewline
+                $caseInsensitive = [System.IO.File]::Exists((Join-Path $root 'CASETEST.TXT'))
 
-                $upper = Join-Path $root 'CASETEST.TXT'
-                [System.IO.File]::Exists($upper) | Should -Be ([bool]$IsWindows)
+                # The name as written always resolves, whatever the volume does.
+                [System.IO.File]::Exists($path) | Should -BeTrue
+
+                if ($IsWindows) {
+                    $caseInsensitive | Should -BeTrue -Because 'NTFS is case-insensitive by default'
+                }
+                elseif ($IsLinux) {
+                    $caseInsensitive | Should -BeFalse -Because 'ext4 is case-sensitive'
+                }
+                # macOS is deliberately unasserted: either result is valid there.
             }
             finally { Remove-Item -LiteralPath $root -Recurse -Force }
         }
 
-        It 'sets the hidden attribute on Windows and ignores it on Unix' {
-            # On Unix the hidden attribute is derived from a leading dot in the name and cannot be
-            # set independently. SetAttributes does not throw, it simply has no effect.
+        It 'sets the hidden attribute on Windows and ignores it on Linux' {
+            # On Linux the hidden attribute is derived from a leading dot in the name and cannot be
+            # set independently. SetAttributes does not throw, it simply has no effect. macOS has a
+            # real UF_HIDDEN flag and was not measured, so it is left unasserted.
             $root = New-TempRoot
             try {
                 $path = Join-Path $root 'visible.txt'
@@ -275,11 +289,15 @@ Describe 'Cross-platform file creation behavior' {
                 [System.IO.File]::SetAttributes($path, [System.IO.FileAttributes]::Hidden)
 
                 $isHidden = [System.IO.File]::GetAttributes($path).HasFlag([System.IO.FileAttributes]::Hidden)
-                $isHidden | Should -Be ([bool]$IsWindows)
 
-                $dotted = Join-Path $root '.dotted.txt'
-                Set-Content -LiteralPath $dotted -Value 'x' -NoNewline
-                if (-not $IsWindows) {
+                if ($IsWindows) {
+                    $isHidden | Should -BeTrue
+                }
+                elseif ($IsLinux) {
+                    $isHidden | Should -BeFalse -Because 'the attribute is derived from a leading dot'
+
+                    $dotted = Join-Path $root '.dotted.txt'
+                    Set-Content -LiteralPath $dotted -Value 'x' -NoNewline
                     [System.IO.File]::GetAttributes($dotted).HasFlag(
                         [System.IO.FileAttributes]::Hidden) | Should -BeTrue
                 }

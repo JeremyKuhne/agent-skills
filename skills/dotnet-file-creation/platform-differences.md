@@ -43,18 +43,36 @@ or a different runtime will open the file regardless.
 
 ### Path casing
 
-| Windows | Unix |
+Case sensitivity is a property of the **filesystem**, not the operating system.
+The common shorthand "Windows is case-insensitive, Unix is case-sensitive" is
+wrong: a default macOS volume behaves like Windows here.
+
+| Filesystem | Default |
 | --- | --- |
-| Case-insensitive; `CASETEST.TXT` finds `casetest.txt` | Case-sensitive; they are different files |
+| NTFS (Windows) | Case-insensitive, case-preserving |
+| ext4, XFS (Linux) | Case-sensitive |
+| APFS, HFS+ (macOS) | Case-**in**sensitive, case-preserving |
+
+Any of these can be configured the other way. APFS and HFS+ can be formatted
+case-sensitive, ext4 supports casefolding, and Windows can enable case
+sensitivity per directory with `fsutil file setCaseSensitiveInfo`, which is what
+WSL does for its own trees.
 
 Consequences worth checking for:
 
-- Two config entries differing only in case collide on Windows and coexist on
-  Linux.
-- A lookup keyed by path needs `StringComparer.OrdinalIgnoreCase` on Windows and
-  `StringComparer.Ordinal` on Unix. `StringComparer.OrdinalIgnoreCase`
-  everywhere silently merges distinct Linux files.
-- Case-only renames need a two-step rename through a temporary name on Windows.
+- Two config entries differing only in case collide on Windows and on a default
+  macOS volume, and coexist on Linux.
+- A lookup keyed by path cannot pick its comparer from the OS. Use
+  `StringComparer.Ordinal` with a normalized key when you need exact identity;
+  probe the filesystem once if you need to match its behavior.
+  `StringComparer.OrdinalIgnoreCase` everywhere silently merges distinct files on
+  a case-sensitive volume.
+- Case-only renames need a two-step rename through a temporary name on any
+  case-insensitive volume, not just on Windows.
+
+If the behavior matters, probe it rather than branching on
+`OperatingSystem.IsWindows()`: create a file, ask whether the uppercase name
+resolves, and cache the answer per directory root.
 
 ### Hidden files
 

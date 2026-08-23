@@ -144,6 +144,15 @@ only built-in temp *file* API, which is why the guidance is built around
 | `SetAttributes(Hidden)` on a normal file | Sets it | No throw, **no effect** |
 | A dot-prefixed file reports `Hidden` | No | Yes |
 
+The casing row is a property of the **filesystem** measured here (NTFS and ext4),
+not of the operating system. macOS APFS is case-insensitive by default, so the
+Unix column must not be generalized to it. The bundled test asserts casing only
+on Windows and Linux for that reason, and leaves macOS unasserted.
+
+The two `Hidden` rows carry the same caveat: they were measured on Linux only.
+Whether .NET honors the macOS `UF_HIDDEN` flag was not tested, so the test scopes
+those assertions to Linux as well.
+
 `FileShare` being enforced on Linux is worth calling out, since it is often
 assumed to be a Windows-only concept. .NET emulates it, so it holds between .NET
 processes. It is not visible to non-.NET processes.

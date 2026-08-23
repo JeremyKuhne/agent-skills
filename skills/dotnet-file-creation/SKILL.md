@@ -96,9 +96,13 @@ move is a rename within one volume rather than a copy.
 | --- | --- | --- |
 | Delete a file that is open | Throws `IOException` | Succeeds; the name is unlinked |
 | `FileShare` | Enforced by the OS | Emulated; holds between .NET processes only |
-| Path comparison | Case-insensitive | Case-sensitive |
 | `FileAttributes.Hidden` | Settable | Derived from a leading dot; `SetAttributes` silently does nothing |
 | Directory mode or descriptor on intermediates | Applies to every level created | Applies to the leaf only |
+
+Path casing is **not** in that table on purpose. It is a filesystem property, not
+an OS one: NTFS and macOS APFS are both case-insensitive by default while Linux
+ext4 is case-sensitive, and every one of them can be configured the other way.
+Probe it rather than inferring it from the platform.
 
 `FileMode.CreateNew` is exclusive and `File.Move(overwrite: true)` replaces the
 destination on both. Details and the traps in
