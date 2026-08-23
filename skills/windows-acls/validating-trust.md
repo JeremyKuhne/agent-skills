@@ -100,17 +100,23 @@ them.
 Independent of descriptors, when a caller-supplied component becomes part of a
 path:
 
+- Require the trusted root to pass `Path.IsPathFullyQualified`.
+  `Path.IsPathRooted` is insufficient because Windows drive-relative and
+  root-relative paths are rooted but still depend on current-directory state.
 - Join it to the trusted root with `Path.Join`, not `Path.Combine`, so a
   rooted component cannot discard the root.
 - Reject directory separators and `..`.
 - Reject the volume separator `:`.
 - Reject a trailing dot or trailing space. Windows strips both, so a component
   ending in a dot or a space aliases the same name without it.
-- Canonicalize with `Path.GetFullPath` and then verify containment against the
-  root with a trailing separator so that `C:\root2` does not pass as a child of
-  `C:\root`. Use `Ordinal` for a fail-closed check. If casing aliases must be
-  accepted, first probe the filesystem for that root and use `OrdinalIgnoreCase`
-  only when the probe shows it is case-insensitive.
+- Canonicalize the joined path with `Path.GetFullPath(joinedPath, root)`. The
+  explicit fully qualified base avoids the process current directory and
+  Windows per-drive current-directory state. Then verify containment against
+  a root prefix that ends in one separator so that `C:\root2` does not pass as a
+  child of `C:\root`. Retain the separator already present on a filesystem root;
+  do not append a second one. Use `Ordinal` for a fail-closed check. If casing
+  aliases must be accepted, first probe the filesystem for that root and use
+  `OrdinalIgnoreCase` only when the probe shows it is case-insensitive.
 
 Reject legacy device basenames such as `CON`, `NUL`, and `LPT1` when Windows 10
 or Server 2022 is supported; those systems can still reinterpret them in a

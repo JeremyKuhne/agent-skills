@@ -14,6 +14,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Test-PathWithin([string] $candidate, [string] $root) {
+    if (-not [System.IO.Path]::IsPathFullyQualified($candidate)) {
+        throw "Candidate path must be fully qualified: '$candidate'."
+    }
+    if (-not [System.IO.Path]::IsPathFullyQualified($root)) {
+        throw "Root path must be fully qualified: '$root'."
+    }
+
     $comparison = if ($IsWindows) {
         [System.StringComparison]::OrdinalIgnoreCase
     }

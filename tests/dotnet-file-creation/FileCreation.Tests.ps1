@@ -182,13 +182,101 @@ Describe 'Cross-platform file creation behavior' {
 
     Context 'Creation semantics that are the same everywhere' {
 
-        It 'keeps the first segment when a later Path.Join segment is rooted' {
+        It 'replaces earlier Path.Combine segments but keeps earlier Path.Join segments' {
             $root = Join-Path $TestDrive 'trusted-root'
             $rootedSegment = if ($IsWindows) { 'C:\outside' } else { '/outside' }
 
             [System.IO.Path]::IsPathRooted($rootedSegment) | Should -BeTrue
+            [System.IO.Path]::Combine($root, $rootedSegment) | Should -Be $rootedSegment
             [System.IO.Path]::Join($root, $rootedSegment).StartsWith(
                 "$root$([System.IO.Path]::DirectorySeparatorChar)",
+                [StringComparison]::Ordinal) | Should -BeTrue
+        }
+
+        It 'distinguishes rooted paths from fully qualified paths' {
+            if ($IsWindows) {
+                [System.IO.Path]::IsPathRooted('C:relative') | Should -BeTrue
+                [System.IO.Path]::IsPathFullyQualified('C:relative') | Should -BeFalse
+                [System.IO.Path]::IsPathRooted('\root-relative') | Should -BeTrue
+                [System.IO.Path]::IsPathFullyQualified('\root-relative') | Should -BeFalse
+                [System.IO.Path]::IsPathFullyQualified('C:\absolute') | Should -BeTrue
+            }
+            else {
+                [System.IO.Path]::IsPathRooted('relative') | Should -BeFalse
+                [System.IO.Path]::IsPathFullyQualified('relative') | Should -BeFalse
+                [System.IO.Path]::IsPathRooted('/absolute') | Should -BeTrue
+                [System.IO.Path]::IsPathFullyQualified('/absolute') | Should -BeTrue
+            }
+        }
+
+        It 'resolves relative paths deterministically only with a fully qualified base' {
+            $firstBase = Join-Path $TestDrive 'base-a'
+            $secondBase = Join-Path $TestDrive 'base-b'
+            [System.IO.Directory]::CreateDirectory($firstBase) | Out-Null
+            [System.IO.Directory]::CreateDirectory($secondBase) | Out-Null
+            $originalDirectory = [Environment]::CurrentDirectory
+
+            try {
+                [Environment]::CurrentDirectory = $firstBase
+                $firstAmbientResult = [System.IO.Path]::GetFullPath('child.txt')
+                [Environment]::CurrentDirectory = $secondBase
+                $secondAmbientResult = [System.IO.Path]::GetFullPath('child.txt')
+
+                $firstAmbientResult | Should -Not -Be $secondAmbientResult
+                [System.IO.Path]::GetFullPath('child.txt', $firstBase) |
+                    Should -Be ([System.IO.Path]::Join($firstBase, 'child.txt'))
+
+                if ($IsWindows) {
+                    $baseDrive = $firstBase[0]
+                    $otherDrive = if ($baseDrive -eq 'C') { 'D' } else { 'C' }
+                    [System.IO.Path]::GetFullPath("${baseDrive}:same-drive.txt", $firstBase) |
+                        Should -Be ([System.IO.Path]::Join($firstBase, 'same-drive.txt'))
+                    [System.IO.Path]::GetFullPath("${otherDrive}:other-drive.txt", $firstBase) |
+                        Should -Be "${otherDrive}:\other-drive.txt"
+                    [System.IO.Path]::GetFullPath('\root-relative.txt', $firstBase) |
+                        Should -Be ([System.IO.Path]::Join(
+                            [System.IO.Path]::GetPathRoot($firstBase),
+                            'root-relative.txt'))
+                }
+
+                Get-ThrownException {
+                    [System.IO.Path]::GetFullPath('child.txt', 'relative-base')
+                } | Should -BeOfType ([System.ArgumentException])
+            }
+            finally { [Environment]::CurrentDirectory = $originalDirectory }
+        }
+
+        It 'requires a trailing separator when checking path containment' {
+            $root = [System.IO.Path]::GetFullPath((Join-Path $TestDrive 'root'))
+            $inside = [System.IO.Path]::GetFullPath(
+                [System.IO.Path]::Join($root, 'folder', 'child.txt'),
+                $root)
+            $sibling = [System.IO.Path]::GetFullPath(
+                [System.IO.Path]::Join($root, '..', 'root2', 'child.txt'),
+                $root)
+            $rootPrefix = "$root$([System.IO.Path]::DirectorySeparatorChar)"
+
+            $inside.StartsWith($rootPrefix, [StringComparison]::Ordinal) |
+                Should -BeTrue
+            $sibling.StartsWith($root, [StringComparison]::Ordinal) |
+                Should -BeTrue
+            $sibling.StartsWith($rootPrefix, [StringComparison]::Ordinal) |
+                Should -BeFalse
+        }
+
+        It 'retains the existing separator on a filesystem root containment prefix' {
+            $root = [System.IO.Path]::GetPathRoot($TestDrive)
+            [System.IO.Path]::TrimEndingDirectorySeparator($root) |
+                Should -Be $root
+
+            $rootPrefix = if ([System.IO.Path]::EndsInDirectorySeparator($root)) {
+                $root
+            }
+            else { "$root$([System.IO.Path]::DirectorySeparatorChar)" }
+
+            $rootPrefix | Should -Be $root
+            [System.IO.Path]::Join($root, 'child.txt').StartsWith(
+                $rootPrefix,
                 [StringComparison]::Ordinal) | Should -BeTrue
         }
 

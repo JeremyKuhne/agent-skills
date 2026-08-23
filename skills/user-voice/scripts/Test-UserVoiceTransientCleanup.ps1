@@ -32,10 +32,7 @@ $rootPrefix = $root.TrimEnd(
     [System.IO.Path]::DirectorySeparatorChar
 
 foreach ($expected in @($ExpectedAbsentPath | Where-Object { $_ })) {
-    $candidate = if ([System.IO.Path]::IsPathRooted($expected)) {
-        [System.IO.Path]::GetFullPath($expected)
-    }
-    else { [System.IO.Path]::GetFullPath((Join-Path $root $expected)) }
+    $candidate = [System.IO.Path]::GetFullPath($expected, $root)
     if (-not $candidate.StartsWith($rootPrefix, $comparison)) {
         Add-CleanupError 'scope' "Expected-absent path escapes the maintenance root: '$expected'."
     }

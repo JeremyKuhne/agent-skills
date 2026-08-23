@@ -1,6 +1,6 @@
 ---
 name: dotnet-file-creation
-description: Create files and directories correctly on .NET 10+ across Windows, Linux, and macOS. Use when choosing where to write temporary, persisted per-user, or machine-wide shared state; when making a file readable only by its owner; when calling File.Open/File.Create/FileStreamOptions/Directory.CreateDirectory/CreateTempSubdirectory/GetTempFileName; when handling UnixFileMode, umask, or PlatformNotSupportedException from UnixCreateMode; when a CA1416 warning appears on a file API; or when file behavior differs between Windows and Linux, such as deleting an open file, FileShare, path casing, or hidden files. Also use for "where should this temp file go", "make this file user-only", "why does this work on Windows but not Linux", and atomic write-then-rename publishing.
+description: Create files, directories, and paths correctly on .NET 10+ across Windows, Linux, and macOS. Use when choosing where to write temporary, persisted per-user, or machine-wide shared state; constructing paths with Path.Join or Path.Combine; distinguishing rooted from fully qualified paths; resolving paths with Path.GetFullPath; making a file readable only by its owner; calling File.Open/File.Create/FileStreamOptions/Directory.CreateDirectory/CreateTempSubdirectory/GetTempFileName; handling UnixFileMode, umask, or PlatformNotSupportedException from UnixCreateMode; responding to a CA1416 warning on a file API; or investigating behavior that differs between Windows and Linux, such as deleting an open file, FileShare, path casing, or hidden files. Also use for "where should this temp file go", "make this file user-only", "why does this work on Windows but not Linux", and atomic write-then-rename publishing.
 license: MIT
 compatibility: Targets .NET 7 or later for the Unix mode APIs; guidance assumes .NET 10 or later. The bundled tests run on Windows, Linux, and macOS under PowerShell 7 and Pester 5.7 or later.
 metadata:
@@ -40,6 +40,23 @@ Two assumptions cause most cross-platform file bugs:
 
 Detail per category: [temporary-files.md](temporary-files.md),
 [persisted-files.md](persisted-files.md), [shared-files.md](shared-files.md).
+
+## Construct and resolve paths deliberately
+
+- Construct paths with `Path.Join`, never `Path.Combine` or string
+  concatenation. A rooted later segment replaces every earlier segment in
+  `Path.Combine`; `Path.Join` preserves them.
+- Use `Path.IsPathFullyQualified` when asking whether current-directory state
+  can change what a path means. `Path.IsPathRooted` is not that test: on Windows,
+  `C:logs` and `\logs` are rooted but still relative.
+- Resolve a path that is not fully qualified with
+  `Path.GetFullPath(path, basePath)`, where `basePath` is a known fully qualified
+  root. The one-argument overload uses ambient process state.
+- Keep resolution separate from containment. `Path.Join`, qualification, and
+  canonicalization do not reject `..`, alternate roots, or symbolic links.
+
+The complete decision path and Windows partial-path matrix are in
+[paths.md](paths.md).
 
 ## Making a file owner-only
 
