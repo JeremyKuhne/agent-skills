@@ -91,10 +91,7 @@ $scanRoots = [System.Collections.Generic.List[string]]::new()
 $workingScanRoots = [System.Collections.Generic.List[string]]::new()
 if ($ContentPath) {
     foreach ($contentInput in $ContentPath) {
-        $candidate = if ([System.IO.Path]::IsPathRooted($contentInput)) {
-            [System.IO.Path]::GetFullPath($contentInput)
-        }
-        else { [System.IO.Path]::GetFullPath((Join-Path $root $contentInput)) }
+        $candidate = [System.IO.Path]::GetFullPath($contentInput, $root)
         if (-not ($candidate.Equals($root, $pathComparison) -or
                 $candidate.StartsWith($rootPrefix, $pathComparison))) {
             Add-RepositoryError 'content-scope' "Content path escapes the repository: '$contentInput'."
@@ -213,23 +210,35 @@ if ($isGitRepository -and $RequirePrePushHook) {
         Add-RepositoryError 'hook' 'core.hooksPath does not name the reviewed hook directory.'
     }
     else {
-        $resolvedHooksPath = if ([System.IO.Path]::IsPathRooted($hooksPath[0])) {
-            [System.IO.Path]::GetFullPath($hooksPath[0])
-        }
-        else { [System.IO.Path]::GetFullPath((Join-Path $root $hooksPath[0])) }
-        $hook = Join-Path $resolvedHooksPath 'pre-push'
-        if (-not (Test-Path -LiteralPath $hook -PathType Leaf)) {
-            Add-RepositoryError 'hook' 'The reviewed pre-push hook is missing.'
+        $hooksPathValue = [string] $hooksPath[0]
+        if ([System.IO.Path]::IsPathRooted($hooksPathValue) -and
+            -not [System.IO.Path]::IsPathFullyQualified($hooksPathValue)) {
+            Add-RepositoryError 'hook' 'core.hooksPath is rooted but not fully qualified.'
         }
         else {
-            $hookContent = [System.IO.File]::ReadAllText($hook)
-            if ($hookContent -notmatch 'Test-UserVoiceRepository\.ps1') {
-                Add-RepositoryError 'hook' 'The pre-push hook does not invoke the repository scanner.'
+            $resolvedHooksPath = [System.IO.Path]::GetFullPath(
+                $hooksPathValue,
+                $root)
+            if (-not ($resolvedHooksPath.Equals($root, $pathComparison) -or
+                    $resolvedHooksPath.StartsWith($rootPrefix, $pathComparison))) {
+                Add-RepositoryError 'hook' 'core.hooksPath escapes the repository.'
             }
-            if (-not $IsWindows) {
-                $mode = (Get-Item -LiteralPath $hook).UnixFileMode
-                if (($mode -band [System.IO.UnixFileMode]::UserExecute) -eq 0) {
-                    Add-RepositoryError 'hook' 'The pre-push hook is not executable.'
+            else {
+                $hook = Join-Path $resolvedHooksPath 'pre-push'
+                if (-not (Test-Path -LiteralPath $hook -PathType Leaf)) {
+                    Add-RepositoryError 'hook' 'The reviewed pre-push hook is missing.'
+                }
+                else {
+                    $hookContent = [System.IO.File]::ReadAllText($hook)
+                    if ($hookContent -notmatch 'Test-UserVoiceRepository\.ps1') {
+                        Add-RepositoryError 'hook' 'The pre-push hook does not invoke the repository scanner.'
+                    }
+                    if (-not $IsWindows) {
+                        $mode = (Get-Item -LiteralPath $hook).UnixFileMode
+                        if (($mode -band [System.IO.UnixFileMode]::UserExecute) -eq 0) {
+                            Add-RepositoryError 'hook' 'The pre-push hook is not executable.'
+                        }
+                    }
                 }
             }
         }

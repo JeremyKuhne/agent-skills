@@ -51,7 +51,9 @@ question they answer.
 - [Path class](https://learn.microsoft.com/dotnet/api/system.io.path)
 - [Path.Join](https://learn.microsoft.com/dotnet/api/system.io.path.join) - joins without allowing a rooted later segment to replace the root
 - [Path.Combine](https://learn.microsoft.com/dotnet/api/system.io.path.combine) - a rooted later segment discards the earlier path; do not use it for path construction
-- [Path.GetFullPath](https://learn.microsoft.com/dotnet/api/system.io.path.getfullpath)
+- [Path.IsPathRooted](https://learn.microsoft.com/dotnet/api/system.io.path.ispathrooted) - detects root syntax, including Windows rooted-relative paths
+- [Path.IsPathFullyQualified](https://learn.microsoft.com/dotnet/api/system.io.path.ispathfullyqualified) - detects whether current drive or directory state can affect resolution
+- [Path.GetFullPath](https://learn.microsoft.com/dotnet/api/system.io.path.getfullpath) - use the overload with a fully qualified base for deterministic relative-path resolution
 - [Maximum path length limitation](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation) - manifest and policy requirements for native Win32 callers
 - [Naming files, paths, and namespaces](https://learn.microsoft.com/windows/win32/fileio/naming-a-file)
 

@@ -62,6 +62,13 @@ function Test-PathWithin {
         [Parameter(Mandatory)] [string] $Root
     )
 
+    if (-not [System.IO.Path]::IsPathFullyQualified($Candidate)) {
+        throw "Candidate path must be fully qualified: '$Candidate'."
+    }
+    if (-not [System.IO.Path]::IsPathFullyQualified($Root)) {
+        throw "Root path must be fully qualified: '$Root'."
+    }
+
     $comparison = if ($IsWindows) {
         [System.StringComparison]::OrdinalIgnoreCase
     }

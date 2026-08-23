@@ -166,10 +166,48 @@ runtime behavior entirely.
 
 ---
 
-## 6. Verification status
+## 6. Path construction and qualification
+
+Path behavior was measured separately on Windows 11 (10.0.26200), .NET 10.0.9,
+via PowerShell 7.6.3:
+
+| Input or operation | Result |
+| --- | --- |
+| `Path.Combine(root, rootedInput)` | Discarded `root` |
+| `Path.Join(root, rootedInput)` | Preserved `root` |
+| `Path.IsPathRooted("C:relative")` | `true` |
+| `Path.IsPathFullyQualified("C:relative")` | `false` |
+| `Path.IsPathRooted("\\root-relative")` | `true` |
+| `Path.IsPathFullyQualified("\\root-relative")` | `false` |
+| `Path.TrimEndingDirectorySeparator("C:\\")` | Preserved the filesystem root separator |
+
+Changing `Environment.CurrentDirectory` between two existing directories changed
+the result of `Path.GetFullPath("child.txt")`. The ordinary relative input
+`child.txt` resolved under the explicit base both times when passed to
+`Path.GetFullPath(path, basePath)`, and a relative `basePath` threw
+`ArgumentException`.
+
+The explicit-base overload is deterministic but is not a containment primitive.
+With base `N:\trusted\root`, the measured Windows results were:
+
+| Input | Result |
+| --- | --- |
+| `N:child.txt` | `N:\trusted\root\child.txt` |
+| `C:child.txt` | `C:\child.txt` |
+| `\child.txt` | `N:\child.txt` |
+| `child.txt` | `N:\trusted\root\child.txt` |
+
+The .NET Windows path-format documentation additionally establishes that the
+one-argument overload can resolve a drive-relative path from per-drive current
+directory state inherited through a hidden environment variable. That ambient
+state was not manipulated in the local harness.
+
+---
+
+## 7. Verification status
 
 The bundled Pester tests run on every platform and branch at run time. On this
-machine they were executed on Windows: **14 passed, 3 skipped** (the three
+machine they were executed on Windows: **18 passed, 3 skipped** (the three
 Unix-only cases).
 
 The Unix branches were **not** executed as PowerShell here, because installing

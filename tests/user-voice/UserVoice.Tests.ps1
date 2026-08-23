@@ -254,6 +254,25 @@ Describe 'Private profile scaffolding' {
                 '-ProfilePath', $runtime)).ExitCode | Should -Be 1
     }
 
+    It 'rejects a synchronized-folder root that is not fully qualified' {
+        $root = Join-Path $TestDrive 'relative-sync-root'
+        $scriptPath = Join-Path $script:SkillRoot 'scripts/New-UserVoiceProfile.ps1'
+        $originalOneDrive = $env:OneDrive
+        $env:OneDrive = if ($IsWindows) { 'C:sync' } else { 'sync' }
+
+        try {
+            $result = Invoke-UserVoiceScript -Script $scriptPath -Arguments @(
+                '-MaintenanceRoot', $root)
+        }
+        finally {
+            $env:OneDrive = $originalOneDrive
+        }
+
+        $result.ExitCode | Should -Be 1
+        $result.Output | Should -Match 'Root path must be fully qualified'
+        Test-Path -LiteralPath $root | Should -BeFalse
+    }
+
     It 'adds dedicated private-repository defenses only when requested' {
         $root = Join-Path $TestDrive 'prepared'
         $scriptPath = Join-Path $script:SkillRoot 'scripts/New-UserVoiceProfile.ps1'
@@ -516,6 +535,33 @@ function gh { '{"visibility":"PUBLIC","owner":{"login":"example"},"name":"privat
             '-RepositoryPath', $root,
             '-RequirePrePushHook')
         $valid.ExitCode | Should -Be 0 -Because $valid.Output
+
+        $outsideHooks = Join-Path $TestDrive 'outside-hooks'
+        $outsideHook = Join-Path $outsideHooks 'pre-push'
+        Write-Utf8File $outsideHook "#!/usr/bin/env sh`n# Test-UserVoiceRepository.ps1"
+        if (-not $IsWindows) {
+            & chmod +x $outsideHook
+            $LASTEXITCODE | Should -Be 0
+        }
+        foreach ($outsideHooksPath in @('../outside-hooks', $outsideHooks)) {
+            & git -C $root config core.hooksPath $outsideHooksPath
+            $outside = Invoke-UserVoiceScript -Script $scanner -Arguments @(
+                '-RepositoryPath', $root,
+                '-RequirePrePushHook')
+            $outside.ExitCode | Should -Be 1
+            $outside.Output | Should -Match 'core\.hooksPath escapes the repository'
+        }
+        & git -C $root config core.hooksPath .githooks
+
+        if ($IsWindows -and $root.Length -gt 1 -and $root[1] -eq ':') {
+            & git -C $root config core.hooksPath "$($root[0]):.githooks"
+            $partiallyQualified = Invoke-UserVoiceScript -Script $scanner -Arguments @(
+                '-RepositoryPath', $root,
+                '-RequirePrePushHook')
+            $partiallyQualified.ExitCode | Should -Be 1
+            $partiallyQualified.Output | Should -Match 'rooted but not fully qualified'
+            & git -C $root config core.hooksPath .githooks
+        }
 
         Remove-Item -LiteralPath $hook
         $missing = Invoke-UserVoiceScript -Script $scanner -Arguments @(

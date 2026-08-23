@@ -100,11 +100,11 @@ This asymmetry catches people who verified their code on one platform. See
 
 ## Paths
 
-- Build paths with `Path.Join`, never `Path.Combine` or string concatenation.
-  `Path.Combine(root, input)` discards the root when `input` is rooted, which is
-  an absolute-path injection. `Path.Join` preserves the root, but it is not a
-  complete traversal defense: reject separators, volume separators, and `..`,
-  then canonicalize and containment-check untrusted components.
+- Follow [paths.md](paths.md) for construction, qualification, deterministic
+  resolution, and containment. In particular, build with `Path.Join`, use
+  `Path.IsPathFullyQualified` rather than `Path.IsPathRooted` to detect ambient
+  dependence, and resolve relative paths with the `Path.GetFullPath` overload
+  that takes a known fully qualified base.
 - `Path.DirectorySeparatorChar` differs, but Windows accepts forward slashes, so
   forward slashes in literals are usually portable. Backslashes are not.
 - `Path.GetFullPath` normalizes, and normalization differs. Windows strips

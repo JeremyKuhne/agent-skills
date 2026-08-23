@@ -164,6 +164,14 @@ try {
         '-NoProfile',
         '-File', (Join-Path $scripts 'Test-UserVoiceTransientCleanup.ps1'),
         '-MaintenanceRoot', $maintenanceRoot)
+    if ($IsWindows -and $maintenanceRoot.Length -gt 1 -and
+        $maintenanceRoot[1] -eq ':') {
+        $null = Invoke-RequiredSuccess 'Drive-relative expected-absent path' @(
+            '-NoProfile',
+            '-File', (Join-Path $scripts 'Test-UserVoiceTransientCleanup.ps1'),
+            '-MaintenanceRoot', $maintenanceRoot,
+            '-ExpectedAbsentPath', "$($maintenanceRoot[0]):missing.tmp")
+    }
     $rawDirectory = Join-Path $maintenanceRoot 'options'
     New-Item -ItemType Directory -Path $rawDirectory | Out-Null
     [System.IO.File]::WriteAllText(

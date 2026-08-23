@@ -112,6 +112,27 @@ Describe 'Install-UserSkill.ps1' {
         } | Should -Throw '*AllowPrivateMultiHostExposure*'
     }
 
+    It 'rejects a synchronized-folder root that is not fully qualified' {
+        $source = New-InstallerSkill -CaseName 'relative-sync-root'
+        $targetHome = Join-Path $TestDrive 'relative-sync-root-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        $originalOneDrive = $env:OneDrive
+        $env:OneDrive = if ($IsWindows) { 'C:sync' } else { 'sync' }
+
+        try {
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw '*Root path must be fully qualified*'
+        }
+        finally {
+            $env:OneDrive = $originalOneDrive
+        }
+    }
+
     It 'rejects a public Git repository in private mode' {
         $source = New-InstallerSkill -CaseName 'public-source'
         $repository = Split-Path -Parent $source

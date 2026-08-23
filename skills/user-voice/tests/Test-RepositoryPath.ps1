@@ -29,6 +29,23 @@ try {
         throw "The absolute repository root was rejected:`n$($output -join "`n")"
     }
 
+    if ($IsWindows -and $repository.Length -gt 1 -and $repository[1] -eq ':') {
+        $driveRelativeContent = "$($repository[0]):safe.md"
+        $output = @(& $pwsh -NoProfile -File $validator `
+                -RepositoryPath $repository `
+                -ContentPath $driveRelativeContent 2>&1)
+        if ($LASTEXITCODE -ne 0) {
+            throw "The drive-relative content path was not resolved against the repository:`n$($output -join "`n")"
+        }
+
+        $output = @(& $pwsh -NoProfile -File $validator `
+                -RepositoryPath $repository `
+                -ContentPath '\safe.md' 2>&1)
+        if ($LASTEXITCODE -eq 0) {
+            throw 'A root-relative content path outside the repository was accepted.'
+        }
+    }
+
     $output = @(& $pwsh -NoProfile -File $validator `
             -RepositoryPath $repository `
             -ContentPath $outside 2>&1)
