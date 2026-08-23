@@ -95,7 +95,7 @@ care about in its own call:
 string current = root;
 foreach (string segment in segments)
 {
-  current = Path.Join(current, segment);
+    current = Path.Join(current, segment);
     Directory.CreateDirectory(current, OwnerOnlyDirectory);
 }
 ```
