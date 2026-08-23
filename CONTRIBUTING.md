@@ -51,6 +51,10 @@ npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_module
 # Offline link check (same engine as CI; requires the lychee binary).
 lychee --no-progress --offline "**/*.md"
 
+# Repository agent guidance and its generated Copilot mirror.
+./tools/Validate-AgentFiles.ps1
+./tools/Test-AgentFileLinks.ps1
+
 # Agent Skills spec plus this portfolio's metadata/overlay contract.
 npx --yes skills-ref@0.1.5 validate ./skills/<name>
 ./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
