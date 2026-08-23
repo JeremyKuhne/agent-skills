@@ -31,6 +31,8 @@ host-read location) with `gh skill install`.
 | [technical-writing](./technical-writing/SKILL.md) | "draft this issue", "rewrite this email", "tighten this explanation", "review this note before publishing"; creating durable human-facing prose; the final text check before a publishing workflow | Portable core with an optional overlay. Draft, revise, review, and pre-publication modes; grounding and authority remain hard gates, and the skill never publishes. |
 | [user-voice](./user-voice/SKILL.md) | "capture how I write", "build my voice profile", "hand voice research to another agent", "audit / migrate / install my private voice skill", connect a personal voice profile to technical-writing | Portable lifecycle and privacy workflow. Creates only local private candidates, audits verified private source and user-scope installation, and keeps every personalized profile out of the commons. |
 | [winui-win32-hosting](./winui-win32-hosting/SKILL.md) | "host WinUI in Win32", "embed a WinUI control in an HWND", set up or debug `DesktopWindowXamlSource`, XAML Islands, dispatcher/message/focus/DPI/airspace/accessibility/packaging/lifetime integration | Portable core with an optional overlay. Includes a build-tested raw host, four Priority 0 guides, deeper boundary guidance, an official source map, and the remaining documentation roadmap. |
+| [windows-acls](./windows-acls/SKILL.md) | "where should this config / cache / state file go", "is ProgramData safe", "how do I ACL this folder", "can a standard user tamper with this", reviewing `DirectorySecurity` / `SetOwner` / `SetAccessRuleProtection`, ACL tests that only fail off CI | Portable core with an optional overlay. Location choice for per-user and machine state, root-anchored trust validation, and the elevated-CI testing trap; bundles measured research and a documentation index. |
+| [dotnet-file-creation](./dotnet-file-creation/SKILL.md) | "where should this temp file go", "make this file user-only", "why does this work on Windows but not Linux", `UnixFileMode` / `UnixCreateMode` / `CreateTempSubdirectory`, CA1416 on a file API, atomic write-then-rename | Portable core with an optional overlay. Temporary, persisted, and shared file creation on .NET 10+, cross-platform permissions, and the Windows/Unix semantic differences; bundles research measured on both platforms. |
 
 ## Routing boundaries
 
@@ -62,6 +64,7 @@ runtime skill is never a commons core or public dependency.
 | [create-pr](./create-pr/SKILL.md) | `git-github` | `optional-overlay` | `remote-write` | `canary` | `technical-writing` | `pre-pr-self-review`, `address-pr-feedback` |
 | [cswin32-com](./cswin32-com/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | `cswin32-interop` | `security-review`, `il-copy-inspection` |
 | [cswin32-interop](./cswin32-interop/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `cswin32-com`, `dotnet-polyfills`, `scratch-buffer-strategy`, `security-review` |
+| [dotnet-file-creation](./dotnet-file-creation/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `windows-acls`, `security-review` |
 | [dotnet-polyfills](./dotnet-polyfills/SKILL.md) | `dotnet-framework` | `optional-overlay` | `local-write` | `canary` | - | `pre-pr-self-review`, `framework-jit-optimization` |
 | [engineering-baseline](./engineering-baseline/SKILL.md) | `dotnet` | `optional-overlay` | `remote-write` | `canary` | `technical-writing` | `manage-skills`, `security-review`, `create-pr`, `github-actions-cost-optimization` |
 | [framework-jit-optimization](./framework-jit-optimization/SKILL.md) | `dotnet-framework` | `optional-overlay` | `local-write` | `canary` | - | `performance-testing`, `scratch-buffer-strategy`, `pre-pr-self-review` |
@@ -76,5 +79,6 @@ runtime skill is never a commons core or public dependency.
 | [security-review](./security-review/SKILL.md) | `universal` | `optional-overlay` | `local-write` | `canary` | - | `pre-pr-self-review`, `performance-testing`, `fuzz-testing` |
 | [technical-writing](./technical-writing/SKILL.md) | `universal` | `optional-overlay` | `local-write` | `canary` | - | `agent-files-review`, `code-comprehension`, `pre-pr-self-review`, `user-voice` |
 | [user-voice](./user-voice/SKILL.md) | `universal` | `none` | `local-write` | `experimental` | `manage-skills` | - |
+| [windows-acls](./windows-acls/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `dotnet-file-creation`, `security-review`, `cswin32-interop` |
 | [winui-win32-hosting](./winui-win32-hosting/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `cswin32-com`, `cswin32-interop`, `security-review` |
 <!-- portfolio-matrix:end -->
