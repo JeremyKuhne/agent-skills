@@ -10,7 +10,7 @@ row is pinned by a bundled test.
 | `FileMode.CreateNew` over an existing file | Throws `IOException` |
 | `File.Move(source, destination, overwrite: true)` | Replaces the destination, removes the source |
 | `FileShare.None` blocking a second open | Blocked |
-| Existing or created per-user special folders | Under `SpecialFolder.UserProfile` |
+| Default per-user special-folder mappings | Under `SpecialFolder.UserProfile` |
 | Machine-wide special folder | Outside the user profile |
 
 Exclusive create is the one to lean on. `FileMode.CreateNew` maps to `O_EXCL` on

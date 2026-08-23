@@ -94,10 +94,11 @@ world-readable.
 ## Windows services
 
 On supported Windows versions, current .NET uses `GetTempPath2`. A process
-running as `SYSTEM` gets `%SystemRoot%\SystemTemp`, which is inaccessible to
-non-SYSTEM processes. Other service identities still follow `TMP` and `TEMP`;
-without a loaded profile they can resolve to a machine-wide location such as
-`%SystemRoot%\Temp`, where standard users may be able to create entries.
+running as `SYSTEM` gets `%SystemRoot%\SystemTemp`, whose ACL grants access to
+`SYSTEM` and administrators rather than standard users. Other service identities
+still follow `TMP` and `TEMP`; without a loaded profile they can resolve to a
+machine-wide location such as `%SystemRoot%\Temp`, where standard users may be
+able to create entries.
 
 Test `Path.GetTempPath()` under the service's real identity. Do not infer that it
 is private or even writable from behavior in an interactive session.

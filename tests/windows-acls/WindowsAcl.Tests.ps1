@@ -16,6 +16,49 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
     BeforeAll {
         $ErrorActionPreference = 'Stop'
 
+        if ($null -eq ('WindowsAclPrivilegeNativeMethods' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class WindowsAclPrivilegeNativeMethods
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Luid
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LuidAndAttributes
+    {
+        public Luid Luid;
+        public uint Attributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PrivilegeSet
+    {
+        public uint PrivilegeCount;
+        public uint Control;
+        public LuidAndAttributes Privilege;
+    }
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LookupPrivilegeValue(string systemName, string name, out Luid luid);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PrivilegeCheck(
+        IntPtr token,
+        ref PrivilegeSet requiredPrivileges,
+        [MarshalAs(UnmanagedType.Bool)] out bool result);
+}
+'@
+        }
+
         function Test-CallerIsElevated {
             $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
             [System.Security.Principal.WindowsPrincipal]::new($identity).IsInRole(
@@ -25,6 +68,33 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
         function New-WellKnownSid {
             param([System.Security.Principal.WellKnownSidType] $Type)
             [System.Security.Principal.SecurityIdentifier]::new($Type, $null)
+        }
+
+        function Test-PrivilegeEnabled {
+            param([string] $Name)
+
+            $luid = [WindowsAclPrivilegeNativeMethods+Luid]::new()
+            if (-not [WindowsAclPrivilegeNativeMethods]::LookupPrivilegeValue(
+                    $null, $Name, [ref]$luid)) {
+                throw [System.ComponentModel.Win32Exception]::new(
+                    [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
+            }
+
+            $privileges = [WindowsAclPrivilegeNativeMethods+PrivilegeSet]::new()
+            $privileges.PrivilegeCount = 1
+            $privileges.Control = 1
+            $privilege = [WindowsAclPrivilegeNativeMethods+LuidAndAttributes]::new()
+            $privilege.Luid = $luid
+            $privileges.Privilege = $privilege
+            $enabled = $false
+            $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+            if (-not [WindowsAclPrivilegeNativeMethods]::PrivilegeCheck(
+                    $identity.Token, [ref]$privileges, [ref]$enabled)) {
+                throw [System.ComponentModel.Win32Exception]::new(
+                    [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
+            }
+
+            $enabled
         }
 
         $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -131,6 +201,10 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
             # disabled. If that changes, the elevated branches below stop being exercised in CI.
             Test-CallerIsElevated | Should -BeTrue -Because 'Windows CI images run elevated'
         }
+
+        It 'recognizes a privilege enabled by default for all users' {
+            Test-PrivilegeEnabled -Name 'SeChangeNotifyPrivilege' | Should -BeTrue
+        }
     }
 
     Context 'Ownership is the part an unelevated caller cannot forge' {
@@ -157,7 +231,7 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
             }
         }
 
-        It 'does not gain permission to assign SYSTEM merely by being elevated' {
+        It 'assigns SYSTEM only as SYSTEM or with SeRestorePrivilege enabled' {
             $path = New-TestPath
             New-Item -ItemType Directory -Path $path | Out-Null
             $originalOwner = Get-OwnerSid -Path $path
@@ -165,7 +239,7 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
             $security = Get-DirectorySecurity -Path $path -Sections $script:OwnerOnly
             $security.SetOwner($script:LocalSystem)
 
-            if ($script:Me -eq $script:LocalSystem) {
+            if ($script:Me -eq $script:LocalSystem -or (Test-PrivilegeEnabled -Name 'SeRestorePrivilege')) {
                 { Set-DirectorySecurity -Path $path -Security $security } | Should -Not -Throw
                 Get-OwnerSid -Path $path | Should -Be $script:LocalSystem
             }

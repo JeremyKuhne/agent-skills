@@ -318,18 +318,55 @@ Describe 'Cross-platform file creation behavior' {
 
     Context 'Where the runtime puts per-user and machine state' {
 
-        It 'creates per-user data folders under the user profile on every platform' {
+        It 'resolves per-user data folders from platform defaults and XDG overrides' {
             $profilePath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
             $profilePath | Should -Not -BeNullOrEmpty
 
-            foreach ($folder in @('ApplicationData', 'LocalApplicationData')) {
-                $path = [Environment]::GetFolderPath(
-                    [Environment+SpecialFolder]::$folder,
-                    [Environment+SpecialFolderOption]::Create)
-                $path | Should -Not -BeNullOrEmpty
-                $path | Should -Exist
-                $path.StartsWith($profilePath, [StringComparison]::OrdinalIgnoreCase) |
-                    Should -BeTrue -Because "$folder should live under the user profile"
+            $folders = @(
+                @{ Folder = [Environment+SpecialFolder]::ApplicationData; Override = 'XDG_CONFIG_HOME' }
+                @{ Folder = [Environment+SpecialFolder]::LocalApplicationData; Override = 'XDG_DATA_HOME' }
+            )
+
+            $originalOverrides = @{}
+            try {
+                if ($IsLinux) {
+                    foreach ($folder in $folders) {
+                        $originalOverrides[$folder.Override] = [Environment]::GetEnvironmentVariable(
+                            $folder.Override)
+                        [Environment]::SetEnvironmentVariable($folder.Override, $null)
+                    }
+                }
+
+                foreach ($folder in $folders) {
+                    $path = [Environment]::GetFolderPath(
+                        $folder.Folder,
+                        [Environment+SpecialFolderOption]::Create)
+                    $path | Should -Not -BeNullOrEmpty
+                    $path | Should -Exist
+                    $path.StartsWith($profilePath, [StringComparison]::OrdinalIgnoreCase) |
+                        Should -BeTrue -Because "$($folder.Folder) defaults under the user profile"
+                }
+
+                if ($IsLinux) {
+                    foreach ($folder in $folders) {
+                        $override = Join-Path $TestDrive $folder.Override
+                        [Environment]::SetEnvironmentVariable($folder.Override, $override)
+                        $path = [Environment]::GetFolderPath(
+                            $folder.Folder,
+                            [Environment+SpecialFolderOption]::Create)
+
+                        $path | Should -Be $override -Because "$($folder.Folder) honors its XDG override"
+                        $path | Should -Exist
+                    }
+                }
+            }
+            finally {
+                if ($IsLinux) {
+                    foreach ($folder in $folders) {
+                        [Environment]::SetEnvironmentVariable(
+                            $folder.Override, $originalOverrides[$folder.Override])
+                    }
+                }
             }
         }
 

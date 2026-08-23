@@ -8,8 +8,9 @@
 | Caches, logs, indexes, downloaded payloads | `LocalApplicationData` | `%LocalAppData%` | `$XDG_DATA_HOME` or `~/.local/share` |
 | The profile root itself | `UserProfile` | `C:\Users\<user>` | `/home/<user>` |
 
-When present, both per-user folders resolve under the user profile on every
-platform.
+With the default mapping, both per-user folders resolve under the user profile.
+On XDG-based Unix systems, absolute `XDG_CONFIG_HOME` and `XDG_DATA_HOME`
+values can redirect them elsewhere.
 
 The default `GetFolderPath` option verifies that the directory exists and
 returns an empty string when it does not. That is common on fresh Unix accounts
