@@ -16,7 +16,9 @@ metadata:
 # Create a pull request
 
 If `overlay.md` exists beside this file, read it before acting; it contains
-repository-specific bindings. This core remains usable without it.
+repository-specific bindings. This core remains usable without it. Check for it
+directly in this skill's base directory before any other action or response; do
+not combine this check with another skill's overlay lookup.
 
 Follow these steps in order. Stop and ask the user if any check is ambiguous;
 do not force-push, rewrite history, or delete branches without explicit
@@ -43,9 +45,11 @@ that repeatedly cost a review round-trip. If the change polyfills a .NET API for
 .NET Framework, a `polyfill-dotnet-api` skill (where the repo provides one)
 defines the design rules the self-review then validates against.
 
-Use the required `technical-writing` skill for the commit message and pull
-request text. It checks the local candidate; this workflow still owns approval
-and the remote action. A successful prose review is not publish approval.
+Load the required `technical-writing` skill before drafting, revising,
+normalizing, or returning any commit message, pull request title, or pull
+request body. This includes prepare-only requests with no remote action. It
+checks the local candidate; this workflow still owns approval and the remote
+action. A successful prose review is not publish approval.
 
 ## 1. Inspect repository state
 
