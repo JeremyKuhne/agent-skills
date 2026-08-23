@@ -8,8 +8,14 @@
 | Caches, logs, indexes, downloaded payloads | `LocalApplicationData` | `%LocalAppData%` | `$XDG_DATA_HOME` or `~/.local/share` |
 | The profile root itself | `UserProfile` | `C:\Users\<user>` | `/home/<user>` |
 
-Both per-user folders resolve under the user profile on every platform, which is
-worth relying on: it means one code path picks the right place everywhere.
+When present, both per-user folders resolve under the user profile on every
+platform.
+
+The default `GetFolderPath` option verifies that the directory exists and
+returns an empty string when it does not. That is common on fresh Unix accounts
+and minimal containers. Never pass the unchecked result to `Path.Join`: joining
+`""` and `"YourApp"` produces a relative path in the current directory. Request
+creation, then still reject an empty result:
 
 Prefer `LocalApplicationData` unless the data genuinely should roam. Roaming
 profiles copy `ApplicationData` at logon and logoff, so a large cache there is a
@@ -17,7 +23,8 @@ logon delay for the user.
 
 ## Per-user does not mean private on Unix
 
-This is the trap. Measured on Ubuntu with a default `umask` of `022`:
+This is the trap. One Ubuntu environment with a default `umask` of `022`
+measured:
 
 ```text
 ~/.config                        mode 755
@@ -25,6 +32,10 @@ This is the trap. Measured on Ubuntu with a default `umask` of `022`:
 ~/.config/yourapp/settings.json  mode 644   (plain File.WriteAllText)
 reachable and readable by other local users: True
 ```
+
+Those parent modes are measurements, not Linux guarantees. Desktop tooling can
+create `~/.config` as `700`; `~/.local/share` is commonly `755`. Set the mode on
+your application directory instead of depending on either parent.
 
 On Windows the equivalent path is restricted to the user, `SYSTEM`, and
 administrators, so the same code is private there and exposed on Linux. Tokens,
@@ -34,9 +45,15 @@ shared machine.
 ## The fix: create the directory owner-only, then the files
 
 ```csharp
-string root = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "YourApp");
+string dataDirectory = Environment.GetFolderPath(
+    Environment.SpecialFolder.LocalApplicationData,
+    Environment.SpecialFolderOption.Create);
+if (string.IsNullOrEmpty(dataDirectory))
+{
+    throw new InvalidOperationException("The per-user data directory is unavailable.");
+}
+
+string root = Path.Join(dataDirectory, "YourApp");
 
 if (OperatingSystem.IsWindows())
 {
@@ -71,8 +88,8 @@ Publish atomically so a reader never sees a partial file and a crash never
 destroys the previous good copy:
 
 ```csharp
-string finalPath = Path.Combine(root, "settings.json");
-string temporary = Path.Combine(root, $".settings.json.{Guid.NewGuid():N}.tmp");
+string finalPath = Path.Join(root, "settings.json");
+string temporary = Path.Join(root, $".settings.json.{Guid.NewGuid():N}.tmp");
 
 var options = new FileStreamOptions
 {
@@ -115,12 +132,12 @@ Points that matter:
 ## Concurrency between your own processes
 
 Two instances of your application writing the same file is the common case, not
-an edge case. `FileShare` is enforced on Windows and emulated between .NET
-processes on Unix, so a lock file works on both:
+an edge case. `FileShare` is enforced by Windows. On Unix, .NET takes advisory
+`flock` locks, so a lock file coordinates processes that take compatible locks:
 
 ```csharp
 using FileStream gate = File.Open(
-    Path.Combine(root, ".lock"),
+    Path.Join(root, ".lock"),
     new FileStreamOptions
     {
         Mode = FileMode.OpenOrCreate,
@@ -129,10 +146,10 @@ using FileStream gate = File.Open(
     });
 ```
 
-It does not defend against non-.NET processes on Unix, and it does not defend
-against another process running as the same user that chooses to ignore it.
-Treat it as coordination between cooperating instances, not as a security
-boundary.
+A native process that also takes `flock` participates; any process can ignore
+the advisory lock. `DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` disables .NET file
+locking on Unix entirely. Treat the lock as coordination between cooperating
+instances, not as a security boundary.
 
 ## Do not put secrets here
 

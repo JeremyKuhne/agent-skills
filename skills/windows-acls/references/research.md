@@ -74,18 +74,35 @@ The supplied DACL is the whole DACL.
 *Pinned:* "suppresses parent inheritable ACEs when the child is created with a
 descriptor".
 
-### 2b. `SE_DACL_PROTECTED` is set implicitly
+### 2b. The measured .NET result is protected
 
 `AreAccessRulesProtected` is `true` on the result, even though nothing called
 `SetAccessRuleProtection`. This was the single most surprising measurement in
 this research, and it is load-bearing for the enterprise scenario in section 5.
 
-*Pinned:* "marks a directory created with an explicit descriptor as protected".
+This result is narrower than the general Windows creation rule. The automatic
+inheritance documentation describes merging inheritable parent ACEs into an
+unprotected creator DACL. `FileSystemAclExtensions.CreateDirectory` instead
+returned a protected child with no inherited ACEs.
+
+A follow-up experiment set `DiscretionaryAclAutoInherited` explicitly on the
+creator `DirectorySecurity` through a `RawSecurityDescriptor`, verified that the
+flag survived the round trip, and invoked the same .NET create helper under a
+parent carrying an inheritable `BUILTIN\Users:Write` ACE. The result was still
+protected, had no `Users` rule, and had no inherited rules. The absence of
+`SE_DACL_AUTO_INHERITED` is therefore not the explanation for this BCL path.
+This experiment does not establish how a direct native creation call behaves.
+
+*Pinned:* "marks a directory created with an explicit descriptor as protected"
+and "protects an explicit descriptor even when it is marked auto-inherited".
 
 ### 2c. Intermediate directories receive the same descriptor
 
-Creating `root\a\b\c` in one call and inspecting every level showed the supplied
-descriptor at all four, not only at the leaf.
+Creating `root\a\b\c` through `FileSystemAclExtensions.CreateDirectory` and
+inspecting every level showed the supplied descriptor at all four, not only at
+the leaf. This is behavior of the .NET helper, which loops over missing path
+components with one descriptor; it is not a property of one native
+`CreateDirectoryW` call.
 
 *Pinned:* "applies the explicit descriptor to the intermediate directories it
 creates".
@@ -120,6 +137,13 @@ object only if the creating token carries it with `SE_GROUP_OWNER`. A filtered
 administrator token carries `Administrators` as deny-only, which does not
 qualify.
 
+Elevation changes the `Administrators` case, not the `SYSTEM` case. An ordinary
+elevated administrator token can assign `Administrators` because that group is
+owner-enabled. Assigning an unrelated SID such as `SYSTEM` requires the caller
+to run as that identity or to enable `SeRestorePrivilege`; the .NET
+`SetAccessControl` path does not enable it on the caller's behalf. The per-PR
+Windows test expects the ordinary elevated runner to reject `SYSTEM` ownership.
+
 ### Correction to a common description
 
 The rejection is frequently described as "SetOwner throws". It does not. Measured
@@ -136,9 +160,11 @@ Code that wraps only the `SetOwner` call in a `try` concludes the assignment
 worked. The check must wrap the commit. This document originally carried the
 incorrect version; the bundled test now pins the correct one.
 
-*Pinned:* "assigns a new owner only when the caller is elevated", "lets any
-caller create a directory whose DACL names only Administrators and SYSTEM", "lets
-the owner rewrite a DACL that grants the owner nothing".
+*Pinned:* "assigns a new owner only when the caller is elevated", "does not gain
+permission to assign SYSTEM merely by being elevated", "creates objects with the
+token default owner", "lets any caller create a directory whose DACL names only
+Administrators and SYSTEM", and "lets the owner rewrite a DACL that grants the
+owner nothing".
 
 ---
 
@@ -187,8 +213,9 @@ The question that decides whether enterprise ACL management breaks an
 application: if IT adds an inheritable ACE to `C:\ProgramData` **after** the
 product directory exists, does it propagate in?
 
-Measured, with a child created via explicit descriptor (therefore protected per
-section 2b), then adding `NETWORK SERVICE:(OI)(CI)FullControl` to the parent:
+Measured, with a child created through the .NET explicit-descriptor overload
+(therefore protected per section 2b), then adding
+`NETWORK SERVICE:(OI)(CI)FullControl` to the parent:
 
 ```text
 ### child after the parent change
@@ -258,27 +285,32 @@ ancestor junction into the real target".
 ## 7. Root-anchored validation is sufficient
 
 Given sections 1 through 6, validating a single root is enough against an
-unprivileged attacker.
+unprivileged attacker only when the path to that root is also trusted. Let `T`
+be the expected machine-principal set: normally `{Administrators, SYSTEM}`, with
+`TrustedInstaller` added only for a known OS-provisioned root.
 
 If root `R` satisfies:
 
-1. `R` is not a reparse point, and
-2. `R`'s owner is `Administrators` or `SYSTEM`, and
-3. no allow ACE on `R` - including inherit-only - grants modification rights to
-   any principal outside `{Administrators, SYSTEM}`
+1. every ancestor of `R` prevents unprivileged replacement or rename of the next component;
+2. `R` is not a reparse point;
+3. `R`'s owner is in `T`; and
+4. no allow ACE on `R` - including inherit-only - grants modification rights to any principal outside `T`
 
 then an unprivileged user `U`:
 
-- cannot create, delete, or rename anything directly in `R`, by (3);
+- cannot replace `R` through an ancestor, by (1);
+- cannot create, delete, or rename anything directly in `R`, by (4);
 - cannot therefore introduce a junction or a permissively ACLed child;
-- cannot own `R` itself, by (2) and section 3;
+- cannot own `R` itself, by (3) and section 3;
 - and by induction cannot do any of the above at any depth, because every
   descendant either inherits `R`'s admin-only ACEs or was created by privileged
   code with an explicit descriptor.
 
-Per-component chain validation excludes no additional unprivileged attacker. It
-detects only deliberate administrator changes deeper in the tree, and
-administrators are outside this threat model.
+Once premise (1) is established, per-component validation *below* `R` excludes
+no additional unprivileged attacker. Without that premise, an attacker who can
+modify an ancestor can replace the validated root through an ancestor junction.
+Default `%ProgramData%\<Product>` satisfies the premise; redirected and custom
+roots require their own proof.
 
 Cost: `O(1)` descriptor reads per process instead of `O(depth)` per operation.
 
@@ -294,22 +326,25 @@ that consumes it, rather than trusting placement.
 GitHub's documentation states plainly: *"Windows virtual machines are configured
 to run as administrators with User Account Control (UAC) disabled."*
 
-Every elevation-dependent measurement in section 3 inverts there. A negative test
-of the form "an unprivileged caller cannot do X" is vacuous on such a runner,
-because the caller is privileged.
+The `Administrators` ownership measurement in section 3 inverts there. A
+negative test of the form "an unprivileged caller cannot do X" is vacuous on
+such a runner, because the caller is privileged. `SYSTEM` ownership does not
+invert merely because the token is elevated; it still requires enabled
+`SeRestorePrivilege`.
 
-The bundled tests branch on elevation at run time rather than skipping, and carry
-one guard test asserting the CI expectation so a runner-image change surfaces as
-a failure.
+The bundled tests branch on elevation at run time rather than skipping, and
+carry one guard test asserting the CI expectation so a runner-image change
+surfaces as a failure. The pull-request workflow runs both filesystem fact suites
+in its existing Windows job when either skill, its tests, or the workflow changes.
 
 ---
 
 ## Open questions
 
-- Whether `SE_DACL_PROTECTED`-on-create is contractual or an implementation
-  detail of the `CreateFile`/`CreateDirectory` path. The documented statement
-  covers the effect of the flag, not the guarantee that supplying a DACL sets it.
-  The bundled test exists precisely so a change is caught.
+- Why the .NET create helper returns a protected DACL. The documented general
+  rule predicts inheritance for an unprotected creator descriptor, and manually
+  setting `SE_DACL_AUTO_INHERITED` did not change the measured result. The tests
+  pin the BCL behavior without claiming it for direct native creation.
 - Behavior when `%ProgramData%` is redirected to a non-default location, where
   the standard descriptor is not guaranteed.
 - ReFS and network redirector behavior; all measurements here are local NTFS.

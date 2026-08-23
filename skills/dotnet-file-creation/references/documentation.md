@@ -33,13 +33,13 @@ question they answer.
 
 - [Directory.CreateTempSubdirectory](https://learn.microsoft.com/dotnet/api/system.io.directory.createtempsubdirectory) - documents the `700` mode on Unix
 - [Path.GetTempPath](https://learn.microsoft.com/dotnet/api/system.io.path.gettemppath)
-- [Path.GetTempFileName](https://learn.microsoft.com/dotnet/api/system.io.path.gettempfilename) - the 65535 limit was removed in .NET 8
+- [Path.GetTempFileName](https://learn.microsoft.com/dotnet/api/system.io.path.gettempfilename) - the Windows 65,535-name limit was removed in .NET 8
 - [Path.GetRandomFileName](https://learn.microsoft.com/dotnet/api/system.io.path.getrandomfilename)
 
 ## Where state belongs
 
 - [Environment.SpecialFolder](https://learn.microsoft.com/dotnet/api/system.environment.specialfolder)
-- [Environment.GetFolderPath](https://learn.microsoft.com/dotnet/api/system.environment.getfolderpath)
+- [Environment.GetFolderPath](https://learn.microsoft.com/dotnet/api/system.environment.getfolderpath) - the default option returns an empty string when the directory does not exist; `Create` creates it
 - [KNOWNFOLDERID](https://learn.microsoft.com/windows/win32/shell/knownfolderid) - the Windows canonical list
 - [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/latest/) - what the runtime maps to on Linux
 - [Isolated storage in multi-user environments](https://learn.microsoft.com/dotnet/standard/io/isolated-storage#impact-in-multi-user-environments)
@@ -49,9 +49,10 @@ question they answer.
 
 - [File path formats on Windows systems](https://learn.microsoft.com/dotnet/standard/io/file-path-formats) - normalization, trailing dots and spaces, legacy device names
 - [Path class](https://learn.microsoft.com/dotnet/api/system.io.path)
-- [Path.Combine](https://learn.microsoft.com/dotnet/api/system.io.path.combine) versus [Path.Join](https://learn.microsoft.com/dotnet/api/system.io.path.join)
+- [Path.Join](https://learn.microsoft.com/dotnet/api/system.io.path.join) - joins without allowing a rooted later segment to replace the root
+- [Path.Combine](https://learn.microsoft.com/dotnet/api/system.io.path.combine) - a rooted later segment discards the earlier path; do not use it for path construction
 - [Path.GetFullPath](https://learn.microsoft.com/dotnet/api/system.io.path.getfullpath)
-- [Maximum path length limitation](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation)
+- [Maximum path length limitation](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation) - manifest and policy requirements for native Win32 callers
 - [Naming files, paths, and namespaces](https://learn.microsoft.com/windows/win32/fileio/naming-a-file)
 
 ## Links and reparse points

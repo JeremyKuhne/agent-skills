@@ -20,18 +20,19 @@ repository-specific bindings. This core remains usable without it.
 
 Two assumptions cause most cross-platform file bugs:
 
-1. **"A per-user directory is private."** True on Windows. **False on Linux**,
-   where `~/.config` and `~/.local/share` are `755` and a file written there is
-   `644`. Other local accounts can read it.
-2. **"The temp directory belongs to me."** True on Windows, where `%TEMP%` is
-   under the user profile. **False on Unix**, where `/tmp` is `777` with the
-   sticky bit and shared by every user.
+1. **"A per-user directory is private."** True for a normal Windows profile.
+   **Not guaranteed on Unix**, where parent modes vary and ordinary app-created
+   directories and files are commonly `755` and `644`.
+2. **"The temp directory belongs to me."** Usually true for an interactive
+   Windows user. It is false on Unix, where `/tmp` is shared, and is not safe to
+   assume for Windows services, whose temp path depends on the service identity
+   and environment.
 
 ## Pick the category first
 
 | Need | Use | Private by default |
 | --- | --- | --- |
-| Scratch for one operation | `Directory.CreateTempSubdirectory()` | Yes, `700` on Unix and per-user `%TEMP%` on Windows |
+| Scratch for one operation | `Directory.CreateTempSubdirectory()` | `700` on Unix; on Windows it inherits the temp root's ACL |
 | A single throwaway file | A file inside that temp subdirectory | Yes, inherited from the directory |
 | Persisted per-user settings that roam | `SpecialFolder.ApplicationData` | Windows only; set the mode yourself on Unix |
 | Persisted per-user caches and logs | `SpecialFolder.LocalApplicationData` | Windows only; set the mode yourself on Unix |
@@ -77,7 +78,7 @@ directories, are in [permissions.md](permissions.md).
 Never write a consumer-visible file in place. Write beside it, flush, then move:
 
 ```csharp
-string temporary = Path.Combine(directory, $".{Path.GetFileName(finalPath)}.{Guid.NewGuid():N}.tmp");
+string temporary = Path.Join(directory, $".{Path.GetFileName(finalPath)}.{Guid.NewGuid():N}.tmp");
 await using (FileStream stream = File.Open(temporary, options))
 {
     await stream.WriteAsync(payload);
@@ -95,9 +96,9 @@ move is a rename within one volume rather than a copy.
 | Behavior | Windows | Unix |
 | --- | --- | --- |
 | Delete a file that is open | Throws `IOException` | Succeeds; the name is unlinked |
-| `FileShare` | Enforced by the OS | Emulated; holds between .NET processes only |
-| `FileAttributes.Hidden` | Settable | Derived from a leading dot; `SetAttributes` silently does nothing |
-| Directory mode or descriptor on intermediates | Applies to every level created | Applies to the leaf only |
+| `FileShare` | Enforced by the OS | Advisory `flock`; honored by cooperating processes and disableable by configuration |
+| `FileAttributes.Hidden` | Settable | Linux derives it from a leading dot; macOS differs |
+| Directory mode or descriptor on intermediates | The .NET ACL overload applies it to every level | The Unix mode overload applies it to the leaf only |
 
 Path casing is **not** in that table on purpose. It is a filesystem property, not
 an OS one: NTFS and macOS APFS are both case-insensitive by default while Linux
@@ -110,9 +111,8 @@ destination on both. Details and the traps in
 
 ## Evidence
 
-Every claim is measured on Windows and Linux and pinned by the bundled tests;
-the numbers are in [references/research.md](references/research.md). Primary
-documentation is indexed in
+Measured behavior and test coverage are recorded in
+[references/research.md](references/research.md). Primary documentation is indexed in
 [references/documentation.md](references/documentation.md).
 
 ## Related skills

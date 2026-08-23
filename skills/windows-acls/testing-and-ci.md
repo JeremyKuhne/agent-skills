@@ -46,10 +46,12 @@ Add one guard test that pins the environment itself, so a runner-image change is
 visible rather than silent:
 
 ```powershell
-It 'runs elevated on Windows CI' -Skip:(-not $env:CI) {
+It 'runs elevated on Windows CI' -Skip:(-not ($env:CI -or $env:TF_BUILD)) {
     Test-CallerIsElevated | Should -BeTrue -Because 'Windows CI images run elevated'
 }
 ```
+
+`CI` covers GitHub Actions; `TF_BUILD` covers Azure Pipelines.
 
 If you genuinely need to exercise unelevated behavior in CI, you must launch a
 medium-integrity process; there is no in-process way to drop the token. That is
@@ -94,6 +96,12 @@ junctions in tests unless you are specifically testing symlink behavior.
 `SetAccessRuleProtection` mutate a detached object. Assert on the object read
 back from disk, not on the one you just modified.
 
+**Elevation is not `SeRestorePrivilege`.** An elevated administrator can assign
+`Administrators` as owner because that SID is owner-enabled in the token.
+Assigning unrelated `SYSTEM` ownership additionally requires
+`SeRestorePrivilege` to be enabled; the .NET commit path does not enable it for
+the caller.
+
 **Well-known SIDs from PowerShell.** Use the enum overload; a string does not
 bind and PowerShell will try the `byte[]` constructor:
 
@@ -120,6 +128,12 @@ rather than the product:
   effective.
 - `FILE_DELETE_CHILD` on a parent defeats a child's `Deny Delete`.
 - Deleting through an ancestor junction reaches the real target.
-- Ownership assignment succeeds or fails according to elevation.
+- `Administrators` ownership assignment follows elevation, while assigning
+  `SYSTEM` requires a matching token or enabled `SeRestorePrivilege`.
 
 The bundled test file in this skill's repository implements exactly these.
+
+These are **fact-regression tests**: they detect when platform behavior no longer
+matches the prose. They are not skill evaluations and do not test trigger
+routing or whether an agent applies the guidance correctly; those require model
+eval scenarios separately.

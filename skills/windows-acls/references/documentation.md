@@ -17,7 +17,7 @@ answer.
 
 - [Inheritance](https://learn.microsoft.com/windows/win32/secauthz/inheritance)
 - [ACE inheritance rules](https://learn.microsoft.com/windows/win32/secauthz/ace-inheritance-rules) - the `OI`/`CI`/`IO`/`NP` matrix
-- [Automatic propagation of inheritable ACEs](https://learn.microsoft.com/windows/win32/secauthz/automatic-propagation-of-inheritable-aces) - states that `SE_DACL_PROTECTED` is how a child is shielded from inheritable ACEs
+- [Automatic propagation of inheritable ACEs](https://learn.microsoft.com/windows/win32/secauthz/automatic-propagation-of-inheritable-aces) - describes merging inherited ACEs unless `SE_DACL_PROTECTED` is set; the measured .NET create path differs
 - [SetNamedSecurityInfo](https://learn.microsoft.com/windows/win32/api/aclapi/nf-aclapi-setnamedsecurityinfow)
 - [SetSecurityInfo](https://learn.microsoft.com/windows/win32/api/aclapi/nf-aclapi-setsecurityinfo)
 - [SECURITY_DESCRIPTOR_CONTROL](https://learn.microsoft.com/windows/win32/secauthz/security-descriptor-control) - the `SE_DACL_PROTECTED` and `SE_DACL_AUTO_INHERITED` bits
@@ -26,6 +26,7 @@ answer.
 
 - [Owners and ownership](https://learn.microsoft.com/windows/win32/secauthz/owners-and-ownership) - an owner implicitly holds `READ_CONTROL` and `WRITE_DAC`
 - [TOKEN_OWNER](https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-token_owner) - a SID may own an object only if the token carries it with `SE_GROUP_OWNER`
+- [Privilege constants](https://learn.microsoft.com/windows/win32/secauthz/privilege-constants) - `SeRestorePrivilege` permits assigning an otherwise unrelated valid owner SID
 - [System objects: Default owner for objects created by members of the Administrators group](https://learn.microsoft.com/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/system-objects-default-owner-for-objects-created-by-members-of-the-administrators-group)
 - [Well-known SIDs](https://learn.microsoft.com/windows-server/identity/ad-ds/manage/understand-security-identifiers)
 

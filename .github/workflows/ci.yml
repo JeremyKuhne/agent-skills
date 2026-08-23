@@ -172,6 +172,53 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Detect Windows filesystem skill changes
+        id: windows-filesystem
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          $affected = $env:GITHUB_REF -like 'refs/tags/*'
+          if (-not $affected) {
+            if ([string]::IsNullOrWhiteSpace($env:BASE_SHA) -or $env:BASE_SHA -match '^0+$') {
+              $affected = $true
+            }
+            else {
+              git fetch --no-tags --depth=1 origin $env:BASE_SHA
+              if ($LASTEXITCODE -ne 0) {
+                throw "Could not fetch base commit $env:BASE_SHA."
+              }
+
+              $changedPaths = @(git diff --name-only $env:BASE_SHA $env:GITHUB_SHA)
+              if ($LASTEXITCODE -ne 0) {
+                throw 'Could not determine changed paths.'
+              }
+
+              $affected = @($changedPaths | Where-Object {
+                      $_ -match '^(skills|tests)/(windows-acls|dotnet-file-creation)/' -or
+                      $_ -eq '.github/workflows/ci.yml'
+                  }).Count -gt 0
+            }
+          }
+
+          "affected=$($affected.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Install Pester for Windows filesystem facts
+        if: steps.windows-filesystem.outputs.affected == 'true'
+        shell: pwsh
+        run: Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Run Windows filesystem fact tests
+        if: steps.windows-filesystem.outputs.affected == 'true'
+        shell: pwsh
+        run: |
+          Import-Module Pester -RequiredVersion 5.7.1
+          $config = New-PesterConfiguration
+          $config.Run.Path = @('tests/windows-acls', 'tests/dotnet-file-creation')
+          $config.Run.Throw = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
       - name: Scaffold, build, test, and pack
         shell: pwsh
         run: |
