@@ -536,6 +536,23 @@ function gh { '{"visibility":"PUBLIC","owner":{"login":"example"},"name":"privat
             '-RequirePrePushHook')
         $valid.ExitCode | Should -Be 0 -Because $valid.Output
 
+        $outsideHooks = Join-Path $TestDrive 'outside-hooks'
+        $outsideHook = Join-Path $outsideHooks 'pre-push'
+        Write-Utf8File $outsideHook "#!/usr/bin/env sh`n# Test-UserVoiceRepository.ps1"
+        if (-not $IsWindows) {
+            & chmod +x $outsideHook
+            $LASTEXITCODE | Should -Be 0
+        }
+        foreach ($outsideHooksPath in @('../outside-hooks', $outsideHooks)) {
+            & git -C $root config core.hooksPath $outsideHooksPath
+            $outside = Invoke-UserVoiceScript -Script $scanner -Arguments @(
+                '-RepositoryPath', $root,
+                '-RequirePrePushHook')
+            $outside.ExitCode | Should -Be 1
+            $outside.Output | Should -Match 'core\.hooksPath escapes the repository'
+        }
+        & git -C $root config core.hooksPath .githooks
+
         if ($IsWindows -and $root.Length -gt 1 -and $root[1] -eq ':') {
             & git -C $root config core.hooksPath "$($root[0]):.githooks"
             $partiallyQualified = Invoke-UserVoiceScript -Script $scanner -Arguments @(

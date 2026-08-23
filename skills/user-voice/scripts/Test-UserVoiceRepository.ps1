@@ -219,19 +219,25 @@ if ($isGitRepository -and $RequirePrePushHook) {
             $resolvedHooksPath = [System.IO.Path]::GetFullPath(
                 $hooksPathValue,
                 $root)
-            $hook = Join-Path $resolvedHooksPath 'pre-push'
-            if (-not (Test-Path -LiteralPath $hook -PathType Leaf)) {
-                Add-RepositoryError 'hook' 'The reviewed pre-push hook is missing.'
+            if (-not ($resolvedHooksPath.Equals($root, $pathComparison) -or
+                    $resolvedHooksPath.StartsWith($rootPrefix, $pathComparison))) {
+                Add-RepositoryError 'hook' 'core.hooksPath escapes the repository.'
             }
             else {
-                $hookContent = [System.IO.File]::ReadAllText($hook)
-                if ($hookContent -notmatch 'Test-UserVoiceRepository\.ps1') {
-                    Add-RepositoryError 'hook' 'The pre-push hook does not invoke the repository scanner.'
+                $hook = Join-Path $resolvedHooksPath 'pre-push'
+                if (-not (Test-Path -LiteralPath $hook -PathType Leaf)) {
+                    Add-RepositoryError 'hook' 'The reviewed pre-push hook is missing.'
                 }
-                if (-not $IsWindows) {
-                    $mode = (Get-Item -LiteralPath $hook).UnixFileMode
-                    if (($mode -band [System.IO.UnixFileMode]::UserExecute) -eq 0) {
-                        Add-RepositoryError 'hook' 'The pre-push hook is not executable.'
+                else {
+                    $hookContent = [System.IO.File]::ReadAllText($hook)
+                    if ($hookContent -notmatch 'Test-UserVoiceRepository\.ps1') {
+                        Add-RepositoryError 'hook' 'The pre-push hook does not invoke the repository scanner.'
+                    }
+                    if (-not $IsWindows) {
+                        $mode = (Get-Item -LiteralPath $hook).UnixFileMode
+                        if (($mode -band [System.IO.UnixFileMode]::UserExecute) -eq 0) {
+                            Add-RepositoryError 'hook' 'The pre-push hook is not executable.'
+                        }
                     }
                 }
             }
