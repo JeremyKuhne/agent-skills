@@ -1,6 +1,6 @@
 #requires -Version 7.0
 
-# Behavioral assertions behind the windows-acls skill. Each test pins one claim the guidance
+# Fact-regression assertions behind the windows-acls skill. Each test pins one claim the guidance
 # depends on, so a Windows change that invalidates the advice fails here first.
 #
 # Outcomes that depend on the caller's token branch on elevation at run time rather than skipping.
@@ -16,6 +16,49 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
     BeforeAll {
         $ErrorActionPreference = 'Stop'
 
+        if ($null -eq ('WindowsAclPrivilegeNativeMethods' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class WindowsAclPrivilegeNativeMethods
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Luid
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LuidAndAttributes
+    {
+        public Luid Luid;
+        public uint Attributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PrivilegeSet
+    {
+        public uint PrivilegeCount;
+        public uint Control;
+        public LuidAndAttributes Privilege;
+    }
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool LookupPrivilegeValue(string systemName, string name, out Luid luid);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool PrivilegeCheck(
+        IntPtr token,
+        ref PrivilegeSet requiredPrivileges,
+        [MarshalAs(UnmanagedType.Bool)] out bool result);
+}
+'@
+        }
+
         function Test-CallerIsElevated {
             $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
             [System.Security.Principal.WindowsPrincipal]::new($identity).IsInRole(
@@ -27,10 +70,39 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
             [System.Security.Principal.SecurityIdentifier]::new($Type, $null)
         }
 
+        function Test-PrivilegeEnabled {
+            param([string] $Name)
+
+            $luid = [WindowsAclPrivilegeNativeMethods+Luid]::new()
+            if (-not [WindowsAclPrivilegeNativeMethods]::LookupPrivilegeValue(
+                    $null, $Name, [ref]$luid)) {
+                throw [System.ComponentModel.Win32Exception]::new(
+                    [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
+            }
+
+            $privileges = [WindowsAclPrivilegeNativeMethods+PrivilegeSet]::new()
+            $privileges.PrivilegeCount = 1
+            $privileges.Control = 1
+            $privilege = [WindowsAclPrivilegeNativeMethods+LuidAndAttributes]::new()
+            $privilege.Luid = $luid
+            $privileges.Privilege = $privilege
+            $enabled = $false
+            $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+            if (-not [WindowsAclPrivilegeNativeMethods]::PrivilegeCheck(
+                    $identity.Token, [ref]$privileges, [ref]$enabled)) {
+                throw [System.ComponentModel.Win32Exception]::new(
+                    [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
+            }
+
+            $enabled
+        }
+
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
         $script:Administrators = New-WellKnownSid -Type BuiltinAdministratorsSid
         $script:LocalSystem = New-WellKnownSid -Type LocalSystemSid
         $script:Users = New-WellKnownSid -Type BuiltinUsersSid
-        $script:Me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+        $script:Me = $identity.User
+        $script:DefaultOwner = $identity.Owner
         $script:BothInherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
         $script:AccessOnly = [System.Security.AccessControl.AccessControlSections]::Access
         $script:OwnerOnly = [System.Security.AccessControl.AccessControlSections]::Owner
@@ -124,10 +196,14 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
 
     Context 'Elevation baseline' {
 
-        It 'runs elevated on Windows CI' -Skip:(-not $env:CI) {
-            # GitHub-hosted Windows runners run as administrators with UAC disabled. If that ever
-            # changes, the elevated branches below stop being exercised in CI.
+        It 'runs elevated on Windows CI' -Skip:(-not ($env:CI -or $env:TF_BUILD)) {
+            # GitHub-hosted and Azure Pipelines Windows runners run as administrators with UAC
+            # disabled. If that changes, the elevated branches below stop being exercised in CI.
             Test-CallerIsElevated | Should -BeTrue -Because 'Windows CI images run elevated'
+        }
+
+        It 'recognizes a privilege enabled by default for all users' {
+            Test-PrivilegeEnabled -Name 'SeChangeNotifyPrivilege' | Should -BeTrue
         }
     }
 
@@ -155,7 +231,7 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
             }
         }
 
-        It 'assigns SYSTEM as owner only when the caller is elevated' {
+        It 'assigns SYSTEM only as SYSTEM or with SeRestorePrivilege enabled' {
             $path = New-TestPath
             New-Item -ItemType Directory -Path $path | Out-Null
             $originalOwner = Get-OwnerSid -Path $path
@@ -163,23 +239,22 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
             $security = Get-DirectorySecurity -Path $path -Sections $script:OwnerOnly
             $security.SetOwner($script:LocalSystem)
 
-            if (Test-CallerIsElevated) {
+            if ($script:Me -eq $script:LocalSystem -or (Test-PrivilegeEnabled -Name 'SeRestorePrivilege')) {
                 { Set-DirectorySecurity -Path $path -Security $security } | Should -Not -Throw
+                Get-OwnerSid -Path $path | Should -Be $script:LocalSystem
             }
             else {
-                { Set-DirectorySecurity -Path $path -Security $security } | Should -Throw
+                { Set-DirectorySecurity -Path $path -Security $security } | Should -Throw `
+                    -Because 'assigning an unrelated owner requires SeRestorePrivilege to be enabled'
                 Get-OwnerSid -Path $path | Should -Be $originalOwner
             }
         }
 
-        It 'creates objects owned by the caller when unelevated' -Skip:($env:CI -and $IsWindows) {
-            # Only meaningful off an elevated CI image, where the default owner is Administrators.
+        It 'creates objects with the token default owner' {
             $path = New-TestPath
             New-Item -ItemType Directory -Path $path | Out-Null
 
-            if (-not (Test-CallerIsElevated)) {
-                Get-OwnerSid -Path $path | Should -Be $script:Me
-            }
+            Get-OwnerSid -Path $path | Should -Be $script:DefaultOwner
         }
     }
 
@@ -299,6 +374,43 @@ Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
                 (Get-DirectorySecurity -Path $path).AreAccessRulesProtected | Should -BeTrue
             }
             finally { Restore-CallerAccess -Path $path }
+        }
+
+        It 'protects an explicit descriptor even when it is marked auto-inherited' {
+            $parent = New-TestPath
+            New-Item -ItemType Directory -Path $parent | Out-Null
+            $parentSecurity = Get-DirectorySecurity -Path $parent
+            $parentSecurity.AddAccessRule((New-Rule -Sid $script:Users -Rights Write -Inheritance ContainerInherit))
+            Set-DirectorySecurity -Path $parent -Security $parentSecurity
+
+            $creator = [System.Security.AccessControl.DirectorySecurity]::new()
+            $creator.SetOwner($script:Me)
+            $creator.AddAccessRule((New-Rule -Sid $script:Me -Rights FullControl -Inheritance $script:BothInherit))
+            $raw = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                $creator.GetSecurityDescriptorBinaryForm(), 0)
+            $flags = $raw.ControlFlags -bor
+                [System.Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInherited
+            $raw = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                $flags, $raw.Owner, $raw.Group, $raw.SystemAcl, $raw.DiscretionaryAcl)
+            $binary = [byte[]]::new($raw.BinaryLength)
+            $raw.GetBinaryForm($binary, 0)
+            $creator.SetSecurityDescriptorBinaryForm($binary)
+
+            $creatorFlags = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                $creator.GetSecurityDescriptorBinaryForm(), 0).ControlFlags
+            $creatorFlags.HasFlag(
+                [System.Security.AccessControl.ControlFlags]::DiscretionaryAclAutoInherited) |
+                Should -BeTrue
+
+            $child = Join-Path $parent 'auto-inherited'
+            [System.IO.FileSystemAclExtensions]::CreateDirectory($creator, $child) | Out-Null
+
+            try {
+                (Get-DirectorySecurity -Path $child).AreAccessRulesProtected | Should -BeTrue
+                Test-HasRuleFor -Path $child -Sid $script:Users | Should -BeFalse
+                foreach ($rule in Get-RuleList -Path $child) { $rule.IsInherited | Should -BeFalse }
+            }
+            finally { Restore-CallerAccess -Path $parent }
         }
 
         It 'does not propagate a later parent ACE into a protected child' {

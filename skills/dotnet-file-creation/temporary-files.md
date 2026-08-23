@@ -2,14 +2,14 @@
 
 ## Use a temp subdirectory, not a temp file
 
-`Directory.CreateTempSubdirectory()` is the only built-in API that gives you a
-private scratch location on every platform:
+`Directory.CreateTempSubdirectory()` gives you a randomized, dedicated scratch
+location and makes it owner-only on Unix:
 
 ```csharp
 DirectoryInfo scratch = Directory.CreateTempSubdirectory("myapp_");
 try
 {
-    string payload = Path.Combine(scratch.FullName, "payload.bin");
+    string payload = Path.Join(scratch.FullName, "payload.bin");
     // ... work inside scratch ...
 }
 finally
@@ -21,18 +21,22 @@ finally
 - On Unix it is created with owner-only permissions (`700`), which is documented
   and measured. The parent `/tmp` is `777` with the sticky bit, so this is what
   separates your files from every other account on the machine.
-- On Windows it lands under `%TEMP%`, which is already inside the user profile.
+- For an interactive Windows user it normally lands under a profile temp
+  directory. Windows services are different; see below.
 
-Files you then create inside it are protected by the directory, so you do not
-need to set a mode on each one. That is the main reason to prefer a directory
-over individual temp files.
+When that directory is private, files you create inside it inherit the
+protection, so you do not need to set a mode on each one. That is the main
+reason to prefer a directory over individual temp files. On Windows the new
+directory inherits the temp root's ACL; service code must not assume that root
+is private.
 
 ## `Path.GetTempFileName()`
 
 It is not dangerous, but it is limited:
 
 - It creates a zero-byte file with mode `600` on Unix, so permissions are fine.
-- The .NET Framework limit of 65535 files was removed in .NET 8 on every OS.
+- On Windows, .NET 7 and earlier failed after 65,535 generated names remained in
+  the temp directory. .NET 8 removed that Windows-specific limit.
 - It returns a **path, not a handle**, so anything you do next re-resolves the
   name. That is a check-then-use window in a directory other users can write to.
 - It always creates in `Path.GetTempPath()`, so you cannot place it beside a
@@ -46,7 +50,7 @@ untrusted local users share the machine.
 
 ```csharp
 // Wrong: on Unix this is a world-writable directory and the name is guessable.
-string path = Path.Combine(Path.GetTempPath(), "myapp-cache.json");
+string path = Path.Join(Path.GetTempPath(), "myapp-cache.json");
 ```
 
 Another user can pre-create that name, or replace it with a symlink pointing
@@ -79,13 +83,25 @@ have files there.
 
 | | Windows | Unix |
 | --- | --- | --- |
-| `Path.GetTempPath()` | `%TEMP%`, under the user profile | `$TMPDIR` or `/tmp` |
-| Mode of that root | Per-user ACL | `777` plus the sticky bit |
-| Shared with other users | No | Yes |
+| `Path.GetTempPath()` | Interactive users normally get profile `%TEMP%`; services vary | `$TMPDIR` or `/tmp` |
+| Mode of that root | Depends on the identity and environment | `777` plus the sticky bit for `/tmp` |
+| Shared with other users | Usually not for interactive users; do not assume for services | Yes for `/tmp` |
 
 The sticky bit means another user cannot delete or rename *your* entries, but it
 does not stop them creating names before you do or reading anything you leave
 world-readable.
+
+## Windows services
+
+On supported Windows versions, current .NET uses `GetTempPath2`. A process
+running as `SYSTEM` gets `%SystemRoot%\SystemTemp`, whose ACL grants access to
+`SYSTEM` and administrators rather than standard users. Other service identities
+still follow `TMP` and `TEMP`; without a loaded profile they can resolve to a
+machine-wide location such as `%SystemRoot%\Temp`, where standard users may be
+able to create entries.
+
+Test `Path.GetTempPath()` under the service's real identity. Do not infer that it
+is private or even writable from behavior in an interactive session.
 
 ## Redirected or missing temp
 

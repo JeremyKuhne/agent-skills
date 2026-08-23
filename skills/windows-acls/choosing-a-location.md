@@ -17,6 +17,12 @@ want, and you get it by doing nothing.
 | Caches, logs, indexes, downloaded payloads | `Environment.SpecialFolder.LocalApplicationData` | Does not roam. This is the default choice for anything recreatable. |
 | Scratch that survives only the operation | `Path.GetTempPath()` | Assume another process as the same user can see and modify it. |
 
+`Environment.GetFolderPath` with its default option returns an empty string when
+the directory does not exist. Use `SpecialFolderOption.Create`, reject an empty
+result, and construct the application path with `Path.Join`; otherwise a missing
+folder can turn the application path into a relative path under the current
+working directory.
+
 Do not write custom ACLs here. Adding an explicit DACL sets `SE_DACL_PROTECTED`
 on the object, which severs it from profile-wide inheritance; a later profile
 migration, redirection change, or permission repair then skips your directory.
@@ -52,9 +58,12 @@ markers, and anything else small and structured, a registry key under
 store, and often the right answer to "where should this file go" is **not a
 file**.
 
-Registry keys avoid the entire class of filesystem problems:
+Registry keys avoid most filesystem-specific problems:
 
-- No reparse points, so no junction redirection of a privileged read or delete.
+- No filesystem reparse points or path traversal. Registry symbolic links do
+  exist, but an unprivileged caller cannot plant or retarget one under the
+  administrator-write `HKLM\SOFTWARE` hierarchy; the protection comes from the
+  key ACL, not from links being impossible.
 - No path traversal, no trailing-dot or trailing-space aliasing, no 8.3 aliases.
 - `HKLM\SOFTWARE` is already administrator-write, standard-user-read by default,
   so the correct ACL is the one you inherit.

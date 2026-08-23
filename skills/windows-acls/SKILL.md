@@ -29,10 +29,7 @@ place**, or **trust placed in a directory nobody proved they own**.
    `%ProgramData%` descriptor lets any standard user create a top-level
    directory. If your code creates `%ProgramData%\YourApp` lazily at first run,
    whoever runs first owns it.
-3. **The owner is the check that matters.** A DACL is forgeable by any caller;
-   an owner of `BUILTIN\Administrators` or `SYSTEM` is not. And because an owner
-   keeps `WRITE_DAC` implicitly, a caller who owns an object can rewrite its DACL
-   at any time - so a DACL-only check proves nothing.
+3. **The owner is the check that matters.** A DACL is forgeable by any caller; an expected machine owner such as `BUILTIN\Administrators` or `SYSTEM` is not. And because an owner keeps `WRITE_DAC` implicitly, a caller who owns an object can rewrite its DACL at any time - so a DACL-only check proves nothing.
 
 ## Decide the location first
 
@@ -66,27 +63,29 @@ security.AddAccessRule(new FileSystemAccessRule(
 security.CreateDirectory(path);
 ```
 
-Supplying a DACL at creation does three things people do not expect, all of them
-measured in the bundled tests:
+Passing a `DirectorySecurity` with an explicit DACL to
+`FileSystemAclExtensions.CreateDirectory` does three things people do not
+expect, all measured in the bundled tests:
 
 - It **suppresses** the parent's inheritable ACEs.
-- It **sets `SE_DACL_PROTECTED`**, so a later edit to the parent does not
-  propagate in. You do not need `SetAccessRuleProtection` to get this.
-- It applies the descriptor to **intermediate** directories it creates, not just
-  the leaf.
+- The created directory comes back with **`SE_DACL_PROTECTED`**, so a later edit
+  to the parent does not propagate in.
+- The .NET helper applies the descriptor to **intermediate** directories it
+  creates, not just the leaf.
 
 Details and the pitfalls in [securing-objects.md](securing-objects.md).
 
 ## If you must trust a shared location you did not just create
 
-Anchor at one root and check it once. Do not walk every component: once the root
-grants no modification rights outside the trusted principals, an unprivileged
-user cannot create anything below it, so descendants follow by induction.
+Anchor at one root and check it once, but only when every ancestor of that root
+also prevents unprivileged replacement. Under that premise, once the root grants
+no modification rights outside the trusted principals, an unprivileged user
+cannot create anything below it, so descendants follow by induction.
 
 Check, in this order:
 
 1. Not a reparse point.
-2. Owner is `BUILTIN\Administrators` or `SYSTEM`.
+2. Owner is an expected machine principal, normally `BUILTIN\Administrators` or `SYSTEM`. Admit `TrustedInstaller` only for a known OS-provisioned root.
 3. No allow ACE - **including inherit-only ACEs** - grants write, append, delete,
    delete-child, `WRITE_DAC`, or `WRITE_OWNER` to any other principal.
 

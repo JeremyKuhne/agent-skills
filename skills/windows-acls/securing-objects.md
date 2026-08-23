@@ -35,41 +35,54 @@ methods:
 The create-then-`SetAccessControl` alternative is a race: between the create and
 the ACL write, the object exists with an inherited descriptor.
 
-## Three behaviors of create-with-descriptor
+## Three measured behaviors of the .NET create helper
 
-All three are pinned by the bundled tests.
+These behaviors were measured for `FileSystemAclExtensions.CreateDirectory` with
+a `DirectorySecurity` on Windows 11 and are pinned by the bundled tests. Do not
+generalize them to arbitrary native `CreateDirectoryW` calls.
 
 **Parent inheritable ACEs are suppressed.** The created object carries only the
 ACEs you supplied. It does not merge in the parent's inheritable ACEs, so a
 `ProgramData`-shaped `BUILTIN\Users` write grant does not silently appear.
 
-**`SE_DACL_PROTECTED` is set.** `AreAccessRulesProtected` is `true` on the result
-even though nothing called `SetAccessRuleProtection`. This is the property that
-makes the object immune to a later inheritable ACE added to the parent: Windows
-propagates inheritable ACEs down through `SetNamedSecurityInfo` and
-`SetSecurityInfo`, but skips protected objects.
+**The result is protected.** `AreAccessRulesProtected` is `true` even though
+nothing called `SetAccessRuleProtection`. This is the property that makes the
+object immune to a later inheritable ACE added to the parent: Windows propagates
+inheritable ACEs down through `SetNamedSecurityInfo` and `SetSecurityInfo`, but
+skips protected objects.
+
+The general Windows inheritance documentation describes merging parent ACEs
+unless `SE_DACL_PROTECTED` is supplied. The observed .NET create path is narrower
+and differs from that general rule, so keep the regression test rather than
+treating this as a guarantee for every creation API.
 
 This is usually what you want for a trust root, and it is worth stating in a
 comment, because a reader will otherwise assume the object still inherits.
 
-**Intermediate directories get the same descriptor.** Creating `a\b\c` in one
-call produces `a`, `b`, and `c` all carrying the supplied descriptor, not just
-the leaf. That is good - it means the whole chain you create is protected - but
-it also means a partially created chain is left behind if creation fails midway.
-An unelevated caller supplying a descriptor that excludes itself will get
-`UnauthorizedAccessException` partway down and cannot then clean up.
+**The helper reuses the descriptor for intermediate directories.** Creating
+`a\b\c` in one call produces `a`, `b`, and `c` all carrying the supplied
+descriptor, not just the leaf. That is good - it means the whole chain you
+create is protected - but it also means a partially created chain is left behind
+if creation fails midway. An unelevated caller supplying a descriptor that
+excludes itself will get `UnauthorizedAccessException` partway down and cannot
+then clean up.
 
 ## Owner: what you can and cannot set
 
-An object's owner may only be a SID present in the creating token with
-`SE_GROUP_OWNER`. That means:
+Normally, an object's owner may only be a SID present in the token with
+`SE_GROUP_OWNER`. An enabled `SeRestorePrivilege` permits assigning another
+valid owner SID. That means:
 
 - An **unelevated** caller cannot make `BUILTIN\Administrators` or `SYSTEM` the
   owner. A filtered administrator token carries `Administrators` as *deny-only*,
   which does not qualify either.
-- An **elevated** caller can, and by default already gets `Administrators` as the
-  owner of objects it creates, governed by the "System objects: Default owner for
-  objects created by members of the Administrators group" policy.
+- An **elevated** administrator can assign `Administrators`, and by default may
+  already get it as the owner of new objects, governed by the "System objects:
+  Default owner for objects created by members of the Administrators group"
+  policy.
+- Elevation alone does **not** make `SYSTEM` assignable. The caller must run as
+  `SYSTEM` or hold and enable `SeRestorePrivilege`; the .NET access-control
+  commit path does not enable that privilege for an ordinary elevated token.
 
 The failure is **not** where most people put it. `SetOwner` succeeds in memory;
 the rejection happens on commit:

@@ -382,6 +382,16 @@ Describe 'Workflow execution contracts' {
         }
     }
 
+    It 'runs affected filesystem fact tests in ordinary Windows CI' {
+        $windowsJob = Get-WorkflowJobBody $script:CiWorkflow 'scaffold-windows'
+
+        $windowsJob | Should -Match ([regex]::Escape(
+                "'tests/windows-acls', 'tests/dotnet-file-creation'"))
+        $windowsJob | Should -Match ([regex]::Escape(
+                "'^(skills|tests)/(windows-acls|dotnet-file-creation)/'"))
+        $windowsJob | Should -Match "if: steps\.windows-filesystem\.outputs\.affected == 'true'"
+    }
+
     It 'exercises a pinned synthetic consumer on tag pushes' {
         $validateJob = Get-WorkflowJobBody $script:CiWorkflow 'validate'
 

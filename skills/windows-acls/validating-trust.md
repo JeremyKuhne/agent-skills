@@ -6,24 +6,34 @@ nothing provisioned it, this is the fallback and it must fail closed.
 
 ## Anchor at a root, not at every component
 
-Validate **one** root directory. Once that root grants no modification rights to
-any principal outside the trusted set, an unprivileged user cannot create,
-replace, rename, or delete anything below it, so every descendant follows by
-induction.
+Validate **one** root directory only after establishing that every ancestor from
+the volume root to that directory prevents unprivileged users from replacing or
+renaming it. Once that premise and the root check both hold, an unprivileged user
+cannot create, replace, rename, or delete anything below the root, so every
+descendant follows by induction.
+
+`%ProgramData%\<Product>` satisfies the ancestor premise on a default Windows
+installation: standard users can create new top-level entries but cannot replace
+an existing administrator-owned product directory. A deeper, redirected, or
+custom root may not. Provision it under trusted ancestors or validate the chain
+before relying on a cached root verdict.
 
 Walking each component of a path adds cost and no protection against an
 unprivileged attacker. It only detects deliberate administrator changes deep in
 the tree, and administrators are already trusted in this model.
 
-Cache the result for the process lifetime. Only an administrator can invalidate
-it, and if an administrator is hostile the check was never the defense.
+Cache the result for the process lifetime only when the ancestor premise holds.
+Then only a trusted principal can invalidate it, and if that principal is
+hostile the check was never the defense.
 
 ## What to check, in order
 
 1. **Not a reparse point.** A junction can be created by a standard user with no
    elevation at all. Check `FileAttributes.ReparsePoint` on the root itself.
-2. **Owner is a trusted machine principal** - `BUILTIN\Administrators` or
-   `SYSTEM`. This is the load-bearing check.
+2. **Owner is an expected machine principal** - normally
+   `BUILTIN\Administrators` or `SYSTEM`. `NT SERVICE\TrustedInstaller` is also
+   valid for a known OS-provisioned root; do not admit arbitrary service
+   accounts. This is the load-bearing check.
 3. **No allow ACE grants modification rights to anyone else.** Include the full
    right set from [securing-objects.md](securing-objects.md), and include
    **inherit-only** ACEs.
@@ -41,9 +51,10 @@ But the creator is still the **owner**, and an owner implicitly retains
 your check and unlock again the moment they want to tamper. A DACL-only check is
 worthless on its own.
 
-An owner of `Administrators` or `SYSTEM`, by contrast, cannot be produced by an
-unelevated caller at all: a SID may own an object only if the creating token
-carries it with `SE_GROUP_OWNER`, and a standard user's token does not.
+An expected machine owner, by contrast, cannot be produced by an unelevated
+caller: a SID may normally own an object only if the token carries it with
+`SE_GROUP_OWNER`, and a standard user's token does not. Assigning an unrelated
+owner requires enabled `SeRestorePrivilege`.
 
 ## Why inherit-only ACEs count
 
@@ -89,18 +100,17 @@ them.
 Independent of descriptors, when a caller-supplied component becomes part of a
 path:
 
+- Join it to the trusted root with `Path.Join`, not `Path.Combine`, so a rooted component cannot discard the root.
 - Reject directory separators and `..`.
 - Reject the volume separator `:`.
 - Reject a trailing dot or trailing space. Windows strips both, so a component
   ending in a dot or a space aliases the same name without it.
-- Canonicalize with `Path.GetFullPath` and then verify containment against the
-  root, comparing with `OrdinalIgnoreCase` and a trailing separator so that
-  `C:\root2` does not pass as a child of `C:\root`.
+- Canonicalize with `Path.GetFullPath` and then verify containment against the root with a trailing separator so that `C:\root2` does not pass as a child of `C:\root`. Use `Ordinal` for a fail-closed check. If casing aliases must be accepted, first probe the filesystem for that root and use `OrdinalIgnoreCase` only when the probe shows it is case-insensitive.
 
-A legacy device-name blocklist (`CON`, `NUL`, `LPT1`) is not needed on current
-Windows; path normalization no longer reinterprets those as devices in a
-qualified path, and a containment check catches anything that does normalize
-elsewhere.
+Reject legacy device basenames such as `CON`, `NUL`, and `LPT1` when Windows 10
+or Server 2022 is supported; those systems can still reinterpret them in a
+qualified path. Newer Windows 11 behavior differs, so do not use one version's
+normalization as a cross-version security boundary.
 
 ## Deletion is the sharpest edge
 

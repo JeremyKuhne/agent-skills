@@ -28,9 +28,11 @@ differ on .NET 10. Treat the Linux column as verified-on-.NET-8.
 | `CommonApplicationData` | `C:\ProgramData` | `/usr/share` |
 | `Path.GetTempPath()` | `%TEMP%` (under the profile) | `/tmp/` |
 
-Both per-user folders resolve under `UserProfile` on both platforms, and
-`CommonApplicationData` resolves outside it on both. Those two invariants are
-pinned by tests.
+Both per-user folders resolved under `UserProfile` on both measured systems, and
+`CommonApplicationData` resolved outside it on both. The test requests
+`SpecialFolderOption.Create`, because the default option returns an empty string
+when the directory does not exist. Without that option, the result depends on
+the state of the account image rather than only on the platform mapping.
 
 `CommonApplicationData` is otherwise not comparable across platforms:
 `C:\ProgramData` is writable by any standard user at the top level, while
@@ -50,9 +52,11 @@ pinned by tests.
 | `Path.GetTempFileName()` | `600` |
 | A file created by `File.OpenHandle` | `644` |
 
-The composite result was measured directly: a settings file written into
-`~/.config/<app>/` is **reachable and readable by other local users**, because
-every component grants other-execute and the file grants other-read.
+The composite result was measured directly in this environment: a settings file
+written into `~/.config/<app>/` is **reachable and readable by other local
+users**, because every component grants other-execute and the file grants
+other-read. The `755` parent is not a Linux invariant; desktop tooling can create
+`~/.config` more restrictively, while `~/.local/share` is commonly traversable.
 
 This is the headline difference from Windows, where the same code path lands
 inside a profile directory restricted to the user, `SYSTEM`, and administrators.
@@ -96,9 +100,10 @@ because the exact value depends on the ambient umask.
 
 Creating each level in its own call produced `700` at every level.
 
-**This is the opposite of Windows**, where a security descriptor supplied to
-`DirectorySecurity.CreateDirectory` is applied to every level the call creates.
-Anyone who verified the pattern on one platform will be wrong on the other.
+**This is the opposite of the .NET Windows ACL overload**, where a security
+descriptor supplied to `FileSystemAclExtensions.CreateDirectory` is applied to
+every level the call creates. This is behavior of that API, not a general rule
+for callers of native `CreateDirectoryW`.
 
 ---
 
@@ -154,15 +159,17 @@ Whether .NET honors the macOS `UF_HIDDEN` flag was not tested, so the test scope
 those assertions to Linux as well.
 
 `FileShare` being enforced on Linux is worth calling out, since it is often
-assumed to be a Windows-only concept. .NET emulates it, so it holds between .NET
-processes. It is not visible to non-.NET processes.
+assumed to be a Windows-only concept. .NET implements it with advisory `flock`
+locks, so cooperating native processes can participate too. Processes may
+ignore advisory locks, and `DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` disables this
+runtime behavior entirely.
 
 ---
 
 ## 6. Verification status
 
 The bundled Pester tests run on every platform and branch at run time. On this
-machine they were executed on Windows: **13 passed, 3 skipped** (the three
+machine they were executed on Windows: **14 passed, 3 skipped** (the three
 Unix-only cases).
 
 The Unix branches were **not** executed as PowerShell here, because installing
@@ -191,5 +198,7 @@ gate.
   permissions from `~/.config` and deserves its own measurement.
 - Behavior on non-default filesystems: ReFS, network shares, and container
   overlay filesystems were not exercised.
-- `TMPDIR` unset or pointing at a shared or read-only location, which is common
-  in containers and service accounts.
+- Service identities were not measured. Current .NET uses `GetTempPath2` where
+  available, giving `SYSTEM` `%SystemRoot%\SystemTemp`; other Windows service
+  identities can still inherit machine-wide `TMP` or `TEMP`. Containers can
+  likewise supply a shared, missing, or read-only temp path.

@@ -1,6 +1,6 @@
 #requires -Version 7.0
 
-# Behavioral assertions behind the dotnet-file-creation skill. These run on every platform and
+# Fact-regression assertions behind the dotnet-file-creation skill. These run on every platform and
 # branch at run time, because the whole point of the guidance is that the same API behaves
 # differently on Windows and Unix. A test that skipped the other platform would pin nothing.
 #
@@ -182,6 +182,16 @@ Describe 'Cross-platform file creation behavior' {
 
     Context 'Creation semantics that are the same everywhere' {
 
+        It 'keeps the first segment when a later Path.Join segment is rooted' {
+            $root = Join-Path $TestDrive 'trusted-root'
+            $rootedSegment = if ($IsWindows) { 'C:\outside' } else { '/outside' }
+
+            [System.IO.Path]::IsPathRooted($rootedSegment) | Should -BeTrue
+            [System.IO.Path]::Join($root, $rootedSegment).StartsWith(
+                "$root$([System.IO.Path]::DirectorySeparatorChar)",
+                [StringComparison]::Ordinal) | Should -BeTrue
+        }
+
         It 'fails an exclusive create when the file already exists' {
             $root = New-TempRoot
             try {
@@ -195,8 +205,8 @@ Describe 'Cross-platform file creation behavior' {
         }
 
         It 'enforces FileShare.None against a second open' {
-            # .NET emulates share modes on Unix, so this holds on both platforms between .NET
-            # processes. It is not enforced against non-.NET processes on Unix.
+            # .NET takes advisory flock locks on Unix, so cooperating native processes can honor
+            # them too. This same-process assertion pins the default runtime behavior only.
             $root = New-TempRoot
             try {
                 $path = Join-Path $root 'share.txt'
@@ -308,15 +318,55 @@ Describe 'Cross-platform file creation behavior' {
 
     Context 'Where the runtime puts per-user and machine state' {
 
-        It 'places per-user data under the user profile on every platform' {
+        It 'resolves per-user data folders from platform defaults and XDG overrides' {
             $profilePath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
             $profilePath | Should -Not -BeNullOrEmpty
 
-            foreach ($folder in @('ApplicationData', 'LocalApplicationData')) {
-                $path = [Environment]::GetFolderPath([Environment+SpecialFolder]::$folder)
-                $path | Should -Not -BeNullOrEmpty
-                $path.StartsWith($profilePath, [StringComparison]::OrdinalIgnoreCase) |
-                    Should -BeTrue -Because "$folder should live under the user profile"
+            $folders = @(
+                @{ Folder = [Environment+SpecialFolder]::ApplicationData; Override = 'XDG_CONFIG_HOME' }
+                @{ Folder = [Environment+SpecialFolder]::LocalApplicationData; Override = 'XDG_DATA_HOME' }
+            )
+
+            $originalOverrides = @{}
+            try {
+                if ($IsLinux) {
+                    foreach ($folder in $folders) {
+                        $originalOverrides[$folder.Override] = [Environment]::GetEnvironmentVariable(
+                            $folder.Override)
+                        [Environment]::SetEnvironmentVariable($folder.Override, $null)
+                    }
+                }
+
+                foreach ($folder in $folders) {
+                    $path = [Environment]::GetFolderPath(
+                        $folder.Folder,
+                        [Environment+SpecialFolderOption]::Create)
+                    $path | Should -Not -BeNullOrEmpty
+                    $path | Should -Exist
+                    $path.StartsWith($profilePath, [StringComparison]::OrdinalIgnoreCase) |
+                        Should -BeTrue -Because "$($folder.Folder) defaults under the user profile"
+                }
+
+                if ($IsLinux) {
+                    foreach ($folder in $folders) {
+                        $override = Join-Path $TestDrive $folder.Override
+                        [Environment]::SetEnvironmentVariable($folder.Override, $override)
+                        $path = [Environment]::GetFolderPath(
+                            $folder.Folder,
+                            [Environment+SpecialFolderOption]::Create)
+
+                        $path | Should -Be $override -Because "$($folder.Folder) honors its XDG override"
+                        $path | Should -Exist
+                    }
+                }
+            }
+            finally {
+                if ($IsLinux) {
+                    foreach ($folder in $folders) {
+                        [Environment]::SetEnvironmentVariable(
+                            $folder.Override, $originalOverrides[$folder.Override])
+                    }
+                }
             }
         }
 

@@ -10,7 +10,7 @@ row is pinned by a bundled test.
 | `FileMode.CreateNew` over an existing file | Throws `IOException` |
 | `File.Move(source, destination, overwrite: true)` | Replaces the destination, removes the source |
 | `FileShare.None` blocking a second open | Blocked |
-| Per-user special folders | Under `SpecialFolder.UserProfile` |
+| Default per-user special-folder mappings | Under `SpecialFolder.UserProfile` |
 | Machine-wide special folder | Outside the user profile |
 
 Exclusive create is the one to lean on. `FileMode.CreateNew` maps to `O_EXCL` on
@@ -35,11 +35,11 @@ rename over the old one.
 
 | Windows | Unix |
 | --- | --- |
-| Enforced by the kernel against every process | Emulated by .NET; enforced between .NET processes, invisible to anything else |
+| Enforced by the kernel against every process | Advisory `flock`; honored by cooperating processes, including native ones |
 
-So a lock file works for coordinating instances of your own application on both
-platforms, and is not a security boundary on Unix. A native tool, a shell script,
-or a different runtime will open the file regardless.
+So a lock file works for coordinating cooperating processes on both platforms,
+and is not a security boundary on Unix. A process can ignore advisory locks, and
+`DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` disables .NET file locking there.
 
 ### Path casing
 
@@ -76,44 +76,50 @@ resolves, and cache the answer per directory root.
 
 ### Hidden files
 
-| Windows | Unix |
+| Windows | Linux |
 | --- | --- |
 | `FileAttributes.Hidden` is real and settable | Derived from a leading dot in the name |
 
-`File.SetAttributes(path, FileAttributes.Hidden)` on Unix **does not throw and
+`File.SetAttributes(path, FileAttributes.Hidden)` on Linux **does not throw and
 does not work**: reading the attributes back afterwards shows the file is not
-hidden. A file named `.config` reports `Hidden` on Unix without anyone setting
+hidden. A file named `.config` reports `Hidden` on Linux without anyone setting
 it.
 
-To hide a file portably, name it with a leading dot and set the attribute on
-Windows.
+macOS has a native `UF_HIDDEN` flag and must not be inferred from Linux behavior;
+the bundled suite has not measured it. To hide a file portably, name it with a
+leading dot and set the attribute on Windows.
 
 ### Directory creation and permissions
 
 | Windows | Unix |
 | --- | --- |
-| A supplied security descriptor applies to every level the call creates, and sets `SE_DACL_PROTECTED` | An explicit `UnixFileMode` applies to the leaf only |
+| `FileSystemAclExtensions.CreateDirectory` applies its descriptor to every level it creates and returns them protected | The Unix mode overload applies an explicit mode to the leaf only |
 
 This asymmetry catches people who verified their code on one platform. See
 [permissions.md](permissions.md).
 
 ## Paths
 
-- Build paths with `Path.Combine` or `Path.Join`, never string concatenation.
-  `Path.Combine` discards earlier segments when a later one is rooted, which is a
-  useful traversal guard and a surprise if you did not expect it; `Path.Join`
-  simply concatenates with a separator.
+- Build paths with `Path.Join`, never `Path.Combine` or string concatenation.
+  `Path.Combine(root, input)` discards the root when `input` is rooted, which is
+  an absolute-path injection. `Path.Join` preserves the root, but it is not a
+  complete traversal defense: reject separators, volume separators, and `..`,
+  then canonicalize and containment-check untrusted components.
 - `Path.DirectorySeparatorChar` differs, but Windows accepts forward slashes, so
   forward slashes in literals are usually portable. Backslashes are not.
 - `Path.GetFullPath` normalizes, and normalization differs. Windows strips
   trailing dots and spaces, so `name.` and `name` can be the same file there and
   different files on Unix.
-- Windows reserves `< > : " | ? *` and historically the device names `CON`,
-  `NUL`, `LPT1`. Modern Windows no longer reinterprets those in a fully qualified
-  path, but they remain poor filename choices.
-- Long paths beyond `MAX_PATH` need opt-in on Windows through the application
-  manifest and the long-paths policy. `\\?\` prefixing bypasses normalization
-  entirely, which also disables the safety of that normalization.
+- Windows reserves `< > : " | ? *` and the device names `CON`, `NUL`, `LPT1`,
+  and related variants. Windows 10-era systems, including Server 2022, can still
+  reinterpret device names in fully qualified paths; reject them when those
+  versions are supported.
+- For fully qualified paths, modern .NET file APIs support paths beyond
+  `MAX_PATH` without an application manifest by adding extended syntax
+  internally. The manifest and long-path policy still matter to .NET Framework,
+  direct Win32 calls, the process working directory, and paths passed to native
+  components. Supplying `\\?\` yourself bypasses normalization and should not be
+  done with untrusted input.
 
 ## Line endings and encoding
 

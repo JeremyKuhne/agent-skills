@@ -87,15 +87,15 @@ Directory.CreateDirectory("/home/u/app/a/b/c", OwnerOnly);
 // a,b -> 755 under a 022 umask
 ```
 
-This is the **opposite** of Windows, where a supplied security descriptor is
-applied to every level the call creates. Create each level you care about in its
-own call:
+This is the **opposite** of the .NET Windows ACL overload, which reuses a
+supplied security descriptor for every level it creates. Create each level you
+care about in its own call:
 
 ```csharp
 string current = root;
 foreach (string segment in segments)
 {
-    current = Path.Combine(current, segment);
+  current = Path.Join(current, segment);
     Directory.CreateDirectory(current, OwnerOnlyDirectory);
 }
 ```
