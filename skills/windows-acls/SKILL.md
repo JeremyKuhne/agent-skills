@@ -29,7 +29,10 @@ place**, or **trust placed in a directory nobody proved they own**.
    `%ProgramData%` descriptor lets any standard user create a top-level
    directory. If your code creates `%ProgramData%\YourApp` lazily at first run,
    whoever runs first owns it.
-3. **The owner is the check that matters.** A DACL is forgeable by any caller; an expected machine owner such as `BUILTIN\Administrators` or `SYSTEM` is not. And because an owner keeps `WRITE_DAC` implicitly, a caller who owns an object can rewrite its DACL at any time - so a DACL-only check proves nothing.
+3. **The owner is the check that matters.** A DACL is forgeable by any caller;
+   an expected machine owner such as `BUILTIN\Administrators` or `SYSTEM` is not.
+   And because an owner keeps `WRITE_DAC` implicitly, a caller who owns an object
+   can rewrite its DACL at any time - so a DACL-only check proves nothing.
 
 ## Decide the location first
 
@@ -85,7 +88,8 @@ cannot create anything below it, so descendants follow by induction.
 Check, in this order:
 
 1. Not a reparse point.
-2. Owner is an expected machine principal, normally `BUILTIN\Administrators` or `SYSTEM`. Admit `TrustedInstaller` only for a known OS-provisioned root.
+2. Owner is an expected machine principal, normally `BUILTIN\Administrators` or
+   `SYSTEM`. Admit `TrustedInstaller` only for a known OS-provisioned root.
 3. No allow ACE - **including inherit-only ACEs** - grants write, append, delete,
    delete-child, `WRITE_DAC`, or `WRITE_OWNER` to any other principal.
 

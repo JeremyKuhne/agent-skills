@@ -100,12 +100,17 @@ them.
 Independent of descriptors, when a caller-supplied component becomes part of a
 path:
 
-- Join it to the trusted root with `Path.Join`, not `Path.Combine`, so a rooted component cannot discard the root.
+- Join it to the trusted root with `Path.Join`, not `Path.Combine`, so a
+  rooted component cannot discard the root.
 - Reject directory separators and `..`.
 - Reject the volume separator `:`.
 - Reject a trailing dot or trailing space. Windows strips both, so a component
   ending in a dot or a space aliases the same name without it.
-- Canonicalize with `Path.GetFullPath` and then verify containment against the root with a trailing separator so that `C:\root2` does not pass as a child of `C:\root`. Use `Ordinal` for a fail-closed check. If casing aliases must be accepted, first probe the filesystem for that root and use `OrdinalIgnoreCase` only when the probe shows it is case-insensitive.
+- Canonicalize with `Path.GetFullPath` and then verify containment against the
+  root with a trailing separator so that `C:\root2` does not pass as a child of
+  `C:\root`. Use `Ordinal` for a fail-closed check. If casing aliases must be
+  accepted, first probe the filesystem for that root and use `OrdinalIgnoreCase`
+  only when the probe shows it is case-insensitive.
 
 Reject legacy device basenames such as `CON`, `NUL`, and `LPT1` when Windows 10
 or Server 2022 is supported; those systems can still reinterpret them in a
