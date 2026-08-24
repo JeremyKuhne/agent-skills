@@ -135,6 +135,10 @@ try {
         throw "Installed skill inventory differs from source: $($inventoryDifference | Out-String)"
     }
 
+    $expectedRef = if ($SourceRepository) {
+        Get-GitHubSkillRef $gitPath $resolvedRepoRoot $Pin
+    }
+    else { $null }
     foreach ($record in $sourceRecords) {
         foreach ($requiredName in $record.Requires) {
             if ($requiredName -notin $installedNames) {
@@ -155,7 +159,7 @@ try {
             $expectedProvenance = [ordered]@{
                 'github-path' = "skills/$($record.Name)"
                 'github-pinned' = $Pin
-                'github-ref' = $Pin
+                'github-ref' = $expectedRef
                 'github-repo' = "https://github.com/$SourceRepository"
                 'github-tree-sha' = [string]$treeOutput[0]
             }
