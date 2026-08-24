@@ -10,6 +10,22 @@ function Get-GeneratedSkillProvenanceFieldNames {
         'local-path')
 }
 
+function Get-GitHubSkillRef(
+    [string] $GitPath,
+    [string] $RepoRoot,
+    [string] $Pin) {
+    $symbolicRefOutput = @(& $GitPath -C $RepoRoot rev-parse `
+            --symbolic-full-name $Pin 2>&1)
+    if ($LASTEXITCODE -ne 0 -or $symbolicRefOutput.Count -gt 1) {
+        throw "Could not resolve the Git ref for '$Pin': $($symbolicRefOutput -join "`n")"
+    }
+    if ($symbolicRefOutput.Count -eq 1 -and
+        -not [string]::IsNullOrWhiteSpace([string]$symbolicRefOutput[0])) {
+        return [string]$symbolicRefOutput[0]
+    }
+    return $Pin
+}
+
 function Get-SkillArtifactDocument([string] $SkillPath) {
     $content = [System.IO.File]::ReadAllText($SkillPath).Replace("`r`n", "`n")
     $match = [regex]::Match(
