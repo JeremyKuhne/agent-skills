@@ -505,7 +505,7 @@ function Get-MarkdownListIndentationErrors ([string] $markdownPath, [string] $sk
 
         [int] $requiredIndent = $listItems[$listItems.Count - 1].ContentIndent
         [string] $trimmedLine = $line.TrimStart()
-        $startsNewBlock = $trimmedLine -match '^(?:#{1,6}(?:\s|$)|>|<[/!?A-Za-z]|(?:-{3,}|\*{3,}|_{3,})\s*$)'
+        $startsNewBlock = $trimmedLine -match '^(?:#{1,6}(?:\s|$)|>|<(?:[!?]|/?[A-Za-z][A-Za-z0-9-]*(?:\s|/?>|$))|(?:-{3,}|\*{3,}|_{3,})\s*$)'
         if ($leadingSpaces -lt $requiredIndent) {
             if ($null -ne $paragraphIndent -and -not $startsNewBlock) {
                 $errors.Add("$relativePath`:$($lineIndex + 1) list continuation is indented $leadingSpaces spaces; align it with the paragraph's $paragraphIndent-space indentation.")

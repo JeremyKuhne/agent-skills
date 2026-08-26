@@ -143,6 +143,43 @@ A top-level paragraph after the list remains valid.
             $r.Output | Should -Match 'All 1 skill'
         }
 
+        It 'accepts a top-level HTML block after a list' {
+            $dir = New-SkillFixture -Name 'html-after-list' -Frontmatter (@(
+                    'name: html-after-list'
+                    'description: A skill with an HTML block after a list.'
+                ) -join "`n") -Body @'
+# HTML after a list
+
+1. The list item ends here.
+<div>
+Top-level HTML remains outside the list.
+</div>
+'@
+            $result = Invoke-Validator -Arguments @($dir)
+
+            $result.ExitCode | Should -Be 0 -Because $result.Output
+            $result.Output | Should -Match 'All 1 skill'
+        }
+
+        It 'rejects an under-indented <Kind> autolink continuation' -ForEach @(
+            @{ Kind = 'URL'; Autolink = '<https://example.com>' }
+            @{ Kind = 'email'; Autolink = '<user@example.com>' }
+        ) {
+            $dir = New-SkillFixture -Name 'under-indented-autolink' -Frontmatter (@(
+                    'name: under-indented-autolink'
+                    'description: A skill with an under-indented autolink.'
+                ) -join "`n") -Body (@(
+                    '# Under-indented autolink'
+                    ''
+                    '1. Read the reference at'
+                    "  $Autolink"
+                ) -join "`n")
+            $result = Invoke-Validator -Arguments @($dir)
+
+            $result.ExitCode | Should -Be 1
+            $result.Output | Should -Match 'list continuation is indented 2 spaces; align it with the paragraph''s 3-space indentation'
+        }
+
         It 'adjusts the content column when ordered items cross from 9 to 10' {
             [string] $threeSpaces = ' ' * 3
             [string] $fourSpaces = ' ' * 4
