@@ -206,10 +206,15 @@ APIs using the consuming codebase's established interop mechanism.
 The flow above evaluates the owner and DACL supplied by the caller. Do not
 describe it as the operating system opening the named object:
 
-- It does not read the mandatory integrity label, resource attributes, or central access policy scope stored in the SACL.
-- A child descriptor alone cannot account for a separate parent grant such as `FILE_DELETE_CHILD`.
-- The no-callback resource manager shown here establishes no result for conditional or callback ACEs that require resource-manager policy or context attributes.
-- Sharing mode, path resolution, object state, and a later descriptor change can still reject the real operation.
+- It does not read the mandatory integrity label, resource attributes, or central
+  access policy scope stored in the SACL.
+- A child descriptor alone cannot account for a separate parent grant such as
+  `FILE_DELETE_CHILD`.
+- The no-callback resource manager shown here establishes no result for
+  conditional or callback ACEs that require resource-manager policy or context
+  attributes.
+- Sharing mode, path resolution, object state, and a later descriptor change can
+  still reject the real operation.
 
 The result is a diagnostic snapshot. Never report the mask as a promise that a
 later operation will succeed.

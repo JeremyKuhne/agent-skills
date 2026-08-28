@@ -34,7 +34,10 @@ hostile the check was never the defense.
    `BUILTIN\Administrators` or `SYSTEM`. `NT SERVICE\TrustedInstaller` is also
    valid for a known OS-provisioned root; do not admit arbitrary service
    accounts. This is the load-bearing check.
-3. **A DACL is present and is not NULL.** Both an absent DACL and a NULL DACL grant access to everyone. An empty DACL instead grants no access. Inspect the raw descriptor's `DiscretionaryAclPresent` control flag and `DiscretionaryAcl`; do not infer this property from an empty projected rule collection.
+3. **A DACL is present and is not NULL.** Both an absent DACL and a NULL DACL
+   grant access to everyone. An empty DACL instead grants no access. Inspect the
+   raw descriptor's `DiscretionaryAclPresent` control flag and `DiscretionaryAcl`;
+   do not infer this property from an empty projected rule collection.
 4. **No allow ACE grants modification rights to anyone else.** Include the full
    right set from [securing-objects.md](securing-objects.md), and include
    **inherit-only** ACEs.
