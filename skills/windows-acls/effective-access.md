@@ -1,4 +1,4 @@
-# Reading effective rights
+# Evaluating descriptor access
 
 Do not calculate effective rights by adding and subtracting ACE masks for one
 SID. Windows evaluates a client context, not an isolated SID: the context can
@@ -6,7 +6,9 @@ include enabled and deny-only groups, restricted SIDs, privileges, a logon SID,
 claims, and device groups. The descriptor's owner participates in the result too.
 
 .NET does not wrap `AuthzAccessCheck`, so the practical question is which
-narrower managed answer your feature actually needs.
+narrower managed answer your feature actually needs. Authz evaluates the
+security descriptors supplied by the caller against a client context; it does
+not open the filesystem or registry object.
 
 ## Use managed APIs for narrower questions
 
@@ -20,8 +22,8 @@ request.
 | --- | --- | --- |
 | Which owner and ACEs are stored? | `FileSystemAclExtensions.GetAccessControl` and `GetAccessRules` | Descriptor facts only. This is suitable for an ACL viewer or a fail-closed descriptor policy. |
 | Is one SID enabled in this token? | `WindowsPrincipal.IsInRole(SecurityIdentifier)` | Token-specific role membership only. This is suitable when membership itself is the policy. |
-| Can this token perform one file operation now? | Perform the operation, or open the file with an exact `FileSystemRights` request. | The operating system granted or denied that request at that time. |
-| What is the token's maximum granted mask? | None; .NET does not wrap `AuthzAccessCheck`. | Nothing, until you add the native Authz flow below. |
+| Can this token perform one file or registry operation now? | Perform the operation, or open the object with an exact `FileSystemRights` or `RegistryRights` request. | The operating system granted or denied that request at that time. |
+| What mask does this client context receive from this supplied descriptor? | None; .NET does not wrap `AuthzAccessCheck`. | Nothing, until you add the native Authz flow below. |
 
 ### Inspect the descriptor without adjudicating it
 
@@ -94,9 +96,25 @@ using FileStream stream = new FileInfo(path).Create(
     fileSecurity: null);
 ```
 
-Keep and use the returned stream; closing it and reopening the path later turns
-the check into a race. When the application already has the real operation - a
-read, a replace, a delete - perform that instead. The overload is file-only, so
+For a registry key, request the rights on the handle you will use:
+
+```csharp
+using RegistryKey? key = parent.OpenSubKey(
+    name,
+    RegistryKeyPermissionCheck.Default,
+    RegistryRights.QueryValues);
+
+if (key is null)
+{
+    throw new InvalidOperationException("The registry key does not exist.");
+}
+```
+
+Keep and use the returned stream or key; closing it and reopening the name later
+turns the check into a race. An access exception means the requested open was
+not granted; `OpenSubKey` instead returns `null` when the key does not exist.
+When the application already has the real operation - a read, a replace, a
+delete - perform that instead. The file overload cannot open a directory, so
 answer a directory question with the real directory operation. Given a token for
 another identity,
 [`WindowsIdentity.RunImpersonated`](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsidentity.runimpersonated)
@@ -110,9 +128,9 @@ for one token; it yields no reusable mask and cannot evaluate an arbitrary SID.
 ## Choose the identity source
 
 Reach for native Authz only when a diagnostic, policy editor, or custom resource
-manager must report a granted mask instead of performing an operation. Keep the
-interop in one small Windows-only component; nothing above approximates it
-safely.
+manager must report a descriptor-evaluation mask instead of performing an
+operation. Keep the interop in one small Windows-only component; nothing above
+approximates it safely.
 
 | Available identity | Authz context | Meaning |
 | --- | --- | --- |
@@ -133,12 +151,11 @@ Do not pass a group SID as though it identified a user. Current
 group evaluation is skipped. A group trustee does not by itself describe any
 particular caller's effective rights.
 
-## Read the granted mask
+## Evaluate the descriptor
 
-Use this sequence for a diagnostic effective-rights result:
+Use this sequence for a diagnostic descriptor-access result:
 
-1. Read the object's security descriptor with `Owner` and `Access` sections.
-   `AuthzAccessCheck` requires both owner and DACL information.
+1. Read the object's security descriptor with `Owner` and `Access` sections. `AuthzAccessCheck` requires both owner and DACL information for this flow.
 2. Create an Authz resource manager with `AUTHZ_RM_FLAG_NO_AUDIT`.
 3. Create the client context from the actual token when one is available;
    otherwise create the qualified SID-based context described above.
@@ -146,8 +163,7 @@ Use this sequence for a diagnostic effective-rights result:
    [`MAXIMUM_ALLOWED`](https://learn.microsoft.com/windows/win32/secauthz/access-mask)
    and call
    [`AuthzAccessCheck`](https://learn.microsoft.com/windows/win32/api/authz/nf-authz-authzaccesscheck).
-5. Check both the API return value and `AUTHZ_ACCESS_REPLY.Error[0]`. On success,
-   `GrantedAccessMask[0]` is the granted object-specific access mask.
+5. Check both the API return value and `AUTHZ_ACCESS_REPLY.Error[0]`. A `FALSE` return is an API failure. The reply error is the authorization result; `ERROR_ACCESS_DENIED` is an ordinary denial, including a `MAXIMUM_ALLOWED` result with a zero mask.
 6. Free the client context and resource manager on every path.
 
 The essential call shape is:
@@ -173,22 +189,30 @@ if (!AuthzAccessCheck(
     throw new Win32Exception(Marshal.GetLastWin32Error());
 }
 
-if (reply.Error[0] != ERROR_SUCCESS)
-{
-    throw new Win32Exception((int)reply.Error[0]);
-}
-
+uint resultCode = reply.Error[0];
 uint grantedMask = reply.GrantedAccessMask[0];
+bool granted = resultCode == ERROR_SUCCESS;
 ```
 
 This intentionally shows the authorization flow rather than unsafe declarations
-and allocation plumbing. The official
+and allocation plumbing. Preserve `resultCode` in a reusable result type so a
+denial is not reported as an interop failure. The official
 [`GetEffectiveRightsFromAcl` example](https://learn.microsoft.com/windows/win32/api/aclapi/nf-aclapi-geteffectiverightsfromaclw)
 contains a complete native Authz implementation. Generate or declare the Authz
 APIs using the consuming codebase's established interop mechanism.
 
-The result is a diagnostic snapshot. The descriptor can change before the caller
-acts, so never report the mask as a promise that a later operation will succeed.
+### Keep descriptor evaluation scoped
+
+The flow above evaluates the owner and DACL supplied by the caller. Do not
+describe it as the operating system opening the named object:
+
+- It does not read the mandatory integrity label, resource attributes, or central access policy scope stored in the SACL.
+- A child descriptor alone cannot account for a separate parent grant such as `FILE_DELETE_CHILD`.
+- The no-callback resource manager shown here establishes no result for conditional or callback ACEs that require resource-manager policy or context attributes.
+- Sharing mode, path resolution, object state, and a later descriptor change can still reject the real operation.
+
+The result is a diagnostic snapshot. Never report the mask as a promise that a
+later operation will succeed.
 
 ## Do not use the legacy shortcut as authority
 

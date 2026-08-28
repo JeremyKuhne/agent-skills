@@ -96,6 +96,16 @@ junctions in tests unless you are specifically testing symlink behavior.
 `SetAccessRuleProtection` mutate a detached object. Assert on the object read
 back from disk, not on the one you just modified.
 
+**Descriptor-bearing create is still create-or-open.**
+`FileSystemAclExtensions.CreateDirectory` returns an existing directory without
+applying its `DirectorySecurity`. `RegistryKey.CreateSubKey` likewise opens an
+existing local key before it uses the supplied `RegistrySecurity`. A normal
+return does not prove creation or descriptor application.
+
+**A NULL DACL is not an empty DACL.** An absent or NULL DACL grants access to
+everyone; an empty DACL grants no access. Inspect the raw descriptor when that
+distinction is part of a validator's contract.
+
 **ACE order is observable behavior.** Do not prove ordering by inspecting only
 the descriptor built in memory. Write it, read it back, assert
 `AreAccessRulesCanonical` and raw ACE order, then perform the access that should
@@ -116,12 +126,14 @@ bind and PowerShell will try the `byte[]` constructor:
     [System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
 ```
 
-**Separate descriptor policy from effective access.** Build a synthetic
-`DirectorySecurity` in memory when testing a validator's own fail-closed policy.
-When the claim is about one operation, perform it or open the file with the
-exact rights; reserve `AuthzAccessCheck` for claims about a granted mask. Never
-present ACE enumeration or `WindowsPrincipal.IsInRole` as an effective-rights
-calculation. See [effective-access.md](effective-access.md).
+**Separate descriptor policy, descriptor evaluation, and operations.** Build a
+synthetic `DirectorySecurity` in memory when testing a validator's own
+fail-closed policy. When the claim is about one operation, perform it or open
+the object with exact `FileSystemRights` or `RegistryRights`; reserve
+`AuthzAccessCheck` for the mask a client context receives from supplied
+descriptors. Never present that snapshot, ACE enumeration, or
+`WindowsPrincipal.IsInRole` as proof that a later object operation will succeed.
+See [effective-access.md](effective-access.md).
 
 ## What to pin
 
@@ -130,14 +142,21 @@ rather than the product:
 
 - Parent inheritable ACEs are suppressed when a descriptor is supplied at
   creation, and the object comes back protected.
+- Descriptor-bearing directory and registry creation leaves an existing
+  object's descriptor unchanged.
+- A directory created with a trusted owner succeeds only when that owner is
+  assignable by the caller's token.
+- A NULL DACL remains distinguishable from an empty DACL after a managed binary
+  descriptor round trip.
 - A matching broad allow before a user deny can complete the access check, while
   canonical deny-before-allow order rejects the same read.
 - `AuthzAccessCheck(MAXIMUM_ALLOWED)` returns the expected read-without-write
-  mask for the current token, and a SID-based context resolves the current
-  user's group grant on the measured host.
+  descriptor mask for the current token, and a SID-based context resolves the
+  current user's group grant on the measured host.
 - Enabled `BUILTIN\Users` membership does not imply access when a separate ACE
-  denies the current user, and an exact managed `ReadData` open can succeed
-  while an exact `WriteData` open is denied.
+  denies the current user, an exact managed `ReadData` file open can succeed
+  while an exact `WriteData` open is denied, and registry handles honor exact
+  `QueryValues` versus `SetValue` requests.
 - A later inheritable ACE on the parent does not propagate into a protected
   child.
 - An inherit-only ACE appears on the container as inherit-only and on a child as

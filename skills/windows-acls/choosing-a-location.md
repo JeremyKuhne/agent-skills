@@ -104,6 +104,11 @@ first-run race and must fail closed. Create the root with the descriptor supplie
 at creation and, if it already exists, **validate and reject** rather than
 repair. See [validating-trust.md](validating-trust.md).
 
+The descriptor-bearing .NET APIs do not report whether they created the object.
+`FileSystemAclExtensions.CreateDirectory` and `RegistryKey.CreateSubKey` can
+return existing objects without applying the supplied descriptor. A normal
+return is not creation evidence.
+
 Understand what you are signing up for: a standard user who pre-creates your root
 converts a privilege-escalation bug into a denial of service. Failing closed with
 a clear recovery message is the correct trade for security, but it is a real

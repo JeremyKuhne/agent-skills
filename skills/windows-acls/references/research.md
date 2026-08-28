@@ -112,6 +112,23 @@ caller, creation of a nested path fails partway with
 `UnauthorizedAccessException`, leaving intermediates behind that the same caller
 then cannot delete.
 
+### 2d. Existing objects keep their descriptors
+
+`FileSystemAclExtensions.CreateDirectory` is not a create-new operation. A
+directory was first created with its ordinary inherited descriptor. Calling the
+descriptor-bearing overload for that same path returned normally and left the
+on-disk access descriptor's SDDL representation unchanged. The requested
+protected descriptor was not applied.
+
+The registry API behaved the same way under a disposable `HKCU` path.
+`RegistryKey.CreateSubKey` created the key normally, then a second call with a
+different protected `RegistrySecurity` opened the key and left its access
+descriptor unchanged. The .NET implementation checks for an existing local key
+before serializing the supplied security descriptor.
+
+*Pinned:* "leaves an existing directory descriptor unchanged" and "leaves an
+existing registry key descriptor unchanged".
+
 ---
 
 ## 3. The owner is forgery-proof; the DACL is not
@@ -144,6 +161,13 @@ to run as that identity or to enable `SeRestorePrivilege`; the .NET
 `SetAccessControl` path does not enable it on the caller's behalf. The per-PR
 Windows test expects the ordinary elevated runner to reject `SYSTEM` ownership.
 
+The same rule is tested when the owner is supplied at creation. The
+descriptor-bearing directory test requests `BUILTIN\Administrators` ownership.
+The measured medium-integrity caller was rejected with `IOException` ("This
+security ID may not be assigned as the owner of this object"), and no leaf was
+created. Its elevated branch requires creation to succeed with `Administrators`
+as owner and runs on the elevated Windows CI host.
+
 ### Correction to a common description
 
 The rejection is frequently described as "SetOwner throws". It does not. Measured
@@ -164,7 +188,18 @@ incorrect version; the bundled test now pins the correct one.
 permission to assign SYSTEM merely by being elevated", "creates objects with the
 token default owner", "lets any caller create a directory whose DACL names only
 Administrators and SYSTEM", and "lets the owner rewrite a DACL that grants the
-owner nothing".
+owner nothing", and "creates a secured directory only when its trusted owner is
+assignable".
+
+### NULL DACL is not empty DACL
+
+A `RawSecurityDescriptor` with `DiscretionaryAclPresent` and a NULL
+`DiscretionaryAcl` remained NULL after a binary round trip through
+`DirectorySecurity`. A descriptor carrying an allocated zero-ACE `RawAcl`
+round-tripped with a non-NULL DACL whose count was zero. Windows grants access
+when no DACL or a NULL DACL is present; the zero-ACE DACL grants nothing.
+
+*Pinned:* "distinguishes a NULL DACL from an empty DACL".
 
 ### ACE order changes effective access
 
@@ -195,7 +230,7 @@ inheritance determine the result.
 *Pinned:* "grants read when a matching allow completes the check before a later
 deny".
 
-### Authz reads an effective access mask
+### Authz evaluates a supplied descriptor
 
 Two tests exercised `AuthzAccessCheck` with `MAXIMUM_ALLOWED` against security
 descriptors read back from disk:
@@ -220,12 +255,21 @@ member of `BUILTIN\Users`, yet a user-specific deny still blocked reading a file
 that allowed that group, so `IsInRole` did not answer the file-access question.
 On a second protected file, `FileSystemAclExtensions.Create` with
 `FileMode.Open` granted an exact `ReadData` request and denied an exact
-`WriteData` request.
+`WriteData` request. Under a disposable `HKCU` key, `RegistryKey.OpenSubKey`
+likewise opened a handle for exact `QueryValues` rights and rejected an exact
+`SetValue` request.
 
-*Pinned:* "gets maximum allowed rights from the current access token",
-"resolves group rights when initialized from the current user SID", "does not
-infer file access from enabled group membership", and "opens an existing file
-with an exact managed rights request".
+*Pinned:* "gets the maximum granted descriptor mask from the current access
+token", "resolves a group grant in a SID-based descriptor evaluation", "does
+not infer file access from enabled group membership", "opens an existing file
+with an exact managed rights request", and "opens an existing registry key with
+an exact managed rights request".
+
+The Authz results above evaluate the owner and DACL supplied to
+`AuthzAccessCheck`; they are not later file-open results. The measured recipe did
+not supply mandatory labels, resource attributes, central policy scope, or a
+parent descriptor. Those policies and filesystem namespace rights remain
+outside the claim.
 
 ---
 
@@ -355,12 +399,14 @@ If root `R` satisfies:
 1. every ancestor of `R` prevents unprivileged replacement or rename of the next component;
 2. `R` is not a reparse point;
 3. `R`'s owner is in `T`; and
-4. no allow ACE on `R` - including inherit-only - grants modification rights to any principal outside `T`
+4. `R` has a present, non-NULL DACL; and
+5. no allow ACE on `R` - including inherit-only - grants modification rights to any principal outside `T`
 
 then an unprivileged user `U`:
 
 - cannot replace `R` through an ancestor, by (1);
-- cannot create, delete, or rename anything directly in `R`, by (4);
+- cannot bypass the access rules through an absent or NULL DACL, by (4);
+- cannot create, delete, or rename anything directly in `R`, by (5);
 - cannot therefore introduce a junction or a permissively ACLed child;
 - cannot own `R` itself, by (3) and section 3;
 - and by induction cannot do any of the above at any depth, because every

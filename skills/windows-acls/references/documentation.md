@@ -17,6 +17,7 @@ answer.
 - [How access check works](https://learn.microsoft.com/windows/win32/secauthz/how-dacls-control-access-to-an-object) - Windows examines matching ACEs sequentially and stops at a matching deny or when allows grant every requested right
 - [Using Authz API](https://learn.microsoft.com/windows/win32/secauthz/using-authz-api)
 - [AuthzAccessCheck](https://learn.microsoft.com/windows/win32/api/authz/nf-authz-authzaccesscheck) - evaluates a security descriptor for a client context and returns granted masks
+- [AUTHZ_ACCESS_REPLY](https://learn.microsoft.com/windows/win32/api/authz/ns-authz-authz_access_reply) - carries one granted mask and authorization result per requested object type
 - [AuthzInitializeContextFromToken](https://learn.microsoft.com/windows/win32/api/authz/nf-authz-authzinitializecontextfromtoken) - preferred context source when an access token is available
 - [AuthzInitializeContextFromSid](https://learn.microsoft.com/windows/win32/api/authz/nf-authz-authzinitializecontextfromsid) - reconstructs a less complete context when only a valid user or computer SID is available
 - [GetEffectiveRightsFromAcl](https://learn.microsoft.com/windows/win32/api/aclapi/nf-aclapi-geteffectiverightsfromaclw) - legacy shortcut with documented omissions; Microsoft points to its Authz example instead
@@ -48,6 +49,8 @@ answer.
 ## Integrity levels and elevation
 
 - [Mandatory integrity control](https://learn.microsoft.com/windows/win32/secauthz/mandatory-integrity-control)
+- [Centralized authorization policy](https://learn.microsoft.com/windows/win32/secauthz/centralized-authorization-policy)
+- [SECURITY_INFORMATION](https://learn.microsoft.com/windows/win32/secauthz/security-information) - identifies owner, DACL, mandatory-label, resource-attribute, and central-policy-scope information
 - [How User Account Control works](https://learn.microsoft.com/windows/security/identity-protection/user-account-control/how-user-account-control-works) - filtered administrator tokens and deny-only groups
 - [User Account Control security policy settings](https://learn.microsoft.com/windows/security/identity-protection/user-account-control/settings-and-configuration)
 
@@ -71,6 +74,7 @@ answer.
 - [ProgramData folder location](https://learn.microsoft.com/windows-hardware/customize/desktop/unattend/microsoft-windows-shell-setup-folderlocations-programdata)
 - [Registry hives](https://learn.microsoft.com/windows/win32/sysinfo/registry-hives)
 - [Accessing an alternate registry view](https://learn.microsoft.com/windows/win32/winprog64/accessing-an-alternate-registry-view) - WOW64 redirection
+- [RegCreateKeyEx](https://learn.microsoft.com/windows/win32/api/winreg/nf-winreg-regcreatekeyexw) - reports whether it created a key or opened an existing one
 
 ## Installer-provisioned locations
 
@@ -89,12 +93,15 @@ answer.
 - [DirectorySecurity](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.directorysecurity)
 - [FileSecurity](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.filesecurity)
 - [FileSystemAclExtensions](https://learn.microsoft.com/dotnet/api/system.io.filesystemaclextensions) - create, open, read, and write file and directory security
+- [FileSystemAclExtensions.CreateDirectory](https://learn.microsoft.com/dotnet/api/system.io.filesystemaclextensions.createdirectory) - returns an existing directory without applying the supplied descriptor
 - [FileSystemAclExtensions.Create](https://learn.microsoft.com/dotnet/api/system.io.filesystemaclextensions.create) - can open an existing file with an exact `FileSystemRights` request
 - [CommonObjectSecurity.GetAccessRules](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.commonobjectsecurity.getaccessrules) - enumerates stored access rules; it does not evaluate a token
 - [ObjectSecurity.SetAccessRuleProtection](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.objectsecurity.setaccessruleprotection)
 - [FileSystemRights](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.filesystemrights)
 - [InheritanceFlags](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.inheritanceflags) and [PropagationFlags](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.propagationflags)
 - [RegistrySecurity](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.registrysecurity)
+- [RegistryKey.CreateSubKey](https://learn.microsoft.com/dotnet/api/microsoft.win32.registrykey.createsubkey) - creates a key or opens an existing key
+- [RegistryKey.OpenSubKey](https://learn.microsoft.com/dotnet/api/microsoft.win32.registrykey.opensubkey) - can request exact `RegistryRights` on the returned handle
 - [WindowsIdentity](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsidentity) and [WindowsPrincipal](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsprincipal)
 - [WindowsPrincipal.IsInRole](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsprincipal.isinrole) - tests one enabled role in the represented token, with documented UAC behavior
 - [WindowsIdentity.RunImpersonated](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsidentity.runimpersonated) - performs a managed operation under a supplied access token

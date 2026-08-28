@@ -8,8 +8,9 @@
 # skipped elevated-only test would never run anywhere useful, and a skipped unelevated-only test
 # would never run in CI. Branching keeps one live assertion in both environments.
 #
-# Everything uses System.IO.FileSystemAclExtensions rather than Get-Acl/Set-Acl. Set-Acl writes
-# the SACL and therefore demands SeSecurityPrivilege, which an unelevated caller does not hold.
+# Filesystem assertions use System.IO.FileSystemAclExtensions rather than Get-Acl/Set-Acl.
+# Set-Acl writes the SACL and therefore demands SeSecurityPrivilege, which an unelevated caller
+# does not hold.
 
 Describe 'Windows access control behavior' -Skip:(-not $IsWindows) {
 
@@ -355,6 +356,16 @@ public static class WindowsAclAuthzNativeMethods
             [System.Security.AccessControl.FileSystemAccessRule]::new($Sid, $Rights, $Inheritance, $Propagation, $Type)
         }
 
+        function New-RegistryRule {
+            param(
+                [System.Security.Principal.SecurityIdentifier] $Sid,
+                [System.Security.AccessControl.RegistryRights] $Rights,
+                [System.Security.AccessControl.AccessControlType] $Type = 'Allow'
+            )
+
+            [System.Security.AccessControl.RegistryAccessRule]::new($Sid, $Rights, $Type)
+        }
+
         function Get-DirectorySecurity {
             param([string] $Path, [System.Security.AccessControl.AccessControlSections] $Sections = $script:AccessOnly)
             [System.IO.FileSystemAclExtensions]::GetAccessControl([System.IO.DirectoryInfo]::new($Path), $Sections)
@@ -440,6 +451,128 @@ public static class WindowsAclAuthzNativeMethods
 
         It 'recognizes a privilege enabled by default for all users' {
             Test-PrivilegeEnabled -Name 'SeChangeNotifyPrivilege' | Should -BeTrue
+        }
+    }
+
+    Context 'Descriptor-bearing creation' {
+
+        It 'leaves an existing directory descriptor unchanged' {
+            $path = New-TestPath
+            New-Item -ItemType Directory -Path $path | Out-Null
+
+            try {
+                $before = (Get-DirectorySecurity -Path $path).GetSecurityDescriptorSddlForm(
+                    $script:AccessOnly)
+                $requested = [System.Security.AccessControl.DirectorySecurity]::new()
+                $requested.SetAccessRuleProtection($true, $false)
+                $requested.AddAccessRule((New-Rule -Sid $script:Me -Rights FullControl))
+                $requested.GetSecurityDescriptorSddlForm($script:AccessOnly) |
+                    Should -Not -Be $before
+
+                [System.IO.FileSystemAclExtensions]::CreateDirectory($requested, $path) |
+                    Out-Null
+
+                (Get-DirectorySecurity -Path $path).GetSecurityDescriptorSddlForm(
+                    $script:AccessOnly) | Should -Be $before
+            }
+            finally { Restore-CallerAccess -Path $path }
+        }
+
+        It 'creates a secured directory only when its trusted owner is assignable' {
+            $path = New-TestPath
+            $security = [System.Security.AccessControl.DirectorySecurity]::new()
+            $security.SetOwner($script:Administrators)
+            $security.AddAccessRule((New-Rule -Sid $script:Administrators -Rights FullControl `
+                        -Inheritance $script:BothInherit))
+            $security.AddAccessRule((New-Rule -Sid $script:LocalSystem -Rights FullControl `
+                        -Inheritance $script:BothInherit))
+
+            try {
+                if (Test-CallerIsElevated) {
+                    { [System.IO.FileSystemAclExtensions]::CreateDirectory($security, $path) } |
+                        Should -Not -Throw
+                    Get-OwnerSid -Path $path | Should -Be $script:Administrators
+                }
+                else {
+                    $createError = {
+                        [System.IO.FileSystemAclExtensions]::CreateDirectory($security, $path)
+                    } | Should -Throw -PassThru
+                    $createError.Exception.InnerException |
+                        Should -BeOfType ([System.IO.IOException])
+                    Test-Path -LiteralPath $path | Should -BeFalse
+                }
+            }
+            finally { Restore-CallerAccess -Path $path }
+        }
+
+        It 'leaves an existing registry key descriptor unchanged' {
+            $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+                [Microsoft.Win32.RegistryHive]::CurrentUser,
+                [Microsoft.Win32.RegistryView]::Registry64)
+            $subkey = "Software\AgentSkillsAclTests-$([guid]::NewGuid().ToString('N'))"
+
+            try {
+                $created = $baseKey.CreateSubKey($subkey)
+                try {
+                    $before = $created.GetAccessControl($script:AccessOnly).
+                        GetSecurityDescriptorSddlForm($script:AccessOnly)
+                }
+                finally { $created.Dispose() }
+
+                $requested = [System.Security.AccessControl.RegistrySecurity]::new()
+                $requested.SetAccessRuleProtection($true, $false)
+                $requested.AddAccessRule((New-RegistryRule -Sid $script:Me -Rights FullControl))
+                $requested.GetSecurityDescriptorSddlForm($script:AccessOnly) |
+                    Should -Not -Be $before
+
+                $existing = $baseKey.CreateSubKey(
+                    $subkey,
+                    [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,
+                    $requested)
+                try {
+                    $after = $existing.GetAccessControl($script:AccessOnly).
+                        GetSecurityDescriptorSddlForm($script:AccessOnly)
+                }
+                finally { $existing.Dispose() }
+
+                $after | Should -Be $before
+            }
+            finally {
+                $baseKey.DeleteSubKeyTree($subkey, $false)
+                $baseKey.Dispose()
+            }
+        }
+    }
+
+    Context 'DACL representation' {
+
+        It 'distinguishes a NULL DACL from an empty DACL' {
+            $flags = [System.Security.AccessControl.ControlFlags]::DiscretionaryAclPresent
+            $nullDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                $flags, $script:Me, $script:Me, $null, $null)
+            $emptyAcl = [System.Security.AccessControl.RawAcl]::new(
+                [System.Security.AccessControl.GenericAcl]::AclRevision, 0)
+            $emptyDescriptor = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                $flags, $script:Me, $script:Me, $null, $emptyAcl)
+
+            $nullBytes = [byte[]]::new($nullDescriptor.BinaryLength)
+            $nullDescriptor.GetBinaryForm($nullBytes, 0)
+            $nullSecurity = [System.Security.AccessControl.DirectorySecurity]::new()
+            $nullSecurity.SetSecurityDescriptorBinaryForm($nullBytes)
+
+            $emptyBytes = [byte[]]::new($emptyDescriptor.BinaryLength)
+            $emptyDescriptor.GetBinaryForm($emptyBytes, 0)
+            $emptySecurity = [System.Security.AccessControl.DirectorySecurity]::new()
+            $emptySecurity.SetSecurityDescriptorBinaryForm($emptyBytes)
+
+            $nullRoundTrip = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                $nullSecurity.GetSecurityDescriptorBinaryForm(), 0)
+            $emptyRoundTrip = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                $emptySecurity.GetSecurityDescriptorBinaryForm(), 0)
+
+            ($null -eq $nullRoundTrip.DiscretionaryAcl) | Should -BeTrue
+            ($null -eq $emptyRoundTrip.DiscretionaryAcl) | Should -BeFalse
+            $emptyRoundTrip.DiscretionaryAcl.Count | Should -Be 0
         }
     }
 
@@ -575,11 +708,11 @@ public static class WindowsAclAuthzNativeMethods
         }
     }
 
-    Context 'Reading effective rights' {
+    Context 'Descriptor evaluation and exact operations' {
 
-        It 'gets maximum allowed rights from the current access token' {
+        It 'gets the maximum granted descriptor mask from the current access token' {
             $path = New-TestPath
-            [System.IO.File]::WriteAllText($path, 'effective rights')
+            [System.IO.File]::WriteAllText($path, 'descriptor access')
             [string] $currentUserSid = $script:Me.Value
 
             try {
@@ -608,7 +741,7 @@ public static class WindowsAclAuthzNativeMethods
             }
         }
 
-        It 'resolves group rights when initialized from the current user SID' {
+        It 'resolves a group grant in a SID-based descriptor evaluation' {
             $path = New-TestPath
             [System.IO.File]::WriteAllText($path, 'group rights')
             [string] $currentUserSid = $script:Me.Value
@@ -714,6 +847,57 @@ public static class WindowsAclAuthzNativeMethods
                     "D:P(A;;FA;;;$currentUserSid)", $script:AccessOnly)
                 Set-FileSecurity -Path $path -Security $cleanup
                 Remove-Item -LiteralPath $path -Force
+            }
+        }
+
+        It 'opens an existing registry key with an exact managed rights request' {
+            $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+                [Microsoft.Win32.RegistryHive]::CurrentUser,
+                [Microsoft.Win32.RegistryView]::Registry64)
+            $subkey = "Software\AgentSkillsAclTests-$([guid]::NewGuid().ToString('N'))"
+            $security = [System.Security.AccessControl.RegistrySecurity]::new()
+            $security.SetOwner($script:Me)
+            $security.SetAccessRuleProtection($true, $false)
+            $security.AddAccessRule((New-RegistryRule -Sid $script:Me -Rights SetValue -Type Deny))
+            $security.AddAccessRule((New-RegistryRule -Sid $script:Me -Rights FullControl))
+            $created = $null
+
+            try {
+                $created = $baseKey.CreateSubKey(
+                    $subkey,
+                    [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,
+                    $security)
+
+                $queryHandle = $baseKey.OpenSubKey(
+                    $subkey,
+                    [Microsoft.Win32.RegistryKeyPermissionCheck]::Default,
+                    [System.Security.AccessControl.RegistryRights]::QueryValues)
+                try {
+                    $queryHandle | Should -Not -BeNullOrEmpty
+                }
+                finally {
+                    if ($null -ne $queryHandle) { $queryHandle.Dispose() }
+                }
+
+                $setValueError = {
+                    $baseKey.OpenSubKey(
+                        $subkey,
+                        [Microsoft.Win32.RegistryKeyPermissionCheck]::Default,
+                        [System.Security.AccessControl.RegistryRights]::SetValue).Dispose()
+                } | Should -Throw -PassThru
+                $setValueError.Exception.InnerException |
+                    Should -BeOfType ([System.Security.SecurityException])
+            }
+            finally {
+                if ($null -ne $created) {
+                    $cleanup = [System.Security.AccessControl.RegistrySecurity]::new()
+                    $cleanup.SetAccessRuleProtection($true, $false)
+                    $cleanup.AddAccessRule((New-RegistryRule -Sid $script:Me -Rights FullControl))
+                    $created.SetAccessControl($cleanup)
+                    $created.Dispose()
+                }
+                $baseKey.DeleteSubKeyTree($subkey, $false)
+                $baseKey.Dispose()
             }
         }
     }
