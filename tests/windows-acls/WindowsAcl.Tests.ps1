@@ -59,6 +59,242 @@ public static class WindowsAclPrivilegeNativeMethods
 '@
         }
 
+        if ($null -eq ('WindowsAclAuthzNativeMethods' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
+public static class WindowsAclAuthzNativeMethods
+{
+    private const uint AuthzRmFlagNoAudit = 0x1;
+    private const uint MaximumAllowed = 0x02000000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Luid
+    {
+        public uint LowPart;
+        public int HighPart;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct AuthzAccessRequest
+    {
+        public uint DesiredAccess;
+        public IntPtr PrincipalSelfSid;
+        public IntPtr ObjectTypeList;
+        public uint ObjectTypeListLength;
+        public IntPtr OptionalArguments;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct AuthzAccessReply
+    {
+        public uint ResultListLength;
+        public IntPtr GrantedAccessMask;
+        public IntPtr SaclEvaluationResults;
+        public IntPtr Error;
+    }
+
+    [DllImport("authz.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AuthzInitializeResourceManager(
+        uint flags,
+        IntPtr accessCheck,
+        IntPtr computeDynamicGroups,
+        IntPtr freeDynamicGroups,
+        string resourceManagerName,
+        out IntPtr resourceManager);
+
+    [DllImport("authz.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AuthzInitializeContextFromToken(
+        uint flags,
+        IntPtr token,
+        IntPtr resourceManager,
+        IntPtr expirationTime,
+        Luid identifier,
+        IntPtr dynamicGroupArguments,
+        out IntPtr clientContext);
+
+    [DllImport("authz.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AuthzInitializeContextFromSid(
+        uint flags,
+        IntPtr userSid,
+        IntPtr resourceManager,
+        IntPtr expirationTime,
+        Luid identifier,
+        IntPtr dynamicGroupArguments,
+        out IntPtr clientContext);
+
+    [DllImport("authz.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AuthzAccessCheck(
+        uint flags,
+        IntPtr clientContext,
+        ref AuthzAccessRequest request,
+        IntPtr auditEvent,
+        IntPtr securityDescriptor,
+        IntPtr optionalSecurityDescriptorArray,
+        uint optionalSecurityDescriptorCount,
+        ref AuthzAccessReply reply,
+        IntPtr accessCheckResults);
+
+    [DllImport("authz.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AuthzFreeContext(IntPtr clientContext);
+
+    [DllImport("authz.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AuthzFreeResourceManager(IntPtr resourceManager);
+
+    public static uint GetMaximumAllowedForToken(IntPtr token, byte[] securityDescriptor)
+    {
+        IntPtr resourceManager = IntPtr.Zero;
+        IntPtr clientContext = IntPtr.Zero;
+        try
+        {
+            ThrowIfFalse(AuthzInitializeResourceManager(
+                AuthzRmFlagNoAudit,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                null,
+                out resourceManager));
+            ThrowIfFalse(AuthzInitializeContextFromToken(
+                0,
+                token,
+                resourceManager,
+                IntPtr.Zero,
+                default,
+                IntPtr.Zero,
+                out clientContext));
+            return GetMaximumAllowed(clientContext, securityDescriptor);
+        }
+        finally
+        {
+            if (clientContext != IntPtr.Zero)
+            {
+                AuthzFreeContext(clientContext);
+            }
+            if (resourceManager != IntPtr.Zero)
+            {
+                AuthzFreeResourceManager(resourceManager);
+            }
+        }
+    }
+
+    public static uint GetMaximumAllowedForSid(byte[] sid, byte[] securityDescriptor)
+    {
+        IntPtr resourceManager = IntPtr.Zero;
+        IntPtr clientContext = IntPtr.Zero;
+        GCHandle sidHandle = default;
+        try
+        {
+            ThrowIfFalse(AuthzInitializeResourceManager(
+                AuthzRmFlagNoAudit,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                null,
+                out resourceManager));
+            sidHandle = GCHandle.Alloc(sid, GCHandleType.Pinned);
+            ThrowIfFalse(AuthzInitializeContextFromSid(
+                0,
+                sidHandle.AddrOfPinnedObject(),
+                resourceManager,
+                IntPtr.Zero,
+                default,
+                IntPtr.Zero,
+                out clientContext));
+            return GetMaximumAllowed(clientContext, securityDescriptor);
+        }
+        finally
+        {
+            if (sidHandle.IsAllocated)
+            {
+                sidHandle.Free();
+            }
+            if (clientContext != IntPtr.Zero)
+            {
+                AuthzFreeContext(clientContext);
+            }
+            if (resourceManager != IntPtr.Zero)
+            {
+                AuthzFreeResourceManager(resourceManager);
+            }
+        }
+    }
+
+    private static uint GetMaximumAllowed(IntPtr clientContext, byte[] securityDescriptor)
+    {
+        GCHandle descriptorHandle = default;
+        IntPtr grantedAccess = IntPtr.Zero;
+        IntPtr error = IntPtr.Zero;
+        try
+        {
+            descriptorHandle = GCHandle.Alloc(securityDescriptor, GCHandleType.Pinned);
+            grantedAccess = Marshal.AllocHGlobal(sizeof(uint));
+            error = Marshal.AllocHGlobal(sizeof(uint));
+            Marshal.WriteInt32(grantedAccess, 0);
+            Marshal.WriteInt32(error, 0);
+
+            var request = new AuthzAccessRequest { DesiredAccess = MaximumAllowed };
+            var reply = new AuthzAccessReply
+            {
+                ResultListLength = 1,
+                GrantedAccessMask = grantedAccess,
+                Error = error
+            };
+
+            ThrowIfFalse(AuthzAccessCheck(
+                0,
+                clientContext,
+                ref request,
+                IntPtr.Zero,
+                descriptorHandle.AddrOfPinnedObject(),
+                IntPtr.Zero,
+                0,
+                ref reply,
+                IntPtr.Zero));
+
+            int accessError = Marshal.ReadInt32(error);
+            if (accessError != 0)
+            {
+                throw new Win32Exception(accessError);
+            }
+
+            return unchecked((uint)Marshal.ReadInt32(grantedAccess));
+        }
+        finally
+        {
+            if (descriptorHandle.IsAllocated)
+            {
+                descriptorHandle.Free();
+            }
+            if (grantedAccess != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(grantedAccess);
+            }
+            if (error != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(error);
+            }
+        }
+    }
+
+    private static void ThrowIfFalse(bool succeeded)
+    {
+        if (!succeeded)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+    }
+}
+'@
+        }
+
         function Test-CallerIsElevated {
             $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
             [System.Security.Principal.WindowsPrincipal]::new($identity).IsInRole(
@@ -291,6 +527,194 @@ public static class WindowsAclPrivilegeNativeMethods
                 Test-HasRuleFor -Path $path -Sid $script:Me | Should -BeTrue
             }
             finally { Restore-CallerAccess -Path $path }
+        }
+    }
+
+    Context 'ACE order changes effective access' {
+
+        It 'grants read when a matching allow completes the check before a later deny' {
+            $path = New-TestPath
+            [System.IO.File]::WriteAllText($path, 'receipt')
+            [string] $currentUserSid = $script:Me.Value
+
+            try {
+                $allowFirst = [System.Security.AccessControl.FileSecurity]::new()
+                $allowFirst.SetSecurityDescriptorSddlForm(
+                    "D:P(A;;FR;;;WD)(D;;FR;;;$currentUserSid)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $allowFirst
+
+                $allowFirstOnDisk = Get-FileSecurity -Path $path
+                $allowFirstRaw = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                    $allowFirstOnDisk.GetSecurityDescriptorBinaryForm(), 0)
+                $allowFirstOnDisk.AreAccessRulesCanonical | Should -BeFalse
+                $allowFirstRaw.DiscretionaryAcl[0].AceType | Should -Be AccessAllowed
+                $allowFirstRaw.DiscretionaryAcl[1].AceType | Should -Be AccessDenied
+                [System.IO.File]::ReadAllText($path) | Should -Be 'receipt'
+
+                $denyFirst = [System.Security.AccessControl.FileSecurity]::new()
+                $denyFirst.SetSecurityDescriptorSddlForm(
+                    "D:P(D;;FR;;;$currentUserSid)(A;;FR;;;WD)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $denyFirst
+
+                $denyFirstOnDisk = Get-FileSecurity -Path $path
+                $denyFirstRaw = [System.Security.AccessControl.RawSecurityDescriptor]::new(
+                    $denyFirstOnDisk.GetSecurityDescriptorBinaryForm(), 0)
+                $denyFirstOnDisk.AreAccessRulesCanonical | Should -BeTrue
+                $denyFirstRaw.DiscretionaryAcl[0].AceType | Should -Be AccessDenied
+                $denyFirstRaw.DiscretionaryAcl[1].AceType | Should -Be AccessAllowed
+                $readError = { [System.IO.File]::ReadAllText($path) } | Should -Throw -PassThru
+                $readError.Exception.InnerException | Should -BeOfType ([System.UnauthorizedAccessException])
+            }
+            finally {
+                $cleanup = [System.Security.AccessControl.FileSecurity]::new()
+                $cleanup.SetSecurityDescriptorSddlForm(
+                    "D:P(A;;FA;;;$currentUserSid)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $cleanup
+                Remove-Item -LiteralPath $path -Force
+            }
+        }
+    }
+
+    Context 'Reading effective rights' {
+
+        It 'gets maximum allowed rights from the current access token' {
+            $path = New-TestPath
+            [System.IO.File]::WriteAllText($path, 'effective rights')
+            [string] $currentUserSid = $script:Me.Value
+
+            try {
+                $security = [System.Security.AccessControl.FileSecurity]::new()
+                $security.SetSecurityDescriptorSddlForm(
+                    "O:${currentUserSid}D:P(D;;FW;;;$currentUserSid)(A;;FR;;;$currentUserSid)",
+                    [System.Security.AccessControl.AccessControlSections]'Owner, Access')
+                Set-FileSecurity -Path $path -Security $security
+
+                $onDisk = Get-FileSecurity -Path $path -Sections 'Owner, Access'
+                [byte[]] $descriptor = $onDisk.GetSecurityDescriptorBinaryForm()
+                [uint32] $rights = [WindowsAclAuthzNativeMethods]::GetMaximumAllowedForToken(
+                    $identity.Token, $descriptor)
+
+                ($rights -band [uint32][System.Security.AccessControl.FileSystemRights]::ReadData) |
+                    Should -Not -Be 0
+                ($rights -band [uint32][System.Security.AccessControl.FileSystemRights]::WriteData) |
+                    Should -Be 0
+            }
+            finally {
+                $cleanup = [System.Security.AccessControl.FileSecurity]::new()
+                $cleanup.SetSecurityDescriptorSddlForm(
+                    "D:P(A;;FA;;;$currentUserSid)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $cleanup
+                Remove-Item -LiteralPath $path -Force
+            }
+        }
+
+        It 'resolves group rights when initialized from the current user SID' {
+            $path = New-TestPath
+            [System.IO.File]::WriteAllText($path, 'group rights')
+            [string] $currentUserSid = $script:Me.Value
+            [byte[]] $currentUserSidBytes = [byte[]]::new($script:Me.BinaryLength)
+            $script:Me.GetBinaryForm($currentUserSidBytes, 0)
+
+            try {
+                $security = [System.Security.AccessControl.FileSecurity]::new()
+                $security.SetSecurityDescriptorSddlForm(
+                    "O:${currentUserSid}D:P(A;;FR;;;BU)",
+                    [System.Security.AccessControl.AccessControlSections]'Owner, Access')
+                Set-FileSecurity -Path $path -Security $security
+
+                $onDisk = Get-FileSecurity -Path $path -Sections 'Owner, Access'
+                [byte[]] $descriptor = $onDisk.GetSecurityDescriptorBinaryForm()
+                [uint32] $rights = [WindowsAclAuthzNativeMethods]::GetMaximumAllowedForSid(
+                    $currentUserSidBytes, $descriptor)
+
+                ($rights -band [uint32][System.Security.AccessControl.FileSystemRights]::ReadData) |
+                    Should -Not -Be 0
+            }
+            finally {
+                $cleanup = [System.Security.AccessControl.FileSecurity]::new()
+                $cleanup.SetSecurityDescriptorSddlForm(
+                    "D:P(A;;FA;;;$currentUserSid)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $cleanup
+                Remove-Item -LiteralPath $path -Force
+            }
+        }
+
+        It 'does not infer file access from enabled group membership' {
+            $path = New-TestPath
+            [System.IO.File]::WriteAllText($path, 'membership is not access')
+            [string] $currentUserSid = $script:Me.Value
+
+            try {
+                $security = [System.Security.AccessControl.FileSecurity]::new()
+                $security.SetSecurityDescriptorSddlForm(
+                    "D:P(D;;FR;;;$currentUserSid)(A;;FR;;;BU)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $security
+
+                $principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
+                $principal.IsInRole($script:Users) | Should -BeTrue
+                $readError = { [System.IO.File]::ReadAllText($path) } |
+                    Should -Throw -PassThru
+                $readError.Exception.InnerException |
+                    Should -BeOfType ([System.UnauthorizedAccessException])
+            }
+            finally {
+                $cleanup = [System.Security.AccessControl.FileSecurity]::new()
+                $cleanup.SetSecurityDescriptorSddlForm(
+                    "D:P(A;;FA;;;$currentUserSid)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $cleanup
+                Remove-Item -LiteralPath $path -Force
+            }
+        }
+
+        It 'opens an existing file with an exact managed rights request' {
+            $path = New-TestPath
+            [System.IO.File]::WriteAllText($path, 'managed access request')
+            [string] $currentUserSid = $script:Me.Value
+            $file = [System.IO.FileInfo]::new($path)
+            $share = [System.IO.FileShare]'ReadWrite, Delete'
+
+            try {
+                $security = [System.Security.AccessControl.FileSecurity]::new()
+                $security.SetSecurityDescriptorSddlForm(
+                    "D:P(D;;0x2;;;$currentUserSid)(A;;FR;;;$currentUserSid)",
+                    $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $security
+
+                $stream = [System.IO.FileSystemAclExtensions]::Create(
+                    $file,
+                    [System.IO.FileMode]::Open,
+                    [System.Security.AccessControl.FileSystemRights]::ReadData,
+                    $share,
+                    4096,
+                    [System.IO.FileOptions]::None,
+                    $null)
+                try {
+                    $stream.CanRead | Should -BeTrue
+                }
+                finally {
+                    $stream.Dispose()
+                }
+
+                $writeError = {
+                    [System.IO.FileSystemAclExtensions]::Create(
+                        $file,
+                        [System.IO.FileMode]::Open,
+                        [System.Security.AccessControl.FileSystemRights]::WriteData,
+                        $share,
+                        4096,
+                        [System.IO.FileOptions]::None,
+                        $null).Dispose()
+                } | Should -Throw -PassThru
+                $writeError.Exception.InnerException |
+                    Should -BeOfType ([System.UnauthorizedAccessException])
+            }
+            finally {
+                $cleanup = [System.Security.AccessControl.FileSecurity]::new()
+                $cleanup.SetSecurityDescriptorSddlForm(
+                    "D:P(A;;FA;;;$currentUserSid)", $script:AccessOnly)
+                Set-FileSecurity -Path $path -Security $cleanup
+                Remove-Item -LiteralPath $path -Force
+            }
         }
     }
 

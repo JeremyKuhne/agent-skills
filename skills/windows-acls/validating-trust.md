@@ -41,6 +41,20 @@ hostile the check was never the defense.
 Deny ACEs and additional read-only allow ACEs are fine. Do not require an exact
 ACE list.
 
+## Do not subtract denies from allows
+
+[ACE order changes effective
+access](securing-objects.md#ace-order-changes-effective-access). A user-specific
+deny blocks a group allow only when the deny is reached before earlier allows
+complete the access check. Masks, inheritance, and noncanonical order all affect
+that result.
+
+This validator intentionally does not calculate deny exceptions. If an allow
+ACE grants modification capability to an untrusted principal, reject the root
+regardless of deny ACEs or DACL order. This makes the verdict independent of
+group membership and ordering details instead of treating a broad grant as safe
+because one current user appears to be denied.
+
 ## Why the owner and not the DACL
 
 A DACL is forgeable. Any caller, at any integrity level, can create a directory

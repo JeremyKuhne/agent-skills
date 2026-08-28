@@ -8,10 +8,18 @@ answer.
 - [Access control lists](https://learn.microsoft.com/windows/win32/secauthz/access-control-lists)
 - [Access control entries](https://learn.microsoft.com/windows/win32/secauthz/access-control-entries)
 - [DACLs and ACEs](https://learn.microsoft.com/windows/win32/secauthz/dacls-and-aces)
-- [Order of ACEs in a DACL](https://learn.microsoft.com/windows/win32/secauthz/order-of-aces-in-a-dacl)
+- [Order of ACEs in a DACL](https://learn.microsoft.com/windows/win32/secauthz/order-of-aces-in-a-dacl) - explicit ACEs precede inherited ACEs; explicit denies precede explicit allows; inherited denies precede inherited allows at each inheritance level
 - [Creating a DACL](https://learn.microsoft.com/windows/win32/secbp/creating-a-dacl) - includes the guidance against NULL DACLs
 - [Access tokens](https://learn.microsoft.com/windows/win32/secauthz/access-tokens)
-- [How access check works](https://learn.microsoft.com/windows/win32/secauthz/how-dacls-control-access-to-an-object)
+- [SID attributes in an access token](https://learn.microsoft.com/windows/win32/secauthz/sid-attributes-in-an-access-token) - enabled SIDs participate in allow and deny checks; deny-only SIDs participate only in deny checks
+- [CheckTokenMembership](https://learn.microsoft.com/windows/win32/api/securitybaseapi/nf-securitybaseapi-checktokenmembership) - tests whether a SID is present and enabled; it is not an object access check
+- [ACCESS_MASK](https://learn.microsoft.com/windows/win32/secauthz/access-mask) - defines object-specific, standard, generic, and `MAXIMUM_ALLOWED` bits
+- [How access check works](https://learn.microsoft.com/windows/win32/secauthz/how-dacls-control-access-to-an-object) - Windows examines matching ACEs sequentially and stops at a matching deny or when allows grant every requested right
+- [Using Authz API](https://learn.microsoft.com/windows/win32/secauthz/using-authz-api)
+- [AuthzAccessCheck](https://learn.microsoft.com/windows/win32/api/authz/nf-authz-authzaccesscheck) - evaluates a security descriptor for a client context and returns granted masks
+- [AuthzInitializeContextFromToken](https://learn.microsoft.com/windows/win32/api/authz/nf-authz-authzinitializecontextfromtoken) - preferred context source when an access token is available
+- [AuthzInitializeContextFromSid](https://learn.microsoft.com/windows/win32/api/authz/nf-authz-authzinitializecontextfromsid) - reconstructs a less complete context when only a valid user or computer SID is available
+- [GetEffectiveRightsFromAcl](https://learn.microsoft.com/windows/win32/api/aclapi/nf-aclapi-geteffectiverightsfromaclw) - legacy shortcut with documented omissions; Microsoft points to its Authz example instead
 
 ## Inheritance and propagation
 
@@ -80,12 +88,16 @@ answer.
 
 - [DirectorySecurity](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.directorysecurity)
 - [FileSecurity](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.filesecurity)
-- [FileSystemAclExtensions](https://learn.microsoft.com/dotnet/api/system.io.filesystemaclextensions) - `CreateDirectory`, `GetAccessControl`, `SetAccessControl`
+- [FileSystemAclExtensions](https://learn.microsoft.com/dotnet/api/system.io.filesystemaclextensions) - create, open, read, and write file and directory security
+- [FileSystemAclExtensions.Create](https://learn.microsoft.com/dotnet/api/system.io.filesystemaclextensions.create) - can open an existing file with an exact `FileSystemRights` request
+- [CommonObjectSecurity.GetAccessRules](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.commonobjectsecurity.getaccessrules) - enumerates stored access rules; it does not evaluate a token
 - [ObjectSecurity.SetAccessRuleProtection](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.objectsecurity.setaccessruleprotection)
 - [FileSystemRights](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.filesystemrights)
 - [InheritanceFlags](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.inheritanceflags) and [PropagationFlags](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.propagationflags)
 - [RegistrySecurity](https://learn.microsoft.com/dotnet/api/system.security.accesscontrol.registrysecurity)
 - [WindowsIdentity](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsidentity) and [WindowsPrincipal](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsprincipal)
+- [WindowsPrincipal.IsInRole](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsprincipal.isinrole) - tests one enabled role in the represented token, with documented UAC behavior
+- [WindowsIdentity.RunImpersonated](https://learn.microsoft.com/dotnet/api/system.security.principal.windowsidentity.runimpersonated) - performs a managed operation under a supplied access token
 
 ## Continuous integration
 

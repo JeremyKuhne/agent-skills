@@ -166,6 +166,67 @@ token default owner", "lets any caller create a directory whose DACL names only
 Administrators and SYSTEM", and "lets the owner rewrite a DACL that grants the
 owner nothing".
 
+### ACE order changes effective access
+
+Microsoft documents both parts of the mechanism: Windows [examines matching ACEs
+in sequence and stops](https://learn.microsoft.com/windows/win32/secauthz/how-dacls-control-access-to-an-object)
+when a deny rejects a requested right or allows have granted every requested
+right, and the [preferred
+order](https://learn.microsoft.com/windows/win32/secauthz/order-of-aces-in-a-dacl)
+puts explicit denies before explicit allows.
+
+The test wrote two protected DACLs to the same file and read each descriptor
+back before attempting `File.ReadAllText`:
+
+| On-disk DACL order | Canonical | Result |
+| --- | --- | --- |
+| `Allow Everyone:Read`, `Deny current-user:Read` | No | Read returned the file contents |
+| `Deny current-user:Read`, `Allow Everyone:Read` | Yes | Threw `UnauthorizedAccessException` |
+
+The allow-first descriptor remained noncanonical on disk. Its first ACE matched
+the caller through `Everyone` and granted the complete read request, so Windows
+stopped before reaching the user-specific deny. Reversing the two ACEs reached
+the deny first and rejected the same operation.
+
+This is not a general user-before-group precedence rule. Windows compares all
+enabled user and group SIDs in the token; ACE sequence, type, mask, and
+inheritance determine the result.
+
+*Pinned:* "grants read when a matching allow completes the check before a later
+deny".
+
+### Authz reads an effective access mask
+
+Two tests exercised `AuthzAccessCheck` with `MAXIMUM_ALLOWED` against security
+descriptors read back from disk:
+
+| Client context | DACL | Result |
+| --- | --- | --- |
+| Current process token through `AuthzInitializeContextFromToken` | Deny current user write; allow current user read | Granted mask included `ReadData` and excluded `WriteData` |
+| Current user SID through `AuthzInitializeContextFromSid` | Allow `BUILTIN\Users` read | Granted mask included `ReadData`, proving group expansion on the measured host |
+
+The SID result is deliberately narrower than the token result. Microsoft says
+the token context is more complete and accurate. `AuthzInitializeContextFromSid`
+attempts S4U token-group retrieval and may fall back to account group data that
+omits logon-characteristic groups. The group-expansion test establishes the
+observed local result, not equivalence between SID and token contexts.
+
+The legacy `GetEffectiveRightsFromAcl` API was not used. Its documentation says
+it omits owner rights, privileges, logon-session groups, and resource-manager
+policy, and fails when an ACL contains an inherited deny ACE.
+
+Two further tests measured the managed alternatives. The token was an enabled
+member of `BUILTIN\Users`, yet a user-specific deny still blocked reading a file
+that allowed that group, so `IsInRole` did not answer the file-access question.
+On a second protected file, `FileSystemAclExtensions.Create` with
+`FileMode.Open` granted an exact `ReadData` request and denied an exact
+`WriteData` request.
+
+*Pinned:* "gets maximum allowed rights from the current access token",
+"resolves group rights when initialized from the current user SID", "does not
+infer file access from enabled group membership", and "opens an existing file
+with an exact managed rights request".
+
 ---
 
 ## 4. Directory rights govern the namespace
