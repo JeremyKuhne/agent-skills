@@ -535,7 +535,6 @@ public static class WindowsAclAuthzNativeMethods
         It 'grants read when a matching allow completes the check before a later deny' {
             $path = New-TestPath
             [System.IO.File]::WriteAllText($path, 'receipt')
-            $file = [System.IO.FileInfo]::new($path)
             [string] $currentUserSid = $script:Me.Value
 
             try {
