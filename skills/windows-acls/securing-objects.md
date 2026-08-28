@@ -6,7 +6,7 @@ object that already exists.** Everything below is the reasoning and the traps.
 ## Create with the descriptor, not after
 
 ```csharp
-static void CreateProtectedDirectory(string path)
+static DirectoryInfo CreateOrOpenDirectoryWithDescriptor(string path)
 {
     SecurityIdentifier administrators = new(WellKnownSidType.BuiltinAdministratorsSid, null);
     SecurityIdentifier localSystem = new(WellKnownSidType.LocalSystemSid, null);
@@ -19,7 +19,7 @@ static void CreateProtectedDirectory(string path)
     security.AddAccessRule(new FileSystemAccessRule(
         localSystem, FileSystemRights.FullControl, inheritance, PropagationFlags.None, AccessControlType.Allow));
 
-    security.CreateDirectory(path);
+    return security.CreateDirectory(path);
 }
 ```
 
@@ -31,6 +31,17 @@ methods:
 ```powershell
 [System.IO.FileSystemAclExtensions]::CreateDirectory($security, $path)
 ```
+
+`FileSystemAclExtensions.CreateDirectory` does not prove that it created the
+directory. If the path already exists, it returns the existing directory and
+does not apply the supplied `DirectorySecurity`. A prior existence check is
+racy. For a trust root, use a native create-new helper that treats
+`ERROR_ALREADY_EXISTS` as failure, or validate and reject the returned object
+before consuming anything below it.
+
+For a file, `FileSystemAclExtensions.Create` with `FileMode.CreateNew` rejects
+an existing path and returns the handle for the object it created. Keep and use
+that stream rather than reopening the name.
 
 The create-then-`SetAccessControl` alternative is a race: between the create and
 the ACL write, the object exists with an inherited descriptor.
@@ -94,7 +105,10 @@ SetAccessControl (commit): THREW InvalidOperationException:
 ```
 
 Code that wraps only `SetOwner` in a `try` will conclude the assignment worked.
-Wrap the commit.
+Wrap the commit. When the descriptor is committed by
+`FileSystemAclExtensions.CreateDirectory`, an unassignable owner instead surfaces
+from that create call as `IOException` ("This security ID may not be assigned as
+the owner of this object").
 
 ## ACE order changes effective access
 
@@ -171,10 +185,17 @@ $security = [System.IO.FileSystemAclExtensions]::GetAccessControl($info, 'Access
 
 ## Registry equivalents
 
-`RegistrySecurity` follows the same model, and `RegistryKey.CreateSubKey` accepts
-one so the key is created with its final descriptor. Choose the view explicitly
-with `RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)`
+`RegistrySecurity` follows the same descriptor model. When a key is new,
+`RegistryKey.CreateSubKey` accepts one so the key is created with its final
+descriptor. Choose the view explicitly with
+`RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)`
 rather than accepting WOW64 redirection.
+
+`CreateSubKey` is also create-or-open. For a local key that already exists, .NET
+opens and returns it without applying the supplied `RegistrySecurity`. A
+create-new wrapper must inspect the `RegCreateKeyEx` disposition and reject
+`REG_OPENED_EXISTING_KEY`; otherwise validate and reject the returned key before
+trusting its values.
 
 For a machine-wide key, the inherited `HKLM\SOFTWARE` descriptor is usually
 already correct: administrators and `SYSTEM` write, everyone reads. Verify rather

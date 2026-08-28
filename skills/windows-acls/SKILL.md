@@ -55,16 +55,27 @@ Supply the DACL **at creation**. Never create then repair - a directory that
 already exists may be someone else's.
 
 ```csharp
+SecurityIdentifier administrators = new(
+    WellKnownSidType.BuiltinAdministratorsSid,
+    domainSid: null);
 DirectorySecurity security = new();
+security.SetOwner(administrators);
 security.AddAccessRule(new FileSystemAccessRule(
-    new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
+    administrators,
     FileSystemRights.FullControl,
     InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
     PropagationFlags.None,
     AccessControlType.Allow));
 // ... SYSTEM, plus read-only rules for Users if the tree must be readable.
-security.CreateDirectory(path);
+DirectoryInfo root = security.CreateDirectory(path);
 ```
+
+This call creates a missing directory with the descriptor, but it is not a
+create-new operation: if the path already exists, it returns that directory
+without applying or validating `security`. Do not treat a normal return as proof
+of creation. Use a create-new native helper, or validate and reject the returned
+root before trusting its contents. A prior `Directory.Exists` check does not
+close the race.
 
 Passing a `DirectorySecurity` with an explicit DACL to
 `FileSystemAclExtensions.CreateDirectory` does three things people do not
@@ -90,7 +101,9 @@ Check, in this order:
 1. Not a reparse point.
 2. Owner is an expected machine principal, normally `BUILTIN\Administrators` or
    `SYSTEM`. Admit `TrustedInstaller` only for a known OS-provisioned root.
-3. No allow ACE - **including inherit-only ACEs** - grants write, append, delete,
+3. A DACL is present and is not NULL. An absent or NULL DACL grants access to
+   everyone; an empty DACL grants no access.
+4. No allow ACE - **including inherit-only ACEs** - grants write, append, delete,
    delete-child, `WRITE_DAC`, or `WRITE_OWNER` to any other principal.
 
 Deny ACEs do not excuse a broad allow. Windows evaluates matching ACEs in order
@@ -108,10 +121,12 @@ equality, or enterprise ACL customization will break you.
 Neither `GetAccessRules` nor `WindowsPrincipal.IsInRole` evaluates a descriptor
 against a token, so do not combine them or sum ACE masks for one SID. To learn
 whether the current token can do one thing, do it - or open the file with the
-exact `FileSystemRights` you need. Only a report of the maximum granted mask
-needs `AuthzAccessCheck(MAXIMUM_ALLOWED)`, which .NET does not wrap. Never treat
-`GetEffectiveRightsFromAcl` as authoritative; Microsoft documents material
-omissions. See [effective-access.md](effective-access.md).
+exact `FileSystemRights` you need. Only a report of the mask a client context
+receives from a supplied descriptor needs `AuthzAccessCheck`, which .NET does
+not wrap. That is descriptor evaluation, not proof that a later path operation
+will succeed. Never treat `GetEffectiveRightsFromAcl` as authoritative;
+Microsoft documents material omissions. See
+[effective-access.md](effective-access.md).
 
 ## Testing
 
