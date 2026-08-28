@@ -96,6 +96,12 @@ junctions in tests unless you are specifically testing symlink behavior.
 `SetAccessRuleProtection` mutate a detached object. Assert on the object read
 back from disk, not on the one you just modified.
 
+**ACE order is observable behavior.** Do not prove ordering by inspecting only
+the descriptor built in memory. Write it, read it back, assert
+`AreAccessRulesCanonical` and raw ACE order, then perform the access that should
+succeed or fail. The bundled test uses a protected file DACL so inherited ACEs
+cannot obscure the result.
+
 **Elevation is not `SeRestorePrivilege`.** An elevated administrator can assign
 `Administrators` as owner because that SID is owner-enabled in the token.
 Assigning unrelated `SYSTEM` ownership additionally requires
@@ -110,10 +116,12 @@ bind and PowerShell will try the `byte[]` constructor:
     [System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
 ```
 
-**Test the descriptor, not effective access.** Building a synthetic
-`DirectorySecurity` in memory and asserting your validator's verdict is fast,
-deterministic, and needs no privileges. Reserve filesystem round-trips for the
-handful of claims that are genuinely about Windows behavior.
+**Separate descriptor policy from effective access.** Build a synthetic
+`DirectorySecurity` in memory when testing a validator's own fail-closed policy.
+When the claim is about one operation, perform it or open the file with the
+exact rights; reserve `AuthzAccessCheck` for claims about a granted mask. Never
+present ACE enumeration or `WindowsPrincipal.IsInRole` as an effective-rights
+calculation. See [effective-access.md](effective-access.md).
 
 ## What to pin
 
@@ -122,6 +130,14 @@ rather than the product:
 
 - Parent inheritable ACEs are suppressed when a descriptor is supplied at
   creation, and the object comes back protected.
+- A matching broad allow before a user deny can complete the access check, while
+  canonical deny-before-allow order rejects the same read.
+- `AuthzAccessCheck(MAXIMUM_ALLOWED)` returns the expected read-without-write
+  mask for the current token, and a SID-based context resolves the current
+  user's group grant on the measured host.
+- Enabled `BUILTIN\Users` membership does not imply access when a separate ACE
+  denies the current user, and an exact managed `ReadData` open can succeed
+  while an exact `WriteData` open is denied.
 - A later inheritable ACE on the parent does not propagate into a protected
   child.
 - An inherit-only ACE appears on the container as inherit-only and on a child as

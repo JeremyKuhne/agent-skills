@@ -1,6 +1,6 @@
 ---
 name: windows-acls
-description: Decide where Windows application state belongs and how to secure it with ACLs. Use when choosing a location for per-user or machine-wide state, creating a directory or registry key that elevated code will later trust, validating that a shared path has not been hijacked, reviewing code that calls DirectorySecurity/FileSecurity/SetAccessControl/SetOwner/SetAccessRuleProtection, diagnosing "access is denied" or descriptor mismatches that only reproduce off CI, or writing tests for ACL behavior. Also use when asked "where should this config/cache/state file go", "is ProgramData safe", "how do I ACL this folder", "can a standard user tamper with this", or when a security review flags a path an elevated process reads, writes, or deletes.
+description: Decide where Windows application state belongs and how to secure it with ACLs. Use when choosing a location for per-user or machine-wide state, creating a directory or registry key that elevated code will later trust, validating that a shared path has not been hijacked, reviewing code that calls DirectorySecurity/FileSecurity/SetAccessControl/SetOwner/SetAccessRuleProtection, diagnosing "access is denied" or descriptor mismatches that only reproduce off CI, or writing tests for ACL behavior. Also use when asked "where should this config/cache/state file go", "is ProgramData safe", "how do I ACL this folder", "can a standard user tamper with this", "what are this user's effective permissions", or when a security review flags a path an elevated process reads, writes, or deletes.
 license: MIT
 compatibility: Guidance and bundled tests target Windows. The behavioral tests require PowerShell 7 and Pester 5.7 or later on Windows; they skip elsewhere.
 metadata:
@@ -55,7 +55,7 @@ Supply the DACL **at creation**. Never create then repair - a directory that
 already exists may be someone else's.
 
 ```csharp
-var security = new DirectorySecurity();
+DirectorySecurity security = new();
 security.AddAccessRule(new FileSystemAccessRule(
     new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
     FileSystemRights.FullControl,
@@ -93,10 +93,25 @@ Check, in this order:
 3. No allow ACE - **including inherit-only ACEs** - grants write, append, delete,
    delete-child, `WRITE_DAC`, or `WRITE_OWNER` to any other principal.
 
+Deny ACEs do not excuse a broad allow. Windows evaluates matching ACEs in order
+and can stop after earlier allows grant every requested right. For this trust
+check, reject the untrusted allow regardless of nearby denies or DACL order. See
+[securing-objects.md](securing-objects.md#ace-order-changes-effective-access).
+
 Reject; never repair. Repairing leaves the attacker's data in place under a
 descriptor that now looks trustworthy. Validate by capability, not by exact ACE
 equality, or enterprise ACL customization will break you.
 [validating-trust.md](validating-trust.md) has the rationale and the trap list.
+
+## If you need effective rights
+
+Neither `GetAccessRules` nor `WindowsPrincipal.IsInRole` evaluates a descriptor
+against a token, so do not combine them or sum ACE masks for one SID. To learn
+whether the current token can do one thing, do it - or open the file with the
+exact `FileSystemRights` you need. Only a report of the maximum granted mask
+needs `AuthzAccessCheck(MAXIMUM_ALLOWED)`, which .NET does not wrap. Never treat
+`GetEffectiveRightsFromAcl` as authoritative; Microsoft documents material
+omissions. See [effective-access.md](effective-access.md).
 
 ## Testing
 

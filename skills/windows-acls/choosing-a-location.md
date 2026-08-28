@@ -23,10 +23,10 @@ result, and construct the application path with `Path.Join`; otherwise a missing
 folder can turn the application path into a relative path under the current
 working directory.
 
-Do not write custom ACLs here. Adding an explicit DACL sets `SE_DACL_PROTECTED`
-on the object, which severs it from profile-wide inheritance; a later profile
-migration, redirection change, or permission repair then skips your directory.
-The failure mode is a directory the user can no longer read after a profile move.
+Do not write custom ACLs here. A directory created with an explicit descriptor
+comes back protected from inheritance, so a later profile migration, redirection
+change, or permission repair skips it. The failure mode is a directory the user
+can no longer read after a profile move.
 
 Two things per-user placement does **not** give you:
 

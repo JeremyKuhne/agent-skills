@@ -8,11 +8,11 @@ object that already exists.** Everything below is the reasoning and the traps.
 ```csharp
 static void CreateProtectedDirectory(string path)
 {
-    var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-    var localSystem = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
-    var inheritance = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+    SecurityIdentifier administrators = new(WellKnownSidType.BuiltinAdministratorsSid, null);
+    SecurityIdentifier localSystem = new(WellKnownSidType.LocalSystemSid, null);
+    InheritanceFlags inheritance = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
 
-    var security = new DirectorySecurity();
+    DirectorySecurity security = new();
     security.SetOwner(administrators);
     security.AddAccessRule(new FileSystemAccessRule(
         administrators, FileSystemRights.FullControl, inheritance, PropagationFlags.None, AccessControlType.Allow));
@@ -95,6 +95,41 @@ SetAccessControl (commit): THREW InvalidOperationException:
 
 Code that wraps only `SetOwner` in a `try` will conclude the assignment worked.
 Wrap the commit.
+
+## ACE order changes effective access
+
+Windows does not use a "most specific trustee wins" rule. [How AccessCheck
+Works](https://learn.microsoft.com/windows/win32/secauthz/how-dacls-control-access-to-an-object)
+says that Windows compares each ACE's trustee with the enabled user and group
+SIDs in the caller's token, examines matching ACEs in sequence, and stops when:
+
+- a deny ACE denies a requested right;
+- allow ACEs have granted every requested right; or
+- the DACL ends with at least one requested right still ungranted.
+
+The last case is an implicit denial. The second case means a broad allow can
+complete the check before a later user-specific deny is reached.
+
+Microsoft's [preferred DACL
+order](https://learn.microsoft.com/windows/win32/secauthz/order-of-aces-in-a-dacl)
+is more precise than "all denies before all allows":
+
+1. Explicit ACEs come before inherited ACEs.
+2. Within the explicit group, deny ACEs come before allow ACEs.
+3. Inherited ACEs stay ordered by inheritance depth, nearest ancestor first; within each level, deny ACEs come before allow ACEs.
+
+The bundled Windows test writes both orders to one file and reads each descriptor
+back from disk. `Allow Everyone:Read` followed by `Deny current-user:Read` is
+noncanonical and permits the read. Reversing the two ACEs is canonical and the
+same read throws `UnauthorizedAccessException`. The measured .NET and NTFS path
+did not repair the noncanonical order during persistence.
+
+Build deny-bearing DACLs in canonical order and verify
+`AreAccessRulesCanonical` after reading them back. Do not generalize this into
+"user ACEs before group ACEs"; trustee specificity does not control the access
+check. For trust validation, do not try to use deny exceptions to rescue a broad
+untrusted allow. Reject the allow as described in
+[validating-trust.md](validating-trust.md#do-not-subtract-denies-from-allows).
 
 ## Rights that mean "can modify"
 
