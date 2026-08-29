@@ -177,6 +177,34 @@ dotnet build <root>.csproj -c Release -p:ReportAnalyzer=true -bl
 - In Visual Studio, the IDE can surface per-analyzer CPU; if a specific project
   feels slow to type in, that is the signal to re-profile.
 
+## Measure code fixes and Fix All separately
+
+Analyzer execution cost and code-fix cost are different measurements. A cheap
+analyzer can still have a Fix All provider that creates one task and changed
+solution per diagnostic, exhausting memory on a bulk cleanup.
+
+Measure Fix All in the host consumers use, such as `dotnet format` or an IDE test
+host. Record:
+
+- the host and SDK version;
+- elapsed time and peak working set of the formatter or IDE child process, not
+  only its launcher;
+- total diagnostics, affected documents, total source bytes, and the largest
+  diagnostic count in one document;
+- whether cancellation came from outside the host or from the provider; and
+- the exact package-delivered analyzer and code-fix binaries under test.
+
+Avoid one task or changed solution per diagnostic for high-volume document-local
+rules. Use `FixAllProvider.Create` or `DocumentBasedFixAllProvider` to process all
+diagnostics for a document in one callback, then apply one coherent syntax or text
+change. Follow the host run with `--verify-no-changes`; a successful in-memory
+Fix All test does not establish acceptable CLI memory use.
+
+Do not make every pull-request leg replay a production-scale host workload when
+that cost is material. Keep an always-on test at the implementation's owned
+boundary, plus a structural or behavioral mutation guard, and run the complete
+host scenario manually, on a schedule, or before release.
+
 ## Quick reference
 
 | Symptom | Cause | Fix |
