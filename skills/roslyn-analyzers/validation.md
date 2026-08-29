@@ -186,6 +186,43 @@ justify enabling a warning broadly; use the observed precision, impact, and cost
 remediation. If the sample is too small or domain-specific, ship disabled by
 default and state what evidence is still missing.
 
+## Validate consumer adoption as a migration
+
+Enabling a suite of diagnostics, or upgrading a consumer to stricter defaults, is
+a policy migration with its own evidence. Before changing the consumer's baseline:
+
+1. **Inventory diagnostic and fix coverage.** Build a matrix of every diagnostic
+   being enabled, its selected severity, whether it has an individual code fix,
+   whether it supports Fix All, the Fix All provider, and its advertised scopes.
+   Do not assume every diagnostic has a fix or that every fix supports bulk use.
+2. **Measure findings before choosing automation.** Record counts by diagnostic
+   and by semantic category. For documentation rules, distinguish missing type
+   summaries, member summaries, parameter elements, and return elements before
+   deciding scope or generated-content policy. Empty or tautological prose can
+   silence a diagnostic without satisfying the documentation policy.
+3. **Enumerate the complete project graph.** Include projects outside the main
+   solution and every build, test, pack, or publish entry point used by the
+   consumer. A clean solution subset does not establish a clean repository.
+4. **Exercise every supported target configuration.** Compile relevant target
+   frameworks, platform-specific configurations, and conditional-compilation
+   symbols. A build on one operating system does not analyze source excluded by
+   another target's preprocessor symbols.
+5. **Compile fixes against the shipped runtime contract.** Test the
+   package-delivered analyzer and code-fix assemblies with the runtime package
+   version the consumer references, then compile the fixed source. Cover every
+   syntax shape the rewrite handles; for an interpolated-string rewrite, include
+   value-only, format-only, alignment-only, and alignment-plus-format holes.
+6. **Distinguish unavailable, withheld, and failed fixes.** Report separately
+   when no fixer exists, when the fixer intentionally registers no action because
+   its candidate cannot bind, and when an offered action or host execution fails.
+   Use the zero-action assertion in
+   [Prove no-fix contexts explicitly](#prove-no-fix-contexts-explicitly) for the
+   withheld case.
+7. **Rerun the same inventory after migration.** Analyze every selected project
+   and target again, compile the fixed consumer, and compare remaining diagnostic
+   counts with the accepted policy rather than assuming a formatter exit code
+   proves completion.
+
 ## Prove no-fix contexts explicitly
 
 For every source shape where the analyzer reports but the fixer must decline, use
