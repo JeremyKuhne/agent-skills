@@ -103,7 +103,8 @@ For every rule, test all of:
   literal). (`AnalyzeComparison_NonNullEquality_ReportsNoDiagnostic`.)
 - **Boundary / known false-positive risks** - generated code (verify no diagnostic
   is produced when the analyzer opts out with
-  `ConfigureGeneratedCodeAnalysis(None)`), partial/erroneous code the IDE feeds while
+  `ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None)`),
+  partial/erroneous code the IDE feeds while
   the user is mid-edit, null/error types, deconstruction and multi-local declarations,
   constructed generic symbols, default/unknown options, unsupported map entries,
   nullable vs non-nullable contexts, and expression vs statement position.
@@ -139,7 +140,8 @@ For every code fix that advertises Fix All:
 - ensure a compiling mutation back to `BatchFixer` fails a provider-selection or
   resource assertion;
 - run an end-to-end consumer probe in `dotnet format` or the target IDE host;
-- run `--verify-no-changes` after the bulk fix; and
+- for `dotnet format`, rerun with `--verify-no-changes`; for an IDE host, assert
+  that a second pass offers no applicable fix and produces no workspace edit; and
 - validate the package-delivered analyzer and code-fix assemblies, not only
   project-reference builds.
 

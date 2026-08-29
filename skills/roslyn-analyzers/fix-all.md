@@ -36,7 +36,9 @@ For document-local fixes, prefer `FixAllProvider.Create` or derive from
 provider instead of `BatchFixer` when each diagnostic affects only its originating
 document. It filters diagnostics by scope, buckets them by document, processes
 projects serially, and processes documents within a project in parallel. The
-factory also handles containing-member and containing-type scopes.
+default factory overload supports document, project, and solution scopes. Pass an
+explicit `supportedFixAllScopes` array to include containing-member or
+containing-type scope.
 
 Use a custom provider when the fix changes project or solution metadata, adds,
 removes, or renames documents, or otherwise cannot be expressed as independent
@@ -76,9 +78,10 @@ per diagnostic, sort by source position, and call `SourceText.WithChanges` once.
 That API validates that changes are ordered and non-overlapping.
 
 `FixAllProvider.Create` applies the document callback once per affected document
-for document, project, solution, containing-member, and containing-type scopes.
-Return only the changed document content; use a custom provider when other project
-or solution changes must survive.
+for the scopes supplied to the factory. The default overload supports document,
+project, and solution; containing-member and containing-type require the overload
+that accepts `supportedFixAllScopes`. Return only the changed document content;
+use a custom provider when other project or solution changes must survive.
 
 ## Keep action selection stable
 

@@ -268,7 +268,8 @@ with "Could not find a part of the path ...\<root>.analyzers.codefixes\...".
 
 - [ ] `netstandard2.0`, `EnforceExtendedAnalyzerRules=true`, release files present.
 - [ ] No instance/static mutable state.
-- [ ] `EnableConcurrentExecution()` + `ConfigureGeneratedCodeAnalysis(None)`.
+- [ ] `EnableConcurrentExecution()` +
+  `ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None)`.
 - [ ] Narrowest registration with a kind filter; no manual tree walks.
 - [ ] No recursion whose depth is controlled by source or embedded input.
 - [ ] `IOperation` where semantics matter; raw syntax only for source-shape rules.
