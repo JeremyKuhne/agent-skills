@@ -14,7 +14,7 @@ The Roslyn SDK ships purpose-built test packages -
 `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing`,
 `Microsoft.CodeAnalysis.CSharp.CodeFix.Testing`, and the runner-specific variants
 (`.MSTest` / `.XUnit` / `.NUnit`). Prefer this harness for anything beyond a trivial
-diagnostic-only analyzer and for code fixes that need exact spans, multiple
+diagnostic-only analyzer, and for code fixes that need exact spans, multiple
 actions, Fix All, or controlled reference sets. It gives you:
 
 - A **markup syntax** that pins the exact expected diagnostic span in the source:

@@ -88,8 +88,10 @@ library it guards (`<root>` is the library project name):
 4. **Validate.** Follow [validation.md](validation.md), including malformed state,
    adversarial depth, and real-code triage before enabling by default. Run Debug
    and Release.
-5. **Check analyzer performance.** Follow [performance.md](performance.md): keep the IDE path cheap and cache bounds explicit.
-6. **Check Fix All performance.** Measure elapsed time and peak memory on representative bulk input in the real host.
+5. **Check analyzer performance.** Follow [performance.md](performance.md): keep
+   the IDE path cheap and cache bounds explicit.
+6. **Check Fix All performance.** Measure elapsed time and peak memory on
+   representative bulk input in the real host.
 7. **Decide whether to dogfood it** on your own source. If yes, the analyzer must
    be clean against the existing tree or scoped off where it shouldn't apply - e.g.
    a directory-level `.editorconfig` that disables the rule for generated or ported
