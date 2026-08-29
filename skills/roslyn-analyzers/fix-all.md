@@ -8,8 +8,15 @@ solution.
 
 `WellKnownFixAllProviders.BatchFixer` invokes the ordinary code fix independently
 for each diagnostic against a fork of the original document, then merges the
-resulting text changes. Use it only when those independent changes are guaranteed
-not to conflict.
+resulting text changes. Because each fix is computed independently, a
+high-cardinality run can materialize one changed document or solution per
+diagnostic and schedule many computations concurrently. Use it only when the
+changes cannot conflict **and** the diagnostic count is predictably bounded.
+
+Before selecting it, estimate total diagnostics, diagnostics per document, the
+largest affected document, and total affected source bytes. Non-overlapping edits
+are necessary for `BatchFixer`, but they are not sufficient to make a
+high-cardinality workload safe.
 
 Do not use `BatchFixer` without further analysis when fixes can:
 
@@ -24,15 +31,30 @@ Two zero-length insertions at one position are still ambiguous. A conflict can
 discard all text changes produced by one independently computed fix, not merely
 the overlapping hunk.
 
-When any of these shapes are possible, implement a custom `FixAllProvider` that
-collects the applicable diagnostics for each document and computes one coherent
-document transformation.
+For document-local fixes, prefer `FixAllProvider.Create` or derive from
+`DocumentBasedFixAllProvider`. Roslyn explicitly recommends the document-based
+provider instead of `BatchFixer` when each diagnostic affects only its originating
+document. It filters diagnostics by scope, buckets them by document, processes
+projects serially, and processes documents within a project in parallel. The
+factory also handles containing-member and containing-type scopes.
+
+Use a custom provider when the fix changes project or solution metadata, adds,
+removes, or renames documents, or otherwise cannot be expressed as independent
+document callbacks.
+
+| Edit shape | Provider |
+| --- | --- |
+| One coherent document transform | `FixAllProvider.Create` |
+| One `SyntaxEditor` transform using all diagnostics in a document | `FixAllProvider.Create` |
+| Diagnostics carry complete `TextChange` replacements | `FixAllProvider.Create` |
+| Low-cardinality independent actions with cross-document effects | `BatchFixer`, after conflict and resource review |
+| Project/solution metadata or document add/remove/rename | Custom `FixAllProvider` |
 
 ## Apply one coherent document edit
 
-Use one `SyntaxEditor` for all edits in a document. Resolve diagnostics against a
-single syntax root and schedule replacements in an order that preserves node
-identity:
+Use one callback and one coherent edit for all diagnostics in a document. For
+syntax edits, use one `SyntaxEditor`, resolve diagnostics against a single syntax
+root, and schedule replacements in an order that preserves node identity:
 
 1. Filter diagnostics to the selected `CodeActionEquivalenceKey` when the provider
    offers multiple actions for one diagnostic.
@@ -49,8 +71,14 @@ Collection operations can invalidate syntax identity too. In particular, repeate
 list can silently miss later removals. Compute the final list once, use indices or
 stable keys, or rebuild it from the retained elements.
 
-Project- and solution-scoped FixAll should use this document transform once per
-affected document, then return one accumulated `Solution`.
+When diagnostics already carry complete replacements, collect one `TextChange`
+per diagnostic, sort by source position, and call `SourceText.WithChanges` once.
+That API validates that changes are ordered and non-overlapping.
+
+`FixAllProvider.Create` applies the document callback once per affected document
+for document, project, solution, containing-member, and containing-type scopes.
+Return only the changed document content; use a custom provider when other project
+or solution changes must survive.
 
 ## Keep action selection stable
 

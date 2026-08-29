@@ -14,15 +14,17 @@ The Roslyn SDK ships purpose-built test packages -
 `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing`,
 `Microsoft.CodeAnalysis.CSharp.CodeFix.Testing`, and the runner-specific variants
 (`.MSTest` / `.XUnit` / `.NUnit`). Prefer this harness for anything beyond a trivial
-diagnostic-only analyzer, and **always** for code fixes. It gives you:
+diagnostic-only analyzer and for code fixes that need exact spans, multiple
+actions, Fix All, or controlled reference sets. It gives you:
 
 - A **markup syntax** that pins the exact expected diagnostic span in the source:
   - `[|text|]` - a diagnostic is reported on `text` (single-descriptor analyzers).
   - `{|ABCD0001:text|}` - a diagnostic with that specific ID is reported on `text`.
 - `VerifyCS.VerifyAnalyzerAsync(source)` - asserts the marked diagnostics, and only
   those, are produced.
-- `VerifyCS.VerifyCodeFixAsync(source, fixedSource)` - applies the fix and asserts
-  the result equals `fixedSource`, including a FixAll pass.
+- `VerifyCS.VerifyCodeFixAsync(source, fixedSource)` - applies a registered fix and
+  asserts the result equals `fixedSource`. Exercise Fix All in a separately
+  configured test with multiple diagnostics and an expected combined result.
 - Control over reference assemblies / target framework, so you can test the analyzer
   against the same surface your consumers compile against.
 - The ability to embed expected compiler diagnostics (e.g. `{|CS0029:...|}`) so a
@@ -74,9 +76,9 @@ calls `provider.RegisterCodeFixesAsync` with a `CodeFixContext` whose registrati
 delegate captures the offered `CodeAction`s, then applies the first action via
 `action.GetOperationsAsync()` -> `ApplyChangesOperation.ChangedSolution` and returns
 the changed document's text to assert on. The test project also needs a project
-reference to `<root>.analyzers.codefixes`. Pin the before/after source and assert the
-expected member gained `readonly`; test the fix on a **non-mutating** member, since
-"make readonly" on a genuinely mutating member would produce a compiler error.
+reference to `<root>.analyzers.codefixes`. Pin the before/after source, reject new
+compiler errors, and include a shape the fixer supports plus one where it must
+offer no action.
 
 ## Coverage checklist
 
@@ -99,7 +101,8 @@ For every rule, test all of:
 - **Negative - lookalike** - similar-but-fine code does not fire (comparing two
   non-null values, comparing against a named constant rather than the `null`
   literal). (`AnalyzeComparison_NonNullEquality_ReportsNoDiagnostic`.)
-- **Boundary / known false-positive risks** - generated code (must stay silent given
+- **Boundary / known false-positive risks** - generated code (verify no diagnostic
+  is produced when the analyzer opts out with
   `ConfigureGeneratedCodeAnalysis(None)`), partial/erroneous code the IDE feeds while
   the user is mid-edit, null/error types, deconstruction and multi-local declarations,
   constructed generic symbols, default/unknown options, unsupported map entries,
@@ -122,14 +125,40 @@ For every rule, test all of:
   applicable conflict shape. Read [fix-all.md](fix-all.md); include a positive
   control that fails if only one occurrence is processed.
 
+### Validate Fix All scale and host behavior
+
+For every code fix that advertises Fix All:
+
+- test every advertised scope, including containing-member and containing-type
+  when supported;
+- cover multiple diagnostics in one document, multiple documents, multiple
+  projects, and linked documents where the language supports them;
+- test a pre-canceled operation and cancellation during a large run when practical;
+- retain the smallest deterministic CI regression that reaches the implementation's
+  owned scale boundary, such as the observed maximum diagnostics in one document;
+- ensure a compiling mutation back to `BatchFixer` fails a provider-selection or
+  resource assertion;
+- run an end-to-end consumer probe in `dotnet format` or the target IDE host;
+- run `--verify-no-changes` after the bulk fix; and
+- validate the package-delivered analyzer and code-fix assemblies, not only
+  project-reference builds.
+
+An in-memory test can establish correctness without reproducing host memory use.
+A real host may load workspaces, analyzers, and one changed solution per diagnostic
+in a materially different resource shape. Keep a cheap always-on unit regression and
+a reproducible full-scale host probe when the production workload is too expensive
+for every CI run. Run the host probe manually, on a schedule, or as a release gate,
+and record its command and expected resource bounds.
+
 A useful discipline from the Roslyn SDK tutorial: write the "should not fire" tests
 *first*. They are where real analyzers go wrong, because the cheap syntactic match
 over-triggers until the semantic guards are added.
 
 For a performance or stability regression, retain the triggering scale dimension
-and verify that a compiling mutation of the fix makes the test fail. A deep-input
-test that never reaches the former recursion depth, or a semantic test whose source
-does not exercise the guarded null/constructed shape, pins nothing.
+at the boundary owned by the changed code and verify that a compiling mutation of
+the fix makes the test fail. A deep-input test that never reaches the former
+recursion depth, or a semantic test whose source does not exercise the guarded
+null/constructed shape, pins nothing.
 
 ## Validate false positives on real code
 

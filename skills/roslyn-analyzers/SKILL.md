@@ -88,14 +88,13 @@ library it guards (`<root>` is the library project name):
 4. **Validate.** Follow [validation.md](validation.md), including malformed state,
    adversarial depth, and real-code triage before enabling by default. Run Debug
    and Release.
-5. **Check performance** against the in-IDE budget in [performance.md](performance.md):
-   cheap syntactic filter first, semantic model only after, and cache lifetime and
-   cardinality made explicit. Enable concurrent execution only with stateless code.
-6. **Decide whether to dogfood it** on your own source. If yes, the analyzer must
+5. **Check analyzer performance.** Follow [performance.md](performance.md): keep the IDE path cheap and cache bounds explicit.
+6. **Check Fix All performance.** Measure elapsed time and peak memory on representative bulk input in the real host.
+7. **Decide whether to dogfood it** on your own source. If yes, the analyzer must
    be clean against the existing tree or scoped off where it shouldn't apply - e.g.
    a directory-level `.editorconfig` that disables the rule for generated or ported
    code that should be exempt.
-7. **Self-review and ship.** Run the `pre-pr-self-review` skill; new public diagnostic
+8. **Self-review and ship.** Run the `pre-pr-self-review` skill; new public diagnostic
    surface needs tests, and a perf claim needs a measurement.
 
 ## Deep dives
@@ -106,19 +105,20 @@ library it guards (`<root>` is the library project name):
 - [design.md](design.md) - authoring rules: stateless and thread-safe, narrowest
   registration, `IOperation` over raw syntax, descriptors, release tracking, and a
   note on code-fix providers.
-- [fix-all.md](fix-all.md) - when `BatchFixer` is safe, conflict-aware document
-  edits, equivalence-key filtering, edit ordering, and tests that prove the bulk
-  path ran.
+- [fix-all.md](fix-all.md) - choosing among `FixAllProvider.Create`,
+  `DocumentBasedFixAllProvider`, `BatchFixer`, and a custom provider; conflict and
+  resource analysis; equivalence-key filtering; edit ordering; and bulk tests.
 - [symbol-actions.md](symbol-actions.md) - complete symbol coverage, names that
   cannot be fixed at the report site, and analyzer-crash diagnosis.
 - [release-tracking.md](release-tracking.md) - shipped/unshipped file format,
   immutable release history, release promotion, and the `RS20xx` diagnostics.
 - [validation.md](validation.md) - testing: the `Microsoft.CodeAnalysis.Testing`
   markup harness, a lightweight in-memory harness, malformed/deep-input coverage,
-  explicit no-fix contexts, real-code false-positive triage, and the dogfood probe.
-- [performance.md](performance.md) - the in-IDE performance budget, the cheap-first
-  rule, cache lifetime and cardinality, traversal/allocation hygiene, and how to
-  measure with `ReportAnalyzer`.
+  explicit no-fix contexts, Fix All scale and host validation, real-code
+  false-positive triage, and the dogfood probe.
+- [performance.md](performance.md) - analyzer IDE budgets, Fix All resource
+  discipline, cache lifetime and cardinality, traversal/allocation hygiene,
+  `ReportAnalyzer`, and real-host code-fix measurement.
 - [suppressors.md](suppressors.md) - `DiagnosticSuppressor`: when owning the domain
   beats suppressing, what is suppressible at all, the id convention, why suppressions
   cannot be release-tracked, and how to prove one is load-bearing.
