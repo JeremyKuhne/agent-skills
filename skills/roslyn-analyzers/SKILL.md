@@ -1,6 +1,6 @@
 ---
 name: roslyn-analyzers
-description: Design, build, validate, and ship a Roslyn analyzer (and optional code fix) in a dedicated analyzer project. Use when asked to "write an analyzer", "create a Roslyn/diagnostic analyzer", "add an analyzer rule", "add a code fix", "enforce a convention at build time", or "flag a pattern in code". ALWAYS starts by checking whether an existing analyzer suite (the .NET SDK CA/IDE rules, BannedApiAnalyzers, an EditorConfig rule, Roslynator, StyleCop, Meziantou, etc.) already covers the request before authoring anything new. Covers the netstandard2.0 project layout, packing the analyzer into your library's NuGet package, the statelessness/concurrency and IOperation-vs-syntax design rules, the Microsoft.CodeAnalysis.Testing validation harness, and the in-IDE performance discipline. For BenchmarkDotNet runtime microbenchmarks see `performance-testing`; for auditing untrusted-input handling see `security-review`.
+description: Design, build, validate, adopt, and ship a Roslyn analyzer (and optional code fix). Use when asked to "write an analyzer", "create a Roslyn/diagnostic analyzer", "add an analyzer rule", "add a code fix", "enable an analyzer suite", "migrate to an analyzer package", "enforce a convention at build time", or "flag a pattern in code". ALWAYS checks whether an existing analyzer suite (the .NET SDK CA/IDE rules, BannedApiAnalyzers, an EditorConfig rule, Roslynator, StyleCop, Meziantou, etc.) already covers new-rule requests before authoring anything. Covers analyzer project layout and packaging, consumer-adoption inventory, statelessness/concurrency and IOperation-vs-syntax design, Microsoft.CodeAnalysis.Testing validation, and analyzer and Fix All performance. For BenchmarkDotNet runtime microbenchmarks see `performance-testing`; for auditing untrusted-input handling see `security-review`.
 license: MIT
 compatibility: Requires the .NET SDK, Roslyn packages, and a test project capable of running Microsoft.CodeAnalysis.Testing fixtures.
 metadata:
@@ -18,10 +18,10 @@ metadata:
 If `overlay.md` exists beside this file, read it before acting; it contains
 repository-specific bindings. This core remains usable without it.
 
-Author a Roslyn diagnostic analyzer (and optional code fix) the right way: confirm
-nothing already does the job, build it to the analyzer-authoring rules, validate it
-with real positive/negative cases, and keep it fast enough to run on every keystroke
-in the IDE.
+Author or adopt a Roslyn diagnostic analyzer suite the right way: confirm nothing
+already does the job before adding a rule, build custom analyzers to the authoring
+rules, validate diagnostics and fixes against real consumers, and keep IDE and Fix
+All costs within measured bounds.
 
 If your repo already has a working analyzer, read it first and copy its shape - a
 real in-repo example is the best template. Otherwise the patterns below are
@@ -92,11 +92,14 @@ library it guards (`<root>` is the library project name):
    the IDE path cheap and cache bounds explicit.
 6. **Check Fix All performance.** Measure elapsed time and peak memory on
    representative bulk input in the real host.
-7. **Decide whether to dogfood it** on your own source. If yes, the analyzer must
+7. **Validate consumer adoption.** Before broad enablement, inventory diagnostic
+   and fix coverage, then test the packaged analyzer against the consumer's full
+   project and target-configuration graph.
+8. **Decide whether to dogfood it** on your own source. If yes, the analyzer must
    be clean against the existing tree or scoped off where it shouldn't apply - e.g.
    a directory-level `.editorconfig` that disables the rule for generated or ported
    code that should be exempt.
-8. **Self-review and ship.** Run the `pre-pr-self-review` skill; new public diagnostic
+9. **Self-review and ship.** Run the `pre-pr-self-review` skill; new public diagnostic
    surface needs tests, and a perf claim needs a measurement.
 
 ## Deep dives
@@ -117,7 +120,7 @@ library it guards (`<root>` is the library project name):
 - [validation.md](validation.md) - testing: the `Microsoft.CodeAnalysis.Testing`
   markup harness, a lightweight in-memory harness, malformed/deep-input coverage,
   explicit no-fix contexts, Fix All scale and host validation, real-code
-  false-positive triage, and the dogfood probe.
+  false-positive triage, consumer-adoption validation, and the dogfood probe.
 - [performance.md](performance.md) - analyzer IDE budgets, Fix All resource
   discipline, cache lifetime and cardinality, traversal/allocation hygiene,
   `ReportAnalyzer`, and real-host code-fix measurement.
