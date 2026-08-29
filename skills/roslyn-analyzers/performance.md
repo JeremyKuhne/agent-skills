@@ -197,8 +197,10 @@ host. Record:
 Avoid one task or changed solution per diagnostic for high-volume document-local
 rules. Use `FixAllProvider.Create` or `DocumentBasedFixAllProvider` to process all
 diagnostics for a document in one callback, then apply one coherent syntax or text
-change. Follow the host run with `--verify-no-changes`; a successful in-memory
-Fix All test does not establish acceptable CLI memory use.
+change. After a `dotnet format` run, rerun with `--verify-no-changes`. For an IDE
+host, assert that a second pass offers no applicable fix and produces no workspace
+edit. A successful in-memory Fix All test does not establish acceptable host
+memory use.
 
 Do not make every pull-request leg replay a production-scale host workload when
 that cost is material. Keep an always-on test at the implementation's owned
