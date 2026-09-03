@@ -39,17 +39,18 @@ defines package shape, not discovery paths or precedence; each host owns those.
 | --- | --- | ------ |
 | "find a skill for X", "is there a skill that does X" | Tiered search (local -> commons -> public), with an applicability check for this repo. | [find.md](find.md) |
 | "build a skill for X", "create a skill" | **Run find first.** Only author new if it exists nowhere; otherwise vendor or tweak the existing one. | [build.md](build.md) |
-| "install this skill", "add this for me", "vendor this into the repo" | Choose source ownership, target surfaces, scope, and host path before selecting `gh`, a host CLI, or a script. | [install.md](install.md) |
+| "install this skill", "add this for me", "vendor this into the repo" | Choose source ownership, target surfaces, scope, and host path; for an existing repository, gather overlay material and resolve overlap before writing. | [install.md](install.md) |
 | "review this skill", "is this skill effective" | Review invocation, workflow closure, progressive disclosure, portability, and lifecycle placement; then hand file validation to `agent-files-review`. | [review.md](review.md) |
 | "update the skill", "sync my change", "pull skill updates" | Pull upstream drift; or push a local improvement, classified common (ask before upstreaming) vs deviation (overlay). | [update.md](update.md) |
 | "retire this skill", "remove this skill" | Find dependents and replacements first, then deprecate or remove without leaving stale routing, catalog, packaging, or validation state. | [retire.md](retire.md) |
 
 These chain: `build` begins with `find`; an install request runs `find` and the
-public-source security gate before `install`; `build`, `install`, and `update`
-finish with `review`; and `review` finishes with `agent-files-review` for file-level
-validation. A local skill that needs a tweak follows `update` so core/overlay
-ownership stays explicit. `retire` inventories every installed scope and host
-before removing anything.
+public-source security gate before `install`; a project-scope install into an
+existing repository also runs [integrate.md](integrate.md) before writing;
+`build`, `install`, and `update` finish with `review`; and `review` finishes with
+`agent-files-review` for file-level validation. A local skill that needs a tweak
+follows `update` so core/overlay ownership stays explicit. `retire` inventories
+every installed scope and host before removing anything.
 
 ## The golden rule
 
@@ -98,9 +99,9 @@ For deterministic user-scope copies, this skill also bundles
 not pre-approve shell access; script execution remains subject to the host's
 normal terminal/tool permission flow.
 
-For a new downstream binding, start from
-`assets/overlay.md.tmpl`, replace its skill and pin tokens, and keep every local
-path and concrete cross-reference in that overlay.
+For a new downstream binding, run [integrate.md](integrate.md), then start from
+`assets/overlay.md.tmpl`, replace its skill and pin tokens, and keep every
+accepted local path and concrete cross-reference in that overlay.
 
 ## Sub-pages
 
@@ -111,6 +112,8 @@ path and concrete cross-reference in that overlay.
   born-personal, or born-shared).
 - [install.md](install.md) - source ownership vs runtime scope, host locations,
   personal-skill privacy, tool selection, verification, and lifecycle effects.
+- [integrate.md](integrate.md) - pre-write discovery of repository bindings,
+  semantic overlap classification, and separately approved deduplication.
 - [evaluations.md](evaluations.md) - should/should-not install cases for scope,
   host collisions, private skills, tooling fallbacks, updates, and retirement.
 - [review.md](review.md) - semantic and lifecycle review: invocation, agent

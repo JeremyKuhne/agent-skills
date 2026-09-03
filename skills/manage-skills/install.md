@@ -66,6 +66,25 @@ Project scope is publication to everyone who can read the repository. Never put
 a personal/private skill there, even when the repository is private today,
 unless that broader audience and any future visibility change are acceptable.
 
+### Pass the existing-repository integration gate
+
+For a project-scope install into an existing repository, run
+[integrate.md](integrate.md) after the candidate source and requirements are
+reviewed but before selecting an installation command or writing files. That
+gate searches local skills, agent files, documentation, and relevant
+implementation surfaces for repository bindings, differently named workflow
+overlap, duplicate guidance, and conflicts.
+
+A request to install the new core and overlay does not authorize changes to
+existing guidance. Present consolidation edits separately and obtain explicit
+approval before applying them. If consolidation is declined, ask whether the
+user wants to record the intentional overlap; create no persistent record by
+default. Stop when a conflict or ambiguous workflow owner remains unresolved.
+
+User-scope installation does not run this repository integration gate. An empty
+greenfield skill-repository scaffold generates its initial bindings through its
+scaffold workflow instead.
+
 ### User scope
 
 Use when a skill should follow one person across local projects. User scope is
@@ -178,6 +197,11 @@ Stop when a conflict remains unresolved. A note that one host shadows another is
 not sufficient because another host may reverse precedence or expose both
 copies. Do not install different implementations under the same name across
 active roots.
+
+This gate resolves runtime identity and precedence. It does not detect a
+differently named skill with equivalent behavior or collect repository-specific
+overlay material. Existing-repository project installs must pass both this gate
+and [integrate.md](integrate.md).
 
 ### Maintain a target ledger
 
@@ -344,6 +368,11 @@ Do not stop at file creation. Verify:
 - the intended host and minimum version support Agent Skills;
 - the ownership/scope gate passed and no personal/private skill crossed into a
   broader scope without explicit reclassification;
+- for an existing-repository project install, the integration gate searched the
+  required repository surfaces and classified every material binding, overlap,
+  duplicate, and conflict before writing;
+- existing guidance changed only through separately approved consolidation, and
+  the user was asked whether to record any intentional overlap that remained;
 - the skill appears at the intended scope and resolved path;
 - the duplicate-name gate passed for every target host; no unresolved duplicate
   wins, shadows, or coexists;
@@ -367,7 +396,8 @@ Useful host checks:
 ## 7. Carry scope through the lifecycle
 
 - **Find:** search active project, inherited, user, plugin, and custom roots before
-  concluding a skill is absent. Report every duplicate and its precedence.
+  concluding a skill is absent. Report every duplicate and its precedence, and
+  compare differently named project skills for equivalent outcomes.
 - **Update:** identify the canonical source before touching an installed copy.
   Re-pin project and user copies deliberately; do not edit generated provenance.
 - **Review:** test routing in every supported host whose precedence or
@@ -377,8 +407,8 @@ Useful host checks:
   policy requires, without deleting the canonical source accidentally.
 
 Report source ownership, canonical source, host, scope, resolved destination,
-install mode (copy/register/plugin), pin/provenance, verification evidence, and
-privacy residuals.
+install mode (copy/register/plugin), pin/provenance, project-integration
+disposition when applicable, verification evidence, and privacy residuals.
 
 Include the completed target ledger in that report.
 

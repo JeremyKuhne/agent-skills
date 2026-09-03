@@ -318,7 +318,10 @@ function Get-SkillEvalScenarioMetadata {
     return @(foreach ($scenario in $Scenarios) {
             $fixturePaths = [System.Collections.Generic.HashSet[string]]::new(
                 [System.StringComparer]::Ordinal)
-            foreach ($propertyName in @('overlayPath', 'personalSkillFixturePath')) {
+            foreach ($propertyName in @(
+                    'overlayPath',
+                    'personalSkillFixturePath',
+                    'workspaceFixturePath')) {
                 if ($scenario.PSObject.Properties[$propertyName] -and
                     -not [string]::IsNullOrWhiteSpace([string]$scenario.$propertyName)) {
                     $fixturePaths.Add([string]$scenario.$propertyName) | Out-Null
@@ -661,6 +664,39 @@ pwsh -NoProfile -File "%~dp0$commandName.ps1" %*
     }
 }
 
+function Resolve-SkillEvalFixtureDirectory {
+    param(
+        [Parameter(Mandatory)]
+        [string] $EvalRoot,
+
+        [Parameter(Mandatory)]
+        [string] $RelativePath,
+
+        [Parameter(Mandatory)]
+        [string] $Description
+    )
+
+    if ([System.IO.Path]::IsPathRooted($RelativePath)) {
+        throw "$Description fixture paths must be relative to the evaluation root."
+    }
+    $fixtureRoot = (Resolve-Path -LiteralPath (Join-Path $EvalRoot 'fixtures')).Path
+    $fixturePath = (Resolve-Path -LiteralPath (Join-Path $EvalRoot $RelativePath)).Path
+    $pathComparison = if ($IsWindows) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else { [System.StringComparison]::Ordinal }
+    $fixturePrefix = $fixtureRoot.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar) +
+        [System.IO.Path]::DirectorySeparatorChar
+    if (-not $fixturePath.StartsWith($fixturePrefix, $pathComparison) -or
+        -not (Test-Path -LiteralPath $fixturePath -PathType Container)) {
+        throw "$Description fixture '$RelativePath' must be a directory under '$fixtureRoot'."
+    }
+
+    return $fixturePath
+}
+
 function New-SkillEvalContext {
     param(
         [Parameter(Mandatory)]
@@ -690,7 +726,22 @@ function New-SkillEvalContext {
     Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('config', 'user.name', 'Skill Eval') | Out-Null
     Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('config', 'user.email', 'skill-eval@example.invalid') | Out-Null
     Set-Content -LiteralPath (Join-Path $workspace 'README.md') -Value "# Evaluation fixture`n"
-    Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('add', 'README.md') | Out-Null
+    $hasWorkspaceFixture = $false
+    if ($Scenario.PSObject.Properties['workspaceFixturePath'] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Scenario.workspaceFixturePath)) {
+        $workspaceFixtureSource = Resolve-SkillEvalFixtureDirectory `
+            -EvalRoot $EvalRoot `
+            -RelativePath ([string]$Scenario.workspaceFixturePath) `
+            -Description 'Workspace'
+        if (Test-Path -LiteralPath (Join-Path $workspaceFixtureSource '.git')) {
+            throw "Workspace fixture '$($Scenario.workspaceFixturePath)' cannot contain a .git directory."
+        }
+        foreach ($item in Get-ChildItem -LiteralPath $workspaceFixtureSource -Force) {
+            Copy-Item -LiteralPath $item.FullName -Destination $workspace -Recurse -Force
+        }
+        $hasWorkspaceFixture = $true
+    }
+    Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('add', '--all') | Out-Null
     Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('commit', '-m', 'Initialize evaluation fixture') | Out-Null
 
     $branch = 'main'
@@ -720,24 +771,10 @@ function New-SkillEvalContext {
     $hasPersonalSkillFixture = $false
     if ($Scenario.PSObject.Properties['personalSkillFixturePath'] -and
         -not [string]::IsNullOrWhiteSpace([string]$Scenario.personalSkillFixturePath)) {
-        $fixtureInput = [string]$Scenario.personalSkillFixturePath
-        if ([System.IO.Path]::IsPathRooted($fixtureInput)) {
-            throw 'Personal skill fixture paths must be relative to the evaluation root.'
-        }
-        $fixtureRoot = (Resolve-Path -LiteralPath (Join-Path $EvalRoot 'fixtures')).Path
-        $personalSkillSource = (Resolve-Path -LiteralPath (Join-Path $EvalRoot $fixtureInput)).Path
-        $pathComparison = if ($IsWindows) {
-            [System.StringComparison]::OrdinalIgnoreCase
-        }
-        else { [System.StringComparison]::Ordinal }
-        $fixturePrefix = $fixtureRoot.TrimEnd(
-            [System.IO.Path]::DirectorySeparatorChar,
-            [System.IO.Path]::AltDirectorySeparatorChar) +
-            [System.IO.Path]::DirectorySeparatorChar
-        if (-not $personalSkillSource.StartsWith($fixturePrefix, $pathComparison) -or
-            -not (Test-Path -LiteralPath $personalSkillSource -PathType Container)) {
-            throw "Personal skill fixture '$fixtureInput' must be a directory under '$fixtureRoot'."
-        }
+        $personalSkillSource = Resolve-SkillEvalFixtureDirectory `
+            -EvalRoot $EvalRoot `
+            -RelativePath ([string]$Scenario.personalSkillFixturePath) `
+            -Description 'Personal skill'
         $personalSkillRoot = Join-Path $copilotHome 'skills'
         $personalSkillTarget = Join-Path $personalSkillRoot (Split-Path -Leaf $personalSkillSource)
         New-Item -ItemType Directory -Path $personalSkillRoot -Force | Out-Null
@@ -759,6 +796,7 @@ function New-SkillEvalContext {
         IsDirty = $isDirty
         SandboxHome = $sandboxHome
         CopilotHome = $copilotHome
+        HasWorkspaceFixture = $hasWorkspaceFixture
         HasPersonalSkillFixture = $hasPersonalSkillFixture
         BaselineWorktree = $baselineWorktree
         RunDirectory = $RunDirectory

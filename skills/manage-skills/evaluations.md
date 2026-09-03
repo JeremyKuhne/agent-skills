@@ -161,6 +161,47 @@ Expected:
 - Requires an explicit scope/privacy decision before any distribution.
 - Refuses remote distribution for a skill whose local policy prohibits it.
 
+## 12. Existing-repository project integration
+
+Setup:
+
+- A reviewed commons candidate is ready for project-scope installation.
+- A differently named local skill owns substantially the same outcome.
+- `AGENTS.md` supplies a repository command the candidate leaves abstract, and
+  its generated mirror repeats the command.
+- A relevant documentation page contains a local prerequisite, while another
+  file contains only an unrelated keyword match.
+
+Expected:
+
+- Builds a candidate lens and searches active project skills, agent files,
+  documentation, and only relevant implementation surfaces before writing.
+- Treats `AGENTS.md` and its generated mirror as one source of evidence.
+- Classifies the command and prerequisite as overlay bindings, the local skill
+  as duplicate or adjacent behavior, and the unrelated match as unrelated.
+- Presents proposed overlay bindings separately from consolidation edits.
+- Does not install while the workflow owner is ambiguous and does not edit or
+  delete existing guidance without separate explicit approval.
+- If consolidation is declined, asks whether to record the retained overlap and
+  creates no persistent record by default.
+
+## 13. Integration scope boundary
+
+Prompts:
+
+> Install this skill for my user profile across projects.
+
+> Scaffold an empty greenfield skill repository with this starter skill.
+
+Expected:
+
+- The user-scope install does not mine the current repository for project
+  bindings or create a project overlay.
+- The empty scaffold uses its own confirmed generated bindings rather than
+  claiming to have reconciled pre-existing repository guidance.
+- Neither path weakens the duplicate-name, privacy, provenance, or verification
+  gates that already apply.
+
 ## Acceptance
 
 For a lifecycle change:
