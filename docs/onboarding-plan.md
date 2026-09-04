@@ -41,6 +41,15 @@ any) and classify **every** skill into exactly one bucket. This is the
 deduplication and common-promotion engine - it decides what flows up, what comes
 down, and what stays.
 
+That package inventory is necessary but not sufficient for a selected new
+skill. Before writing each project copy, run the `manage-skills`
+[repository-integration gate](../skills/manage-skills/integrate.md). It searches
+existing skills under every active project root, agent customization files,
+documentation, and relevant implementation evidence for differently named
+workflow overlap and repository-specific overlay material. It classifies that
+evidence without treating a keyword match as duplication and keeps the portable
+core unchanged.
+
 | Bucket | Test | Action |
 | ------ | ---- | ------ |
 | **Identical** | Body matches a commons core already | Drop the local copy; vendor the pinned core + overlay |
@@ -53,6 +62,12 @@ Record the result as a per-repo row in a **deduplication ledger** - a fleet-leve
 tracker of what must flow up, come down, or be reconciled. The audit is the single
 most valuable onboarding step: skipping it is how two repos end up with three
 drifting copies of the same skill.
+
+This fleet runbook persists skill-flow dispositions because it coordinates
+several repositories. A normal project installation keeps its integration
+report transient. If consolidation is declined or intentional overlap remains,
+ask whether the user wants a catalog note, overlay boundary, issue, or ledger
+entry; create no persistent overlap record by default.
 
 Two axes decide the buckets, and they are independent:
 
@@ -108,7 +123,8 @@ enforces them:
   core says "the perf project" and `-f <tfm>`; the overlay supplies the concrete
   values.
 - **Vendoring is a merge, not a greenfield drop** - reconcile against the repo's
-  existing catalog, `FORMAT.md`, and instruction set rather than overwriting them.
+  existing catalog, `FORMAT.md`, instruction set, and integration findings rather
+  than overwriting them.
 
 The acid test: if the fork drops onto the pinned core with only a thin overlay
 and the repo's link check passes, the core was genuinely generic. If the check

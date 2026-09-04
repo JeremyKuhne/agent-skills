@@ -17,6 +17,14 @@ custom directories. Use the host's skill listing when available because it
 exposes precedence and registered directories that a fixed file scan can miss.
 Record every matching name, resolved path, scope, and winning source.
 
+For a project-scope request, also compare the outcomes, trigger boundaries,
+applicability, and relationships of active project skills. Include differently
+named skills that appear to own the same workflow; exact-name discovery alone
+does not establish that the candidate is new. Keep this pass at skill and
+catalog level. After selecting a candidate, [integrate.md](integrate.md) owns the
+targeted search of agent files, documentation, and repository implementation
+details.
+
 A project hit does not satisfy "install this for me everywhere"; a user hit does
 not prove the repository carries the skill for teammates or remote agents.
 Follow [install.md](install.md) for the host matrix.
@@ -84,9 +92,13 @@ Output a short summary, not a raw search dump:
 - **Applicable to whom:** project / user / managed or remote, with the one-line
   reason.
 - **Active source:** winning path and any duplicate-name ambiguity.
+- **Local overlap:** equivalent or adjacent project skills, including
+  differently named candidates, and whether to reuse, reconcile, or continue to
+  repository integration.
 - **Recommended action:** use the existing target / install at the missing
   scope / tweak the overlay / install from the commons / evaluate a public
   source / build new / skip as inapplicable.
 
 That recommendation hands "build new" to [build.md](build.md) and any runtime copy
-or registration to [install.md](install.md).
+or registration to [install.md](install.md). A selected project-scope candidate
+for an existing repository passes [integrate.md](integrate.md) before any write.

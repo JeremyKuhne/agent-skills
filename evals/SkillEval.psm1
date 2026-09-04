@@ -269,6 +269,75 @@ function Get-SkillEvalPathRevision {
             [System.Text.Encoding]::UTF8.GetBytes($manifest)))
 }
 
+function Resolve-SkillEvalFixturePath {
+    param(
+        [Parameter(Mandatory)]
+        [string] $EvalRoot,
+
+        [Parameter(Mandatory)]
+        [string] $RelativePath,
+
+        [Parameter(Mandatory)]
+        [string] $Description,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('Leaf', 'Container')]
+        [string] $PathType,
+
+        [bool] $RejectGitMetadata = $false
+    )
+
+    if ([System.IO.Path]::IsPathRooted($RelativePath)) {
+        throw "$Description fixture paths must be relative to the evaluation root."
+    }
+    $fixtureRoot = (Resolve-Path -LiteralPath (Join-Path $EvalRoot 'fixtures')).Path
+    $fixturePath = (Resolve-Path -LiteralPath (Join-Path $EvalRoot $RelativePath)).Path
+    $pathComparison = if ($IsWindows) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else { [System.StringComparison]::Ordinal }
+    $fixturePrefix = $fixtureRoot.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar) +
+        [System.IO.Path]::DirectorySeparatorChar
+    $pathDescription = if ($PathType -eq 'Leaf') { 'a file' } else { 'a directory' }
+    if (-not $fixturePath.StartsWith($fixturePrefix, $pathComparison) -or
+        -not (Test-Path -LiteralPath $fixturePath -PathType $PathType)) {
+        throw "$Description fixture '$RelativePath' must be $pathDescription under '$fixtureRoot'."
+    }
+
+    $fixtureRelativePath = [System.IO.Path]::GetRelativePath($fixtureRoot, $fixturePath)
+    $currentPath = $fixtureRoot
+    foreach ($segment in $fixtureRelativePath -split '[\\/]') {
+        $currentPath = Join-Path $currentPath $segment
+        $currentItem = Get-Item -LiteralPath $currentPath -Force
+        if (($currentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "$Description fixture '$RelativePath' contains a reparse point at '$segment'."
+        }
+    }
+
+    if ($PathType -eq 'Container') {
+        $unsafeItem = @(Get-ChildItem -LiteralPath $fixturePath -Force -Recurse |
+            Where-Object {
+                ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or
+                ($RejectGitMetadata -and $_.Name -ieq '.git')
+            } |
+            Select-Object -First 1)
+        if ($unsafeItem.Count -gt 0) {
+            $unsafeRelativePath = [System.IO.Path]::GetRelativePath(
+                $fixturePath,
+                $unsafeItem[0].FullName)
+            $unsafeKind = if (($unsafeItem[0].Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                'a reparse point'
+            }
+            else { 'Git metadata' }
+            throw "$Description fixture '$RelativePath' contains $unsafeKind at '$unsafeRelativePath'."
+        }
+    }
+
+    return $fixturePath
+}
+
 function Get-SkillEvalScenarioDependencies {
     param(
         [Parameter(Mandatory)]
@@ -318,10 +387,23 @@ function Get-SkillEvalScenarioMetadata {
     return @(foreach ($scenario in $Scenarios) {
             $fixturePaths = [System.Collections.Generic.HashSet[string]]::new(
                 [System.StringComparer]::Ordinal)
-            foreach ($propertyName in @('overlayPath', 'personalSkillFixturePath')) {
+            foreach ($fixtureProperty in @(
+                    @{ Name = 'overlayPath'; Description = 'Overlay'; PathType = 'Leaf'; RejectGitMetadata = $false }
+                    @{ Name = 'personalSkillFixturePath'; Description = 'Personal skill'; PathType = 'Container'; RejectGitMetadata = $false }
+                    @{ Name = 'workspaceFixturePath'; Description = 'Workspace'; PathType = 'Container'; RejectGitMetadata = $true })) {
+                $propertyName = [string]$fixtureProperty.Name
                 if ($scenario.PSObject.Properties[$propertyName] -and
                     -not [string]::IsNullOrWhiteSpace([string]$scenario.$propertyName)) {
-                    $fixturePaths.Add([string]$scenario.$propertyName) | Out-Null
+                    $fixturePath = Resolve-SkillEvalFixturePath `
+                        -EvalRoot $EvalRoot `
+                        -RelativePath ([string]$scenario.$propertyName) `
+                        -Description ([string]$fixtureProperty.Description) `
+                        -PathType ([string]$fixtureProperty.PathType) `
+                        -RejectGitMetadata ([bool]$fixtureProperty.RejectGitMetadata)
+                    $fixtureRelativePath = [System.IO.Path]::GetRelativePath(
+                        $EvalRoot,
+                        $fixturePath).Replace('\', '/')
+                    $fixturePaths.Add($fixtureRelativePath) | Out-Null
                 }
             }
             $fixtureManifest = @($fixturePaths | Sort-Object | ForEach-Object {
@@ -690,7 +772,21 @@ function New-SkillEvalContext {
     Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('config', 'user.name', 'Skill Eval') | Out-Null
     Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('config', 'user.email', 'skill-eval@example.invalid') | Out-Null
     Set-Content -LiteralPath (Join-Path $workspace 'README.md') -Value "# Evaluation fixture`n"
-    Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('add', 'README.md') | Out-Null
+    $hasWorkspaceFixture = $false
+    if ($Scenario.PSObject.Properties['workspaceFixturePath'] -and
+        -not [string]::IsNullOrWhiteSpace([string]$Scenario.workspaceFixturePath)) {
+        $workspaceFixtureSource = Resolve-SkillEvalFixturePath `
+            -EvalRoot $EvalRoot `
+            -RelativePath ([string]$Scenario.workspaceFixturePath) `
+            -Description 'Workspace' `
+            -PathType Container `
+            -RejectGitMetadata $true
+        foreach ($item in Get-ChildItem -LiteralPath $workspaceFixtureSource -Force) {
+            Copy-Item -LiteralPath $item.FullName -Destination $workspace -Recurse -Force
+        }
+        $hasWorkspaceFixture = $true
+    }
+    Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('add', '--all') | Out-Null
     Invoke-SkillEvalGit -GitPath $gitPath -WorkingDirectory $workspace -Arguments @('commit', '-m', 'Initialize evaluation fixture') | Out-Null
 
     $branch = 'main'
@@ -713,31 +809,22 @@ function New-SkillEvalContext {
         Copy-Item -LiteralPath $projectSkillSource -Destination $projectSkillsRoot -Recurse
     }
     if ($Scenario.PSObject.Properties['overlayPath'] -and -not [string]::IsNullOrWhiteSpace([string]$Scenario.overlayPath)) {
-        $overlaySource = (Resolve-Path -LiteralPath (Join-Path $EvalRoot ([string]$Scenario.overlayPath))).Path
+        $overlaySource = Resolve-SkillEvalFixturePath `
+            -EvalRoot $EvalRoot `
+            -RelativePath ([string]$Scenario.overlayPath) `
+            -Description 'Overlay' `
+            -PathType Leaf
         $overlayTarget = Join-Path $pluginDirectory "skills/$($Scenario.skill)/overlay.md"
         Copy-Item -LiteralPath $overlaySource -Destination $overlayTarget
     }
     $hasPersonalSkillFixture = $false
     if ($Scenario.PSObject.Properties['personalSkillFixturePath'] -and
         -not [string]::IsNullOrWhiteSpace([string]$Scenario.personalSkillFixturePath)) {
-        $fixtureInput = [string]$Scenario.personalSkillFixturePath
-        if ([System.IO.Path]::IsPathRooted($fixtureInput)) {
-            throw 'Personal skill fixture paths must be relative to the evaluation root.'
-        }
-        $fixtureRoot = (Resolve-Path -LiteralPath (Join-Path $EvalRoot 'fixtures')).Path
-        $personalSkillSource = (Resolve-Path -LiteralPath (Join-Path $EvalRoot $fixtureInput)).Path
-        $pathComparison = if ($IsWindows) {
-            [System.StringComparison]::OrdinalIgnoreCase
-        }
-        else { [System.StringComparison]::Ordinal }
-        $fixturePrefix = $fixtureRoot.TrimEnd(
-            [System.IO.Path]::DirectorySeparatorChar,
-            [System.IO.Path]::AltDirectorySeparatorChar) +
-            [System.IO.Path]::DirectorySeparatorChar
-        if (-not $personalSkillSource.StartsWith($fixturePrefix, $pathComparison) -or
-            -not (Test-Path -LiteralPath $personalSkillSource -PathType Container)) {
-            throw "Personal skill fixture '$fixtureInput' must be a directory under '$fixtureRoot'."
-        }
+        $personalSkillSource = Resolve-SkillEvalFixturePath `
+            -EvalRoot $EvalRoot `
+            -RelativePath ([string]$Scenario.personalSkillFixturePath) `
+            -Description 'Personal skill' `
+            -PathType Container
         $personalSkillRoot = Join-Path $copilotHome 'skills'
         $personalSkillTarget = Join-Path $personalSkillRoot (Split-Path -Leaf $personalSkillSource)
         New-Item -ItemType Directory -Path $personalSkillRoot -Force | Out-Null
@@ -759,6 +846,7 @@ function New-SkillEvalContext {
         IsDirty = $isDirty
         SandboxHome = $sandboxHome
         CopilotHome = $copilotHome
+        HasWorkspaceFixture = $hasWorkspaceFixture
         HasPersonalSkillFixture = $hasPersonalSkillFixture
         BaselineWorktree = $baselineWorktree
         RunDirectory = $RunDirectory

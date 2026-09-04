@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "manage-skills-project-integration-gate",
+      "skill": "manage-skills",
+      "category": "integration",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "workspaceFixturePath": "fixtures/manage-skills-project-integration",
+      "prompt": "Use manage-skills to prepare, but do not perform, a project-scope install of the reviewed commons candidate `release-coordination` at `v2.4.0` into this existing repository. Its source, security, dependencies, and pin have already passed review. The candidate invokes for 'prepare a release', owns an end-to-end release checklist, and leaves the concrete package project, validation and publish commands, artifact path, and local approval policy to an overlay. Inspect the repository for semantically overlapping skills and repository-specific material before any write. Include a concise classification of material findings and rejected false positives, show the proposed overlay bindings separately from any deduplication option, and stop at every required approval. If overlap may remain, address whether the user wants it recorded. Do not install, write, edit, delete, or run commands.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)publish-widget", "(?i)AGENTS\\.md", "(?i)overlay", "(?i)(?:duplicate|overlap|adjacent)", "(?i)unrelated", "(?i)(?:separate|explicit)[^\\r\\n]{0,100}approval", "(?im)(?:do|would) you want[^\\r\\n?]{0,200}(?:(?:record|document)[^\\r\\n?]{0,80}(?:overlap|decision)|(?:overlap|decision)[^\\r\\n?]{0,80}(?:record|document))[^\\r\\n?]*\\?"],
+      "forbiddenResponsePatterns": ["(?i)(?:installed|vendored) the skill", "(?i)(?:edited|deleted|removed) (?:the )?(?:existing|local)"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": ["(?m)^git (?:add|commit|rm)(?: |$)", "(?m)^gh skill install(?: |$)"],
+      "requireUnchangedWorktree": true
+    }
+  ]
+}

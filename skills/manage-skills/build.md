@@ -21,9 +21,10 @@ equivalent; route the existing source through [install.md](install.md).
 
 ### 3. In the commons
 
-Do not build. Install it and add a thin overlay for project- or user-specific
-paths and cross-references. Choose scope and required hosts with
-[install.md](install.md). For a Copilot project copy:
+Do not build. Choose scope and required hosts with [install.md](install.md). For
+an existing-repository project copy, run [integrate.md](integrate.md) before
+writing so the thin overlay comes from repository evidence and semantic overlap
+is resolved. For a Copilot project copy:
 
 ```pwsh
 gh skill install JeremyKuhne/agent-skills <skill> --pin vX.Y.Z `

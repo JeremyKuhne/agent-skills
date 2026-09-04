@@ -5,6 +5,7 @@ param(
     [string[]] $ScenarioPath = @(
         'evals/scenarios/technical-writing.json',
         'evals/scenarios/create-pr.json',
+        'evals/scenarios/manage-skills.json',
         'evals/scenarios/publishing-workflows.json',
         'evals/scenarios/user-voice.json',
         'evals/scenarios/create-skill-repo.json'

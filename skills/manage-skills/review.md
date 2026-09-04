@@ -17,7 +17,7 @@ frontmatter, schema, whitespace, link, or diagnostic checks. Those belong to
 | Existing skill effectiveness | Missed/false invocation, agent stalls, excessive context, missing stop/recovery paths |
 | Vendored update | Behavioral drift, new dependencies, overlay compatibility, provenance/pin disposition |
 | Local core edit | Common vs local classification and upstream/overlay/pending-divergence outcome |
-| Installation/scope change | Canonical source, hosts, scope, copy/register mode, precedence, privacy |
+| Installation/scope change | Canonical source, hosts, scope, repository integration, copy/register mode, precedence, privacy |
 | Portfolio review | Trigger overlap, catalog disambiguation, duplicate skills, missing prerequisites |
 
 Review the smallest relevant surface: catalog row and neighboring trigger domains,
@@ -61,6 +61,9 @@ with the repository's eval harness:
 - **Installation:** target hosts and scope match the audience, duplicate names
   resolve to the intended source, and a project/user hit is not mistaken for the
   other scope.
+- **Project integration:** an existing-repository install found differently
+  named workflow overlap and gathered local bindings from skills, agent files,
+  documentation, and relevant implementation evidence before writing.
 
 Treat false positives and false negatives separately. Broader trigger wording is not
 automatically better: it may steal work from a more precise skill.
@@ -109,6 +112,9 @@ retain unrelated branches in working memory before choosing the first action.
 
 - Portable behavior belongs in the core; repository paths, commands, defaults, and
   local policy belong in the overlay.
+- Every new overlay binding traces to repository evidence gathered through
+  [integrate.md](integrate.md), and links to canonical local guidance instead of
+  copying rules that can drift.
 - Source ownership and runtime scope are orthogonal. A portable core may be a
   user install; a born-personal skill may have no repository home. Reclassifying
   scope does not reclassify ownership.
@@ -141,8 +147,13 @@ earlier review sections; do not accept them as style edits. Prose quality cannot
 make an incomplete or unsafe workflow correct.
 
 For an install/scope change, exercise one project request, one user request, one
-duplicate-name case, and one private or remote-session boundary. Use the host's
-skill listing to confirm the active source path and scope.
+duplicate-name case, one differently named semantic-overlap case, one
+documentation-derived binding, and one private or remote-session boundary. Use
+the host's skill listing to confirm the active source path and scope. Verify
+that consolidation changed no existing file without separate approval and that
+every rejected hit was labeled unrelated with a reason. When overlap could
+remain, verify that the same response asked a direct recording question and
+created no default persistent note.
 
 Treat an unresolved ownership/scope mismatch or duplicate name as a blocking
 finding, not residual risk. For a pin change, require a disposition for every
@@ -171,8 +182,9 @@ Separate:
 5. missing semantic tests or evidence.
 
 Then state the ownership disposition (core, overlay, upstream, or pending
-divergence), installation targets and scope when applicable, the
-`agent-files-review` result, commands run, and residual risk. If no issues remain,
-say so explicitly rather than manufacturing style churn: "Semantic review
-complete; no invocation, workflow, portability, or lifecycle defects found.
-Proceeding to agent-files-review."
+divergence), installation targets and scope when applicable, repository
+integration and separately approved deduplication dispositions, whether an
+overlap record was requested, the `agent-files-review` result, commands run, and
+residual risk. If no issues remain, say so explicitly rather than manufacturing
+style churn: "Semantic review complete; no invocation, workflow, portability,
+or lifecycle defects found. Proceeding to agent-files-review."

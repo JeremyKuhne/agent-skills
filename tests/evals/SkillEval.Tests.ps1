@@ -5,6 +5,7 @@ BeforeAll {
     $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path
     $script:ScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/create-pr.json'
     $script:TechnicalWritingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/technical-writing.json'
+    $script:ManageSkillsScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/manage-skills.json'
     $script:PublishingWorkflowScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/publishing-workflows.json'
     $script:UserVoiceScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/user-voice.json'
     $script:CreateSkillRepoScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/create-skill-repo.json'
@@ -15,10 +16,17 @@ Describe 'Skill evaluation scenario contract' {
     It 'loads uniquely named scenarios for each evaluated skill' {
         $createPrScenarios = @(Get-SkillEvalScenarios -Path $script:ScenarioPath)
         $technicalWritingScenarios = @(Get-SkillEvalScenarios -Path $script:TechnicalWritingScenarioPath)
+        $manageSkillsScenarios = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath)
         $publishingWorkflowScenarios = @(Get-SkillEvalScenarios -Path $script:PublishingWorkflowScenarioPath)
         $userVoiceScenarios = @(Get-SkillEvalScenarios -Path $script:UserVoiceScenarioPath)
         $createSkillRepoScenarios = @(Get-SkillEvalScenarios -Path $script:CreateSkillRepoScenarioPath)
-        $scenarios = @($createPrScenarios; $technicalWritingScenarios; $publishingWorkflowScenarios; $userVoiceScenarios; $createSkillRepoScenarios)
+        $scenarios = @(
+            $createPrScenarios
+            $technicalWritingScenarios
+            $manageSkillsScenarios
+            $publishingWorkflowScenarios
+            $userVoiceScenarios
+            $createSkillRepoScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -37,6 +45,11 @@ Describe 'Skill evaluation scenario contract' {
                 'technical-writing-artifact-repository-documentation')) {
             $technicalWritingScenarios.id | Should -Contain $artifactScenario
         }
+        $manageSkillsScenarios.Count | Should -Be 1
+        @($manageSkillsScenarios | Where-Object skill -ne 'manage-skills').Count |
+            Should -Be 0
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-project-integration-gate'
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
         $userVoiceScenarios.Count | Should -Be 8
@@ -49,7 +62,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'create-skill-repo-recommends-derived-location'
         $createSkillRepoScenarios.id |
             Should -Contain 'create-skill-repo-explains-upstream-order'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 43
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 44
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
@@ -62,6 +75,19 @@ Describe 'Skill evaluation scenario contract' {
 
         { Get-SkillEvalScenarios -Path $path } |
             Should -Throw '*lowercase kebab-case*'
+    }
+
+    It 'requires a direct question before recording retained overlap' {
+        $scenario = @(Get-SkillEvalScenarios `
+                -Path $script:ManageSkillsScenarioPath)[0]
+        $recordingPattern = @($scenario.requiredResponsePatterns |
+                Where-Object { $_ -match '\(\?:do\|would\) you want' })
+
+        $recordingPattern.Count | Should -Be 1
+        'Do you want to record this overlap or its disposition?' |
+            Should -Match $recordingPattern[0]
+        'If overlap remains, decide whether it should be recorded.' |
+            Should -Not -Match $recordingPattern[0]
     }
 
     It 'expands every tool permission into a separate CLI argument' {
@@ -143,6 +169,156 @@ Describe 'Skill evaluation scenario contract' {
             Should -BeFalse
     }
 
+    It 'stages a repository fixture as the committed workspace baseline' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath)[0]
+        $runDirectory = Join-Path $TestDrive 'workspace-fixture-context'
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+
+        $context = & $module {
+            param($selectedScenario, $repoRoot, $evalRoot, $runRoot)
+            New-SkillEvalContext `
+                -Scenario $selectedScenario `
+                -RepoRoot $repoRoot `
+                -EvalRoot $evalRoot `
+                -RunDirectory $runRoot
+        } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals') $runDirectory
+
+        $context.HasWorkspaceFixture | Should -BeTrue
+        Test-Path -LiteralPath (
+            Join-Path $context.Workspace '.agents/skills/publish-widget/SKILL.md') `
+            -PathType Leaf | Should -BeTrue
+        Test-Path -LiteralPath (
+            Join-Path $context.Workspace '.github/instructions/packaging.instructions.md') `
+            -PathType Leaf | Should -BeTrue
+        Get-Content -LiteralPath (Join-Path $context.Workspace 'README.md') -Raw |
+            Should -Match 'Widget repository'
+        @(& $context.GitPath -C $context.Workspace status --short).Count |
+            Should -Be 0
+    }
+
+    It 'normalizes fixture paths before revision hashing' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath)[0]
+        $module = Get-Module SkillEval
+
+        $revisions = & $module {
+            param($selectedScenario, $repoRoot, $evalRoot)
+            $metadata = @(Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evalRoot)[0]
+            $relativePath = 'fixtures/manage-skills-project-integration'
+            $pathRevision = Get-SkillEvalPathRevision `
+                -Root $evalRoot `
+                -RelativePath $relativePath
+            $manifest = "$relativePath`:$pathRevision"
+            $expectedRevision = [Convert]::ToHexString(
+                [System.Security.Cryptography.SHA256]::HashData(
+                    [System.Text.Encoding]::UTF8.GetBytes($manifest)))
+            @($metadata.FixtureRevision, $expectedRevision)
+        } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals')
+
+        $revisions[0] | Should -Be $revisions[1]
+    }
+
+    It 'rejects <PropertyName> outside fixtures before revision hashing' -ForEach @(
+        @{ PropertyName = 'overlayPath'; EscapingPath = '../README.md'; ExpectedType = 'file' }
+        @{ PropertyName = 'personalSkillFixturePath'; EscapingPath = '../skills/manage-skills'; ExpectedType = 'directory' }
+        @{ PropertyName = 'workspaceFixturePath'; EscapingPath = '../skills/manage-skills'; ExpectedType = 'directory' }
+    ) {
+        $scenario = [pscustomobject]@{
+            id = 'escaped-fixture'
+            skill = 'manage-skills'
+        }
+        $scenario | Add-Member `
+            -NotePropertyName $PropertyName `
+            -NotePropertyValue $EscapingPath
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evalRoot)
+                Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evalRoot
+            } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals')
+        } | Should -Throw "*must be a $ExpectedType under*fixtures*"
+    }
+
+    It 'rejects a nested Git <EntryType> in a workspace fixture' -ForEach @(
+        @{ EntryType = 'file' }
+        @{ EntryType = 'directory' }
+    ) {
+        $evalRoot = Join-Path $TestDrive "nested-git-$EntryType/evals"
+        $fixtureRoot = Join-Path $evalRoot 'fixtures/workspace/nested'
+        New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+        New-Item `
+            -ItemType $EntryType `
+            -Path (Join-Path $fixtureRoot '.git') `
+            -Force | Out-Null
+        $scenario = [pscustomobject]@{
+            profile = 'clean-feature'
+            skill = 'manage-skills'
+            workspaceFixturePath = 'fixtures/workspace'
+        }
+        $runDirectory = Join-Path $TestDrive "nested-git-$EntryType/run"
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evals)
+                Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evals
+            } $scenario $script:RepoRoot $evalRoot
+        } | Should -Throw '*contains Git metadata*nested*.git*'
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evals, $runRoot)
+                New-SkillEvalContext `
+                    -Scenario $selectedScenario `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evals `
+                    -RunDirectory $runRoot
+            } $scenario $script:RepoRoot $evalRoot $runDirectory
+        } | Should -Throw '*contains Git metadata*nested*.git*'
+        Test-Path -LiteralPath (Join-Path $runDirectory 'workspace/nested') |
+            Should -BeFalse
+    }
+
+    It 'rejects a reparse point beneath a fixture root' {
+        $evalRoot = Join-Path $TestDrive 'reparse-fixture/evals'
+        $workspaceRoot = Join-Path $evalRoot 'fixtures/workspace'
+        $externalRoot = Join-Path $TestDrive 'reparse-fixture/external'
+        New-Item -ItemType Directory -Path $workspaceRoot, $externalRoot -Force |
+            Out-Null
+        $linkType = if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }
+        New-Item `
+            -ItemType $linkType `
+            -Path (Join-Path $workspaceRoot 'external') `
+            -Target $externalRoot | Out-Null
+        $scenario = [pscustomobject]@{
+            id = 'reparse-fixture'
+            skill = 'manage-skills'
+            workspaceFixturePath = 'fixtures/workspace'
+        }
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evals)
+                Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evals
+            } $scenario $script:RepoRoot $evalRoot
+        } | Should -Throw '*contains a reparse point*external*'
+    }
+
     It 'rejects a personal fixture path outside the fixtures directory' {
         $scenario = [pscustomobject]@{
             profile = 'clean-feature'
@@ -165,6 +341,31 @@ Describe 'Skill evaluation scenario contract' {
         } | Should -Throw '*must be a directory under*fixtures*'
         Test-Path -LiteralPath (
             Join-Path $runDirectory 'copilot-home/skills/technical-writing') |
+            Should -BeFalse
+    }
+
+    It 'rejects a workspace fixture path outside the fixtures directory' {
+        $scenario = [pscustomobject]@{
+            profile = 'clean-feature'
+            skill = 'manage-skills'
+            workspaceFixturePath = '../skills/manage-skills'
+        }
+        $runDirectory = Join-Path $TestDrive 'escaped-workspace-fixture-context'
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evalRoot, $runRoot)
+                New-SkillEvalContext `
+                    -Scenario $selectedScenario `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evalRoot `
+                    -RunDirectory $runRoot
+            } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals') $runDirectory
+        } | Should -Throw '*must be a directory under*fixtures*'
+        Test-Path -LiteralPath (
+            Join-Path $runDirectory 'workspace/skills/manage-skills') |
             Should -BeFalse
     }
 }
@@ -530,15 +731,17 @@ Describe 'Skill evaluation worker allocation' {
         $allocation = @(Get-SkillEvalWorkerAllocation -Workload @(
                 [pscustomobject]@{ Name = 'technical-writing'; WorkItemCount = 51 }
                 [pscustomobject]@{ Name = 'create-pr'; WorkItemCount = 24 }
+                [pscustomobject]@{ Name = 'manage-skills'; WorkItemCount = 3 }
                 [pscustomobject]@{ Name = 'publishing-workflows'; WorkItemCount = 9 }
                 [pscustomobject]@{ Name = 'user-voice'; WorkItemCount = 24 }
                 [pscustomobject]@{ Name = 'create-skill-repo'; WorkItemCount = 21 }
-            ) -MaxConcurrency 8)
+            ) -MaxConcurrency 9)
 
-        ($allocation | Measure-Object -Property Workers -Sum).Sum | Should -Be 8
+        ($allocation | Measure-Object -Property Workers -Sum).Sum | Should -Be 9
         ($allocation | Where-Object Name -eq 'technical-writing').Workers | Should -Be 2
         ($allocation | Where-Object Name -eq 'create-pr').Workers | Should -Be 2
         ($allocation | Where-Object Name -eq 'user-voice').Workers | Should -Be 2
+        ($allocation | Where-Object Name -eq 'manage-skills').Workers | Should -Be 1
         ($allocation | Where-Object Name -eq 'publishing-workflows').Workers | Should -Be 1
         ($allocation | Where-Object Name -eq 'create-skill-repo').Workers | Should -Be 1
     }

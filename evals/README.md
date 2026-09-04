@@ -34,6 +34,13 @@ and a local-only stop.
 require both the owning workflow and `technical-writing` to invoke while
 forbidding the remote action.
 
+`scenarios/manage-skills.json` covers project integration before vendoring into
+an existing repository. Its synthetic workspace contains a differently named
+local skill, canonical and generated agent guidance, documentation-derived
+bindings, and an unrelated keyword match. The scenario requires a read-only
+classification, proposed overlay, separate deduplication approval, and the
+optional-record question.
+
 `scenarios/create-skill-repo.json` contains seven scenarios for the
 repository-local bootstrap workflow. They cover novice-oriented role
 explanations, a name-derived sibling destination, question-first handling of an
@@ -54,11 +61,13 @@ cases can require companion invocations. Near misses forbid the primary skill.
 A unique token exists only in each injected overlay, providing a separate
 assertion that the selected core loaded its repository binding.
 
-Each run creates a fresh git repository and a minimal copy of the plugin. Fake
-`git` and `gh` executables are first on the Copilot child process `PATH`; they
-return fixture state and log attempted commands without changing a remote. The
-runner also compares the real fixture `HEAD` and status before and after the run
-so an unexpected bypass is visible.
+Each run creates a fresh git repository and a minimal copy of the plugin. A
+scenario may seed repository content from a revision-tracked directory beneath
+`evals/fixtures/`; that content becomes part of the committed baseline before
+the model runs. Fake `git` and `gh` executables are first on the Copilot child
+process `PATH`; they return fixture state and log attempted commands without
+changing a remote. The runner also compares the real fixture `HEAD` and status
+before and after the run so an unexpected bypass is visible.
 
 The Copilot process retains only the credential needed to reach the model.
 `--secret-env-vars` strips known and secret-looking environment variables from
@@ -133,9 +142,10 @@ Select another scenario document explicitly:
   -ReportOnly
 ```
 
-The runner loads one scenario document per invocation. Run all five documents
-for a capability release that changes `technical-writing`, `user-voice`, its
-private-profile composition contract, or a publishing workflow.
+The runner loads one scenario document per invocation. Run all six documents
+for a capability release that changes skill management, `technical-writing`,
+`user-voice`, its private-profile composition contract, or a publishing
+workflow.
 
 For an incremental gate, use a prior summary to select only scenarios whose
 canonical definition, fixture closure, or candidate dependency closure changed:
