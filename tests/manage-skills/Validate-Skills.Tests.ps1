@@ -111,7 +111,7 @@ Describe 'Validate-Skills.ps1' {
             $dir = Join-Path $script:RepoRoot 'skills'
             $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
             $r.ExitCode | Should -Be 0
-            $r.Output | Should -Match 'All 23 skill'
+            $r.Output | Should -Match 'All 24 skill'
         }
     }
 

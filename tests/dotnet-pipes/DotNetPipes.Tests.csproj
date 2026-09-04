@@ -1,0 +1,16 @@
+<Project Sdk="MSTest.Sdk/4.2.3">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="anonymous-child/**/*.cs" />
+    <ProjectReference Include="anonymous-child/AnonymousPipeChild.csproj" />
+    <ProjectReference Include="../../skills/dotnet-pipes/assets/bounded-echo/BoundedPipeEcho.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -160,6 +160,22 @@ sibling files load only when referenced. When a skill grows past roughly 150
 lines, split the deep detail into sibling `*.md` files and leave the core as an
 overview that links to them.
 
+## Code examples
+
+Format source examples as production code rather than compressed tutorial code.
+C# examples use these repository conventions:
+
+- Use four spaces for each indentation level, never tabs, and use Allman-style
+  braces. Put one statement on each line and no more than one blank line between
+  members.
+- Use C# keywords for types and explicit local variable types instead of `var`.
+  Use target-typed `new` when the declared type makes the constructed type clear.
+- Keep lines under 120 characters when practical and never exceed 150. Do not
+  wrap a statement that fits clearly within 120 characters.
+- When a declaration or invocation must wrap, put every parameter or argument
+  on its own line, indented one level from the containing statement. Start
+  wrapped operators on continuation lines, except `=>`.
+
 ## Discovery
 
 Vendor-neutral [Agent Skills](https://agentskills.io/) location, discovered by

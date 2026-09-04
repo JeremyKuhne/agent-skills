@@ -96,6 +96,8 @@ opening or updating a pull request.
   parser beyond the subset its contract documents.
 - Keep prose concise and concrete. Do not use HTML entities. Match surrounding
   Markdown wrapping and keep wrapped list prose on its content indentation.
+- Format source examples as production code. Apply the language-specific
+  example conventions in [FORMAT.md](FORMAT.md).
 - Prefer relative Markdown links for repository files. Every relative link must
   resolve in the current branch and in any generated mirror or installed
   artifact that carries it.

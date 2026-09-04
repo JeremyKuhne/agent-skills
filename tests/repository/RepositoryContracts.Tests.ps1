@@ -392,6 +392,17 @@ Describe 'Workflow execution contracts' {
         $windowsJob | Should -Match "if: steps\.windows-filesystem\.outputs\.affected == 'true'"
     }
 
+    It 'builds and tests the dotnet-pipes sample on Windows and Linux' {
+        $pipesJob = Get-WorkflowJobBody $script:CiWorkflow 'dotnet-pipes'
+
+        $pipesJob | Should -Match ([regex]::Escape('runs-on: ${{ matrix.os }}'))
+        $pipesJob | Should -Match ([regex]::Escape('os: [ubuntu-24.04-arm, windows-latest]'))
+        $pipesJob | Should -Match ([regex]::Escape(
+            'dotnet test --project ./tests/dotnet-pipes/DotNetPipes.Tests.csproj'))
+        $pipesJob | Should -Match '--configuration Release'
+        $pipesJob | Should -Not -Match '--nologo'
+    }
+
     It 'exercises a pinned synthetic consumer on tag pushes' {
         $validateJob = Get-WorkflowJobBody $script:CiWorkflow 'validate'
 
