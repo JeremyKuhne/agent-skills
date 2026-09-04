@@ -88,12 +88,18 @@ public static class NamedPipeEchoServer
                     PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
-                if (!await TryAcceptClientAsync(server.WaitForConnectionAsync(stoppingToken)).ConfigureAwait(false))
+                while (!stoppingToken.IsCancellationRequested
+                    && await TryAcceptClientAsync(server.WaitForConnectionAsync(stoppingToken)).ConfigureAwait(false))
                 {
-                    continue;
+                    try
+                    {
+                        await HandleClientAsync(server, requestTimeout, idleTimeout, stoppingToken).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        server.Disconnect();
+                    }
                 }
-
-                await HandleClientAsync(server, requestTimeout, idleTimeout, stoppingToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

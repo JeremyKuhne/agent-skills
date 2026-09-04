@@ -16,7 +16,9 @@ finite timeout values.
 
 An access-denied accept drops the rejected peer and resumes listening. The
 worker count limits active handlers; on Unix, additional connections can enter
-the socket backlog and wait under their request deadline.
+the socket backlog and wait under their request deadline. Workers disconnect
+accepted clients and reuse their server instances, preserving the Unix listener
+between sessions.
 
 Build the sample:
 

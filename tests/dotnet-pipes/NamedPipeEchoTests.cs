@@ -311,6 +311,51 @@ public sealed class NamedPipeEchoTests
             () => clientTask.WaitAsync(TimeSpan.FromSeconds(2)));
     }
 
+    [TestMethod]
+    [Timeout(10_000)]
+    public async Task RunAsync_QueuedClientSurvivesPreviousDisconnect()
+    {
+        string pipeName = CreatePipeName();
+        using CancellationTokenSource testDeadline = new(TimeSpan.FromSeconds(8));
+        using CancellationTokenSource serverShutdown = new();
+        Task serverTask = NamedPipeEchoServer.RunAsync(pipeName, 1, serverShutdown.Token);
+
+        try
+        {
+            await using NamedPipeClientStream firstClient = new(
+                ".",
+                pipeName,
+                PipeDirection.InOut,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            byte[] firstResponse = await ExchangeFrameAsync(firstClient, 1, testDeadline.Token);
+            CollectionAssert.AreEqual(BitConverter.GetBytes(1), firstResponse);
+
+            await using NamedPipeClientStream queuedClient = new(
+                ".",
+                pipeName,
+                PipeDirection.InOut,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            Task connectTask = queuedClient.ConnectAsync(testDeadline.Token);
+            if (!OperatingSystem.IsWindows())
+            {
+                await connectTask;
+            }
+
+            await firstClient.DisposeAsync();
+            await connectTask;
+
+            byte[] expected = [0x10, 0x20];
+            await PipeFrames.WriteAsync(queuedClient, expected, testDeadline.Token);
+            byte[]? actual = await PipeFrames.ReadAsync(queuedClient, testDeadline.Token);
+            Assert.IsNotNull(actual);
+            CollectionAssert.AreEqual(expected, actual);
+        }
+        finally
+        {
+            await StopServerAsync(serverShutdown, serverTask);
+        }
+    }
+
     private static async Task AssertStalledClientDoesNotStopServerAsync(
         byte[] partialFrame,
         TimeSpan requestTimeout,
@@ -356,6 +401,7 @@ public sealed class NamedPipeEchoTests
     private static async Task AssertMalformedClientDoesNotStopServerAsync(byte[] malformedFrame)
     {
         string pipeName = CreatePipeName();
+        using CancellationTokenSource testDeadline = new(TimeSpan.FromSeconds(8));
         using CancellationTokenSource serverShutdown = new();
         Task serverTask = NamedPipeEchoServer.RunAsync(pipeName, 1, serverShutdown.Token);
 
@@ -367,8 +413,8 @@ public sealed class NamedPipeEchoTests
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly))
             {
-                await malformedClient.ConnectAsync(serverShutdown.Token);
-                await malformedClient.WriteAsync(malformedFrame, serverShutdown.Token);
+                await malformedClient.ConnectAsync(testDeadline.Token);
+                await malformedClient.WriteAsync(malformedFrame, testDeadline.Token);
             }
 
             byte[] expected = [0x10, 0x20];
@@ -376,7 +422,7 @@ public sealed class NamedPipeEchoTests
                 pipeName,
                 expected,
                 TimeSpan.FromSeconds(5),
-                CancellationToken.None);
+                testDeadline.Token);
 
             CollectionAssert.AreEqual(expected, actual);
         }

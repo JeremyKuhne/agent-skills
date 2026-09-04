@@ -18,6 +18,7 @@ The suite verifies:
   payload failure;
 - same-user round trips with every client held open until all replies arrive,
   plus a one-worker negative control that cannot satisfy the same workload;
+- clients queued in the Unix backlog survive the preceding client's disconnect;
 - normal server completion when pending accepts are canceled;
 - accept-completion classification using synthetic failures: an unauthorized
   peer is rejected while cancellation and unexpected I/O failures propagate;

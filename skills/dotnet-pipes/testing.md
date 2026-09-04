@@ -40,6 +40,8 @@ source instead of copying prose snippets into a separate test implementation.
 
 - server starts first and client starts first;
 - two clients race for one listener;
+- a client queued in the Unix listener backlog survives the preceding session's
+  disconnect;
 - configured peak clients connect while excess clients receive bounded overload
   behavior;
 - clients remain open until all replies arrive, so a single-worker negative

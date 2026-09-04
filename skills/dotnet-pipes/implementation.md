@@ -151,9 +151,11 @@ Preserve these properties when adapting it:
 4. An idle or request timeout closes the affected connection and releases its
    worker. It does not shut down the other clients.
 
-Host shutdown cancels pending accepts and connected I/O. Access-denied accepts
-and connection-level I/O failures close only the affected client. Its worker
-disposes the instance and resumes listening.
+Host shutdown cancels pending accepts and connected I/O. Once all I/O for an
+accepted client finishes, its worker calls `Disconnect()` and reuses the server
+instance. On Unix, disposing the last instance also closes the listener and can
+reset clients already queued in its backlog. Access-denied accepts instead
+dispose the rejected instance and resume listening.
 
 The worker count bounds active handlers, and the constructor uses the same
 value for its server-instance limit. Every server instance sharing a pipe name
@@ -238,8 +240,8 @@ anonymous-pipe operation supports cancellation on the target runtime.
 - Avoid `WaitForPipeDrain()` unless its Windows-only, synchronous, potentially
   unbounded peer-consumption semantics are explicitly required and isolated.
 - For reusable named-pipe server objects, finish all client I/O before
-  `Disconnect()` and the next accept. Creating a fresh server instance per
-  connection is often easier to own correctly.
+  `Disconnect()` and the next accept. Do not recreate the last server instance
+  during normal turnover if Unix clients can already be queued.
 
 ## 5. Validate immediately
 
