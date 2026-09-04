@@ -197,6 +197,128 @@ Describe 'Skill evaluation scenario contract' {
             Should -Be 0
     }
 
+    It 'normalizes fixture paths before revision hashing' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath)[0]
+        $module = Get-Module SkillEval
+
+        $revisions = & $module {
+            param($selectedScenario, $repoRoot, $evalRoot)
+            $metadata = @(Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evalRoot)[0]
+            $relativePath = 'fixtures/manage-skills-project-integration'
+            $pathRevision = Get-SkillEvalPathRevision `
+                -Root $evalRoot `
+                -RelativePath $relativePath
+            $manifest = "$relativePath`:$pathRevision"
+            $expectedRevision = [Convert]::ToHexString(
+                [System.Security.Cryptography.SHA256]::HashData(
+                    [System.Text.Encoding]::UTF8.GetBytes($manifest)))
+            @($metadata.FixtureRevision, $expectedRevision)
+        } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals')
+
+        $revisions[0] | Should -Be $revisions[1]
+    }
+
+    It 'rejects <PropertyName> outside fixtures before revision hashing' -ForEach @(
+        @{ PropertyName = 'overlayPath'; EscapingPath = '../README.md'; ExpectedType = 'file' }
+        @{ PropertyName = 'personalSkillFixturePath'; EscapingPath = '../skills/manage-skills'; ExpectedType = 'directory' }
+        @{ PropertyName = 'workspaceFixturePath'; EscapingPath = '../skills/manage-skills'; ExpectedType = 'directory' }
+    ) {
+        $scenario = [pscustomobject]@{
+            id = 'escaped-fixture'
+            skill = 'manage-skills'
+        }
+        $scenario | Add-Member `
+            -NotePropertyName $PropertyName `
+            -NotePropertyValue $EscapingPath
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evalRoot)
+                Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evalRoot
+            } $scenario $script:RepoRoot (Join-Path $script:RepoRoot 'evals')
+        } | Should -Throw "*must be a $ExpectedType under*fixtures*"
+    }
+
+    It 'rejects a nested Git <EntryType> in a workspace fixture' -ForEach @(
+        @{ EntryType = 'file' }
+        @{ EntryType = 'directory' }
+    ) {
+        $evalRoot = Join-Path $TestDrive "nested-git-$EntryType/evals"
+        $fixtureRoot = Join-Path $evalRoot 'fixtures/workspace/nested'
+        New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+        New-Item `
+            -ItemType $EntryType `
+            -Path (Join-Path $fixtureRoot '.git') `
+            -Force | Out-Null
+        $scenario = [pscustomobject]@{
+            profile = 'clean-feature'
+            skill = 'manage-skills'
+            workspaceFixturePath = 'fixtures/workspace'
+        }
+        $runDirectory = Join-Path $TestDrive "nested-git-$EntryType/run"
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evals)
+                Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evals
+            } $scenario $script:RepoRoot $evalRoot
+        } | Should -Throw '*contains Git metadata*nested*.git*'
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evals, $runRoot)
+                New-SkillEvalContext `
+                    -Scenario $selectedScenario `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evals `
+                    -RunDirectory $runRoot
+            } $scenario $script:RepoRoot $evalRoot $runDirectory
+        } | Should -Throw '*contains Git metadata*nested*.git*'
+        Test-Path -LiteralPath (Join-Path $runDirectory 'workspace/nested') |
+            Should -BeFalse
+    }
+
+    It 'rejects a reparse point beneath a fixture root' {
+        $evalRoot = Join-Path $TestDrive 'reparse-fixture/evals'
+        $workspaceRoot = Join-Path $evalRoot 'fixtures/workspace'
+        $externalRoot = Join-Path $TestDrive 'reparse-fixture/external'
+        New-Item -ItemType Directory -Path $workspaceRoot, $externalRoot -Force |
+            Out-Null
+        $linkType = if ($IsWindows) { 'Junction' } else { 'SymbolicLink' }
+        New-Item `
+            -ItemType $linkType `
+            -Path (Join-Path $workspaceRoot 'external') `
+            -Target $externalRoot | Out-Null
+        $scenario = [pscustomobject]@{
+            id = 'reparse-fixture'
+            skill = 'manage-skills'
+            workspaceFixturePath = 'fixtures/workspace'
+        }
+        $module = Get-Module SkillEval
+
+        {
+            & $module {
+                param($selectedScenario, $repoRoot, $evals)
+                Get-SkillEvalScenarioMetadata `
+                    -Scenarios @($selectedScenario) `
+                    -RepoRoot $repoRoot `
+                    -EvalRoot $evals
+            } $scenario $script:RepoRoot $evalRoot
+        } | Should -Throw '*contains a reparse point*external*'
+    }
+
     It 'rejects a personal fixture path outside the fixtures directory' {
         $scenario = [pscustomobject]@{
             profile = 'clean-feature'

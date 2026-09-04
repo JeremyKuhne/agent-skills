@@ -72,7 +72,7 @@ in a compact table:
 
 | Existing source | Classification | Proposed owner | Proposed action |
 | --- | --- | --- | --- |
-| `<path or section>` | binding/adjacent/duplicate/conflict/portable/unrelated | `<canonical surface or none>` | `<overlay, boundary, consolidate, upstream, exclude, or stop>` |
+| `<path or section>` | overlay binding/adjacent workflow/duplicate guidance/conflict/portable gap/unrelated | `<canonical surface or none>` | `<overlay, boundary, consolidate, upstream, exclude, or stop>` |
 
 Label every rejected keyword or concept match explicitly as **Unrelated** and
 state why it does not affect invocation, execution, or repository binding. Do
