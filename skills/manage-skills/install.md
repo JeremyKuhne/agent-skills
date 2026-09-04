@@ -77,9 +77,10 @@ overlap, duplicate guidance, and conflicts.
 
 A request to install the new core and overlay does not authorize changes to
 existing guidance. Present consolidation edits separately and obtain explicit
-approval before applying them. If consolidation is declined, ask whether the
-user wants to record the intentional overlap; create no persistent record by
-default. Stop when a conflict or ambiguous workflow owner remains unresolved.
+approval before applying them. Whenever overlap could remain after the current
+decision, ask directly in the same response whether the user wants to record the
+overlap or its disposition; create no persistent record by default. Stop when a
+conflict or ambiguous workflow owner remains unresolved.
 
 User-scope installation does not run this repository integration gate. An empty
 greenfield skill-repository scaffold generates its initial bindings through its

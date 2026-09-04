@@ -13,7 +13,7 @@
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?i)publish-widget", "(?i)AGENTS\\.md", "(?i)overlay", "(?i)(?:duplicate|overlap|adjacent)", "(?i)unrelated", "(?i)(?:separate|explicit)[^\\r\\n]{0,100}approval", "(?i)record[^\\r\\n]{0,100}(?:overlap|decision)"],
+      "requiredResponsePatterns": ["(?i)publish-widget", "(?i)AGENTS\\.md", "(?i)overlay", "(?i)(?:duplicate|overlap|adjacent)", "(?i)unrelated", "(?i)(?:separate|explicit)[^\\r\\n]{0,100}approval", "(?im)(?:do|would) you want[^\\r\\n?]{0,200}(?:(?:record|document)[^\\r\\n?]{0,80}(?:overlap|decision)|(?:overlap|decision)[^\\r\\n?]{0,80}(?:record|document))[^\\r\\n?]*\\?"],
       "forbiddenResponsePatterns": ["(?i)(?:installed|vendored) the skill", "(?i)(?:edited|deleted|removed) (?:the )?(?:existing|local)"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^git (?:add|commit|rm)(?: |$)", "(?m)^gh skill install(?: |$)"],

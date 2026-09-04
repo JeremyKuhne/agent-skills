@@ -67,11 +67,17 @@ second implementation.
 
 ## 4. Present the integration decision
 
-Before installation, report the material findings in a compact table:
+Before installation, report the material findings and rejected false positives
+in a compact table:
 
 | Existing source | Classification | Proposed owner | Proposed action |
 | --- | --- | --- | --- |
-| `<path or section>` | binding/adjacent/duplicate/conflict/portable | `<canonical surface>` | `<overlay, boundary, consolidate, upstream, or stop>` |
+| `<path or section>` | binding/adjacent/duplicate/conflict/portable/unrelated | `<canonical surface or none>` | `<overlay, boundary, consolidate, upstream, exclude, or stop>` |
+
+Label every rejected keyword or concept match explicitly as **Unrelated** and
+state why it does not affect invocation, execution, or repository binding. Do
+not rely on a "rejected false positives" heading or an explanation alone to
+communicate that classification.
 
 Then show the proposed overlay bindings and any deduplication changes separately.
 A request to install or vendor a skill authorizes the new pinned copy and its
@@ -79,12 +85,14 @@ overlay; it does not authorize editing or deleting existing skills,
 documentation, instructions, prompts, or agents. Obtain explicit approval for
 the named consolidation edits even when the duplication appears exact.
 
-If the user declines consolidation or chooses to keep an intentional overlap,
-ask whether they want to record that decision in an overlay boundary, catalog
-note, issue, or repository-specific ledger. Default to no persistent record. Do
-not create a report, ledger, issue, marker, or note unless the user requests it.
-The current interaction still reports the overlap and the resulting residual
-routing risk.
+Whenever duplicate, adjacent, or conflicting guidance could remain after the
+current decision, ask a direct question in this response: **"Do you want to
+record this overlap or its disposition?"** Offer an overlay boundary, catalog
+note, issue, or repository-specific ledger as examples, and state that the
+default is no persistent record. Do not defer the question until after the user
+chooses a canonical owner or declines consolidation. Do not create a report,
+ledger, issue, marker, or note unless the user requests it. The current
+interaction still reports the overlap and the resulting residual routing risk.
 
 Stop before writing when:
 

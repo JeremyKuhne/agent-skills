@@ -178,18 +178,23 @@ Expected:
   documentation, and only relevant implementation surfaces before writing.
 - Treats `AGENTS.md` and its generated mirror as one source of evidence.
 - Classifies the command and prerequisite as overlay bindings, the local skill
-  as duplicate or adjacent behavior, and the unrelated match as unrelated.
+  as duplicate or adjacent behavior, and every rejected match explicitly as
+  unrelated with a reason.
 - Presents proposed overlay bindings separately from consolidation edits.
 - Does not install while the workflow owner is ambiguous and does not edit or
   delete existing guidance without separate explicit approval.
-- If consolidation is declined, asks whether to record the retained overlap and
-  creates no persistent record by default.
+- In the same response, directly asks whether to record any overlap that could
+  remain after the decision and creates no persistent record by default.
 
 ## 13. Integration scope boundary
 
 Prompts:
 
+User-scope install:
+
 > Install this skill for my user profile across projects.
+
+Greenfield scaffold:
 
 > Scaffold an empty greenfield skill repository with this starter skill.
 

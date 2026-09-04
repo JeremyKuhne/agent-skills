@@ -151,7 +151,9 @@ duplicate-name case, one differently named semantic-overlap case, one
 documentation-derived binding, and one private or remote-session boundary. Use
 the host's skill listing to confirm the active source path and scope. Verify
 that consolidation changed no existing file without separate approval and that
-declined overlap produced a recording question but no default persistent note.
+every rejected hit was labeled unrelated with a reason. When overlap could
+remain, verify that the same response asked a direct recording question and
+created no default persistent note.
 
 Treat an unresolved ownership/scope mismatch or duplicate name as a blocking
 finding, not residual risk. For a pin change, require a disposition for every

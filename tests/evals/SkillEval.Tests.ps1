@@ -77,6 +77,19 @@ Describe 'Skill evaluation scenario contract' {
             Should -Throw '*lowercase kebab-case*'
     }
 
+    It 'requires a direct question before recording retained overlap' {
+        $scenario = @(Get-SkillEvalScenarios `
+                -Path $script:ManageSkillsScenarioPath)[0]
+        $recordingPattern = @($scenario.requiredResponsePatterns |
+                Where-Object { $_ -match '\(\?:do\|would\) you want' })
+
+        $recordingPattern.Count | Should -Be 1
+        'Do you want to record this overlap or its disposition?' |
+            Should -Match $recordingPattern[0]
+        'If overlap remains, decide whether it should be recorded.' |
+            Should -Not -Match $recordingPattern[0]
+    }
+
     It 'expands every tool permission into a separate CLI argument' {
         $scenario = [pscustomobject]@{
             prompt = 'Evaluate.'
