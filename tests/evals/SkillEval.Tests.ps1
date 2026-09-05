@@ -9,6 +9,7 @@ BeforeAll {
     $script:PublishingWorkflowScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/publishing-workflows.json'
     $script:UserVoiceScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/user-voice.json'
     $script:CreateSkillRepoScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/create-skill-repo.json'
+    $script:DotNetPipesScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-pipes.json'
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -20,13 +21,15 @@ Describe 'Skill evaluation scenario contract' {
         $publishingWorkflowScenarios = @(Get-SkillEvalScenarios -Path $script:PublishingWorkflowScenarioPath)
         $userVoiceScenarios = @(Get-SkillEvalScenarios -Path $script:UserVoiceScenarioPath)
         $createSkillRepoScenarios = @(Get-SkillEvalScenarios -Path $script:CreateSkillRepoScenarioPath)
+        $dotNetPipesScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetPipesScenarioPath)
         $scenarios = @(
             $createPrScenarios
             $technicalWritingScenarios
             $manageSkillsScenarios
             $publishingWorkflowScenarios
             $userVoiceScenarios
-            $createSkillRepoScenarios)
+            $createSkillRepoScenarios
+            $dotNetPipesScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -62,7 +65,16 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'create-skill-repo-recommends-derived-location'
         $createSkillRepoScenarios.id |
             Should -Contain 'create-skill-repo-explains-upstream-order'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 44
+        $dotNetPipesScenarios.Count | Should -Be 6
+        @($dotNetPipesScenarios | Where-Object skill -ne 'dotnet-pipes').Count |
+            Should -Be 0
+        $dotNetPipesScenarios.id |
+            Should -Contain 'dotnet-pipes-audit-framing-and-lifetime'
+        $dotNetPipesScenarios.id |
+            Should -Contain 'dotnet-pipes-troubleshoot-single-client-server'
+        $dotNetPipesScenarios.id |
+            Should -Contain 'dotnet-pipes-routing-pipelines-near-miss'
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 50
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 

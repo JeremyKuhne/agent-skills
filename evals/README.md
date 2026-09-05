@@ -55,6 +55,13 @@ source access, a manual copy/paste data handoff, public-destination refusal,
 untrusted report rejection, best-self tone filtering, third-party impersonation
 refusal, separate private GitHub approval gates, and non-destructive migration.
 
+`scenarios/dotnet-pipes.json` is an opt-in six-case domain suite. It covers a
+bounded named-pipe implementation, anonymous-pipe selection for a parent-child
+channel, Windows service ACL design without invented managed APIs, pipe-specific
+audit findings, listener-starvation troubleshooting, and a `System.IO.Pipelines`
+near miss. It is not part of the default release matrix in
+`Invoke-SkillEvalMatrix.ps1`.
+
 Copilot CLI 1.0.63 emits structured JSONL when the model invokes the `skill`
 tool. Positive cases require their primary skill invocation, and cross-skill
 cases can require companion invocations. Near misses forbid the primary skill.
