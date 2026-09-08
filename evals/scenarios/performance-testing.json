@@ -12,7 +12,7 @@
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?i)(?:valid|acceptable|usable)[^\r\n]{0,80}(?:measurement|evidence|shape)", "(?i)fresh[- ]process", "(?i)(?:phase|operation)[^\r\n]{0,80}(?:count|denominator|reconcile)", "(?i)(?:generated binary|debug symbol|subject identity)", "(?i)(?:application|OS|file)[- ]cache", "(?i)(?:cannot|does not|not enough|insufficient)[^\r\n]{0,100}cold"],
+      "requiredResponsePatterns": ["(?i)(?:valid|acceptable|usable)[^\r\n]{0,80}(?:measurement|evidence|shape)", "(?i)fresh[- ]process", "(?i)(?:phase|operation)[^\r\n]{0,80}(?:count|denominator|reconcile)", "(?i)(?:generated binary|debug[- ]symbols?|subject identity)", "(?i)(?:application|OS|file)[- ]cache", "(?i)(?:cannot|does not|not enough|insufficient)[^\r\n]{0,100}cold"],
       "forbiddenResponsePatterns": ["(?i)(?:must|required to) use BenchmarkDotNet", "(?i)(?:both|two) TFMs", "(?i)fresh[- ]process (?:therefore|means|is) (?:a )?(?:fully )?cold"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
