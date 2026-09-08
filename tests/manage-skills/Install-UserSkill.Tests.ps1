@@ -26,9 +26,156 @@ BeforeAll {
             [System.Text.UTF8Encoding]::new($false))
         return $skillRoot
     }
+
+    function Get-TestEnvironmentSnapshot {
+        param([Parameter(Mandatory)] [string[]] $Name)
+
+        $snapshot = @{}
+        foreach ($item in $Name) {
+            $snapshot[$item] = [pscustomobject]@{
+                Exists = Test-Path -LiteralPath "Env:$item"
+                Value = [Environment]::GetEnvironmentVariable(
+                    $item,
+                    [EnvironmentVariableTarget]::Process)
+            }
+        }
+        return $snapshot
+    }
+
+    function Restore-TestEnvironment {
+        param([Parameter(Mandatory)] [hashtable] $Snapshot)
+
+        foreach ($item in $Snapshot.GetEnumerator()) {
+            if ($item.Value.Exists) {
+                [Environment]::SetEnvironmentVariable(
+                    $item.Key,
+                    $item.Value.Value,
+                    [EnvironmentVariableTarget]::Process)
+            }
+            else {
+                Remove-Item -LiteralPath "Env:$($item.Key)" `
+                    -Force `
+                    -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    function New-GitInstallerSkill {
+        param(
+            [Parameter(Mandatory)] [string] $CaseName,
+            [AllowEmptyString()] [string] $RemoteUrl = ''
+        )
+
+        $source = New-InstallerSkill -CaseName $CaseName
+        $repository = Split-Path -Parent $source
+        & git -C $repository init --quiet
+        if (-not [string]::IsNullOrWhiteSpace($RemoteUrl)) {
+            & git -C $repository remote add origin $RemoteUrl
+        }
+        return $source
+    }
+
+    function Set-InstallerGhFixture {
+        param(
+            [AllowNull()] [object] $Output,
+            [int] $ExitCode = 0
+        )
+
+        $global:InstallerGhOutput = $Output
+        $global:InstallerGhExitCode = $ExitCode
+        $global:InstallerGhArguments = $null
+        Set-Item -Path Function:\global:gh -Value {
+            $global:InstallerGhArguments = @($args)
+            Write-Output $global:InstallerGhOutput
+            $global:LASTEXITCODE = $global:InstallerGhExitCode
+        }
+    }
+
+    function Remove-InstallerGhFixture {
+        Remove-Item Function:\gh -Force -ErrorAction SilentlyContinue
+        Remove-Variable InstallerGhOutput -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable InstallerGhExitCode -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable InstallerGhArguments -Scope Global -ErrorAction SilentlyContinue
+    }
+
+    $tokens = $null
+    $parseErrors = $null
+    $installerAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $script:InstallerPath,
+        [ref] $tokens,
+        [ref] $parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        throw "Installer test harness could not parse '$($script:InstallerPath)'."
+    }
+
+    $functionAsts = @($installerAst.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
+            }, $true))
+    foreach ($name in @('Invoke-GitInspection', 'Get-GitRepositoryInspection')) {
+        $matchingFunctions = @($functionAsts | Where-Object Name -EQ $name)
+        if ($matchingFunctions.Count -ne 1) {
+            throw "Installer test harness expected one '$name' declaration."
+        }
+        Set-Item -Path "Function:\$name" -Value $matchingFunctions[0].Body.GetScriptBlock()
+    }
+}
+
+Describe 'Get-GitRepositoryInspection' {
+    It 'accepts Git nonrepository diagnostic: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'ordinary parent search'
+            Diagnostic = 'fatal: not a git repository (or any of the parent directories): .git'
+        }
+        @{
+            CaseName = 'mount boundary with LF'
+            Diagnostic = "fatal: not a git repository (or any parent up to mount point /mount)`nStopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)."
+        }
+        @{
+            CaseName = 'mount boundary with CRLF'
+            Diagnostic = "fatal: not a git repository (or any parent up to mount point /mount)`r`nStopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set)."
+        }
+    ) {
+        Mock Invoke-GitInspection {
+            [pscustomobject]@{
+                ExitCode = 128
+                StandardOutput = ''
+                StandardError = $Diagnostic
+            }
+        }
+
+        $inspection = Get-GitRepositoryInspection `
+            -Path $TestDrive `
+            -GitPath 'synthetic-git' `
+            -BoundaryName 'source'
+
+        $inspection.IsRepository | Should -BeFalse
+        $inspection.Root | Should -BeNullOrEmpty
+    }
+
+    It 'rejects an unrelated exit 128 Git diagnostic' {
+        Mock Invoke-GitInspection {
+            [pscustomobject]@{
+                ExitCode = 128
+                StandardOutput = ''
+                StandardError = "fatal: detected dubious ownership in repository at '/mount/source'"
+            }
+        }
+
+        {
+            Get-GitRepositoryInspection `
+                -Path $TestDrive `
+                -GitPath 'synthetic-git' `
+                -BoundaryName 'source'
+        } | Should -Throw '*dubious ownership*'
+    }
 }
 
 Describe 'Install-UserSkill.ps1' {
+    AfterEach {
+        Remove-InstallerGhFixture
+    }
+
     It 'copies the complete skill into the Copilot user root' {
         $source = New-InstallerSkill -CaseName 'copy'
         $targetHome = Join-Path $TestDrive 'copy-home'
@@ -79,6 +226,194 @@ Describe 'Install-UserSkill.ps1' {
         @(Get-ChildItem $destinationRoot -Force | Where-Object {
                 $_.Name -match '^\.sample-skill\.install-|^sample-skill\.backup-'
             }).Count | Should -Be 0
+    }
+
+    It 'rejects a Git repository at the exact destination without replacing it' {
+        $source = New-InstallerSkill -CaseName 'destination-repository'
+        $targetHome = Join-Path $TestDrive 'destination-repository-home'
+        $destinationRoot = Join-Path $targetHome '.copilot/skills'
+        $destination = Join-Path $destinationRoot 'sample-skill'
+        New-Item -ItemType Directory -Path $destination -Force | Out-Null
+        [System.IO.File]::WriteAllText(
+            (Join-Path $destination 'original.txt'),
+            'preserve me',
+            [System.Text.UTF8Encoding]::new($false))
+        & git -C $destination init --quiet
+
+        {
+            & $script:InstallerPath `
+                -SourceSkillPath $source `
+                -ProfileRoot $targetHome `
+                -Private `
+                -Force
+        } | Should -Throw '*destination is inside a Git worktree*'
+
+        Test-Path (Join-Path $destination '.git') -PathType Container |
+            Should -BeTrue
+        [System.IO.File]::ReadAllText((Join-Path $destination 'original.txt')) |
+            Should -Be 'preserve me'
+        @(Get-ChildItem $destinationRoot -Force | Where-Object {
+                $_.Name -match '^\.sample-skill\.install-|^sample-skill\.backup-'
+            }).Count | Should -Be 0
+    }
+
+    It 'rejects a file at the exact destination without replacing it' {
+        $source = New-InstallerSkill -CaseName 'destination-file'
+        $targetHome = Join-Path $TestDrive 'destination-file-home'
+        $destinationRoot = Join-Path $targetHome '.copilot/skills'
+        $destination = Join-Path $destinationRoot 'sample-skill'
+        New-Item -ItemType Directory -Path $destinationRoot -Force | Out-Null
+        [System.IO.File]::WriteAllText(
+            $destination,
+            'preserve destination file',
+            [System.Text.UTF8Encoding]::new($false))
+
+        {
+            & $script:InstallerPath `
+                -SourceSkillPath $source `
+                -ProfileRoot $targetHome `
+                -Force
+        } | Should -Throw '*destination path is blocked by a file*'
+
+        Test-Path $destination -PathType Leaf | Should -BeTrue
+        [System.IO.File]::ReadAllText($destination) |
+            Should -Be 'preserve destination file'
+        @(Get-ChildItem $destinationRoot -Force | Where-Object {
+                $_.Name -match '^\.sample-skill\.install-|^sample-skill\.backup-'
+            }).Count | Should -Be 0
+    }
+
+    It 'fails closed when source Git inspection is denied' {
+        $source = New-InstallerSkill -CaseName 'source-inspection-error'
+        $repository = Split-Path -Parent $source
+        & git -C $repository init --quiet
+        $targetHome = Join-Path $TestDrive 'source-inspection-error-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        $environment = Get-TestEnvironmentSnapshot -Name @(
+            'GIT_TEST_ASSUME_DIFFERENT_OWNER',
+            'GIT_CONFIG_GLOBAL',
+            'GIT_CONFIG_NOSYSTEM')
+
+        try {
+            [Environment]::SetEnvironmentVariable(
+                'GIT_TEST_ASSUME_DIFFERENT_OWNER',
+                '1',
+                [EnvironmentVariableTarget]::Process)
+            [Environment]::SetEnvironmentVariable(
+                'GIT_CONFIG_GLOBAL',
+                (Join-Path $TestDrive 'source-inspection-error.gitconfig'),
+                [EnvironmentVariableTarget]::Process)
+            [Environment]::SetEnvironmentVariable(
+                'GIT_CONFIG_NOSYSTEM',
+                '1',
+                [EnvironmentVariableTarget]::Process)
+
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw '*could not inspect the source repository boundary*dubious ownership*'
+        }
+        finally {
+            Restore-TestEnvironment -Snapshot $environment
+        }
+
+        Test-Path (Join-Path $targetHome '.copilot') | Should -BeFalse
+    }
+
+    It 'fails closed when destination Git inspection is denied' {
+        $source = New-InstallerSkill -CaseName 'destination-inspection-error'
+        $targetHome = Join-Path $TestDrive 'destination-inspection-error-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        & git -C $targetHome init --quiet
+        $environment = Get-TestEnvironmentSnapshot -Name @(
+            'GIT_TEST_ASSUME_DIFFERENT_OWNER',
+            'GIT_CONFIG_GLOBAL',
+            'GIT_CONFIG_NOSYSTEM')
+
+        try {
+            [Environment]::SetEnvironmentVariable(
+                'GIT_TEST_ASSUME_DIFFERENT_OWNER',
+                '1',
+                [EnvironmentVariableTarget]::Process)
+            [Environment]::SetEnvironmentVariable(
+                'GIT_CONFIG_GLOBAL',
+                (Join-Path $TestDrive 'destination-inspection-error.gitconfig'),
+                [EnvironmentVariableTarget]::Process)
+            [Environment]::SetEnvironmentVariable(
+                'GIT_CONFIG_NOSYSTEM',
+                '1',
+                [EnvironmentVariableTarget]::Process)
+
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -WhatIf
+            } | Should -Throw '*could not inspect the destination repository boundary*dubious ownership*'
+        }
+        finally {
+            Restore-TestEnvironment -Snapshot $environment
+        }
+
+        Test-Path (Join-Path $targetHome '.copilot') | Should -BeFalse
+    }
+
+    It 'accepts a private local source after Git reports no repository' {
+        $source = New-InstallerSkill -CaseName 'local-private-source'
+        $targetHome = Join-Path $TestDrive 'local-private-source-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+
+        {
+            & $script:InstallerPath `
+                -SourceSkillPath $source `
+                -ProfileRoot $targetHome `
+                -Private `
+                -WhatIf
+        } | Should -Not -Throw
+
+        Test-Path (Join-Path $targetHome '.copilot') | Should -BeFalse
+    }
+
+    It 'ignores ambient Git repository selectors during boundary inspection' {
+        $source = New-InstallerSkill -CaseName 'ambient-git-source'
+        $unrelatedRepository = Join-Path $TestDrive 'ambient-git-repository'
+        New-Item -ItemType Directory -Path $unrelatedRepository | Out-Null
+        & git -C $unrelatedRepository init --quiet
+        & git -C $unrelatedRepository remote add origin `
+            https://github.com/example/unrelated.git
+        $targetHome = Join-Path $TestDrive 'ambient-git-source-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        $environment = Get-TestEnvironmentSnapshot -Name @(
+            'GIT_DIR',
+            'GIT_WORK_TREE')
+        Set-InstallerGhFixture -Output '{"nameWithOwner":"example/unrelated","visibility":"PRIVATE"}'
+
+        try {
+            [Environment]::SetEnvironmentVariable(
+                'GIT_DIR',
+                (Join-Path $unrelatedRepository '.git'),
+                [EnvironmentVariableTarget]::Process)
+            [Environment]::SetEnvironmentVariable(
+                'GIT_WORK_TREE',
+                $unrelatedRepository,
+                [EnvironmentVariableTarget]::Process)
+
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Not -Throw
+            $global:InstallerGhArguments | Should -BeNullOrEmpty
+        }
+        finally {
+            Remove-InstallerGhFixture
+            Restore-TestEnvironment -Snapshot $environment
+        }
     }
 
     It 'deduplicates host aliases that use the neutral agents root' {
@@ -133,31 +468,257 @@ Describe 'Install-UserSkill.ps1' {
         }
     }
 
-    It 'rejects a public Git repository in private mode' {
-        $source = New-InstallerSkill -CaseName 'public-source'
-        $repository = Split-Path -Parent $source
-        & git -C $repository init --quiet
-        & git -C $repository remote add origin https://github.com/example/public.git
-        $global:LASTEXITCODE = 0
-
-        function global:gh {
-            'PUBLIC'
-            $global:LASTEXITCODE = 0
-        }
+    It 'rejects a private source under the <Variable> sync root' -ForEach @(
+        @{ Variable = 'OneDrive' }
+        @{ Variable = 'OneDriveConsumer' }
+        @{ Variable = 'OneDriveCommercial' }
+        @{ Variable = 'Dropbox' }
+        @{ Variable = 'GoogleDrive' }
+    ) {
+        $source = New-InstallerSkill -CaseName "source-sync-$Variable"
+        $syncRoot = Split-Path -Parent $source
+        $targetHome = Join-Path $TestDrive "source-sync-$Variable-home"
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        $syncVariables = @(
+            'OneDrive',
+            'OneDriveConsumer',
+            'OneDriveCommercial',
+            'Dropbox',
+            'GoogleDrive')
+        $environment = Get-TestEnvironmentSnapshot -Name $syncVariables
 
         try {
-            $targetHome = Join-Path $TestDrive 'public-source-home'
-            New-Item -ItemType Directory -Path $targetHome | Out-Null
+            foreach ($name in $syncVariables) {
+                [Environment]::SetEnvironmentVariable(
+                    $name,
+                    $null,
+                    [EnvironmentVariableTarget]::Process)
+            }
+            [Environment]::SetEnvironmentVariable(
+                $Variable,
+                $syncRoot,
+                [EnvironmentVariableTarget]::Process)
+
             {
                 & $script:InstallerPath `
                     -SourceSkillPath $source `
                     -ProfileRoot $targetHome `
                     -Private `
                     -WhatIf
-            } | Should -Throw '*PUBLIC repository*'
+            } | Should -Throw '*source is under a synchronized folder*'
         }
         finally {
-            Remove-Item Function:\gh -Force -ErrorAction SilentlyContinue
+            Restore-TestEnvironment -Snapshot $environment
+        }
+
+        Test-Path (Join-Path $targetHome '.copilot') | Should -BeFalse
+    }
+
+    It 'rejects a skill collection without a top-level SKILL.md' {
+        $nestedSkill = New-InstallerSkill -CaseName 'skill-collection'
+        $collection = Split-Path -Parent $nestedSkill
+        $targetHome = Join-Path $TestDrive 'skill-collection-home'
+        $destination = Join-Path $targetHome '.copilot/skills/skill-collection'
+        New-Item -ItemType Directory -Path $destination -Force | Out-Null
+        [System.IO.File]::WriteAllText(
+            (Join-Path $destination 'original.txt'),
+            'preserve collection target',
+            [System.Text.UTF8Encoding]::new($false))
+
+        {
+            & $script:InstallerPath `
+                -SourceSkillPath $collection `
+                -ProfileRoot $targetHome `
+                -Force
+        } | Should -Throw '*must contain a top-level SKILL.md*'
+
+        [System.IO.File]::ReadAllText((Join-Path $destination 'original.txt')) |
+            Should -Be 'preserve collection target'
+        Test-Path (Join-Path $destination 'sample-skill') | Should -BeFalse
+    }
+
+    It 'passes the explicit github.com source despite unrelated repository and host overrides' {
+        $source = New-GitInstallerSkill `
+            -CaseName 'private-source' `
+            -RemoteUrl 'https://github.com/example/private-source.git'
+        $targetHome = Join-Path $TestDrive 'private-source-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        $environment = Get-TestEnvironmentSnapshot -Name @('GH_REPO', 'GH_HOST')
+        Set-InstallerGhFixture -Output '{"nameWithOwner":"example/private-source","visibility":"PRIVATE"}'
+        try {
+            [Environment]::SetEnvironmentVariable(
+                'GH_REPO',
+                'example/unrelated-private',
+                [EnvironmentVariableTarget]::Process)
+            [Environment]::SetEnvironmentVariable(
+                'GH_HOST',
+                'github.enterprise.invalid',
+                [EnvironmentVariableTarget]::Process)
+
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Not -Throw
+
+            $global:InstallerGhArguments -join ' ' |
+                Should -Be 'repo view https://github.com/example/private-source --json nameWithOwner,visibility'
+        }
+        finally {
+            Remove-InstallerGhFixture
+            Restore-TestEnvironment -Snapshot $environment
+        }
+    }
+
+    It 'rejects a <Visibility> Git repository in private mode' -ForEach @(
+        @{ Visibility = 'PUBLIC' }
+        @{ Visibility = 'INTERNAL' }
+    ) {
+        $source = New-GitInstallerSkill `
+            -CaseName "non-private-$($Visibility.ToLowerInvariant())" `
+            -RemoteUrl 'https://github.com/example/non-private.git'
+        $targetHome = Join-Path $TestDrive "non-private-$($Visibility.ToLowerInvariant())-home"
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        Set-InstallerGhFixture -Output (
+            "{`"nameWithOwner`":`"example/non-private`",`"visibility`":`"$Visibility`"}")
+
+        try {
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw "*$Visibility repository*"
+        }
+        finally {
+            Remove-InstallerGhFixture
+        }
+    }
+
+    It 'rejects repository metadata for a different source identity' {
+        $source = New-GitInstallerSkill `
+            -CaseName 'mismatched-source' `
+            -RemoteUrl 'https://github.com/example/reviewed-source.git'
+        $targetHome = Join-Path $TestDrive 'mismatched-source-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        Set-InstallerGhFixture -Output '{"nameWithOwner":"example/unrelated-private","visibility":"PRIVATE"}'
+
+        try {
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw '*identity*does not match*reviewed source*'
+        }
+        finally {
+            Remove-InstallerGhFixture
+        }
+    }
+
+    It 'rejects failed or malformed GitHub repository metadata: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'command failure'
+            Output = 'synthetic gh failure'
+            ExitCode = 1
+            Expected = '*visibility could not be verified*'
+        }
+        @{
+            CaseName = 'malformed JSON'
+            Output = 'not-json'
+            ExitCode = 0
+            Expected = '*malformed repository metadata*'
+        }
+    ) {
+        $source = New-GitInstallerSkill `
+            -CaseName "metadata-$($CaseName -replace ' ', '-')" `
+            -RemoteUrl 'https://github.com/example/metadata-source.git'
+        $targetHome = Join-Path $TestDrive "metadata-$($CaseName -replace ' ', '-')-home"
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        Set-InstallerGhFixture -Output $Output -ExitCode $ExitCode
+
+        try {
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw $Expected
+        }
+        finally {
+            Remove-InstallerGhFixture
+        }
+    }
+
+    It 'rejects a private Git source with no remote' {
+        $source = New-GitInstallerSkill -CaseName 'missing-remote'
+        $targetHome = Join-Path $TestDrive 'missing-remote-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        Set-InstallerGhFixture -Output '{"nameWithOwner":"example/source","visibility":"PRIVATE"}'
+
+        try {
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw '*does not have a remote*'
+        }
+        finally {
+            Remove-InstallerGhFixture
+        }
+    }
+
+    It 'rejects a private Git source with an unsupported remote host' {
+        $source = New-GitInstallerSkill `
+            -CaseName 'unsupported-remote' `
+            -RemoteUrl 'https://gitlab.example.com/example/source.git'
+        $targetHome = Join-Path $TestDrive 'unsupported-remote-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        Set-InstallerGhFixture -Output '{"nameWithOwner":"example/source","visibility":"PRIVATE"}'
+
+        try {
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw '*unsupported remote*'
+        }
+        finally {
+            Remove-InstallerGhFixture
+        }
+    }
+
+    It 'rejects a private Git source with ambiguous remote identities' {
+        $source = New-GitInstallerSkill `
+            -CaseName 'ambiguous-remotes' `
+            -RemoteUrl 'https://github.com/example/source-one.git'
+        $repository = Split-Path -Parent $source
+        & git -C $repository remote add upstream `
+            https://github.com/example/source-two.git
+        $targetHome = Join-Path $TestDrive 'ambiguous-remotes-home'
+        New-Item -ItemType Directory -Path $targetHome | Out-Null
+        Set-InstallerGhFixture -Output '{"nameWithOwner":"example/source-one","visibility":"PRIVATE"}'
+
+        try {
+            {
+                & $script:InstallerPath `
+                    -SourceSkillPath $source `
+                    -ProfileRoot $targetHome `
+                    -Private `
+                    -WhatIf
+            } | Should -Throw '*ambiguous GitHub remote identities*'
+        }
+        finally {
+            Remove-InstallerGhFixture
         }
     }
 

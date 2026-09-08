@@ -7,7 +7,9 @@ updating a skill.
 This page reviews whether a skill will invoke appropriately and lead an autonomous
 agent through a complete, maintainable workflow. It deliberately does **not** repeat
 frontmatter, schema, whitespace, link, or diagnostic checks. Those belong to
-`agent-files-review`, which runs after this review.
+`agent-files-review` for repository-backed sources. A repository-free personal
+source instead uses the bundled normal validator, host diagnostics, and direct
+resource/link inspection after this review.
 
 ## Choose the review scope
 
@@ -121,8 +123,9 @@ retain unrelated branches in working memory before choosing the first action.
 - A new skill is born-shared when another repository would want the core unchanged;
   otherwise it is born-local.
 - A vendored core edit ends upstreamed, moved to the overlay, or recorded as a
-  pending-upstream divergence with its files, base pin, reason, and upstream status.
-  Never accept unexplained drift.
+  pending-upstream divergence with its base pin, reason, upstream status, and
+  exact patch or expected hash for every changed, added, or deleted path. Never
+  accept unexplained drift.
 - Re-review overlays when a core pin changes; a syntactically valid overlay can bind
   obsolete assumptions.
 - Public-source imports pass the security gate in [build.md](build.md), retain an
@@ -136,9 +139,11 @@ retain unrelated branches in working memory before choosing the first action.
 
 Require the narrowest semantic check that can fail the changed behavior: routing
 examples, eval tasks, fake adapters, script contract tests, or a representative dry
-run. Then invoke `agent-files-review` for file-level validation and run the consuming
-repository's validator, link checker, markdown checks, generated-catalog checks, and
-upstream mirror check as applicable.
+run. For a repository-backed source, invoke `agent-files-review` and run the owning
+repository's applicable validator, link, Markdown, catalog, and mirror checks. For a
+repository-free personal source, run the bundled validator without commons strict
+mode, target-host diagnostics, and direct resource/link inspection. Report a
+required unavailable gate and stop rather than inventing repository infrastructure.
 
 After semantic findings are resolved, run `technical-writing` in review mode on
 the changed skill prose. Treat changed triggers, requirement strength, commands,
@@ -161,9 +166,14 @@ overlay and pending divergence at the candidate pin.
 
 For a changed vendored skill, verify both sides:
 
-- local normalized mirror comparison against the provenance pin makes
-  additional drift visible without treating generated provenance or YAML
-  serialization as a core edit;
+- a complete raw local-to-pin path diff surfaces changed, added, and deleted
+  paths before normalization or classification;
+- a clean normalized comparison treats only verified generated provenance,
+  YAML serialization, line endings, and the frontmatter boundary as installer
+  differences;
+- a reconciled divergence record matches the current base pin and derives the
+  complete expected artifact from exact patches or hashes without excluding a
+  whole file; and
 - upstream comparison shows whether each recorded divergence remains at the candidate
   pin, and records are removed once that artifact contains the change.
 

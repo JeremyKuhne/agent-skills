@@ -9,7 +9,13 @@ directions. The second - pushing a local improvement - is where the
 First identify the canonical source and every installed project/user target. Do
 not edit a runtime copy merely because it is the first path found.
 
-When a skill has moved upstream, check before changing files:
+### Separate local drift from upstream discovery
+
+`gh skill update` compares the **recorded** local provenance tree SHA in
+`SKILL.md` with the remote repository. It does not hash the installed files or
+prove that local content still matches the recorded pin. Pinned skills are
+skipped unless `--unpin` is supplied. Treat this command as upstream discovery,
+not as a local-drift check:
 
 ```pwsh
 # One skill
@@ -19,46 +25,107 @@ gh skill update <skill> --dry-run
 gh skill update --all --dry-run
 ```
 
-`gh skill update` compares the local copy's provenance tree SHA against upstream
-and scans known host directories at project and user scope. Review each target
-like a dependency bump: read what changed, run the applicable agent-file checks,
-then re-pin when satisfied. Update an overlay's `core-pin` and re-review its
-bindings in the same change. A skill pinned with `--pin` is skipped; reinstall
-it with a new pin deliberately.
+Run the independent local-to-recorded-pin gate below before this command, even
+when the skill is pinned or the remote tree has not moved. Do not pass `--unpin`
+or change an immutable pin merely to inspect state; either action needs the same
+approval as the resulting update. Review an actual candidate like a dependency
+bump, then re-pin deliberately after every overlay and divergence has a
+disposition.
+
+### Pass the local-to-recorded-pin gate
+
+Use the installed provenance to obtain the exact source artifact at its recorded
+repository, path, and immutable revision. Use an existing trusted checkout or a
+read-only temporary checkout; if the recorded artifact or a structured YAML
+parser is unavailable, report the gate as unavailable and stop rather than
+claiming the copy is clean.
+
+1. Parse and verify the generated provenance fields against the reviewed source
+   identity, path, ref, pin state, and tree SHA.
+2. Produce a complete raw path diff between the recorded artifact and installed
+   skill before excluding or normalizing anything. Retain every added, deleted,
+   and changed path in the review evidence.
+3. For every non-`SKILL.md` path present on both sides, compare bytes or a
+   cryptographic hash. A changed resource is drift even when its filename is in
+   a divergence record.
+4. Parse both `SKILL.md` frontmatter mappings with a structured YAML parser.
+   Compare every source-authored key and value. Set aside only verified generated
+   `github-repo`, `github-ref`, `github-pinned`, `github-path`,
+   `github-tree-sha`, or `local-path` fields.
+5. Compare the authored Markdown body after normalizing line endings and the
+   frontmatter/body boundary. Do not normalize other text or YAML values.
+6. Classify the retained raw differences using the clean/reconciled rules below.
+   Any unclassified difference blocks update or acceptance.
+
+This PowerShell manifest is a portable first pass for step 2; it deliberately
+shows the raw `SKILL.md` difference before semantic normalization:
+
+```pwsh
+function Get-SkillManifest([string] $Root) {
+  Get-ChildItem -LiteralPath $Root -Recurse -File -Force |
+    ForEach-Object {
+      [pscustomobject]@{
+        Path = [IO.Path]::GetRelativePath($Root, $_.FullName).Replace('\', '/')
+        Length = $_.Length
+        Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+      }
+    } |
+    Sort-Object Path
+}
+
+Compare-Object `
+  (Get-SkillManifest <recorded-artifact>) `
+  (Get-SkillManifest <installed-skill>) `
+  -Property Path, Length, Hash
+```
+
+Do not substitute a tests-only repository helper for these checks. A consuming
+repository may wrap them in its own production validator, but missing local
+infrastructure does not relax the comparison.
+
+### Distinguish a clean mirror from reconciled divergence
+
+A **clean mirror** has no authored core difference after the narrow
+`SKILL.md` normalization above. Every source resource and source manifest entry
+is exact. An overlay, catalog entry, or divergence ledger is separately owned
+local collateral: surface it in the raw diff, classify it explicitly, and do not
+call it part of the clean core.
+
+A **reconciled pending divergence** is not a clean mirror. Accept it only when:
+
+- the record's base pin exactly matches the installed provenance pin;
+- the record states its reason and upstream status;
+- every expected changed, added, or deleted path is listed with an exact patch
+  or expected normalized content/hash, not merely a filename exemption;
+- applying all current records to a scratch copy of the recorded artifact
+  produces the complete installed core after the same narrow normalization; and
+- the full comparison leaves no extra hunk, path, or manifest difference.
+
+Never omit a whole recorded file from comparison. That would hide an unrelated
+edit in the same body or resource. An overlay also cannot excuse a core change.
+Report the result as `clean mirror`, `reconciled divergence`, or `blocked by
+unexplained drift`; do not collapse those states into one pass.
 
 ### Pass the pin and divergence gate
 
 Before changing any pin or provenance ref:
 
-1. enumerate the overlay and every pending-divergence record for the skill;
-2. compare each divergent file against both the current pin and candidate pin;
-3. search the candidate upstream tree and release history for the equivalent
+1. complete the local-to-recorded-pin gate at the current pin;
+2. enumerate the overlay and every pending-divergence record for the skill;
+3. compare each exact recorded change against both the current and candidate
+   artifacts, including changed, added, and deleted paths;
+4. search the candidate upstream tree and release history for the equivalent
    change;
-4. remove a divergence record only when the candidate artifact contains it;
-5. rebase a still-needed divergence onto the candidate and update its base pin,
-   affected files, reason, and upstream status;
-6. update every overlay `core-pin` only after its bindings are reviewed against
-   the candidate;
-7. run the upstream mirror comparison and semantic cases before installing.
-
-For an installer-produced artifact, normalize only the installer boundary. The
-mirror comparison passes when:
-
-- the installed manifest equals the source manifest plus declared overlays or
-  pending-divergence files;
-- every source resource other than `SKILL.md` is byte-identical;
-- every source-authored frontmatter field has the same parsed value;
-- the normalized `SKILL.md` body is identical after line-ending and
-  frontmatter-boundary normalization; and
-- generated `github-repo`, `github-ref`, `github-pinned`, `github-path`,
-  `github-tree-sha`, or `local-path` metadata matches the reviewed source and
-  target.
-
-Do not compare a provenance-stamped `SKILL.md` by raw file hash: `gh skill`
-reserializes frontmatter and may remove the blank line after its closing
-delimiter. Treat any other field, body, resource, or manifest difference as
-drift. Overlays and local catalog collateral are additive and must be identified
-separately.
+5. remove an **absorbed** record only when the candidate artifact contains its
+   exact effective change;
+6. rebase a **retained** change onto a scratch candidate artifact, verify the
+   complete derived artifact, and update the record's base pin, exact patch or
+   hashes, paths, reason, and upstream status;
+7. reject every stale-base record and every difference left after applying the
+   current records;
+8. update every overlay `core-pin` only after its bindings are reviewed against
+   the candidate; and
+9. run the semantic cases before installing.
 
 Stop the update if any overlay or divergence has no explicit disposition. A new
 pin with a stale base-pin record is unexplained drift, even when validation and
@@ -68,9 +135,10 @@ the skill itself still load.
 files. It therefore does not prove overlays or pending divergences are still
 valid.
 
-Manual fallback (no `gh`): compare the canonical source or installed core against
-the recorded immutable revision, apply the reviewed diff, update provenance, and
-reinstall every recorded host/scope target with file-list and hash verification.
+Manual fallback (no `gh`): perform the same local-to-recorded-pin gate, compare a
+separately obtained candidate artifact, apply the reviewed diff, update
+provenance, and reinstall every recorded host/scope target with file-list and
+hash verification. Preserve pins and approval boundaries.
 
 ## Push: send a local improvement to the right layer
 
@@ -100,10 +168,12 @@ common, and the options:
   explicit publish verb from the user. Once merged, re-vendor here at the new pin.
 - **Not now / not plausible** - keep the change in the local core as a *tracked
   pending-upstream divergence*: record it in the commit message and the repository's
-  divergence ledger or a short note. Identify the skill, affected files, base pin,
-  reason, and upstream status so the drift check's later alarm is expected, not a
-  surprise. Re-attempt upstreaming when it becomes plausible; remove the record when
-  the pinned upstream artifact contains the change.
+  divergence ledger or a short note. Identify the skill, base pin, reason,
+  upstream status, and every changed, added, or deleted path with its exact patch
+  or expected normalized content/hash. The local-to-pin check must be able to
+  derive the complete expected artifact from the record. Re-attempt upstreaming
+  when it becomes plausible; remove the record when the pinned upstream artifact
+  contains the exact change.
 - **Reclassify** - if discussion shows the change is actually repo-specific, move
   it to the overlay instead and restore the core.
 
@@ -134,15 +204,16 @@ fine; an unexplained one is the alarm. What makes this enforceable:
 
 - **Provenance frontmatter** on every vendored copy records the source repo, ref,
   and tree SHA it was installed from.
-- **The drift check** (`gh skill update`, or the normalized mirror comparison in
-  CI) compares the local core against that recorded upstream. Unexplained drift
-  - a local core that no longer matches its pin and has no corresponding upstream
-  PR - is the alarm that an improvement was written into the wrong layer.
+- **The independent local-to-recorded-pin check** compares the complete local
+  core against that exact source artifact. `gh skill update` separately reports
+  whether the recorded tree SHA differs from the remote; it does not inspect
+  local content. Unexplained local drift is the alarm that an improvement was
+  written into the wrong layer.
 
-So the discipline is mechanical: if the drift check lights up and there is no
-upstream PR in flight and no recorded pending-upstream note, the change was a local
-deviation written into the core by mistake; move it to the overlay and restore the
-core.
+So the discipline is mechanical: if the local-to-pin comparison finds a change
+that no exact current record explains, stop. Classify it as common or local; move
+a local deviation to the overlay and restore the core, or obtain the required
+upstream/pending-divergence decision for a common change.
 
 ## After any update
 

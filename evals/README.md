@@ -34,12 +34,13 @@ and a local-only stop.
 require both the owning workflow and `technical-writing` to invoke while
 forbidding the remote action.
 
-`scenarios/manage-skills.json` covers project integration before vendoring into
-an existing repository. Its synthetic workspace contains a differently named
-local skill, canonical and generated agent guidance, documentation-derived
-bindings, and an unrelated keyword match. The scenario requires a read-only
-classification, proposed overlay, separate deduplication approval, and the
-optional-record question.
+`scenarios/manage-skills.json` covers four behaviors: project integration before
+vendoring into an existing repository, local drift despite a pinned unchanged
+upstream, exact pending-divergence reconciliation with extra unexplained drift,
+and ownership-specific authoring gates. The project-integration fixture contains
+a differently named local skill, canonical and generated agent guidance,
+documentation-derived bindings, and an unrelated keyword match. Every scenario
+is read-only and preserves approval boundaries.
 
 `scenarios/create-skill-repo.json` contains seven scenarios for the
 repository-local bootstrap workflow. They cover novice-oriented role

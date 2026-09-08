@@ -355,12 +355,29 @@ Use `-ProfileRoot` only to select another user profile root or an isolated test
 profile; host-relative destinations remain fixed beneath it.
 
 Use `-Private` for personal/private sources. It requires a local-only source or
-a GitHub repository verified as private and rejects network, synchronization,
-Git-worktree, and reparse-point boundaries. A private copy to multiple roots or
-the neutral `~/.agents/skills/` root additionally requires
-`-AllowPrivateMultiHostExposure`. Use `-Force` only after reviewing the source
-diff. The script copies complete directories, stages and hashes every target,
-and rolls back the multi-target operation before commit if a replacement fails.
+an unambiguous `github.com` remote whose explicit `owner/repository` identity and
+`PRIVATE` visibility are returned by GitHub CLI. The visibility lookup uses the
+full `https://github.com/owner/repository` URL, so it does not rely on the current
+directory, `GH_REPO`, or `GH_HOST`; no remote, mixed identities, unsupported
+hosts, malformed metadata, and Git inspection errors all fail closed. The
+selected source directory itself must contain `SKILL.md`; a parent collection
+of skills is not an installable skill.
+
+All modes reject destination Git worktrees, including a repository rooted at an
+existing exact destination. `-Force` cannot override source privacy or Git
+protection. All modes reject network source/destination paths and source reparse
+points; private mode also rejects destination reparse points and checks both
+source and destination against fully qualified roots from `OneDrive`,
+`OneDriveConsumer`, `OneDriveCommercial`, `Dropbox`, and `GoogleDrive`. Those
+variables do not enumerate every cloud, shared, indexed, or managed folder on
+every platform. Review local synchronization and endpoint policy explicitly; do
+not treat a passing script check as universal exposure detection.
+
+A private copy to multiple roots or the neutral `~/.agents/skills/` root
+additionally requires `-AllowPrivateMultiHostExposure`. Use `-Force` only after
+reviewing the source diff. The script copies complete directories, stages and
+hashes every target, and rolls back the multi-target operation before commit if
+a replacement fails.
 
 ## 6. Verify the effective installation
 

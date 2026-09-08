@@ -40,7 +40,7 @@ defines package shape, not discovery paths or precedence; each host owns those.
 | "find a skill for X", "is there a skill that does X" | Tiered search (local -> commons -> public), with an applicability check for this repo. | [find.md](find.md) |
 | "build a skill for X", "create a skill" | **Run find first.** Only author new if it exists nowhere; otherwise vendor or tweak the existing one. | [build.md](build.md) |
 | "install this skill", "add this for me", "vendor this into the repo" | Choose source ownership, target surfaces, scope, and host path; for an existing repository, gather overlay material and resolve overlap before writing. | [install.md](install.md) |
-| "review this skill", "is this skill effective" | Review invocation, workflow closure, progressive disclosure, portability, and lifecycle placement; then hand file validation to `agent-files-review`. | [review.md](review.md) |
+| "review this skill", "is this skill effective" | Review invocation, workflow closure, progressive disclosure, portability, and lifecycle placement; then run the applicable file validation. | [review.md](review.md) |
 | "update the skill", "sync my change", "pull skill updates" | Pull upstream drift; or push a local improvement, classified common (ask before upstreaming) vs deviation (overlay). | [update.md](update.md) |
 | "retire this skill", "remove this skill" | Find dependents and replacements first, then deprecate or remove without leaving stale routing, catalog, packaging, or validation state. | [retire.md](retire.md) |
 
@@ -48,9 +48,11 @@ These chain: `build` begins with `find`; an install request runs `find` and the
 public-source security gate before `install`; a project-scope install into an
 existing repository also runs [integrate.md](integrate.md) before writing;
 `build`, `install`, and `update` finish with `review`; and `review` finishes with
-`agent-files-review` for file-level validation. A local skill that needs a tweak
-follows `update` so core/overlay ownership stays explicit. `retire` inventories
-every installed scope and host before removing anything.
+`agent-files-review` for repository-backed file validation or the bundled
+normal validator and host diagnostics for a repository-free personal source. A
+local skill that needs a tweak follows `update` so core/overlay ownership stays
+explicit. `retire` inventories every installed scope and host before removing
+anything.
 
 ## The golden rule
 
@@ -68,16 +70,20 @@ edit, then place it - and **nothing about upstreaming is automatic**:
 
 So a vendored-core edit ends in one of three **recorded** states - upstreamed,
 moved to the overlay, or a tracked pending-upstream divergence - never an
-unexplained one. The provenance frontmatter (source repo, ref, and tree SHA) plus
-the `update` drift check is what enforces this: unexplained drift is the signal
-that an improvement was written into the wrong layer. See [update.md](update.md).
+unexplained one. Provenance frontmatter identifies the source repo, ref, and tree
+SHA. The independent normalized local-to-recorded-pin comparison in `update`
+detects unexplained local changes. `gh skill update` checks the recorded SHA
+against the remote but does not hash local content. See [update.md](update.md).
 
 ## Conventions every skill follows
 
-Whatever the verb, the result must satisfy the repo's authoring rules
-(`FORMAT.md`) and then pass `agent-files-review`, which owns the file-level
-checks - frontmatter, mirror sync, whitespace, and the validator and link
-checker. Don't restate those rules here.
+Whatever the verb, the result must satisfy its canonical owner's rules. A
+shared core uses its commons' strict format and publication gates; a
+repository-specific skill uses that repository's local policy; a personal
+source needs no repository format or catalog. Use `agent-files-review` for
+repository-backed file checks. For a repository-free personal source, use the
+bundled normal validator, target-host diagnostics, and direct resource/link
+inspection. [build.md](build.md) defines these branches.
 
 Use the required `technical-writing` skill after behavior and routing are
 settled. It owns human and agent comprehension, grounding, and reader cost;
