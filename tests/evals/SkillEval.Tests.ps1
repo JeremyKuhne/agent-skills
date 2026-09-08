@@ -10,6 +10,7 @@ BeforeAll {
     $script:UserVoiceScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/user-voice.json'
     $script:CreateSkillRepoScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/create-skill-repo.json'
     $script:DotNetPipesScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-pipes.json'
+    $script:PerformanceTestingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/performance-testing.json'
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -22,6 +23,7 @@ Describe 'Skill evaluation scenario contract' {
         $userVoiceScenarios = @(Get-SkillEvalScenarios -Path $script:UserVoiceScenarioPath)
         $createSkillRepoScenarios = @(Get-SkillEvalScenarios -Path $script:CreateSkillRepoScenarioPath)
         $dotNetPipesScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetPipesScenarioPath)
+        $performanceTestingScenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
         $scenarios = @(
             $createPrScenarios
             $technicalWritingScenarios
@@ -29,7 +31,8 @@ Describe 'Skill evaluation scenario contract' {
             $publishingWorkflowScenarios
             $userVoiceScenarios
             $createSkillRepoScenarios
-            $dotNetPipesScenarios)
+            $dotNetPipesScenarios
+            $performanceTestingScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -74,7 +77,16 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'dotnet-pipes-troubleshoot-single-client-server'
         $dotNetPipesScenarios.id |
             Should -Contain 'dotnet-pipes-routing-pipelines-near-miss'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 50
+        $performanceTestingScenarios.Count | Should -Be 3
+        @($performanceTestingScenarios | Where-Object skill -ne 'performance-testing').Count |
+            Should -Be 0
+        $performanceTestingScenarios.id |
+            Should -Contain 'performance-testing-accepts-valid-fresh-process-phases'
+        $performanceTestingScenarios.id |
+            Should -Contain 'performance-testing-rejects-exit-zero-without-work'
+        $performanceTestingScenarios.id |
+            Should -Contain 'performance-testing-refuses-incompatible-cpu-denominators'
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 53
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 

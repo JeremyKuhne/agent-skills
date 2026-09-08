@@ -1,8 +1,8 @@
 ---
 name: performance-testing
-description: Author and run BenchmarkDotNet performance tests in a multi-targeted .NET library's perf project, and translate a user's outcome-shaped performance question into a measurement. Use when adding new benchmarks, running existing ones, comparing implementations, profiling to find which method or source line dominates, evaluating allocations / memory usage, reading the generated code (sharplab / DisassemblyDiagnoser / HardwareCounters), or when a user asks how long something takes, how much memory it uses, where time is spent, or to help make a method faster - which this skill turns into a scenario, a benchmark, and a drill-down.
+description: Design, run, and validate .NET performance measurements, from BenchmarkDotNet microbenchmarks to fresh-process CLI and multi-phase workflows. Use when adding or running benchmarks, comparing implementations, profiling hot methods or lines, evaluating latency, throughput, allocations, retained memory, GC/JIT cost, or generated code, investigating regressions, or helping make code faster with measured evidence.
 license: MIT
-compatibility: Requires the .NET SDK and BenchmarkDotNet; source-line profiling may require a repository-specific trace tool.
+compatibility: Requires the .NET SDK. BenchmarkDotNet is used for in-process microbenchmarks; profiling may require an optional repository-specific trace tool.
 metadata:
    portability: portable
    applicability: dotnet-project-gated
@@ -13,29 +13,25 @@ metadata:
    related: framework-jit-optimization, scratch-buffer-strategy, pre-pr-self-review
 ---
 
-# Performance testing with BenchmarkDotNet
+# Performance testing
 
 If `overlay.md` exists beside this file, read it before acting; it contains
 repository-specific bindings. This core remains usable without it.
 
-This skill covers authoring and running
-[BenchmarkDotNet](https://benchmarkdotnet.org/) benchmarks in a multi-targeted
-.NET library's **perf project** (`<root>.perf` by convention), and - just as
-important - turning a user's vague, outcome-shaped performance question into a
-concrete measurement and a useful answer.
+This skill turns a user's outcome-shaped performance question into a concrete,
+validated measurement and a useful answer. It covers
+[BenchmarkDotNet](https://benchmarkdotnet.org/) for repeatable in-process
+operations and external harnesses for fresh-process startup, command discovery,
+or multi-phase workflows.
 
-A consuming repository wires the concrete project name, target frameworks,
-cross-skill links, and profiling tooling in its overlay. This core uses
-`<root>.perf` for the perf project and `<tfm>` for a target-framework moniker;
-the overlay supplies the real names. The two framework monikers this skill names
-directly - modern .NET (`net10.0` or whatever the repo's current version is) and
-.NET Framework (`net481`) - are the common multi-targeting pair; a single-target
-repo simply ignores the second.
+A consuming repository wires concrete project names, supported target frameworks,
+cross-skill links, and optional profiling tooling in its overlay. This core uses
+`<root>.perf` for a conventional perf project and `<tfm>` for a target-framework
+moniker. Measure every supported target affected by the change; a single-target
+repository runs only its one target.
 
-Note: code in a Framework-only source tree (the `Framework/` subtree by
-convention, excluded from the modern build) compiles only for the .NET Framework
-target. References to those types from a benchmark must be guarded with
-`#if NETFRAMEWORK`.
+When a repository has a Framework-only source tree, references to those types
+from a shared benchmark must be guarded with `#if NETFRAMEWORK`.
 
 ## Starting from a user's question
 
@@ -76,18 +72,20 @@ Choose the narrowest workflow that answers the question:
 
 ## The rules that always apply
 
-Five rules cover most benchmark work; the sub-pages hold the rest.
+Five rules cover most measurement work; the sub-pages hold the rest.
 
-1. **Pass `-f <tfm>`.** A multi-targeted perf project makes `dotnet run` fail
-   without an explicit target framework (e.g. `-f net10.0` or `-f net481`).
+1. **Define the operation and validity gate first.** Require nonempty equivalent
+   work, populated expected rows, exact operation/phase denominators, and recorded
+   identities. See [investigation-workflow.md](investigation-workflow.md).
 2. **`-c Release` is mandatory.** Debug runs are not representative.
-3. **`[MemoryDiagnoser]` on every class.** It adds the `Allocated` column, which
-   is usually the point.
-4. **Every `[Benchmark]` method returns a value derived from the work**, never
-   `void` - otherwise dead-code elimination wipes the body and the numbers are
-   meaningless. See [authoring.md](authoring.md).
-5. **Run both TFMs** for any code that compiles for both. Results diverge: the
-   modern runtime has vectorized BCL APIs the older Framework runtime lacks.
+3. **Make measured work observable.** Return or consume a value derived from the
+   work, or validate mutated state outside the timed region. A `void` benchmark is
+   not automatically eliminated, but unobserved pure work can be optimized away.
+4. **Use `[MemoryDiagnoser]` on BenchmarkDotNet classes** when allocation is in
+   scope. Its `Allocated` column is cumulative managed allocation per operation,
+   not retained memory.
+5. **Run every affected supported TFM.** Pass `-f <tfm>` when the perf project is
+   multi-targeted; do not invent a second target for a single-target repository.
 
 For a multi-candidate optimization, **screen before you confirm**: predeclare the
 product gate and time/candidate budget, use a narrow short-job benchmark and small
@@ -97,11 +95,11 @@ the hypothesis; defer candidate attribution until the product pilot passes. The
 staged defaults and stop rules are in [investigation-workflow.md](investigation-workflow.md).
 
 ```powershell
-# The canonical run, one TFM. Repeat with the other -f <tfm>.
+# One affected TFM; repeat only for additional supported targets the change affects.
 dotnet run -c Release -f <tfm> --project <root>.perf -- --filter *MyBenchmark*
 ```
 
-## Workflow checklist for a new benchmark
+## Workflow checklist for a new BenchmarkDotNet benchmark
 
 1. Add a `<Name>.cs` file under the perf project with a `public` class in the
    perf namespace. See [authoring.md](authoring.md) for layout, globals, and
@@ -109,23 +107,23 @@ dotnet run -c Release -f <tfm> --project <root>.perf -- --filter *MyBenchmark*
 2. Decorate the class with `[MemoryDiagnoser]`.
 3. Add `[Benchmark(Baseline = true)]` to the reference implementation and
    `[Benchmark]` to each variant.
-4. Make every benchmark method **return a value** derived from the work, never
-   `void`.
-5. Avoid helper-method indirection between the benchmark and the
-   system-under-test. If overload resolution forces it, temporarily rename one
-   overload in source while measuring, then revert.
+4. Make the measured work observable through a derived return value, a consumer,
+   or post-iteration validation of mutated state.
+5. Avoid avoidable helper overhead between the benchmark and system-under-test.
+   Resolve overloads with explicit argument types or casts, or split benchmark
+   classes; do not rename product APIs merely to obtain a measurement.
 6. Build Release: `dotnet build -c Release <root>.perf`.
-7. Smoke-test with `--job short --filter *<Name>*` on each target framework
+7. Smoke-test with `--job short --filter *<Name>*` on each supported target
    individually. See [running.md](running.md).
-8. Run the full benchmark on both target frameworks (drop `--job short`).
+8. Run the full benchmark on every affected supported target (drop `--job short`).
 9. Inspect `Allocated` and `Ratio` columns; copy the Markdown report into the PR.
    See [interpreting-results.md](interpreting-results.md).
 10. If one method dominates and you need to know which - or which *line* inside
     it - profile it. See your repo's profiling overlay (the trace-analyzer skill).
 
 When the change is driven by a profile, follow the before/after discipline in
-[interpreting-results.md](interpreting-results.md) (baseline both TFMs, re-run
-both, keep full rows, confirm the targeted frame moved).
+[interpreting-results.md](interpreting-results.md) (baseline every affected
+supported TFM, re-run them, keep full rows, confirm the targeted frame moved).
 
 ## Codegen-level optimization rules
 
@@ -153,8 +151,7 @@ inspection.
   required and optional attributes, and what a benchmark method must do.
 - [running.md](running.md) - the `-f <tfm>` requirement, filtering to a class or
   method, the interactive picker, and useful switches.
-- [interpreting-results.md](interpreting-results.md) - before/after discipline on
-  both TFMs and reading the memory columns.
+- [interpreting-results.md](interpreting-results.md) - before/after discipline on supported TFMs and reading the memory columns.
 - [investigation-workflow.md](investigation-workflow.md) - staged fail-fast
   screening, fresh-state phase measurement versus profiling, experiment ledgers,
   exact-source oracles, and reconstructable run provenance for multi-step

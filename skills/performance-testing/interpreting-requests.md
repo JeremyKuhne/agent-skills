@@ -21,12 +21,12 @@ lives here.
 
 | The user asks | They want | What you do |
 |---|---|---|
-| "How long does X take?" / "Is X fast enough?" | a latency number for a real scenario | benchmark the scenario, report `Mean` + error on both TFMs ([authoring](authoring.md), [running](running.md)) |
-| "How much memory does X use?" / "Does X allocate?" | bytes per operation | `[MemoryDiagnoser]` benchmark, report `Allocated` on both TFMs ([interpreting-results](interpreting-results.md)) |
+| "How long does X take?" / "Is X fast enough?" | a latency number for a real scenario | use BenchmarkDotNet for repeatable in-process work or an external harness for startup/phased work; report uncertainty on each supported TFM |
+| "How much memory does X use?" / "Does X allocate?" | the requested allocation, retention, or process-memory measure | choose the matching measurement boundary ([interpreting-results](interpreting-results.md)) |
 | "Where is the time spent?" / "Why is X slow?" | the hot method or line | profile a trace (EventPipe on the modern runtime, **ETW on .NET Framework**), rank -> callers -> lines; if a thin driver/wrapper tops the modern ranking, cross-check under ETW - inlining can misattribute self-time to the host |
 | "What's allocating?" / "What's the GC doing?" | the hot alloc site / GC pressure | the allocation or GC view of a trace |
 | "Make X faster" / "improve this method" | a *verified* improvement | the bounded loop below: scenario -> baseline/hypothesis -> mechanism screen -> product pilot -> confirmation |
-| "Did my change help / regress anything?" | a before/after delta | baseline before, re-run after, diff both TFMs ([interpreting-results](interpreting-results.md)) |
+| "Did my change help / regress anything?" | a before/after delta | baseline before, re-run after, diff every affected supported TFM ([interpreting-results](interpreting-results.md)) |
 
 ## First, nail the scenario - a method has no single "speed"
 
@@ -71,11 +71,7 @@ does not rescue it.
 
 1. **Find the scenario.** Read the method, identify the inputs that drive cost,
    propose a representative set. Confirm or proceed with stated assumptions.
-2. **Establish a reusable baseline.** Write a benchmark in the perf project
-   ([authoring](authoring.md)) and run the representative short job on both TFMs.
-   This is the initial answer to "how slow is it today" and the comparison for the
-   mechanism screen. Keep the benchmark as the regression guard, but defer the full
-   matrix until a candidate passes the product pilot.
+2. **Establish a reusable baseline.** Use BenchmarkDotNet for a repeatable in-process operation, or an external fresh-process harness when startup, discovery, environment initialization, or phase boundaries are part of the outcome. Run every affected supported TFM. This is the initial answer to "how slow is it today" and the comparison for the mechanism screen; defer the full matrix until a candidate passes the product pilot.
 3. **Find where the cost is when the target is unclear.** Profile the baseline:
    rank -> callers -> lines for CPU, or the allocation view if `Allocated` is the
    problem. When code and a targeted benchmark already isolate the cost, state that
@@ -87,14 +83,8 @@ does not rescue it.
    the codegen skills: the framework-JIT-optimization skill for specialization /
    unrolling / BCL-delegation, and the scratch-buffer-strategy skill for
    stackalloc vs pool vs a stack-with-pool-fallback buffer.
-5. **Verify in stages.** Run the narrow correctness check and short benchmark
-   screen, then the real-scenario product pilot. Only a survivor earns the full
-   benchmark on both TFMs, retained product confirmation against the actual gate,
-   and candidate before/after attribution ([investigation workflow](investigation-workflow.md)).
-   Confirm nothing regressed, especially `Allocated` and the other TFM. A faster
-   wall clock with the targeted frame unchanged is noise or a different win; say so.
-6. **Report and offer the next drill.** Show the before/after for both TFMs and
-   the line-level evidence, then suggest the logical follow-up.
+5. **Verify in stages.** Run the narrow correctness check and short benchmark screen, then the real-scenario product pilot. Only a survivor earns the full benchmark on every affected supported TFM, retained product confirmation against the actual gate, and candidate before/after attribution ([investigation workflow](investigation-workflow.md)). Confirm nothing regressed, especially `Allocated` and other supported targets. A faster wall clock with the targeted frame unchanged is noise or a different win; say so.
+6. **Report and offer the next drill.** Show the before/after for all measured targets and the line-level evidence, then suggest the logical follow-up.
 
 ## Translate the numbers back into the user's words
 
@@ -110,8 +100,8 @@ Do not paste a raw table and stop. Answer the question they asked:
 - *Where?* -> "Two thirds of the time is in `<method>` at `<file:line>`, doing
   `<what>`. The rest is the bounds checks the loop repeats."
 
-Always surface a **both-TFM divergence** when there is one - it is frequently the
-most actionable thing you can say.
+When the repository supports multiple TFMs, surface a divergence when there is
+one - it is frequently the most actionable thing you can say.
 
 ## Follow up - suggest the next question, don't wait for it
 
@@ -137,8 +127,8 @@ yet. Offer it:
   callee's time to its host; want me to re-capture under ETW - which resolves the
   inlinee - and diff the two?" Lengthening the run will not fix this; only ETW
   reattributes it.
-- After an **improvement** -> "Want me to push the scenario harder (larger input,
-  worst case), or check whether the win holds on the other TFM?"
+- After an **improvement** -> offer a larger/worst-case or sustained control, and
+  check other supported TFMs when they exist.
 - After a **surprising divergence** -> "The .NET Framework path is 3x slower
   here; want me to dig into why (likely the missing vectorized BCL API)?"
 

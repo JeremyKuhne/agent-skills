@@ -3,32 +3,33 @@
 Detail for the [performance-testing](SKILL.md) skill. Covers the before/after
 measurement discipline and reading the memory columns.
 
-## Before/after measurement discipline (both TFMs, every time)
+## Before/after measurement discipline
 
-A perf change is not done until you can show it helped and harmed nothing.
+A performance claim is not supported until semantic equivalence and the
+predeclared latency, allocation, and memory guardrails pass.
 Profiling a trace answers *where* to optimize; only a before/after benchmark
 answers *whether it worked*. Treat the following as mandatory whenever a code
 change is driven by a profile:
 
-- **Capture a baseline first, on both TFMs.** Run the affected benchmark on each
-  target framework *before* touching the source and save the full result rows.
+- **Capture a baseline first on every affected supported TFM.** Run the affected
+  benchmark on each production target *before* touching the source and save the
+  full result rows.
   The line-level EventPipe profiling that guides the edit is modern-runtime-only,
-  but the change still has to be measured on .NET Framework - the older RyuJIT
-  and BCL allocate and inline differently, and a win on one TFM can be a wash or
-  a regression on the other. **Never iterate on modern-runtime line info without
-  also tracking the .NET Framework overall throughput and allocation numbers.**
-- **Re-run both TFMs after the change** and diff against the saved baseline.
+  but a repository that also supports .NET Framework must measure that target
+  directly because its JIT and BCL allocate and inline differently.
+- **Re-run every affected supported TFM after the change** and diff against the
+  saved baseline.
 - **Record the full BenchmarkDotNet rows, not just a one-line summary.** Keep the
   whole table - `Mean`, `Error`, `StdDev`, `Gen0`, `Gen1`, `Gen2`, `Allocated` -
-  for both the before and after runs on both TFMs. A summary like "~7% faster"
+  for both the before and after runs on every measured TFM. A summary like "~7% faster"
   loses the error bars (is the delta inside the noise?) and the allocation column
   (did the speedup trade CPU for garbage?). Save the raw output to
   `artifacts/<name>-baseline-<tfm>.txt` and `artifacts/<name>-after-<tfm>.txt`
   so the full diff is reproducible. Pipe the run through `Tee-Object` to keep the
   console table.
-- **Allocation must not regress.** Compare the `Allocated` column before and
-  after on *both* TFMs. "No additional allocations" is only true if both columns
-  are unchanged.
+- **Apply the predeclared allocation gate.** Compare the `Allocated` column
+  before and after on every measured TFM. "No additional allocations" is only
+  true if all applicable columns are unchanged.
 - **Confirm the targeted cost actually moved.** Re-capture a trace after the
   change and check that the specific method/line the heat map flagged dropped
   (e.g. `System.Array.Copy` self-time falling from 30 ms to 19 ms). A faster
@@ -36,13 +37,30 @@ change is driven by a profile:
   somewhere else - or from noise.
 - **Distrust sub-microsecond deltas from a noisy machine.** A busy or thermally
   throttled host shows variance swings; trust the `Allocated` column and a unit
-  test over a small `Mean` delta. Deltas comfortably outside the `Error`/`StdDev`
-  and consistent in direction across both TFMs are credible.
+  test over a small `Mean` delta. Deltas comfortably outside `Error`/`StdDev` and
+  consistent across repeated runs and affected TFMs have stronger support.
 
-Present both TFMs' before/after tables together when reporting the result, plus
-the line-level evidence that the targeted hot spot shrank.
+Present the supported TFMs' before/after tables together when reporting the
+result, plus the line-level evidence that the targeted hot spot shrank.
 
 ## Evaluating memory usage
+
+First identify which memory question the user asked. These measures are not
+substitutes for one another:
+
+| Measure | What it supports |
+| --- | --- |
+| BenchmarkDotNet `Allocated` | cumulative managed bytes allocated per operation |
+| Sampled allocation profile | estimated allocation types/sites under that profiler's sampling contract |
+| Collection counts and GC pauses | collection frequency and pause cost, separate from allocation volume |
+| Heap/liveness measurement at a named boundary | live or retained bytes and ownership at that boundary |
+| Process working set or peak memory | process-level committed/resident pressure, including costs outside the managed heap |
+
+Do not call sampled allocation cumulative bytes unless the profiler establishes
+that conversion. Do not infer retained or output-owned memory by subtracting file
+size, final heap size, or result size from cumulative allocation. Establish
+result, intermediate, and cache ownership at a named lifetime boundary with a
+heap/liveness tool or explicit object ownership evidence.
 
 With `[MemoryDiagnoser]` (or `--memory`), each row of the results table includes:
 
@@ -65,8 +83,8 @@ With `[MemoryDiagnoser]` (or `--memory`), each row of the results table includes
 - Stack-only types (`Span<T>`, `ref struct`s, `stackalloc`) do not contribute to
   `Allocated`. Boxing of value types does - watch for accidental boxing through
   `object`, non-generic interfaces, or `string.Format`.
-- On .NET Framework the JIT and BCL allocate differently than on the modern
-  target. Always run both before declaring a win.
+- When a repository supports .NET Framework and a modern target, measure both;
+  their JITs and BCLs can allocate differently.
 
 ### Where the report lives
 

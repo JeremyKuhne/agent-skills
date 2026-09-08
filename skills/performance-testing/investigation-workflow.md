@@ -14,6 +14,7 @@ Use only the sections the task needs:
 
 | Investigation shape | Read |
 | --- | --- |
+| Fresh-process CLI startup or multiple phases | [measurement contract](#establish-the-measurement-contract) |
 | Multiple optimization candidates | [budget and stages](#bound-the-investigation-before-the-first-run) |
 | Consumable/mutable phase inputs | [fresh-state measurement](#measure-phases-with-fresh-state) |
 | External baseline or revision | [exact-source oracle](#compare-an-exact-source-oracle) |
@@ -23,6 +24,62 @@ The expected outputs are a trustworthy benchmark or profile, a compact experimen
 ledger, and enough source and run provenance to reconstruct any result that is kept.
 Creating those local artifacts does not authorize committing, uploading, or
 publishing them.
+
+## Establish the measurement contract
+
+Define the measured operation and its observable result before choosing a
+harness. BenchmarkDotNet is a good fit for a repeatable in-process operation.
+Use a purpose-built external harness when process startup, command discovery,
+environment initialization, or a multi-phase CLI operation is part of the
+question. Keep uninstrumented elapsed measurements separate from diagnostic
+captures in either case.
+
+Fail closed before accepting a run:
+
+**Discovered work.** Require a nonzero discovered-case count, successful setup
+with the expected subject identity, and one finite populated result for every
+expected case. A zero exit code does not rescue zero cases, skipped setup, or
+all-missing rows.
+
+**Denominators.** Record the exact operation count and denominator for every
+phase. Reconcile phase counts to the end-to-end operation population. When phases
+cover different populations, report each denominator instead of adding or
+comparing their totals.
+
+**Semantics and artifacts.** Require equivalent nonempty semantic output or the
+repository's explicit normalization. Retain the exact generated subject binary
+and matching debug symbols used by the run; do not let a later build overwrite
+them.
+
+**Identity.** Record subject, analyzer, runtime, input/corpus, collector profile,
+and relevant options. Pin the collector and requested sampling interval across
+comparison arms, then verify interval semantics from the evidence before
+converting CPU samples to time.
+
+**Units.** Keep CPU samples or interval-derived CPU time, elapsed time, waits, and
+GC pauses as separate measures. If interval provenance is absent or changes
+incompatibly, report sample counts separately and mark the time comparison
+`inconclusive`. Never estimate CPU time by multiplying wall time by a sampled CPU
+share.
+
+These are measurement-validity gates, not success criteria for the candidate. A
+valid neutral or unfavorable result remains evidence and feeds the keep/reject/
+inconclusive decision below.
+
+### Name process and cache state
+
+Use state labels that describe what the harness actually establishes:
+
+| State | Required setup |
+| --- | --- |
+| Practical cold start | A fresh process plus a new isolated application/user home and application-owned cache state |
+| Warm fresh-process | A fresh process using deliberately initialized application state from an earlier setup operation |
+| Warm in-process | Repeated operations in one process with its managed and native state retained |
+
+A fresh process clears that process's state; it does not flush operating-system
+file caches, shared runtime state, kernel caches, or device caches. Do not call a
+run cold merely because the process restarted. Record any cache state the harness
+does not control instead of implying it was reset.
 
 ## Bound the investigation before the first run
 
@@ -92,12 +149,16 @@ Before a full matrix, test whether the isolated win survives the real product pa
 - predeclare a plausibility cutoff below the retained target (default 80% of that
   target, such as 8% for a 10% gate).
 
-For screening, call a pilot stable only when every launch succeeds with equivalent
-output, each arm's CV is within the repository limit (default 5%), and the candidate
-has the same direction in every one of three paired/alternated repetitions or at
-least four of five. Reject when the median improvement is below the plausibility
-cutoff. When direction or CV is unstable, repeat the unchanged pilot once; if it is
-still unstable, stop as `inconclusive` rather than promoting it to confirmation.
+Before screening, choose a scenario-specific uncertainty rule and launch budget.
+Every launch must succeed with equivalent output. Alternate or randomize paired
+arms and retain their individual results; three to five launches are a coarse
+screen, not a precise estimate of variance. A 5% CV limit can be useful for an
+established stable scenario, but is not a universal gate for short processes.
+Require a consistent direction and uncertainty small enough to distinguish the
+predeclared plausibility cutoff. If the initial sample is insufficient, use the
+predeclared additional launches without changing the candidate or measurement
+conditions. If that budget cannot distinguish the effect, stop as `inconclusive`.
+Reject a stable median improvement below the plausibility cutoff.
 
 Reject a stable product regression or a result outside that plausibility margin.
 Do not profile a candidate after it has failed a hard product gate. A lightweight
@@ -128,6 +189,13 @@ Only a candidate that passes the first two stages earns broader confirmation:
 - confirm the real product scenario at the repository's retained-run rigor and
   require the actual predeclared product gate, not the pilot's plausibility cutoff;
 - validate every supported target framework and the repository's correctness gates.
+
+Use a small control to expose fixed overhead, a target-scale case to exercise the
+suspected cost, and a sustained case when the outcome is repeated throughput or
+long-running latency. Vary scale rather than merely collecting more samples from
+one tiny shape. A short best-case launch does not establish sustained speed; report
+startup, steady operation, and any warmup or degradation separately when they
+matter.
 
 If two controlled reruns still miss the repository's noise/CV limit, stop as
 `inconclusive`. Do not keep changing affinity, job shape, thresholds, or outlier
@@ -206,9 +274,9 @@ the batch changed GC and live-set behavior.
 Start the ledger before the first edit and add one row per candidate. Record
 rejected variants as carefully as retained ones.
 
-| Hypothesis | Small edit | Discriminating check | Time | Allocation | Target frame | Decision |
+| Hypothesis | Small edit | Discriminating check | Time | Allocation | Target frame | Decision / evidence gap |
 | --- | --- | --- | ---: | ---: | --- | --- |
-| Example claim | One-variable change | Same filtered benchmark | Result | Result | Before -> after | Keep or reject, with reason |
+| Example claim | One-variable change | Same filtered benchmark | Result | Result | Before -> after | Keep, reject, or inconclusive; name the missing evidence |
 
 Change one material variable at a time. Use the same scenario, filter, target
 framework, job, and profiler scope before and after. Preserve both target
@@ -219,6 +287,24 @@ lost on throughput, allocation, another runtime, or the intended target frame.
 The final report should explain why the retained implementation beat at least the
 most plausible alternative, not merely state that the retained row was faster than
 the original baseline.
+
+## Decide, stop, and resume
+
+Use the narrowest state supported by the evidence:
+
+| State | Meaning |
+| --- | --- |
+| Keep | Semantic gates pass and the candidate meets the predeclared product and resource gates |
+| Reject | A valid result is neutral, unfavorable, or below the keep threshold, or a semantic/resource gate fails |
+| Inconclusive | The evidence is noisy, incompatible, incomplete, or invalid for the claimed comparison |
+| Evidence-blocked | A named prerequisite such as symbols, operation counts, identity, or a working harness is missing |
+| Diminishing returns | Valid coverage remains, but further eligible hypotheses have less plausible headroom than the remaining budget justifies |
+
+Do not relabel missing evidence as diminishing returns. Preserve neutral and
+rejected candidates; they prevent repeated dead ends. A compact resume record names
+the next hypothesis, completed and invalid attempts, exact identities and artifact
+locations, semantic and measurement gates, remaining evidence gaps, and the current
+budget/stop decision. Publication state is separate from investigation progress.
 
 ## Compare an exact-source oracle
 
@@ -315,6 +401,8 @@ The workflow is complete when all applicable checks pass:
 - A consumable parse/materialize split uses fresh-state batches for measurement
   and an adaptive end-to-end path for profiling unless the one-shot phase has
   enough query-level evidence.
+- Every accepted run has nonzero discovered work, populated expected rows, reconciled operation/phase denominators, equivalent semantic output, and exact subject/debug identities.
+- CPU samples, interval-derived CPU time, elapsed time, waits, and GC pauses retain distinct units; incompatible or absent interval provenance cannot produce a time comparison.
 - The ledger preserves rejected variants and explains the final decision.
 - An opt-in BenchmarkDotNet child build references the assembly built from the
   recorded oracle commit and hash, semantic-parity checks pass on fresh state, and
