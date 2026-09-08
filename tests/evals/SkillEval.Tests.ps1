@@ -114,6 +114,22 @@ Describe 'Skill evaluation scenario contract' {
             Should -Not -Match $recordingPattern[0]
     }
 
+    It 'accepts grounded test evidence wording for blocked commit messages' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ScenarioPath |
+            Where-Object id -eq 'create-pr-blocked-commit-message')[0]
+        $testEvidencePattern = @($scenario.requiredResponsePatterns |
+            Where-Object { $_ -match 'all tests pass' })
+
+        $testEvidencePattern.Count | Should -Be 1
+        "The current evidence does not support: 'All tests pass'." |
+            Should -Match $testEvidencePattern[0]
+        "'All tests pass' is not backed by current evidence." |
+            Should -Match $testEvidencePattern[0]
+        'All tests pass.' | Should -Not -Match $testEvidencePattern[0]
+        'The current evidence supports that all tests pass.' |
+            Should -Not -Match $testEvidencePattern[0]
+    }
+
     It 'expands every tool permission into a separate CLI argument' {
         $scenario = [pscustomobject]@{
             prompt = 'Evaluate.'
