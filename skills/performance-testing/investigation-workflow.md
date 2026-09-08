@@ -149,12 +149,16 @@ Before a full matrix, test whether the isolated win survives the real product pa
 - predeclare a plausibility cutoff below the retained target (default 80% of that
   target, such as 8% for a 10% gate).
 
-For screening, call a pilot stable only when every launch succeeds with equivalent
-output, each arm's CV is within the repository limit (default 5%), and the candidate
-has the same direction in every one of three paired/alternated repetitions or at
-least four of five. Reject when the median improvement is below the plausibility
-cutoff. When direction or CV is unstable, repeat the unchanged pilot once; if it is
-still unstable, stop as `inconclusive` rather than promoting it to confirmation.
+Before screening, choose a scenario-specific uncertainty rule and launch budget.
+Every launch must succeed with equivalent output. Alternate or randomize paired
+arms and retain their individual results; three to five launches are a coarse
+screen, not a precise estimate of variance. A 5% CV limit can be useful for an
+established stable scenario, but is not a universal gate for short processes.
+Require a consistent direction and uncertainty small enough to distinguish the
+predeclared plausibility cutoff. If the initial sample is insufficient, use the
+predeclared additional launches without changing the candidate or measurement
+conditions. If that budget cannot distinguish the effect, stop as `inconclusive`.
+Reject a stable median improvement below the plausibility cutoff.
 
 Reject a stable product regression or a result outside that plausibility margin.
 Do not profile a candidate after it has failed a hard product gate. A lightweight
