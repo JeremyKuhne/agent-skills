@@ -95,7 +95,7 @@ the hypothesis; defer candidate attribution until the product pilot passes. The
 staged defaults and stop rules are in [investigation-workflow.md](investigation-workflow.md).
 
 ```powershell
-# The canonical run, one TFM. Repeat with the other -f <tfm>.
+# One affected TFM; repeat only for additional supported targets the change affects.
 dotnet run -c Release -f <tfm> --project <root>.perf -- --filter *MyBenchmark*
 ```
 
