@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "performance-testing-accepts-valid-fresh-process-phases",
+      "skill": "performance-testing",
+      "category": "quality",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use performance-testing to assess whether this single-target CLI measurement is valid evidence. The operation includes process startup, discovery, and generation. An external harness ran five discovered cases in three fresh processes per arm. Setup verified the expected subject, runtime, analyzer, input, generated binary, and matching debug-symbol identities. Every expected row is finite and populated; phase and end-to-end operation counts reconcile; normalized outputs are nonempty and equal. Uninstrumented elapsed runs are separate from diagnostic captures. State whether this is an acceptable measurement shape and name the important state/denominator boundary. Do not run commands or propose BenchmarkDotNet as a requirement.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)(?:valid|acceptable|usable)[^\r\n]{0,80}(?:measurement|evidence|shape)", "(?i)fresh[- ]process", "(?i)(?:phase|operation)[^\r\n]{0,80}(?:count|denominator|reconcile)", "(?i)(?:generated binary|debug symbol|subject identity)"],
+      "forbiddenResponsePatterns": ["(?i)(?:must|required to) use BenchmarkDotNet", "(?i)(?:both|two) TFMs"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "performance-testing-rejects-exit-zero-without-work",
+      "skill": "performance-testing",
+      "category": "quality",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use performance-testing to review this benchmark result without running anything: the process exited 0, discovered zero cases, setup reported an identity mismatch, all six expected rows are NA, and no operation or phase count was recorded. The summary says the candidate improved startup by 40%. Decide whether the result supports that claim and list the blocking validity failures.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)(?:invalid|reject|inconclusive|does not support)", "(?i)(?:zero|no)[^\r\n]{0,40}(?:cases|work)", "(?i)(?:all[^\r\n]{0,20}NA|missing[^\r\n]{0,30}rows|rows[^\r\n]{0,30}(?:NA|missing))", "(?i)(?:identity mismatch|setup)", "(?i)(?:operation|phase)[^\r\n]{0,50}(?:count|denominator)"],
+      "forbiddenResponsePatterns": ["(?i)(?:benchmark|run) succeeded", "(?i)(?:supports|confirms|proves)[^\r\n]{0,80}(?:40%|improvement|win)"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "performance-testing-refuses-incompatible-cpu-denominators",
+      "skill": "performance-testing",
+      "category": "quality",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use performance-testing to assess this CPU comparison without running commands. Baseline has 1,000 samples from analyzer A with a requested 1 ms interval. Candidate has 1,200 samples from analyzer B with a requested 0.125 ms interval. Neither trace records the physical interval semantics, and the operation counts are absent. A report converts these to 1,000 ms and 150 ms and calls the candidate 85% faster. Decide what can be reported and what evidence is needed for a time comparison.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)(?:inconclusive|not (?:directly )?comparable|cannot compare)", "(?i)sample", "(?i)(?:physical )?interval[^\r\n]{0,80}(?:provenance|semantics|evidence|unknown|record)", "(?i)(?:same|pin|different)[^\r\n]{0,80}(?:analyzer|collector)", "(?i)(?:operation count|denominator)"],
+      "forbiddenResponsePatterns": ["(?i)1,?000\\s*ms", "(?i)150\\s*ms", "(?i)(?:85% faster|candidate is 85%)", "(?i)wall[^\r\n]{0,40}(?:CPU share|sample share)"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    }
+  ]
+}

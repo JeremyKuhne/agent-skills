@@ -63,22 +63,22 @@ relative to that baseline.
 
 ## What a benchmark method must do
 
-- **Return a value derived from the measured work, even when measuring
-  `void`-returning APIs.** Returning `void` (or a constant the JIT can prove
-  invariant) lets dead-code elimination wipe the body, producing meaningless
-  near-zero or wildly inconsistent timings. BenchmarkDotNet consumes the return
-  value to prevent that. For buffer-mutating APIs (`Span<T>.Replace`,
-  `Random.NextBytes`, `Encoding.GetBytes`) return `buffer[0]`, the last element,
-  or an XOR/sum digest of the buffer - not `buffer.Length` or any other value
-  invariant of execution. Symptoms of forgetting: "optimized" variants slower
-  than the baseline (because the baseline got eliminated), >50% StdDev between
-  runs, near-zero timings for non-trivial work. See
+- **Make the measured work observable.** Prefer returning a value derived from
+  the work. For a `void`-returning API, consume changed state or validate it
+  outside the timed region; use BenchmarkDotNet's consumer when no natural
+  result exists. Do not return a constant, `buffer.Length`, or another value
+  invariant of execution. For buffer-mutating APIs (`Span<T>.Replace`,
+  `Random.NextBytes`, `Encoding.GetBytes`), return an element or a digest whose
+  value depends on the mutation. A `void` benchmark is not automatically
+  eliminated, but pure work whose result is unobserved can be. Near-zero or
+  unstable timings are a reason to inspect generated code and semantic output,
+  not proof of one specific optimizer action. See
   [BenchmarkDotNet good practices](https://benchmarkdotnet.org/articles/guides/good-practices.html).
 - Be cheap to call repeatedly - BenchmarkDotNet invokes it millions of times.
 - Avoid per-call setup; move setup into `[GlobalSetup]` or readonly fields.
-- Avoid wrapping the system-under-test in a helper method just to satisfy
-  overload resolution - the helper's call frame, type check, and generic
-  instantiation show up in the measurement. Either rename one overload
-  temporarily while measuring, or split into two benchmark classes.
+- Call the system-under-test directly where practical. Resolve overloads with
+  explicitly typed fields, casts, or separate benchmark classes. If a wrapper is
+  unavoidable, keep the same wrapper shape in every comparison arm and account
+  for its overhead; do not rename a product API merely to make a benchmark bind.
 - Ref structs cannot be returned from `[Benchmark]` methods; consume them inside
   the method and return a representative scalar (length or hash).
