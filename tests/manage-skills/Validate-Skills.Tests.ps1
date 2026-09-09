@@ -789,6 +789,121 @@ core-pin: v1.2.3
     }
 
     Context 'YAML block shapes' {
+        It 'rejects unsupported or ambiguous frontmatter shape: <CaseName>' -ForEach @(
+            @{
+                CaseName = 'duplicate top-level key'
+                Name = 'duplicate-top-level'
+                Frontmatter = @(
+                    'name: duplicate-top-level'
+                    'description: First description.'
+                    'description: Second description.'
+                ) -join "`n"
+                Strict = $false
+                Expected = "Duplicate frontmatter key 'description'"
+            }
+            @{
+                CaseName = 'duplicate metadata key'
+                Name = 'duplicate-metadata'
+                Frontmatter = @(
+                    'name: duplicate-metadata'
+                    'description: A skill.'
+                    'metadata:'
+                    '  portability: portable'
+                    '  applicability: universal'
+                    '  binding: none'
+                    '  risk: advisory'
+                    '  risk: local-write'
+                    '  maturity: canary'
+                    '  requires: none'
+                    '  related: none'
+                ) -join "`n"
+                Strict = $true
+                Expected = "Duplicate metadata key 'risk'"
+            }
+            @{
+                CaseName = 'flow sequence in a known scalar field'
+                Name = 'flow-description'
+                Frontmatter = @(
+                    'name: flow-description'
+                    'description: [one, two]'
+                ) -join "`n"
+                Strict = $false
+                Expected = "Field 'description' must be a scalar value, not a flow sequence"
+            }
+            @{
+                CaseName = 'flow mapping in a known scalar field'
+                Name = 'flow-compatibility'
+                Frontmatter = @(
+                    'name: flow-compatibility'
+                    'description: A skill.'
+                    'compatibility: { os: windows }'
+                ) -join "`n"
+                Strict = $false
+                Expected = "Field 'compatibility' must be a scalar value, not a flow mapping"
+            }
+            @{
+                CaseName = 'flow mapping in metadata'
+                Name = 'flow-metadata-value'
+                Frontmatter = @(
+                    'name: flow-metadata-value'
+                    'description: A skill.'
+                    'metadata:'
+                    '  requires: [one, two]'
+                ) -join "`n"
+                Strict = $false
+                Expected = "Field 'metadata.requires' must be a scalar value, not a flow sequence"
+            }
+            @{
+                CaseName = 'nested metadata container'
+                Name = 'nested-metadata'
+                Frontmatter = @(
+                    'name: nested-metadata'
+                    'description: A skill.'
+                    'metadata:'
+                    '  portfolio:'
+                    '    portability: portable'
+                    '    applicability: universal'
+                    '    binding: none'
+                    '    risk: advisory'
+                    '    maturity: canary'
+                    '    requires: none'
+                    '    related: none'
+                ) -join "`n"
+                Strict = $true
+                Expected = 'Nested metadata mappings or sequences are not supported'
+            }
+        ) {
+            $dir = New-SkillFixture -Name $Name -Frontmatter $Frontmatter
+            $arguments = @($dir)
+            if ($Strict) { $arguments += '-RequirePortfolioMetadata' }
+
+            $result = Invoke-Validator -Arguments $arguments
+
+            $result.ExitCode | Should -Be 1
+            $result.Output | Should -Match ([regex]::Escape($Expected))
+        }
+
+        It 'preserves supported scalar and custom-field forms' {
+            $dir = New-SkillFixture -Name 'supported-yaml-subset' -Frontmatter (@(
+                    'name: supported-yaml-subset'
+                    'description: |'
+                    '  A literal description containing [brackets].'
+                    'license: "[internal text]"'
+                    'metadata:'
+                    '  source: github'
+                    '  repository: example/supported-yaml-subset'
+                    '  ref: refs/heads/main'
+                    '  commit: 0123456789012345678901234567890123456789'
+                    'custom-data: { a: 1, b: 2 }'
+                    'custom-list: [one, two]'
+                ) -join "`n")
+
+            $result = Invoke-Validator -Arguments @($dir)
+
+            $result.ExitCode | Should -Be 0 -Because $result.Output
+            $result.Output | Should -Match 'All 1 skill'
+        }
+
         It 'folds a block-scalar (>) description and validates the folded text' {
             $dir = Join-Path $TestDrive 'block-good'
             New-Item -ItemType Directory -Path $dir -Force | Out-Null

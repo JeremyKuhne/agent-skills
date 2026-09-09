@@ -21,15 +21,18 @@
     created. Defaults to the current PowerShell home directory.
 
 .PARAMETER Private
-    Require a local-only source or a GitHub repository verified as private, and
-    reject synchronized, network, Git-worktree, or shared-root destinations.
+    Require a local-only source or one unambiguous github.com repository whose
+    identity and PRIVATE visibility GitHub CLI verifies. Also reject configured
+    synchronized source/destination roots, destination reparse points, and
+    unapproved multi-host or shared-root exposure.
 
 .PARAMETER AllowPrivateMultiHostExposure
     Explicitly accept the expanded discovery surface when a private skill is
     copied to multiple roots or to the neutral ~/.agents/skills root.
 
 .PARAMETER Force
-    Replace existing installed copies after staging and hash verification.
+    Replace existing copied skill directories after staging and hash
+    verification. Does not override source, path-type, or Git protections.
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -221,46 +224,264 @@ function Get-UserSkillsRoot {
     }
 }
 
+function Invoke-GitInspection {
+    param(
+        [Parameter(Mandatory)] [string] $GitPath,
+        [Parameter(Mandatory)] [string] $WorkingPath,
+        [Parameter(Mandatory)] [string[]] $Arguments
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $GitPath
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    [void] $startInfo.ArgumentList.Add('-C')
+    [void] $startInfo.ArgumentList.Add($WorkingPath)
+    foreach ($argument in $Arguments) {
+        [void] $startInfo.ArgumentList.Add($argument)
+    }
+
+    foreach ($name in @(
+            'GIT_DIR',
+            'GIT_WORK_TREE',
+            'GIT_COMMON_DIR',
+            'GIT_INDEX_FILE',
+            'GIT_OBJECT_DIRECTORY',
+            'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+            'GIT_CEILING_DIRECTORIES')) {
+        [void] $startInfo.Environment.Remove($name)
+    }
+    $startInfo.Environment['LC_ALL'] = 'C'
+    $startInfo.Environment['LANG'] = 'C'
+    $startInfo.Environment['GIT_TERMINAL_PROMPT'] = '0'
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) {
+            throw "Git could not be started from '$GitPath'."
+        }
+
+        $standardOutput = $process.StandardOutput.ReadToEndAsync()
+        $standardError = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            StandardOutput = $standardOutput.GetAwaiter().GetResult()
+            StandardError = $standardError.GetAwaiter().GetResult()
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
+function Get-GitRepositoryInspection {
+    param(
+        [Parameter(Mandatory)] [string] $Path,
+        [Parameter(Mandatory)] [string] $GitPath,
+        [Parameter(Mandatory)] [string] $BoundaryName
+    )
+
+    $result = Invoke-GitInspection `
+        -GitPath $GitPath `
+        -WorkingPath $Path `
+        -Arguments @('rev-parse', '--show-toplevel')
+    if ($result.ExitCode -eq 0) {
+        $roots = @($result.StandardOutput -split '\r?\n' |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique)
+        if ($roots.Count -ne 1 -or
+            -not [System.IO.Path]::IsPathFullyQualified($roots[0])) {
+            throw "Git returned an invalid repository root while inspecting the $BoundaryName boundary at '$Path'."
+        }
+
+        return [pscustomobject]@{
+            IsRepository = $true
+            Root = [System.IO.Path]::GetFullPath($roots[0])
+        }
+    }
+
+    $errorText = $result.StandardError.Trim()
+    $notRepositoryPatterns = @(
+        '^fatal: not a git repository \(or any of the parent directories\): \.git$'
+        '^fatal: not a git repository \(or any parent up to mount point [^\r\n]+\)\r?\nStopping at filesystem boundary \(GIT_DISCOVERY_ACROSS_FILESYSTEM not set\)\.$'
+    )
+    $isNotRepository = @($notRepositoryPatterns | Where-Object {
+            $errorText -match $_
+        }).Count -gt 0
+    if ($result.ExitCode -eq 128 -and $isNotRepository) {
+        return [pscustomobject]@{
+            IsRepository = $false
+            Root = $null
+        }
+    }
+
+    $detail = if ([string]::IsNullOrWhiteSpace($errorText)) {
+        $result.StandardOutput.Trim()
+    }
+    else {
+        $errorText
+    }
+    throw "Git could not inspect the $BoundaryName repository boundary at '$Path' (exit code $($result.ExitCode)): $detail"
+}
+
+function ConvertTo-GitHubRepositoryIdentity {
+    param([Parameter(Mandatory)] [string] $RemoteUrl)
+
+    $value = $RemoteUrl.Trim()
+    $remotePath = $null
+    foreach ($pattern in @(
+            '^https://github\.com/(?<path>[^?#]+)$',
+            '^git@github\.com:(?<path>[^?#]+)$',
+            '^ssh://git@github\.com/(?<path>[^?#]+)$')) {
+        if ($value -match $pattern) {
+            $remotePath = $Matches['path']
+            break
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($remotePath)) {
+        return $null
+    }
+
+    $remotePath = $remotePath.TrimEnd('/')
+    if ($remotePath.EndsWith('.git', [StringComparison]::OrdinalIgnoreCase)) {
+        $remotePath = $remotePath.Substring(0, $remotePath.Length - 4)
+    }
+    $parts = @($remotePath -split '/')
+    if ($parts.Count -ne 2 -or
+        $parts | Where-Object {
+            [string]::IsNullOrWhiteSpace($_) -or
+            $_ -in @('.', '..') -or
+            $_ -match '\s'
+        }) {
+        return $null
+    }
+
+    return "$($parts[0])/$($parts[1])"
+}
+
+function Get-SourceGitHubRepositoryIdentity {
+    param(
+        [Parameter(Mandatory)] [string] $RepositoryRoot,
+        [Parameter(Mandatory)] [string] $GitPath
+    )
+
+    $remoteResult = Invoke-GitInspection `
+        -GitPath $GitPath `
+        -WorkingPath $RepositoryRoot `
+        -Arguments @('remote')
+    if ($remoteResult.ExitCode -ne 0) {
+        throw 'The source repository remotes could not be inspected.'
+    }
+
+    $remoteNames = @($remoteResult.StandardOutput -split '\r?\n' |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($remoteNames.Count -eq 0) {
+        throw 'The source repository does not have a remote to verify as private.'
+    }
+
+    $identities = [System.Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::OrdinalIgnoreCase)
+    foreach ($remoteName in $remoteNames) {
+        $urlResult = Invoke-GitInspection `
+            -GitPath $GitPath `
+            -WorkingPath $RepositoryRoot `
+            -Arguments @('remote', 'get-url', '--all', $remoteName)
+        if ($urlResult.ExitCode -ne 0) {
+            throw "The source repository remote '$remoteName' could not be inspected."
+        }
+
+        $remoteUrls = @($urlResult.StandardOutput -split '\r?\n' |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($remoteUrls.Count -eq 0) {
+            throw "The source repository remote '$remoteName' does not have a fetch URL."
+        }
+
+        foreach ($remoteUrl in $remoteUrls) {
+            $identity = ConvertTo-GitHubRepositoryIdentity $remoteUrl
+            if ($null -eq $identity) {
+                throw "The source repository has an unsupported remote on '$remoteName'; private verification requires unambiguous github.com remotes."
+            }
+            [void] $identities.Add($identity)
+        }
+    }
+
+    if ($identities.Count -ne 1) {
+        throw 'The source repository has ambiguous GitHub remote identities.'
+    }
+
+    return @($identities)[0]
+}
+
 function Assert-PrivateSource {
     param(
         [Parameter(Mandatory)] [string] $SkillRoot,
         [Parameter(Mandatory)] [string] $GitPath
     )
 
-    $sourceRepository = & $GitPath -C $SkillRoot rev-parse --show-toplevel 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    $inspection = Get-GitRepositoryInspection `
+        -Path $SkillRoot `
+        -GitPath $GitPath `
+        -BoundaryName 'source'
+    if (-not $inspection.IsRepository) {
         return
     }
+
+    $sourceRepository = $inspection.Root
+    $sourceIdentity = Get-SourceGitHubRepositoryIdentity `
+        -RepositoryRoot $sourceRepository `
+        -GitPath $GitPath
 
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     if ($null -eq $gh) {
         throw 'GitHub CLI is required to verify a private Git repository.'
     }
 
-    Push-Location $sourceRepository
-    try {
-        $visibilityOutput = @(
-            & gh repo view --json visibility --jq '.visibility' 2>&1
-        )
-        $visibilityExitCode = $LASTEXITCODE
-    }
-    finally {
-        Pop-Location
-    }
+    $sourceRepositoryUrl = "https://github.com/$sourceIdentity"
+    $repositoryOutput = @(
+        & gh repo view $sourceRepositoryUrl `
+            --json 'nameWithOwner,visibility' 2>&1
+    )
+    $repositoryExitCode = $LASTEXITCODE
 
-    if ($visibilityExitCode -ne 0) {
+    if ($repositoryExitCode -ne 0) {
         throw 'The source repository visibility could not be verified as private.'
     }
 
-    $visibility = @($visibilityOutput | ForEach-Object {
-            $_.ToString().Trim().ToUpperInvariant()
-        } | Where-Object { $_ -in @('PRIVATE', 'PUBLIC', 'INTERNAL') } |
-        Select-Object -Unique)
-    if ($visibility.Count -ne 1) {
-        throw 'The source repository returned an unrecognized visibility result.'
+    $repositoryJson = @($repositoryOutput | ForEach-Object {
+            $_.ToString()
+        }) -join "`n"
+    try {
+        $repositoryMetadata = $repositoryJson | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw 'The source repository returned malformed repository metadata.'
     }
 
-    $visibilityValue = $visibility[0]
+    $identityProperty = $repositoryMetadata.PSObject.Properties['nameWithOwner']
+    $visibilityProperty = $repositoryMetadata.PSObject.Properties['visibility']
+    if ($null -eq $identityProperty -or
+        $identityProperty.Value -isnot [string] -or
+        [string]::IsNullOrWhiteSpace($identityProperty.Value) -or
+        $null -eq $visibilityProperty -or
+        $visibilityProperty.Value -isnot [string] -or
+        [string]::IsNullOrWhiteSpace($visibilityProperty.Value)) {
+        throw 'The source repository returned malformed repository metadata.'
+    }
+
+    if (-not $identityProperty.Value.Equals(
+            $sourceIdentity,
+            [StringComparison]::OrdinalIgnoreCase)) {
+        throw "The returned repository identity '$($identityProperty.Value)' does not match the reviewed source '$sourceIdentity'."
+    }
+
+    $visibilityValue = $visibilityProperty.Value.Trim().ToUpperInvariant()
+    if ($visibilityValue -notin @('PRIVATE', 'PUBLIC', 'INTERNAL')) {
+        throw 'The source repository returned an unrecognized visibility result.'
+    }
     if ($visibilityValue -cne 'PRIVATE') {
         throw "Refusing to install a private skill from a $visibilityValue repository."
     }
@@ -281,6 +502,11 @@ $skillRoot = (Resolve-Path -LiteralPath $sourceInputPath).Path
 $ProfileRoot = [System.IO.Path]::GetFullPath(
     $ExecutionContext.SessionState.Path.
         GetUnresolvedProviderPathFromPSPath($ProfileRoot))
+
+$skillEntryPoint = Join-Path $skillRoot 'SKILL.md'
+if (-not (Test-Path -LiteralPath $skillEntryPoint -PathType Leaf)) {
+    throw "The selected source directory must contain a top-level SKILL.md: '$skillRoot'."
+}
 
 $skillName = Split-Path -Leaf $skillRoot
 $validator = Join-Path $PSScriptRoot 'Validate-Skills.ps1'
@@ -309,7 +535,21 @@ if ($null -eq $git) {
     throw 'Git is required to verify source and destination repository boundaries.'
 }
 
+$syncRoots = @(
+    $env:OneDrive,
+    $env:OneDriveConsumer,
+    $env:OneDriveCommercial,
+    $env:Dropbox,
+    $env:GoogleDrive
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
 if ($Private) {
+    foreach ($syncRoot in $syncRoots) {
+        if (Test-PathWithin $skillRoot $syncRoot) {
+            throw "The source is under a synchronized folder: '$syncRoot'."
+        }
+    }
+
     Assert-PrivateSource $skillRoot $git.Source
 }
 
@@ -344,14 +584,6 @@ if ($Private -and
     throw 'A private skill requires -AllowPrivateMultiHostExposure for multiple roots or ~/.agents/skills.'
 }
 
-$syncRoots = @(
-    $env:OneDrive,
-    $env:OneDriveConsumer,
-    $env:OneDriveCommercial,
-    $env:Dropbox,
-    $env:GoogleDrive
-) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-
 foreach ($target in $targets) {
     if (Test-NetworkPath $target.Root) {
         throw "The destination cannot be a network share: '$($target.Root)'."
@@ -363,10 +595,24 @@ foreach ($target in $targets) {
         throw "The destination path is blocked by a file: '$($target.ExistingAncestor)'."
     }
 
-    $destinationRepository = & $git.Source -C $target.ExistingAncestor `
-        rev-parse --show-toplevel 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        throw "The destination is inside a Git worktree: '$destinationRepository'."
+    $destinationExists = Test-Path -LiteralPath $target.Destination
+    if ($destinationExists -and
+        -not (Test-Path -LiteralPath $target.Destination -PathType Container)) {
+        throw "The destination path is blocked by a file: '$($target.Destination)'."
+    }
+
+    $repositoryInspectionPath = if ($destinationExists) {
+        $target.Destination
+    }
+    else {
+        $target.ExistingAncestor
+    }
+    $destinationInspection = Get-GitRepositoryInspection `
+        -Path $repositoryInspectionPath `
+        -GitPath $git.Source `
+        -BoundaryName 'destination'
+    if ($destinationInspection.IsRepository) {
+        throw "The destination is inside a Git worktree: '$($destinationInspection.Root)'."
     }
 
     if ($Private) {

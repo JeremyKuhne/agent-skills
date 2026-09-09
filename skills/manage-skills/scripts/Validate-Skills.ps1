@@ -35,9 +35,10 @@
     overlay is present.
 
     The frontmatter parser handles inline scalars, `>`/`|` block scalars, and one
-    level of `metadata:` mapping, with `---` matched line by line. A known field
-    given a block mapping/sequence (or an unquoted-colon scalar) is rejected;
-    unknown fields may take any shape. For arbitrary YAML use the `skills-ref` tool.
+    level of scalar-valued `metadata:` mapping, with `---` matched line by line.
+    Duplicate keys, nested metadata, and collections in known scalar fields are
+    rejected. Unknown top-level fields may take any shape. For arbitrary YAML use
+    the `skills-ref` tool.
 
     Exits 0 when every skill is valid, 1 otherwise.
 
@@ -87,8 +88,8 @@ $AllowedBinding = @('none', 'optional-overlay', 'required-overlay')
 $AllowedRisk = @('advisory', 'local-write', 'remote-write')
 $AllowedMaturity = @('experimental', 'canary', 'stable')
 $OverlayCue = 'If `overlay.md` exists beside this file, read it before acting'
-# Spec scalar fields. If one of these is given a block mapping/sequence instead of
-# a scalar it is rejected; unknown fields and `metadata` are not shape-checked.
+# Spec scalar fields. If one of these is given a block/flow mapping or sequence
+# instead of a scalar it is rejected; unknown top-level fields are not shape-checked.
 $KnownScalarFields = @('name', 'description', 'license', 'compatibility', 'allowed-tools')
 
 function Get-SkillMd ([string] $dir) {
@@ -145,9 +146,10 @@ function Join-BlockScalar ([System.Collections.Generic.List[string]] $blockLines
 
 # Parse SKILL.md frontmatter into a case-sensitive ordered map. The `---`
 # delimiters are matched line by line. Handles inline scalars, `>`/`|` block
-# scalars, and one level of `metadata:` block mapping. A known field given a block
-# mapping/sequence is rejected; an unknown field may take any shape (unvalidated).
-# Not a general YAML parser; for arbitrary YAML use `skills-ref`.
+# scalars, and one level of scalar-valued `metadata:` block mapping. Duplicate
+# keys, nested metadata, and collections in known scalar fields are rejected; an
+# unknown top-level field may take any shape (unvalidated). Not a general YAML
+# parser; for arbitrary YAML use `skills-ref`.
 function Read-Frontmatter ([string] $content) {
     $allLines = $content -split "\r?\n"
     if ($allLines.Count -eq 0 -or $allLines[0].Trim() -ne '---') {
@@ -173,6 +175,9 @@ function Read-Frontmatter ([string] $content) {
         if ($idx -lt 0) { throw "Invalid YAML in frontmatter near: $line" }
         $key = $line.Substring(0, $idx).Trim()
         $rest = $line.Substring($idx + 1).Trim()
+        if ($map.Contains($key)) {
+            throw "Duplicate frontmatter key '$key'."
+        }
 
         if ($rest -match '^[|>][+-]?\d*\s*$') {
             $literal = $rest.StartsWith('|')
@@ -194,16 +199,40 @@ function Read-Frontmatter ([string] $content) {
 
             if ($hasChild -and $key -ceq 'metadata' -and -not $isSequence) {
                 $sub = New-Object System.Collections.Specialized.OrderedDictionary ([System.StringComparer]::Ordinal)
+                $metadataIndent = $null
                 $i++
                 while ($i -lt $lines.Count) {
                     if ([string]::IsNullOrWhiteSpace($lines[$i])) { $i++; continue }
                     if ($lines[$i] -notmatch '^\s') { break }
                     if ($lines[$i].TrimStart().StartsWith('#')) { $i++; continue }
-                    $kv = $lines[$i].Trim()
+                    $indent = [regex]::Match($lines[$i], '^\s+').Length
+                    if ($null -eq $metadataIndent) {
+                        $metadataIndent = $indent
+                    }
+                    elseif ($indent -ne $metadataIndent) {
+                        throw 'Nested metadata mappings or sequences are not supported; metadata values must be inline scalars.'
+                    }
+
+                    $kv = $lines[$i].Substring($indent)
                     $ci = $kv.IndexOf(':')
                     if ($ci -lt 0) { throw "Invalid YAML in frontmatter near: $kv" }
                     $sk = $kv.Substring(0, $ci).Trim()
                     $sv = $kv.Substring($ci + 1).Trim()
+                    if ($sub.Contains($sk)) {
+                        throw "Duplicate metadata key '$sk'."
+                    }
+                    $metadataFlowShape = if ($sv.StartsWith('[')) {
+                        'sequence'
+                    }
+                    elseif ($sv.StartsWith('{')) {
+                        'mapping'
+                    }
+                    else {
+                        $null
+                    }
+                    if ($null -ne $metadataFlowShape) {
+                        throw "Field 'metadata.$sk' must be a scalar value, not a flow $metadataFlowShape."
+                    }
                     Test-InlineColon $sk $sv
                     $sub[$sk] = Get-ScalarValue $sv
                     $i++
@@ -228,6 +257,19 @@ function Read-Frontmatter ([string] $content) {
             }
             $map[$key] = ''
             continue
+        }
+
+        $flowShape = if ($rest.StartsWith('[')) {
+            'sequence'
+        }
+        elseif ($rest.StartsWith('{')) {
+            'mapping'
+        }
+        else {
+            $null
+        }
+        if ($key -cin $KnownScalarFields -and $null -ne $flowShape) {
+            throw "Field '$key' must be a scalar value, not a flow $flowShape."
         }
 
         Test-InlineColon $key $rest

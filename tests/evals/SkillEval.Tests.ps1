@@ -51,11 +51,17 @@ Describe 'Skill evaluation scenario contract' {
                 'technical-writing-artifact-repository-documentation')) {
             $technicalWritingScenarios.id | Should -Contain $artifactScenario
         }
-        $manageSkillsScenarios.Count | Should -Be 1
+        $manageSkillsScenarios.Count | Should -Be 4
         @($manageSkillsScenarios | Where-Object skill -ne 'manage-skills').Count |
             Should -Be 0
         $manageSkillsScenarios.id |
             Should -Contain 'manage-skills-project-integration-gate'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-pinned-local-drift'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-reconciles-exact-divergence'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-ownership-specific-authoring'
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
         $userVoiceScenarios.Count | Should -Be 8
@@ -86,8 +92,129 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'performance-testing-rejects-exit-zero-without-work'
         $performanceTestingScenarios.id |
             Should -Contain 'performance-testing-refuses-incompatible-cpu-denominators'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 53
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 56
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
+    }
+
+    It 'compiles every manage-skills scenario pattern' {
+        $scenarios = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath)
+        foreach ($scenario in $scenarios) {
+            foreach ($field in @(
+                    'requiredResponsePatterns',
+                    'forbiddenResponsePatterns',
+                    'requiredCommandPatterns',
+                    'forbiddenCommandPatterns')) {
+                foreach ($pattern in @($scenario.$field)) {
+                    { [regex]::new([string] $pattern) } |
+                        Should -Not -Throw -Because "$($scenario.id).$field must contain valid regular expressions"
+                }
+            }
+        }
+    }
+
+    It 'permits a compliant lifecycle response: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'pinned drift warns against unpinning'
+            ScenarioId = 'manage-skills-pinned-local-drift'
+            Response = 'Run gh skill update without --unpin after resolving the unexplained drift.'
+        }
+        @{
+            CaseName = 'exact divergence warns against whole-file omission'
+            ScenarioId = 'manage-skills-reconciles-exact-divergence'
+            Response = 'Exclude the exact recorded patch from the derived comparison, not the whole file.'
+        }
+        @{
+            CaseName = 'exact divergence limits acceptance'
+            ScenarioId = 'manage-skills-reconciles-exact-divergence'
+            Response = 'Not all changes are accepted; only exact matching portions can be reconciled.'
+        }
+        @{
+            CaseName = 'personal authoring rejects repository infrastructure'
+            ScenarioId = 'manage-skills-ownership-specific-authoring'
+            Response = 'A personal skill must use local validation and does not require a repository or FORMAT.md.'
+        }
+        @{
+            CaseName = 'pinned drift rejects skipped-update inference'
+            ScenarioId = 'manage-skills-pinned-local-drift'
+            Response = 'A skipped update does not prove the installed skill is clean. No upstream updates does not mean clean.'
+        }
+        @{
+            CaseName = 'ownership authoring limits portfolio requirements'
+            ScenarioId = 'manage-skills-ownership-specific-authoring'
+            Response = 'Not all skills require portfolio metadata. I have not created the skill or files.'
+        }
+        @{
+            CaseName = 'project integration reports no writes'
+            ScenarioId = 'manage-skills-project-integration-gate'
+            Response = 'I have not installed the skill or edited the existing files.'
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $matchingPatterns = @($scenario.forbiddenResponsePatterns |
+            Where-Object { $Response -match $_ })
+
+        $matchingPatterns.Count | Should -Be 0 -Because $CaseName
+    }
+
+    It 'rejects an affirmative lifecycle violation: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'pinned drift unpins for inspection'
+            ScenarioId = 'manage-skills-pinned-local-drift'
+            Response = 'Run gh skill update --unpin to inspect the installed state.'
+        }
+        @{
+            CaseName = 'exact divergence omits a whole file'
+            ScenarioId = 'manage-skills-reconciles-exact-divergence'
+            Response = 'Exclude the entire recorded SKILL.md file from comparison.'
+        }
+        @{
+            CaseName = 'exact divergence accepts every installed change'
+            ScenarioId = 'manage-skills-reconciles-exact-divergence'
+            Response = 'All installed changes are accepted as the recorded divergence.'
+        }
+        @{
+            CaseName = 'personal authoring mandates repository infrastructure'
+            ScenarioId = 'manage-skills-ownership-specific-authoring'
+            Response = 'A personal skill must use a repository and FORMAT.md.'
+        }
+        @{
+            CaseName = 'pinned drift treats a skipped update as proof'
+            ScenarioId = 'manage-skills-pinned-local-drift'
+            Response = 'A skipped update proves the installed skill is clean.'
+        }
+        @{
+            CaseName = 'pinned drift treats no updates as proof'
+            ScenarioId = 'manage-skills-pinned-local-drift'
+            Response = 'No upstream updates means clean.'
+        }
+        @{
+            CaseName = 'ownership authoring universalizes portfolio metadata'
+            ScenarioId = 'manage-skills-ownership-specific-authoring'
+            Response = 'All skills require portfolio metadata.'
+        }
+        @{
+            CaseName = 'project integration claims installation'
+            ScenarioId = 'manage-skills-project-integration-gate'
+            Response = 'I installed the skill.'
+        }
+        @{
+            CaseName = 'project integration claims an edit'
+            ScenarioId = 'manage-skills-project-integration-gate'
+            Response = 'I edited the existing files.'
+        }
+        @{
+            CaseName = 'ownership authoring claims creation'
+            ScenarioId = 'manage-skills-ownership-specific-authoring'
+            Response = 'I created the skill.'
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $matchingPatterns = @($scenario.forbiddenResponsePatterns |
+            Where-Object { $Response -match $_ })
+
+        $matchingPatterns.Count | Should -BeGreaterThan 0 -Because $CaseName
     }
 
     It 'rejects a scenario id that can escape its run directory' {

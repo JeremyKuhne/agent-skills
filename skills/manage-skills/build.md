@@ -81,36 +81,7 @@ exposed secrets). Before installing anything from a public source:
 
 ## Building a new skill (it exists nowhere)
 
-Author it to the repo's `FORMAT.md`:
-
-- A thin `SKILL.md` core under the size budget; push deep detail into sibling
-  `*.md` files in the same directory (the pattern this very skill uses).
-- `name` matches the directory; a "pushy" `description` with explicit trigger
-  phrasing that will auto-invoke on the right asks without over-firing.
-- Set every portfolio metadata field (`portability`, `applicability`, `binding`,
-  `risk`, `maturity`, `requires`, and `related`) using the repo's `FORMAT.md`.
-- For an overlay-aware core, include the standard loader sentence. Create a
-  downstream overlay from `assets/overlay.md.tmpl`; replace `{{SKILL_NAME}}` and
-  `{{CORE_PIN}}`, then add only repository-specific bindings.
-- Add a row to the catalog `README.md` inventory in the same change, and a
-  disambiguation entry if the trigger phrasing competes with an existing skill.
-- Once behavior and routing are complete, run `technical-writing` in revise
-  mode over the human- and agent-facing text. Preserve literal trigger phrases,
-  normative force, tool and file names, permission boundaries, and stop
-  conditions. Do not let a clarity edit change the workflow silently.
-- Validate the `SKILL.md` frontmatter with the bundled
-  [scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1) in strict portfolio
-  mode, then run the repo's remaining agent-file checks (the installed-artifact
-  link check, markdown lint, and generated catalog check).
-
-Before calling the skill complete, select and verify its runtime targets with
-[install.md](install.md), run the semantic workflow review in
-[review.md](review.md), then hand the resulting files to `agent-files-review` for
-frontmatter, links, whitespace, and repository diagnostics. A validator pass does
-not establish that the skill will invoke at the right time or lead an agent to a
-finished outcome.
-
-### Canonical source ownership
+### Choose canonical source ownership first
 
 Decide where the canonical source lives before writing much. This is independent
 of where runtime copies will be installed:
@@ -125,15 +96,90 @@ of where runtime copies will be installed:
 - **Born-shared** - the skill is generic and other repos will want it. First ask
   the user whether to pursue commons authoring, as required by
   [update.md](update.md).
-  Prepare and validate the portable core in a commons checkout or local staging
-  branch, but do not create a remote branch, push, or open a PR without the
-  repository's explicit approvals. Once the shared change is merged and released,
-  vendor that immutable revision back here with an overlay. Keep repo-specific
-  paths, cross-references, and example links out of the core from the start - they
-  belong in the overlay. Leave a short prose cue in the core telling the agent to
-  read `overlay.md` when present; that stable loader contract is what gets the
-  overlay read.
+  Prepare and validate the portable core in the owning commons checkout, but do
+  not create a branch, commit, push, or open a PR without that repository's
+  explicit approvals. Once the shared change is merged and released, vendor the
+  immutable revision with an overlay where needed.
 
 A skill that is mostly generic but needs a few project or user specifics is still
 born-shared: the generic part is the core, the specifics are an installation-local
 overlay. The test is whether another consumer would want the core unchanged.
+
+### Apply the baseline package checks
+
+Every ownership class still needs a valid, complete skill package:
+
+- Keep a thin top-level `SKILL.md`; move deep detail into bundled sibling or
+  `references/` files.
+- Make `name` match the directory and write a specific `description` that names
+  the requests that should invoke the skill without stealing neighboring work.
+- Keep every referenced resource and script inside the package unless the
+  owning scope explicitly supplies it through an overlay.
+- Run [scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1) without strict
+  portfolio mode when the bundled script is available. Also use the target
+  host's diagnostics or a reference Agent Skills validator when available.
+- After behavior and routing settle, run `technical-writing` in revise mode.
+  Preserve literal triggers, requirement strength, tool and file names,
+  permissions, and stop conditions.
+
+The bundled normal validator is the portable fallback; it does not establish an
+owning repository's catalog, metadata vocabulary, or publication policy. If a
+required owning-scope or host check is unavailable, name that check and stop
+before claiming completion. Report optional checks as `not run` rather than
+inventing a pass.
+
+### Author a born-shared core
+
+Follow the **owning commons'** format, metadata, catalog, overlay, and publication
+rules. A commons that requires the bundled portfolio contract runs:
+
+```pwsh
+pwsh scripts/Validate-Skills.ps1 <commons-skills-root> `
+  -RequirePortfolioMetadata
+```
+
+Use that strict mode only when the owning commons adopts those fields. Add or
+regenerate a catalog only when its local policy requires one. Keep repository
+paths, cross-references, and examples out of the core; put consumer bindings in
+an overlay. For this portfolio contract, an overlay-aware core carries the
+loader sentence and a downstream overlay can start from
+`assets/overlay.md.tmpl`.
+
+Run every additional validator, link check, artifact-isolation check, and catalog
+check required by the owning commons. Its documented format and commands are
+authoritative; this portable workflow does not assume every commons has a file
+named `FORMAT.md` or the same metadata vocabulary.
+
+### Author a born-repository skill
+
+Write the canonical package in a project root documented by the target host.
+Follow the repository's local agent instructions, schema extensions, validation,
+and catalog policy. Do not add portfolio fields, a `FORMAT.md`, or a catalog
+merely because a shared commons uses them. Run strict portfolio mode only if this
+repository explicitly adopts that contract; otherwise use the bundled normal
+validator plus the repository and host checks that actually exist.
+
+Repository-specific paths and commands can live directly in a born-repository
+skill. An overlay is useful only when the repository deliberately vendors a
+separate portable core; do not manufacture a core/overlay split for a package
+with one repository owner.
+
+### Author a born-personal skill
+
+Use a local-only canonical directory or a controlled private source and apply
+the privacy gate in [install.md](install.md). A personal skill needs no
+repository checkout, `FORMAT.md`, catalog, portfolio metadata, repository link
+checker, or publication validator. Validate the package with the bundled normal
+validator and each available target host's diagnostics, then install only at the
+approved user scope. Keep secrets out of the package and do not infer remote
+availability from a local install.
+
+### Finish the applicable path
+
+Select and verify runtime targets with [install.md](install.md), then run the
+semantic workflow review in [review.md](review.md). For a repository-backed
+source, hand file checks to `agent-files-review` and the owning repository's
+tools. For a repository-free personal source, use the bundled normal validator,
+host diagnostics, and direct link/resource inspection instead. A validator pass
+does not establish that the skill invokes correctly or leads an agent to a
+finished outcome.

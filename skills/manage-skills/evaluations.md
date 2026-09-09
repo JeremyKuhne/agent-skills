@@ -207,14 +207,101 @@ Expected:
 - Neither path weakens the duplicate-name, privacy, provenance, or verification
   gates that already apply.
 
+## 14. Pinned skill with unchanged upstream and local drift
+
+Setup:
+
+- An installed skill records immutable pin `v1` and is still pinned.
+- `gh skill update --dry-run` skips it; the remote tree has not moved.
+- The local `SKILL.md` body and an existing resource differ from the `v1`
+  artifact, with no pending-divergence record.
+
+Expected:
+
+- Treats the `gh` result only as upstream-discovery state, not proof of a clean
+  local copy.
+- Obtains the exact `v1` artifact and retains a raw diff for both changed paths.
+- Compares parsed authored frontmatter/body and resource bytes independently of
+  generated provenance.
+- Blocks on unexplained local drift without unpinning, rewriting provenance, or
+  changing files.
+
+## 15. Recorded divergence plus unexplained drift
+
+Setup:
+
+- The current pin is `v1`.
+- A current-base record contains an exact `SKILL.md` body patch and an exact
+  added-resource hash, with reason and pending-upstream status.
+- The installed copy contains both recorded changes plus a second unrecorded body
+  hunk, a changed existing resource, and a deleted script.
+
+Expected:
+
+- Surfaces every changed, added, and deleted path before classification.
+- Applies the exact records to a scratch `v1` artifact and accepts only the
+  matching body patch and added resource as reconciled divergence.
+- Does not exclude either recorded file from full comparison.
+- Blocks the extra body hunk, changed resource, and deletion as unexplained drift.
+
+## 16. Absorbed, retained, and stale divergence records
+
+Setup:
+
+- Candidate `v2` contains one exact recorded `v1` body change.
+- A second exact `v1` resource change remains needed but is absent from `v2`.
+- A third record names an older base pin and has not been reconciled to `v1`.
+
+Expected:
+
+- Stops on the stale record before changing the pin.
+- After that record receives an explicit disposition, removes the body record as
+  absorbed by `v2`.
+- Rebases the retained resource change onto a scratch `v2` artifact and updates
+  its base pin, exact patch/hash, paths, reason, and upstream status.
+- Requires a complete candidate-to-derived-artifact comparison with no residue
+  before re-pinning.
+
+## 17. Ownership-specific authoring
+
+Prompts:
+
+Shared:
+
+> Build a portable skill for our commons.
+
+Repository-specific:
+
+> Build a skill for this repository's release script and local paths.
+
+Personal:
+
+> Build a private preference skill only for my local user profile; there is no
+> repository for it.
+
+Expected:
+
+- The shared path follows the owning commons' strict format, metadata, catalog,
+  artifact, and publication gates, with remote actions separately approved.
+- The repository path follows local policy and host discovery roots; it does not
+  invent commons portfolio fields, `FORMAT.md`, or a catalog.
+- The personal path uses local-only canonical source, the privacy gate, bundled
+  normal validation, and host diagnostics without requiring a repository.
+- Every unavailable required gate is reported and blocks a completion claim;
+  optional checks are reported as not run.
+- Ownership remains separate from runtime scope in all three paths.
+
 ## Acceptance
 
 For a lifecycle change:
 
 1. Run all affected cases in a fresh read-only semantic review.
-2. Run the strict and reference validators.
+2. Run the canonical owner's validation: commons strict gates for shared cores,
+   repository-local gates for born-repository skills, and bundled normal plus
+   host validation for repository-free personal skills.
 3. Run source-aligned Markdown and relative-link checks.
-4. Compare vendored files to the base pin and reconcile the divergence ledger.
-5. Verify installed copies or registrations through each target host.
+4. Compare vendored files to the recorded base pin before upstream discovery and
+   reconcile every exact divergence record without whole-file exclusions.
+5. Verify installed copies or registrations through each applicable target host.
 6. Parse bundled scripts and run their isolated success, replacement, privacy,
    deduplication, and rollback fixtures.
