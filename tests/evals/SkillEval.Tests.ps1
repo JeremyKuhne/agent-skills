@@ -86,7 +86,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'dotnet-pipes-troubleshoot-single-client-server'
         $dotNetPipesScenarios.id |
             Should -Contain 'dotnet-pipes-routing-pipelines-near-miss'
-        $performanceTestingScenarios.Count | Should -Be 3
+        $performanceTestingScenarios.Count | Should -Be 10
         @($performanceTestingScenarios | Where-Object skill -ne 'performance-testing').Count |
             Should -Be 0
         $performanceTestingScenarios.id |
@@ -95,6 +95,16 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'performance-testing-rejects-exit-zero-without-work'
         $performanceTestingScenarios.id |
             Should -Contain 'performance-testing-refuses-incompatible-cpu-denominators'
+        foreach ($scenarioId in @(
+                'performance-testing-preflights-benchmarkdotnet-etw-package',
+                'performance-testing-fails-closed-when-live-corpus-changes',
+                'performance-testing-rejects-common-mode-oracle',
+                'performance-testing-uses-native-call-count-mechanism',
+                'performance-testing-reruns-pool-allocation-in-matched-state',
+                'performance-testing-requires-callback-exit-matrix',
+                'performance-testing-serializes-shared-output-builds')) {
+            $performanceTestingScenarios.id | Should -Contain $scenarioId
+        }
         $dotNetFileCreationScenarios.Count | Should -Be 16
         @($dotNetFileCreationScenarios | Where-Object skill -ne 'dotnet-file-creation').Count |
             Should -Be 0
@@ -105,7 +115,7 @@ Describe 'Skill evaluation scenario contract' {
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-roaming-split'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-defaults-overrides'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-enforced-policy'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 72
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 79
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
@@ -122,6 +132,129 @@ Describe 'Skill evaluation scenario contract' {
                         Should -Not -Throw -Because "$($scenario.id).$field must contain valid regular expressions"
                 }
             }
+        }
+    }
+
+    It 'compiles every performance-testing scenario pattern' {
+        $scenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
+        foreach ($scenario in $scenarios) {
+            foreach ($field in @(
+                    'requiredResponsePatterns',
+                    'forbiddenResponsePatterns',
+                    'requiredCommandPatterns',
+                    'forbiddenCommandPatterns')) {
+                foreach ($pattern in @($scenario.$field)) {
+                    { [regex]::new([string] $pattern) } |
+                        Should -Not -Throw -Because "$($scenario.id).$field must contain valid regular expressions"
+                }
+            }
+        }
+    }
+
+    It 'accepts a compliant performance-testing response: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'ETW package preflight'
+            ScenarioId = 'performance-testing-preflights-benchmarkdotnet-etw-package'
+            Response = 'Do not start the UAC capture now. Before UAC, preflight the evaluated PackageReference items, add BenchmarkDotNet.Diagnostics.Windows, and build in Release. A central package version is not sufficient for inclusion.'
+        },
+        @{
+            CaseName = 'live corpus mutation'
+            ScenarioId = 'performance-testing-fails-closed-when-live-corpus-changes'
+            Response = 'Reject the result because the filesystem corpus changed to 501 items. Use an independent oracle, validate the expected result after every measured operation, and retain a fingerprint or population count.'
+        },
+        @{
+            CaseName = 'common-mode oracle'
+            ScenarioId = 'performance-testing-rejects-common-mode-oracle'
+            Response = 'The gate is invalid: the shared predicate creates a common-mode defect, so matching nonempty results do not prove correctness. Build an independent oracle before measurement.'
+        },
+        @{
+            CaseName = 'native call counts'
+            ScenarioId = 'performance-testing-uses-native-call-count-mechanism'
+            Response = 'The workload made 200 native calls before and 100 calls after. The call count supports the early-stop mechanism. Missing native symbols do not block that conclusion, but the call count does not prove it is faster and elapsed timing still needs a matched comparison.'
+        },
+        @{
+            CaseName = 'pool allocation state'
+            ScenarioId = 'performance-testing-reruns-pool-allocation-in-matched-state'
+            Response = 'The allocation claim is inconclusive. ArrayPool may refill or reach a new high-water state. Repeat under matched process launch, warmup, profiler, and workload state, and report cold and warm behavior separately; 744 B does not prove a regression.'
+        },
+        @{
+            CaseName = 'callback exit matrix'
+            ScenarioId = 'performance-testing-requires-callback-exit-matrix'
+            Response = 'Block the performance claim. The exit matrix is incomplete: the handled data-read failure misses the callback. Assert callback count and ordering for every exit, including thrown failure or cancellation where applicable; a performance win does not excuse the contract gap.'
+        },
+        @{
+            CaseName = 'shared output serialization'
+            ScenarioId = 'performance-testing-serializes-shared-output-builds'
+            Response = 'Run the MSBuild build, test, and BenchmarkDotNet child sequentially because they share obj and bin. They may run concurrently only with distinct intermediate and output trees. Read-only analysis of immutable traces may run in parallel.'
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $missingPatterns = @($scenario.requiredResponsePatterns |
+            Where-Object { $Response -notmatch $_ })
+        $forbiddenPatterns = @($scenario.forbiddenResponsePatterns |
+            Where-Object { $Response -match $_ })
+
+        $missingPatterns.Count | Should -Be 0 -Because $CaseName
+        $forbiddenPatterns.Count | Should -Be 0 -Because $CaseName
+    }
+
+    It 'rejects an incomplete performance-testing response: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'central version claimed to include the package'
+            ScenarioId = 'performance-testing-preflights-benchmarkdotnet-etw-package'
+            Response = 'Directory.Packages.props supplies the version and already includes the package, so do not add the PackageReference. Before UAC, preflight the evaluated project and run a Release build with BenchmarkDotNet.Diagnostics.Windows.'
+            ExpectForbidden = $true
+        },
+        @{
+            CaseName = 'pool state matches warmup only'
+            ScenarioId = 'performance-testing-reruns-pool-allocation-in-matched-state'
+            Response = 'The allocation claim is inconclusive. ArrayPool may refill. Repeat under the same warmup state and report cold and warm behavior separately.'
+            ExpectForbidden = $false
+        },
+        @{
+            CaseName = 'callback ordering omitted'
+            ScenarioId = 'performance-testing-requires-callback-exit-matrix'
+            Response = 'Block the performance claim. The handled data-read failure misses the callback. Cover every exit and assert callback count, including cancellation where applicable.'
+            ExpectForbidden = $false
+        },
+        @{
+            CaseName = 'call count claimed as latency proof'
+            ScenarioId = 'performance-testing-uses-native-call-count-mechanism'
+            Response = 'The 200 calls before and 100 after prove the candidate is faster. The call count validates the early-stop mechanism and missing native symbols do not block that conclusion.'
+            ExpectForbidden = $false
+        },
+        @{
+            CaseName = 'live corpus speedup accepted'
+            ScenarioId = 'performance-testing-fails-closed-when-live-corpus-changes'
+            Response = 'Accept the 12% speedup because both results are nonempty. The filesystem now has 501 items.'
+            ExpectForbidden = $false
+        },
+        @{
+            CaseName = 'common-mode oracle accepted'
+            ScenarioId = 'performance-testing-rejects-common-mode-oracle'
+            Response = 'Accept the result because the shared predicate gives both implementations the same nonempty output.'
+            ExpectForbidden = $false
+        },
+        @{
+            CaseName = 'shared builds run in parallel'
+            ScenarioId = 'performance-testing-serializes-shared-output-builds'
+            Response = 'Run the build, test, and BenchmarkDotNet child in parallel even though they share obj and bin. Immutable trace analysis may also run in parallel.'
+            ExpectForbidden = $false
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $missingPatterns = @($scenario.requiredResponsePatterns |
+            Where-Object { $Response -notmatch $_ })
+        $forbiddenPatterns = @($scenario.forbiddenResponsePatterns |
+            Where-Object { $Response -match $_ })
+
+        if ($ExpectForbidden) {
+            $forbiddenPatterns.Count | Should -BeGreaterThan 0 -Because $CaseName
+        }
+        else {
+            $missingPatterns.Count | Should -BeGreaterThan 0 -Because $CaseName
         }
     }
 

@@ -17,6 +17,7 @@ Use only the sections the task needs:
 | Fresh-process CLI startup or multiple phases | [measurement contract](#establish-the-measurement-contract) |
 | Multiple optimization candidates | [budget and stages](#bound-the-investigation-before-the-first-run) |
 | Consumable/mutable phase inputs | [fresh-state measurement](#measure-phases-with-fresh-state) |
+| Mutable external corpus | [live-input validity](#treat-live-input-as-a-validity-gate) |
 | External baseline or revision | [exact-source oracle](#compare-an-exact-source-oracle) |
 | Dirty or generated retained inputs | [reconstructable run](#preserve-a-reconstructable-run) |
 
@@ -65,6 +66,24 @@ share.
 These are measurement-validity gates, not success criteria for the candidate. A
 valid neutral or unfavorable result remains evidence and feeds the keep/reject/
 inconclusive decision below.
+
+### Treat live input as a validity gate
+
+A registry, filesystem, database, service, or other mutable external corpus can
+change after setup and turn a fast wrong answer into a plausible benchmark row.
+Build the correctness oracle independently from the candidate: do not share the
+candidate's parser, predicate, traversal, or normalization when that shared logic
+could create a common-mode error.
+
+Require nonempty equivalent results before measurement, then validate the expected
+semantic result during or immediately after every measured operation. Keep that check
+outside the timed region when the harness permits. If fail-closed validation must run
+inside the measured wrapper, apply the same check to every comparison arm and report
+its cost. Fail the run when the population or expected result changes; setup-only
+agreement is insufficient for a long-running live-input benchmark. Retain the accepted
+population count or a non-secret corpus fingerprint with the result. A count establishes
+cardinality only; when records can change without changing the count, retain a
+fingerprint so later comparisons can prove they measured equivalent work.
 
 ### Name process and cache state
 
@@ -269,6 +288,31 @@ end-to-end operation:
 A large gap usually means setup leaked into a measurement, state was reused, or
 the batch changed GC and live-set behavior.
 
+### Count expensive boundary operations
+
+When inclusive attribution ends at a P/Invoke or I/O boundary, count the expensive
+operations implied by the workload. Use an independent counter or event source where
+possible, and reconcile the total to the verified workload denominator. Sampled time
+identifies the responsible path; operation counts explain the mechanism even when
+native symbols remain incomplete. Unresolved native frames do not invalidate an
+independent count of boundary crossings.
+
+Use the count to test concrete hypotheses: stop once a search result is known,
+remove a terminal enumeration probe, avoid reopening an object, or batch calls when
+the native API supports it. A lower call count supports that mechanism; it does not
+by itself establish an elapsed-time improvement, which still needs a matched timing
+comparison.
+
+### Verify callback exits before timing
+
+When a candidate adds filtering, cancellation, continuation, or early-stop callbacks,
+list every exit from the affected state machine before benchmarking. Test callback
+count and ordering for rejected input, successful metadata-only processing, successful
+full processing, a boundary or data-read failure caught by the state machine, and a
+failure or cancellation thrown to the caller where applicable. Reject the performance
+claim until the matrix is complete; a faster path does not excuse an extension-point
+contract gap.
+
 ## Keep an experiment ledger
 
 Start the ledger before the first edit and add one row per candidate. Record
@@ -403,6 +447,9 @@ The workflow is complete when all applicable checks pass:
   enough query-level evidence.
 - Every accepted run has nonzero discovered work, populated expected rows, reconciled operation/phase denominators, equivalent semantic output, and exact subject/debug identities.
 - CPU samples, interval-derived CPU time, elapsed time, waits, and GC pauses retain distinct units; incompatible or absent interval provenance cannot produce a time comparison.
+- A live-input run validates an independent, nonempty semantic result throughout measurement and retains its population count plus a fingerprint when records can change without changing cardinality.
+- Native or I/O call counts reconcile to the workload denominator when they are used to explain a boundary optimization.
+- Callback-driven candidates cover every applicable exit with asserted callback count and ordering before performance evidence is accepted.
 - The ledger preserves rejected variants and explains the final decision.
 - An opt-in BenchmarkDotNet child build references the assembly built from the
   recorded oracle commit and hash, semantic-parity checks pass on fresh state, and
