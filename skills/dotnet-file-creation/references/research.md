@@ -1,9 +1,154 @@
 # Research: cross-platform file creation on .NET
 
-Evidence base for the `dotnet-file-creation` skill. Every number below was
-measured, not inferred.
+Evidence base for the `dotnet-file-creation` skill. Keep three levels separate:
 
-Environments:
+- **Documented contract:** an API or OS specification, within its stated scope.
+- **Implementation evidence:** inspected versioned runtime source; not a promise
+  for another release, storage backend, or configuration.
+- **Measurement:** an executed test in a named environment; not proof of access
+  denial to another identity, adversarial race resistance, or crash durability.
+
+Primary sources and independent security/storage guidance are indexed in
+[documentation.md](documentation.md).
+
+## Review on 2026-09-09
+
+The initial review emphasized hardened recipes; usability review then exposed
+that the entry point imposed those prerequisites on ordinary applications too.
+The revised default is an unelevated application using normal per-user account
+protections, with concrete triggers for stronger guarantees. Direct discardable
+writes and replaceable preference saves need not solve adversarial provisioning.
+This is an explicit risk policy, not a new API guarantee.
+
+The hardened adversary remains another unprivileged account. Hardened recipes
+require an already trusted application parent and stable ancestors; they exclude
+hostile code with the same effective authority, fully privileged
+administrators/root, and a compromised storage server. Lower-privilege input into
+elevated code still needs review. The recipes do not implement a validator for
+hostile filesystem trees.
+
+Microsoft's known-folder definitions and object-access documentation distinguish
+per-user AppData from common machine locations and actual access policy. A normal
+user can edit their own AppData without elevation; a special-folder name does
+not make the contents administrator-approved. This distinction is now an entry
+point rule and an audit case, not an advanced caveat left to the reader to infer.
+
+| Reviewed claim | Evidence | Resulting boundary |
+| --- | --- | --- |
+| A profile path proves privacy | Windows object-access and inheritance documentation; CERT secure-directory guidance | Ordinary apps can assume normal account protection; hardened claims require ownership, ancestors, contents, and effective child-access evidence. |
+| Requesting `600` guarantees exactly `600` | Linux `umask(2)` and default-ACL rules | Ordinary bits are bounded by the request; owner bits can be removed. Mode queries do not prove every ACL policy. |
+| Both platform guards silence CA1416 | Microsoft CA1416 documentation | Both `OperatingSystem` and `RuntimeInformation.IsOSPlatform` are recognized; guard the Unix setter. |
+| Directory creation secures an existing tree | .NET 10.0.0 Unix filesystem source | Existing entries are reused; explicit Unix mode applies only to a newly created leaf. |
+| Unix `FileShare` equals Windows sharing | .NET 10.0.0 Unix SafeFileHandle source | Coarser, best-effort advisory locking; unsupported locking and configuration can remove exclusion. |
+| Delete sharing guarantees Windows replacement | Local Windows tests and a sharing-mode probe | `File.Move` refused an open destination even with all sharing flags; handle refusal without deleting the old version. |
+| Flush then rename is a durable commit | `File.Move`, `FileStream.Flush`, Linux `rename(2)`/`fsync(2)`, SQLite commit guidance | Separate visibility from durable directory metadata and coordinated updates. NFS failure can be ambiguous. |
+| `DeleteOnClose` survives termination everywhere | .NET 10.0.0 Unix SafeFileHandle source | Unix unlink occurs during managed release and can be bypassed by termination; cleanup is not secure erasure. |
+| Linux rules cover macOS and every filesystem | Apple ACL manual, .NET macOS mapping documentation, XDG specification | macOS ACLs/locations and nonlocal or permission-emulating storage need separate evidence. |
+
+### Executed in this review
+
+The focused Pester suite compiled and exercised the bundled
+[ordinary preferences example](../assets/OrdinaryPreferences.cs) and
+[TrustedFileWrites recipe](../assets/TrustedFileWrites.cs) on Windows
+10.0.26200, NTFS, PowerShell 7.6.6, and its hosted .NET 10.0.12 runtime:
+**49 passed, 0 failed, 7 Unix-only cases skipped** after the ordinary-path change.
+
+Coverage includes ordinary application-directory creation, new/updated settings,
+shorter replacement payloads, reuse of existing ordinary storage, failed-save
+cleanup, and invalid roots. Hardened cases cover invalid/rooted keys, missing parents, exclusive-create
+collisions, normal scratch cleanup, new/replaced destinations, failed-publish
+cleanup, deliberately restricted Windows ACL inheritance, open-reader behavior,
+Windows sharing refusal, and lexical escape through a directory junction.
+Unix-specific assertions cover creation modes and unchanged permissions on
+existing objects, but were not executed locally in this review.
+
+A separate Windows probe tried `File.Move` while a reader used `Read`,
+`Read | Delete`, and `ReadWrite | Delete`. All three returned
+`UnauthorizedAccessException` with `E_ACCESSDENIED`; the old reader retained its
+original content. This is a measured limitation of this environment, not a claim
+that every future Windows/filesystem combination must behave identically.
+
+The repository CI runs Pester on Linux and selected filesystem tests on Windows.
+That workflow is configured coverage, not an observed successful run of these
+changes. Neither local execution nor the current CI provides a macOS run.
+WSL was unavailable in this review; no Linux environment was installed.
+
+Not executed: second-account access-denial tests, macOS extended-ACL tests,
+process-kill or power-loss injection, independent-process locking validation,
+network/overlay/FUSE filesystem tests, and service-identity provisioning tests.
+The existing same-process sharing assertion proves only that narrower case.
+
+### Manual decision walkthroughs
+
+These are semantic review cases, not model invocations or measured routing
+accuracy:
+
+| Request | Required decision |
+| --- | --- |
+| Save theme preferences for an ordinary desktop app | Use normal per-user storage and the ordinary recipe; no ACL certification question. Explain the accepted reset/loss limits. |
+| Audit direct writes to a non-sensitive cache that validates and rebuilds entries | Accepted tradeoff, not a defect. Do not mandate transactions or disk flushes. |
+| Audit a preferences file with unknown simultaneous writers | Conditional risk. Ask whether two instances must retain each other's changes; do not invent that requirement. |
+| Audit an elevated helper that trusts an unvalidated command from AppData | Defect: the owning user can change the command without elevation. Recommend service-owned policy or validated authorized requests. |
+| Audit ordinary storage because an administrator could read it | Explain the excluded attacker; do not flag the lack of administrator-proof ACLs as a defect. |
+| Audit an existing implementation | Remain read-only; report definite defects, conditional risks, and material accepted tradeoffs separately. |
+| Make a temporary token file user-only | Establish the parent and effective access first; prefer a credential store for persisted secrets. |
+| Resolve `C:logs` under a configured root | Distinguish rooted from fully qualified; an explicit base gives deterministic resolution, not containment. |
+| Safely update settings from two processes | Choose last-writer-wins only deliberately; otherwise coordinate the whole update or use a transaction. |
+| An attacker may have created the app directory first | Refuse adoption or mode/ACL repair; require trustworthy provisioning or platform-specific validation. |
+| Validate a machine-wide Windows security descriptor | Hand off to the Windows ACL workflow, or stop if that capability is unavailable. |
+
+These walkthroughs check the intended decision flow only. No novice-user study
+or model-routing evaluation was run; passing code tests does not measure whether
+developers understand the questions or agents select the right assurance level.
+
+### Behavioral suite added on 2026-09-10
+
+The initial commons evaluation suite contained 12 opt-in cases for this skill.
+It uses natural prompts for ordinary preferences/scratch, public versus sensitive
+caches, privileged AppData consumption, mixed audit findings, understandable
+writer questions, durable saves, administrator exclusions, hostile existing
+directories, empty roots, and a pipe near miss. Four audit cases inspect
+synthetic source and deployment facts with writing available but forbidden by
+the requested audit scope.
+
+On Windows, **34 focused deterministic checks passed** for the scenario registry,
+pattern syntax, coherent and contradictory responses, actual invocation evidence,
+unchanged-audit enforcement, isolated fixture staging, and compiled fixture
+behavior. These are tests of the suite, not successful model evaluations.
+
+No real model run, generated-answer compilation, full multi-turn interview, or
+novice-user study has been performed for this suite. Per-case human rubrics cover
+decision quality, useful questions, and runnable implementation output; the
+generic scorer does not evaluate those rubrics automatically. Keep any future
+model results separate from the API and harness test evidence above.
+
+### Settings decisions extended on 2026-09-11
+
+"Where do I save this?" and "Am I saving this right?" now share the scope,
+mobility, and authority rules in [persisted-files.md](../persisted-files.md).
+The first designs a storage choice; the second audits the existing read/merge
+and save paths without changing them. Windows roaming participates in configured
+profile behavior, not automatic cross-device synchronization. Linux and macOS
+folder mappings do not provide an equivalent roaming split. The proposed
+defaults/user-override ordering is an application design convention, not a
+universal .NET persistence or policy contract.
+
+Four new scenarios cover per-user "global" settings, portable versus local
+values, shared defaults with user saves/reset behavior, and protected policy
+that user preferences must not override. This brings the suite to **16 cases**,
+including six source-backed read-only audits and one pipe near miss.
+
+The full deterministic evaluation-harness run on Windows reported **94 passed
+and 1 failed**. The failure was native Copilot CLI discovery, not a settings
+case. All new response checks and compiled fixture checks passed, including
+the accepted theme-default precedence, the wrong machine-default save target,
+and the user override of an enforced policy value. No real model evaluation,
+profile-roaming deployment test, or novice-user study was run.
+
+## Historical measurements
+
+The following environments and observations were recorded before this review.
+They are retained as historical evidence, not relabeled as fresh executions:
 
 - **Windows** 11 (10.0.26200), .NET 10.0.11, via PowerShell 7.6.5 and file-based
   apps on the .NET 10 SDK.
@@ -11,10 +156,9 @@ Environments:
   a `/mnt` drvfs mount, which does not carry real Unix modes and would have
   invalidated every permission measurement.
 
-The Linux figures come from .NET 8 because that is the SDK available in that
-environment. The APIs involved were introduced in .NET 7 and their behavior is
-governed by `open(2)`, `mkdir(2)`, and `umask`, so they are not expected to
-differ on .NET 10. Treat the Linux column as verified-on-.NET-8.
+The Linux figures came from .NET 8. API availability since .NET 7 and shared
+syscalls do not prove unchanged behavior on .NET 10. Treat that column only as
+the recorded .NET 8 observation; the .NET 10 source review is separate evidence.
 
 ---
 
@@ -35,8 +179,9 @@ when the directory does not exist. Without that option, the result depends on
 the state of the account image rather than only on the platform mapping.
 
 `CommonApplicationData` is otherwise not comparable across platforms:
-`C:\ProgramData` is writable by any standard user at the top level, while
-`/usr/share` is root-owned. There is no portable machine-writable location.
+the measured Windows default allowed standard users to create subdirectories
+under `C:\ProgramData`, while `/usr/share` was root-owned. Neither the path nor
+those observed defaults is a portable writable-store or trust guarantee.
 
 ---
 
@@ -58,8 +203,9 @@ users**, because every component grants other-execute and the file grants
 other-read. The `755` parent is not a Linux invariant; desktop tooling can create
 `~/.config` more restrictively, while `~/.local/share` is commonly traversable.
 
-This is the headline difference from Windows, where the same code path lands
-inside a profile directory restricted to the user, `SYSTEM`, and administrators.
+The recorded Windows environment had restrictive profile inheritance. That
+configuration does not establish privacy for redirected locations, changed ACLs,
+or another identity's environment.
 
 `Directory.CreateTempSubdirectory` at `700` matches its documentation, which
 states the parent temp directory may be shared while the created directory is
@@ -85,9 +231,10 @@ Measured under `umask 022`:
 | `644` | `644` |
 | `666` | `644` |
 
-A restrictive request always survives; a permissive one may be reduced. The
-tests pin the invariant `(actual & ~requested) == 0` rather than an exact value,
-because the exact value depends on the ambient umask.
+These exact outcomes are specific to umask `022`. A mask can remove owner bits
+as well; a `600` request under `0777` can produce `000`. For ordinary bits the
+testable bound is `(actual & ~requested) == 0`, not equality. Default ACLs require
+the separate calculation documented by `umask(2)`.
 
 ### Directory modes reach the leaf only
 
@@ -150,19 +297,19 @@ only built-in temp *file* API, which is why the guidance is built around
 | A dot-prefixed file reports `Hidden` | No | Yes |
 
 The casing row is a property of the **filesystem** measured here (NTFS and ext4),
-not of the operating system. macOS APFS is case-insensitive by default, so the
-Unix column must not be generalized to it. The bundled test asserts casing only
-on Windows and Linux for that reason, and leaves macOS unasserted.
+not of the operating system. The current test probes the actual directory and
+accepts either consistent behavior on every OS; it no longer assumes NTFS or
+ext4 defaults merely from an OS branch.
 
 The two `Hidden` rows carry the same caveat: they were measured on Linux only.
 Whether .NET honors the macOS `UF_HIDDEN` flag was not tested, so the test scopes
 those assertions to Linux as well.
 
-`FileShare` being enforced on Linux is worth calling out, since it is often
-assumed to be a Windows-only concept. .NET implements it with advisory `flock`
-locks, so cooperating native processes can participate too. Processes may
-ignore advisory locks, and `DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` disables this
-runtime behavior entirely.
+The recorded Linux sharing observation was a second .NET open with default
+locking. The inspected implementation uses advisory `flock`, with less
+granularity than Windows, ignored unsupported-lock errors, and some skipped
+filesystem/access combinations. Processes can ignore advisory locks, and
+`DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` disables this runtime behavior.
 
 ---
 
@@ -204,39 +351,31 @@ state was not manipulated in the local harness.
 
 ---
 
-## 7. Verification status
+## 7. Historical verification status
 
-The bundled Pester tests run on every platform and branch at run time. On this
-machine they were executed on Windows: **18 passed, 3 skipped** (the three
-Unix-only cases).
+The earlier record reported **18 passed, 3 skipped** on Windows. That count
+predates the current suite and is not the result of this review.
 
-The Unix branches were **not** executed as PowerShell here, because installing
-PowerShell into the WSL environment was out of scope. Instead every Unix
-assertion was mirrored one-for-one as a C# harness and run against the .NET SDK
-already present in WSL:
+That earlier record said the Unix assertions were mirrored as a C# harness under
+WSL, rather than executed as Pester, and reported:
 
 ```text
 19 assertions, all PASS
 ```
 
-That verifies the behavior each Unix branch encodes. What remains unverified is
-the PowerShell in those branches itself: enum comparisons, `Join-Path` with
-forward slashes, and `-Skip:$IsWindows` semantics on Linux. The repository's
-Linux CI Pester job executes them on every pull request, which is the intended
-gate.
+That historical harness result does not execute the current Unix Pester
+branches, the new recipe, or its new failure cases. Those need a fresh Linux run.
 
 ---
 
 ## Open questions
 
-- Whether the Linux figures hold identically on .NET 10; the underlying syscalls
-  make divergence unlikely but it was not measured.
-- macOS was not measured at all. It is Unix-like and expected to match Linux for
-  modes and `umask`, but `~/Library/Application Support` has different default
-  permissions from `~/.config` and deserves its own measurement.
+- Whether the Linux figures and new recipes hold on the deployed .NET 10+
+  runtime; source inspection is not an executed Linux test.
+- macOS execution, including effective access with extended ACLs. Do not infer
+  that a matching Unix mode query establishes the same access as on Linux.
 - Behavior on non-default filesystems: ReFS, network shares, and container
   overlay filesystems were not exercised.
-- Service identities were not measured. Current .NET uses `GetTempPath2` where
-  available, giving `SYSTEM` `%SystemRoot%\SystemTemp`; other Windows service
-  identities can still inherit machine-wide `TMP` or `TEMP`. Containers can
-  likewise supply a shared, missing, or read-only temp path.
+- Service identities were not measured. `GetTempPath2` can honor a `SystemTemp`
+  override for SYSTEM; other identities use a different environment search
+  order. Containers can supply a shared, missing, or read-only temp path.

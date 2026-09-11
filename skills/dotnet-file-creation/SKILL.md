@@ -1,8 +1,8 @@
 ---
 name: dotnet-file-creation
-description: Create files, directories, and paths correctly on .NET 10+ across Windows, Linux, and macOS. Use when choosing where to write temporary, persisted per-user, or machine-wide shared state; constructing paths with Path.Join or Path.Combine; distinguishing rooted from fully qualified paths; resolving paths with Path.GetFullPath; making a file readable only by its owner; calling File.Open/File.Create/FileStreamOptions/Directory.CreateDirectory/CreateTempSubdirectory/GetTempFileName; handling UnixFileMode, umask, or PlatformNotSupportedException from UnixCreateMode; responding to a CA1416 warning on a file API; or investigating behavior that differs between Windows and Linux, such as deleting an open file, FileShare, path casing, or hidden files. Also use for "where should this temp file go", "make this file user-only", "why does this work on Windows but not Linux", and atomic write-then-rename publishing.
+description: Create and audit .NET 10+ filesystem I/O on Windows, Linux, and macOS. Use for "where do I save this", "am I saving this right", global/user app settings, roaming/non-roaming preferences, machine-wide defaults or policy, caches, temporary files, safe overwrite/deletion, and write-then-rename publishing. Also use for "check my code to make sure I'm following best practices for IO", file I/O audits, "where should this temp file go", "make this file user-only", "why does this work on Windows but not Linux", Path.Join vs Path.Combine, rooted vs fully qualified paths, Path.GetFullPath, File.Open/File.Create/FileStreamOptions, Directory.CreateDirectory/CreateTempSubdirectory, GetTempFileName, UnixFileMode/umask/UnixCreateMode, CA1416 or PlatformNotSupportedException on file APIs, FileShare, casing, and hidden files. Audits cover filesystem correctness and security; route pipes, networking, and deep performance elsewhere.
 license: MIT
-compatibility: Targets .NET 7 or later for the Unix mode APIs; guidance assumes .NET 10 or later. The bundled tests run on Windows, Linux, and macOS under PowerShell 7 and Pester 5.7 or later.
+compatibility: Guidance assumes .NET 10 or later; Unix mode APIs require .NET 7 or later. Bundled tests require PowerShell 7 and Pester 5.7 or later. Platform execution coverage and limits are recorded in references/research.md.
 metadata:
   portability: portable
   applicability: dotnet
@@ -13,118 +13,121 @@ metadata:
   related: windows-acls, security-review
 ---
 
-# Creating files on .NET across platforms
+# File I/O on .NET across platforms
 
 If `overlay.md` exists beside this file, read it before acting; it contains
 repository-specific bindings. This core remains usable without it.
 
-Two assumptions cause most cross-platform file bugs:
+## Choose the entry point
 
-1. **"A per-user directory is private."** True for a normal Windows profile.
-   **Not guaranteed on Unix**, where parent modes vary and ordinary app-created
-   directories and files are commonly `755` and `644`.
-2. **"The temp directory belongs to me."** Usually true for an interactive
-   Windows user. It is false on Unix, where `/tmp` is shared, and is not safe to
-   assume for Windows services, whose temp path depends on the service identity
-   and environment.
+| Question | Workflow |
+| --- | --- |
+| "Where do I save this?" | Design: use the [settings decisions](persisted-files.md) to select scope, roaming behavior, and who may write; then choose the smallest adequate save recipe. |
+| "Am I saving this right?" | [Audit](audit.md): trace the existing location, readers/writers, load order, and save target against the same settings decisions. Remain read-only unless changes are requested. |
 
-## Pick the category first
+Infer requirements from the application first. These are two ways into the same
+decision rules, not two different security standards. Scratch and exports use
+their own recipes below; they need not answer every settings question.
 
-| Need | Use | Private by default |
+## Start with ordinary application I/O
+
+Default to an unelevated desktop or CLI application using its own per-user
+storage, normal OS account protections, and application-controlled names. Do not
+require an ACL auditor, installer-provisioned directory, custom key scheme, or
+native code merely to save preferences or use disposable scratch space.
+
+Inspect the call site, data, writers, and deployment configuration before asking
+for missing product decisions. Reuse an existing settings framework when it fits.
+
+Ordinary defaults accept loss of the latest replaceable preference after a
+crash, rebuildable cache corruption, and some crash leftovers. They do not accept
+silent save failures, accidental overwrite of valuable data, or treating
+user-editable files as privileged authority. A cache can still contain sensitive
+data; being rebuildable is not a privacy decision.
+
+## Special directories are locations, not authority
+
+On Windows, the owning user normally can write their `ApplicationData` and
+`LocalApplicationData` **without elevation**. Other ordinary accounts are
+normally restricted by profile ACLs. Thus AppData is appropriate for that user's
+preferences, but not proof that a policy, executable, or command stored there
+was approved by an administrator. `CommonApplicationData` is different: default
+Windows policy can let ordinary users create application subdirectories there.
+
+Do not equate "special folder", "per-user", "hidden", or "random name" with
+trusted contents. On Unix, location alone also does not imply private access;
+request restrictive modes when creating application storage. No mode or ACL
+recipe here promises protection from a fully privileged administrator/root,
+hostile code with the same effective authority, or a compromised OS/storage
+server. That exclusion does not excuse trusting lower-privilege input in an
+elevated operation.
+
+## Select the simple path
+
+| Need | Default and accepted limitation | Recipe |
 | --- | --- | --- |
-| Scratch for one operation | `Directory.CreateTempSubdirectory()` | `700` on Unix; on Windows it inherits the temp root's ACL |
-| A single throwaway file | A file inside that temp subdirectory | Yes, inherited from the directory |
-| Persisted per-user settings that roam | `SpecialFolder.ApplicationData` | Windows only; set the mode yourself on Unix |
-| Persisted per-user caches and logs | `SpecialFolder.LocalApplicationData` | Windows only; set the mode yourself on Unix |
-| Machine-wide shared state | No portable location exists. See [shared-files.md](shared-files.md) | No |
+| Non-sensitive scratch | New temp subdirectory, normal disposal/cleanup; a crash may leave files | [temporary-files.md](temporary-files.md) |
+| Rebuildable cache, one writer | Ordinary app directory and direct writes; validate and discard incomplete entries | [persisted-files.md](persisted-files.md) |
+| User settings, including "global" across one user's projects | Select roaming/non-roaming, then a simple save; no power-loss or lost-update guarantee | [Settings decisions](persisted-files.md) |
+| Defaults or policy for everyone on one computer | Distinguish overrideable defaults from enforced policy and identify the authorized writer | [Settings layers](persisted-files.md) |
+| User-selected export | Authorized destination and deliberate overwrite policy; stage if preserving the old file matters | [persisted-files.md](persisted-files.md) |
+| Credentials | Existing platform credential-store integration; do not invent a secret-file format | [persisted-files.md](persisted-files.md) |
+| Filesystem best-practices audit | Trace reads/writes and report defects, conditional risks, and accepted tradeoffs | [audit.md](audit.md) |
 
-Detail per category: [temporary-files.md](temporary-files.md),
-[persisted-files.md](persisted-files.md), [shared-files.md](shared-files.md).
+Direct `File.WriteAllText` is reasonable for non-sensitive, replaceable output
+when a failed write can be discarded. Do not prescribe write-then-rename,
+`Flush(true)`, or a database for every file. Reuse existing application storage
+and logging APIs before adding helpers.
 
-## Construct and resolve paths deliberately
+## Escalate for a concrete reason
 
-- Construct paths with `Path.Join`, never `Path.Combine` or string
-  concatenation. A rooted later segment replaces every earlier segment in
-  `Path.Combine`; `Path.Join` preserves them.
-- Use `Path.IsPathFullyQualified` when asking whether current-directory state
-  can change what a path means. `Path.IsPathRooted` is not that test: on Windows,
-  `C:logs` and `\logs` are rooted but still relative.
-- Resolve a path that is not fully qualified with
-  `Path.GetFullPath(path, basePath)`, where `basePath` is a known fully qualified
-  root. The one-argument overload uses ambient process state.
-- Keep resolution separate from containment. `Path.Join`, qualification, and
-  canonicalization do not reject `..`, alternate roots, or symbolic links.
+| Evidence or requirement | Next action |
+| --- | --- |
+| Elevated/service code trusts user-writable files or caller-selected paths | Trace the lower-privilege input; prefer service-owned state and validated requests. See [shared-files.md](shared-files.md). |
+| Other accounts can replace target entries/ancestors, or explicit hostile-account privacy is required | Move to private storage or trusted provisioning first. Use [permissions.md](permissions.md) for the hardened boundary. |
+| Secrets or sensitive personal data | Prefer a credential store for secrets; use private per-user storage and restrictive creation permissions for personal data. Require the hardened check when hostile-account exclusion is needed. |
+| Multiple writers must preserve each other's changes | Use an existing transaction/coordinator; atomic replacement alone loses updates. See [persisted-files.md](persisted-files.md). |
+| Irreplaceable data or a promise that saves survive power loss | Establish the recovery requirement and prefer a proven transactional store or save protocol. |
+| Known network, redirected, or unusual filesystem | Check only the permissions, locking, or durability assumptions the operation actually relies on; this alone need not trigger native hardening. |
 
-The complete decision path and Windows partial-path matrix are in
-[paths.md](paths.md).
+Prefer a simpler design or established API over custom native security code.
+Ask before changing storage location, deployment, overwrite behavior, or accepted
+data loss. When the required guarantee cannot be established, stop that operation
+and name the safer alternative; do not silently downgrade it. Do not block an
+ordinary preference save solely because a hypothetical deployment is untested.
 
-## Making a file owner-only
+## Ask about consequences, not mechanisms
 
-There is **no single cross-platform API**. The runtime exposes `UnixFileMode`
-for Unix and Windows ACLs for Windows, each unsupported on the other. The
-portable shape is one guarded branch:
+Infer facts from code and configuration first. Ask only when the answer changes
+the choice or finding. For settings: "Just this person, or everyone on this
+computer?", "Should it follow the person to another computer?", and "Is this a
+default people can change, or a rule they must not override?" For recovery and
+sharing: "Can this be rebuilt?" or "Can two copies update this?" Explain the
+consequence and recommend a default; do not ask the developer to certify ACLs
+or choose synchronization primitives. Unknown is not proof of safety or a defect.
 
-```csharp
-var options = new FileStreamOptions
-{
-    Mode = FileMode.CreateNew,
-    Access = FileAccess.Write,
-};
+## Keep the basic rules
 
-if (!OperatingSystem.IsWindows())
-{
-    // Set at creation. A chmod afterwards leaves the file briefly readable.
-    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-}
+- Use application-controlled leaf names, or validate and authorize external
+  input. `Path.Join` and `GetFullPath` do not establish containment; see
+  [paths.md](paths.md). No key helper is mandatory for a fixed filename.
+- Reject an empty storage root before joining. Resolve relative paths against a
+  known fully qualified base; Windows rooted paths need not be fully qualified.
+- Use `CreateNew` for create-if-absent, not `Exists` followed by create. An
+  intentional overwrite needs an explicit policy instead.
+- Set sensitive creation permissions before writing, guard Unix APIs, dispose
+  owned streams, and keep incomplete output distinguishable from success.
+- Load [platform-differences.md](platform-differences.md) for a relevant sharing,
+  deletion, casing, link, or attribute issue; do not infer filesystem behavior
+  solely from the OS.
 
-using FileStream stream = File.Open(path, options);
-```
+## Validate the chosen outcome
 
-`OperatingSystem.IsWindows()` is the guard CA1416 understands. The
-`UnixCreateMode` **setter** carries `[UnsupportedOSPlatform("windows")]` and
-throws `PlatformNotSupportedException` there, so guard the assignment, not the
-open call.
-
-On Windows the containing user-profile directory already restricts access, so no
-extra work is required. Only machine-wide locations need explicit descriptors,
-and that is a separate problem. The full rules, including umask, handles, and
-directories, are in [permissions.md](permissions.md).
-
-## Write atomically, then publish
-
-Never write a consumer-visible file in place. Write beside it, flush, then move:
-
-```csharp
-string temporary = Path.Join(directory, $".{Path.GetFileName(finalPath)}.{Guid.NewGuid():N}.tmp");
-await using (FileStream stream = File.Open(temporary, options))
-{
-    await stream.WriteAsync(payload);
-    stream.Flush(flushToDisk: true);
-}
-
-File.Move(temporary, finalPath, overwrite: true);
-```
-
-The temporary file must be in the **same directory** as the destination so the
-move is a rename within one volume rather than a copy.
-
-## Behavior that differs by platform
-
-| Behavior | Windows | Unix |
-| --- | --- | --- |
-| Delete a file that is open | Throws `IOException` | Succeeds; the name is unlinked |
-| `FileShare` | Enforced by the OS | Advisory `flock`; honored by cooperating processes and disableable by configuration |
-| `FileAttributes.Hidden` | Settable | Linux derives it from a leading dot; macOS differs |
-| Directory mode or descriptor on intermediates | The .NET ACL overload applies it to every level | The Unix mode overload applies it to the leaf only |
-
-Path casing is **not** in that table on purpose. It is a filesystem property, not
-an OS one: NTFS and macOS APFS are both case-insensitive by default while Linux
-ext4 is case-sensitive, and every one of them can be configured the other way.
-Probe it rather than inferring it from the platform.
-
-`FileMode.CreateNew` is exclusive and `File.Move(overwrite: true)` replaces the
-destination on both. Details and the traps in
-[platform-differences.md](platform-differences.md).
+Test the ordinary recipe's create/read/update and relevant failure path. Report
+the assumptions and limitations that matter to this use, not every filesystem
+caveat. Stronger access-denial, concurrency, or crash-recovery claims need checks
+at those boundaries; a same-user write test cannot establish them. Audit output
+and scope rules are in [audit.md](audit.md).
 
 ## Evidence
 

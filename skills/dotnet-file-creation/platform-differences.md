@@ -1,22 +1,24 @@
 # Platform differences
 
-Behavior measured on Windows 11 with .NET 10 and Ubuntu 24.04 with .NET 8. Each
-row is pinned by a bundled test.
+This page combines documented contracts, .NET 10 source inspection, and limited
+runtime measurements. The evidence and untested deployments are separated in
+[references/research.md](references/research.md); not every row has been tested
+on every platform or filesystem.
 
-## Same on both platforms
+## Common behavior on supported filesystems
 
 | Behavior | Result |
 | --- | --- |
 | `FileMode.CreateNew` over an existing file | Throws `IOException` |
 | `File.Move(source, destination, overwrite: true)` | Replaces the destination, removes the source |
-| `FileShare.None` blocking a second open | Blocked |
-| Default per-user special-folder mappings | Under `SpecialFolder.UserProfile` |
-| Machine-wide special folder | Outside the user profile |
+| `FileShare.None` blocking a second .NET open | Observed with default locking on the tested local filesystems, not universal |
+| Special-folder APIs | Select locations; do not prove ownership, privacy, availability, or local storage |
 
 Exclusive create is the one to lean on. `FileMode.CreateNew` maps to `O_EXCL` on
-Unix and `CREATE_NEW` on Windows, so it is a genuine atomic
-"create-if-absent-or-fail" on both. Prefer it to `File.Exists` followed by
-`File.Create`, which is a race on every platform.
+Unix and `CREATE_NEW` on Windows. This is the create-if-absent primitive where
+the filesystem supports those semantics. Prefer it to `File.Exists` followed
+by `File.Create`, which is a race. It reserves the leaf only; it does not protect
+ancestors or atomically publish all future writes to the new file.
 
 ## Different
 
@@ -24,22 +26,39 @@ Unix and `CREATE_NEW` on Windows, so it is a genuine atomic
 
 | Windows | Unix |
 | --- | --- |
-| Throws `IOException` while a handle is open without `FileShare.Delete` | Succeeds; the name is unlinked and the data lives until the last handle closes |
+| Sharing can block deletion unless existing handles allow `FileShare.Delete` | An open file can be unlinked when directory permissions and the filesystem allow it |
 
-Code that deletes and immediately recreates a file works on Unix and
-intermittently fails on Windows, usually under a scanner or an indexer holding a
-transient handle. Retry with backoff on Windows, or write to a new name and
-rename over the old one.
+Windows can delete open files when sharing permits; final removal may wait for
+handle closure depending on the deletion mechanism. On Unix, open descriptors
+and other hard links keep the data alive after unlink. Neither case revokes
+existing access or securely erases data.
+
+Rename is **not** a workaround for a destination handle that denies delete
+sharing on Windows. Readers participating in snapshot replacement should allow
+`FileShare.Delete`, but that alone does not make every replacement primitive
+work: the tested Windows `File.Move` refused replacement even with all sharing
+flags. A refusal can surface as `UnauthorizedAccessException`, not only
+`IOException`. Retry only identified transient failures with a bounded policy;
+diagnose the actual operation and error rather than inferring an ACL problem
+from the exception type alone.
 
 ### `FileShare`
 
 | Windows | Unix |
 | --- | --- |
-| Enforced by the kernel against every process | Advisory `flock`; honored by cooperating processes, including native ones |
+| Sharing checks enforced by the kernel for normal file opens | Coarser, best-effort advisory locks, not Windows-equivalent sharing |
 
-So a lock file works for coordinating cooperating processes on both platforms,
-and is not a security boundary on Unix. A process can ignore advisory locks, and
-`DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` disables .NET file locking there.
+In the inspected .NET 10 Unix implementation, `FileShare.None` requests an
+exclusive `flock`; other share combinations use shared locks where supported.
+This does not enforce individual read/write/delete share flags. For example,
+`FileShare.Read` must not be assumed to exclude a writer as it does on Windows.
+
+The runtime can ignore unsupported-lock errors and skip locking on some
+filesystem/access combinations. `DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` disables
+it. A native process can ignore an advisory lock, and network filesystems can
+translate locking differently. Successful open is not proof of mutual exclusion.
+Use only a verified cooperative protocol, such as the bounded one in
+[persisted-files.md](persisted-files.md), never a confidentiality boundary.
 
 ### Path casing
 
@@ -53,22 +72,22 @@ wrong: a default macOS volume behaves like Windows here.
 | ext4, XFS (Linux) | Case-sensitive |
 | APFS, HFS+ (macOS) | Case-**in**sensitive, case-preserving |
 
-Any of these can be configured the other way. APFS and HFS+ can be formatted
-case-sensitive, ext4 supports casefolding, and Windows can enable case
-sensitivity per directory with `fsutil file setCaseSensitiveInfo`, which is what
-WSL does for its own trees.
+APFS and HFS+ can be formatted case-sensitive, ext4 supports casefolding, and
+Windows can enable case sensitivity per directory. Do not extrapolate one
+mount or directory's behavior to every path on the machine.
 
 Consequences worth checking for:
 
 - Two config entries differing only in case collide on Windows and on a default
   macOS volume, and coexist on Linux.
 - A lookup keyed by path cannot pick its comparer from the OS. Use
-  `StringComparer.Ordinal` with a normalized key when you need exact identity;
-  probe the filesystem once if you need to match its behavior.
+  `StringComparer.Ordinal` for exact string keys, not as proof of file identity.
+  Case, Unicode normalization, aliases, and hard links can defeat that inference.
   `StringComparer.OrdinalIgnoreCase` everywhere silently merges distinct files on
   a case-sensitive volume.
-- Case-only renames need a two-step rename through a temporary name on any
-  case-insensitive volume, not just on Windows.
+- Case-only rename behavior depends on the API and filesystem. Test the actual
+  operation before adding a two-step rename, which introduces an intermediate
+  state and additional failure cases.
 
 If the behavior matters, probe it rather than branching on
 `OperatingSystem.IsWindows()`: create a file, ask whether the uppercase name
@@ -93,10 +112,10 @@ leading dot and set the attribute on Windows.
 
 | Windows | Unix |
 | --- | --- |
-| `FileSystemAclExtensions.CreateDirectory` applies its descriptor to every level it creates and returns them protected | The Unix mode overload applies an explicit mode to the leaf only |
+| `FileSystemAclExtensions.CreateDirectory` supplies its descriptor for each newly created level | The Unix mode overload supplies the explicit mode for the new leaf only |
 
-This asymmetry catches people who verified their code on one platform. See
-[permissions.md](permissions.md).
+Neither overload establishes the provenance or protection of existing
+directories. See [permissions.md](permissions.md).
 
 ## Paths
 
@@ -107,9 +126,10 @@ This asymmetry catches people who verified their code on one platform. See
   that takes a known fully qualified base.
 - `Path.DirectorySeparatorChar` differs, but Windows accepts forward slashes, so
   forward slashes in literals are usually portable. Backslashes are not.
-- `Path.GetFullPath` normalizes, and normalization differs. Windows strips
-  trailing dots and spaces, so `name.` and `name` can be the same file there and
-  different files on Unix.
+- `Path.GetFullPath` performs lexical normalization, whose rules depend on the
+  platform and path namespace. Ordinary Windows paths can collapse trailing
+  dots and spaces; extended namespaces bypass some normalization. Never use
+  normalization as a substitute for an accepted-name policy.
 - Windows reserves `< > : " | ? *` and the device names `CON`, `NUL`, `LPT1`,
   and related variants. Windows 10-era systems, including Server 2022, can still
   reinterpret device names in fully qualified paths; reject them when those
@@ -135,6 +155,7 @@ but the privilege is not: Windows requires `SeCreateSymbolicLinkPrivilege` or
 Developer Mode, while Unix allows any user to create one. Directory *junctions*
 on Windows need no privilege at all.
 
-Use `File.ResolveLinkTarget(path, returnFinalTarget: true)` when you need to know
-what a link points at, and treat any link in a path you did not construct as
-untrusted.
+`File.ResolveLinkTarget(path, returnFinalTarget: true)` reports a supported link's
+target at that instant. It neither checks every ancestor and reparse-point type
+nor pins a later open to that object. Follow [paths.md](paths.md) for the
+distinction between lexical containment, physical containment, and object trust.

@@ -3,10 +3,11 @@
 Path construction, qualification, canonicalization, and containment answer
 different questions. Do not treat success at one stage as proof of another.
 
-## Always construct with `Path.Join`
+## Choose construction semantics deliberately
 
-On the .NET versions covered by this skill, always use `Path.Join` to construct
-a path. Never use `Path.Combine` or string concatenation.
+For a fixed application root, prefer `Path.Join` over manual concatenation or
+`Path.Combine`. `Combine` is appropriate when a later trusted absolute path is
+intended to replace the earlier base; that is a different contract.
 
 If any argument after the first is rooted, `Path.Combine` discards every
 preceding component. A caller-controlled later argument can therefore replace a
@@ -74,15 +75,33 @@ under that base. Given `N:\trusted\root` on Windows:
 | `C:child.txt` | `C:\child.txt` when `C:` is a different drive |
 | `C:\child.txt` | `C:\child.txt`; a fully qualified input ignores the base |
 
-## Keep untrusted input under a root
+## Prefer keys over caller-supplied paths
 
-When input must remain below a trusted root:
+For a fixed application file such as `settings.json`, use that literal leaf;
+no custom key scheme is necessary. When the feature accepts external identifiers
+instead of a full destination, a logical key can keep the filename policy small.
+[assets/TrustedFileWrites.cs](assets/TrustedFileWrites.cs) accepts 1-64 lowercase
+ASCII letters, digits, hyphens, or underscores, then produces `item-<key>.bin`.
+The fixed prefix avoids Windows device names even for a key such as `con`.
+The alphabet excludes separators, `..`, alternate data streams, trailing dots
+and spaces, device namespaces, and case-only key collisions.
+
+This is an intentional application key contract, not a general filename parser.
+Do not silently strip invalid characters into a colliding name. Reject invalid
+input, and keep the trusted root in application configuration rather than in the
+request. The helper requires a fully qualified root but **does not certify it**.
+The application must separately authorize access to each key; accepted syntax
+is not authorization to read or overwrite the corresponding object.
+
+## Lexical containment is a separate, weaker check
+
+When a feature genuinely accepts relative paths, define lexical containment:
 
 1. Require the root to pass `Path.IsPathFullyQualified`; canonicalize it once.
 2. Define the accepted input shape. Reject root syntax when the contract is
    relative-only. For one filename, also reject directory separators, the
    volume separator, `.` and `..`.
-3. Construct with `Path.Join`, never `Path.Combine`.
+3. Construct with `Path.Join`; this is not the validation step.
 4. Canonicalize the joined result with
    `Path.GetFullPath(joinedPath, canonicalRoot)`.
 5. Build the containment prefix by retaining an existing ending separator or
@@ -90,10 +109,35 @@ When input must remain below a trusted root:
    already ends in one; appending another produces the wrong prefix. Verify that
    the result equals the root or starts with that prefix. Never compare only with
    the bare root: `C:\root2` shares the prefix `C:\root`. Choose comparison casing
-   from known filesystem behavior; `Ordinal` is the fail-closed default.
-6. Handle symbolic links and reparse points separately when physical containment
-   matters. Lexical canonicalization cannot establish where links lead.
+   from known filesystem behavior; `Ordinal` is a conservative lexical default,
+   which can reject equivalent spellings. It is not a file-identity comparison.
+6. Reject unwanted filename syntax explicitly. `GetInvalidFileNameChars` follows
+   the host platform and is not a cross-platform filename policy. Windows device
+   names, alternate streams, trailing dots/spaces, and extended path namespaces
+   need a policy even if the string passes a prefix check.
 
 Test ordinary relative input, rooted and fully qualified input, both Windows
 rooted-relative forms, `..`, alternate separators, a sibling whose name shares
 the root prefix, and relevant link or reparse-point behavior.
+
+## Physical containment and object trust
+
+Canonicalize the configured root **before** establishing its trust, and use that
+same path throughout. A prefix check does not resolve symbolic links, junctions,
+mounts, or all reparse-point types. Hard links can name the same file outside the
+tree without being symbolic links at all.
+
+`ResolveLinkTarget`, `GetAttributes`, and `Exists` followed by open are separate
+operations. An attacker able to replace a component can change it between the
+check and use. `CreateNew` protects the new leaf from an existing entry; it does
+not prevent redirection through ancestors. An open handle identifies the opened
+object, not whether that object was trustworthy to begin with.
+
+Use the [trusted-parent prerequisites](permissions.md) when hardened protection
+is required, not for every ordinary app path. If an attacker can replace or
+redirect a relevant component, prefer moving the operation to private storage
+or trusted provisioning. If the hostile path cannot be avoided, stop and require a platform-specific
+handle-relative/no-follow design with ownership and object-type checks. Merely
+rejecting a symlink once, or setting a no-follow flag for only the final leaf,
+is not a complete hostile-tree traversal protocol. This skill does not supply
+that stronger recipe.
