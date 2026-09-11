@@ -868,9 +868,34 @@ public sealed class FileIoShortReadStream : MemoryStream
         return base.Read(buffer.Slice(0, Math.Min(buffer.Length, 1)));
     }
 
+    public void ReadExactlyThroughArray(byte[] buffer)
+    {
+        int offset = 0;
+        while (offset < buffer.Length)
+        {
+            int read = Read(buffer, offset, buffer.Length - offset);
+            if (read == 0)
+            {
+                throw new EndOfStreamException();
+            }
+
+            offset += read;
+        }
+    }
+
     public void ReadExactlyThroughSpan(byte[] buffer)
     {
-        ReadExactly(buffer.AsSpan());
+        Span<byte> remaining = buffer;
+        while (!remaining.IsEmpty)
+        {
+            int read = Read(remaining);
+            if (read == 0)
+            {
+                throw new EndOfStreamException();
+            }
+
+            remaining = remaining.Slice(read);
+        }
     }
 }
 '@
@@ -888,7 +913,7 @@ public sealed class FileIoShortReadStream : MemoryStream
         $readExactlyStream = [FileIoShortReadStream]::new([byte[]](4, 1, 0, 0))
         try {
             $header = [byte[]]::new(4)
-            $readExactlyStream.ReadExactly($header, 0, $header.Length)
+            $readExactlyStream.ReadExactlyThroughArray($header)
             $header | Should -Be @(4, 1, 0, 0)
             $readExactlyStream.Position | Should -Be 4
             ($readExactlyStream.ArrayReadCount + $readExactlyStream.SpanReadCount) |
