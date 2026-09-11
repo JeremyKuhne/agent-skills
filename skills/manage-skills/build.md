@@ -17,11 +17,12 @@ Run [find.md](find.md) before writing anything.
 
 ### 2. Already installed at the requested host and scope
 
-If it fully fits, do not build. If it needs a common improvement or repository integration,
-follow [update.md](update.md) before editing the installed copy. If the requested
-skill has a distinct trigger, outcome, or owner, record that boundary and continue
-with the applicable authoring path. A hit at another scope is not equivalent; route
-the existing source through [install.md](install.md).
+If it fully fits, do not build. For a common improvement, follow
+[update.md](update.md) before editing the installed copy. For repository specialization,
+run [integrate.md](integrate.md) before adding or changing project policy. If the
+requested skill has a distinct trigger, outcome, or owner, record that boundary and
+continue with the applicable authoring path. A hit at another scope is not equivalent;
+route the existing source through [install.md](install.md).
 
 ### 3. In the commons
 

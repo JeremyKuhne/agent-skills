@@ -1,6 +1,6 @@
 ---
 name: roslyn-analyzers
-description: Design, implement, test, or adopt Roslyn analyzers, code fixes, and suppressors. Use for rules, Fix All, enablement, or performance.
+description: Build Roslyn analyzers, fixes, and suppressors. Use for Fix All, enablement, or analyzer performance; runtime uses performance-testing.
 license: MIT
 compatibility: Requires the .NET SDK, Roslyn packages, and a test project capable of running Microsoft.CodeAnalysis.Testing fixtures.
 metadata:
@@ -32,8 +32,8 @@ performance checks below.
    first-party rules and configuration-only mechanisms in
    [existing-analyzers.md](existing-analyzers.md). If the request explicitly targets a
    custom or approved rule, record relevant overlap and continue. If an existing rule
-   is the chosen solution, configure it, validate it at step 7, and finish unless
-   packaging or dogfooding applies.
+   is the chosen solution, configure it, run relevant step 6 checks before broad
+   enablement, validate it at step 7, and finish unless packaging or dogfooding applies.
 3. **Define the contract.** For an analyzer diagnostic, choose a stable ID, category,
    default severity, help link, and release-tracking entry. For a suppressor, choose a
    unique suppression ID and follow [suppressors.md](suppressors.md) for recording rules.
@@ -65,3 +65,10 @@ performance checks below.
 - [validation.md](validation.md): harnesses, edge cases, real-code and adoption checks.
 - [performance.md](performance.md): IDE and bulk-fix costs.
 - [suppressors.md](suppressors.md): suppressor ownership, implementation, and tests.
+
+## Related workflows
+
+- Use `performance-testing` for application runtime performance.
+- Use `security-review` when analysis parses or reinterprets untrusted input.
+- Use `il-copy-inspection` to verify emitted struct copies after compilation.
+- Use `pre-pr-self-review` before publishing analyzer changes.

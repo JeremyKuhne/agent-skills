@@ -54,7 +54,7 @@ Describe 'Skill evaluation scenario contract' {
                 'technical-writing-artifact-repository-documentation')) {
             $technicalWritingScenarios.id | Should -Contain $artifactScenario
         }
-        $manageSkillsScenarios.Count | Should -Be 4
+        $manageSkillsScenarios.Count | Should -Be 6
         @($manageSkillsScenarios | Where-Object skill -ne 'manage-skills').Count |
             Should -Be 0
         $manageSkillsScenarios.id |
@@ -65,6 +65,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'manage-skills-reconciles-exact-divergence'
         $manageSkillsScenarios.id |
             Should -Contain 'manage-skills-ownership-specific-authoring'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-distinct-overlap-authoring'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-overlay-reverse-discovery'
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
         $userVoiceScenarios.Count | Should -Be 8
@@ -115,7 +119,7 @@ Describe 'Skill evaluation scenario contract' {
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-roaming-split'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-defaults-overrides'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-enforced-policy'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 79
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 81
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 

@@ -323,8 +323,8 @@ Expected:
   policy.
 - Chooses an overlay unless reverse discovery and shared-dependency availability can
   be verified for every target host and remote environment.
-- Counts the core and overlay together because the loader unconditionally requires
-  reading both.
+- When an overlay is installed, counts the core and overlay together because the loader
+  requires reading both. An optional-overlay install without the file remains core-only.
 - Keeps the overlay concise and links to repository docs and tools in their owning area
   rather than placing those resources inside the vendored core directory.
 - Exercises the repository request from both entry points when composing skills are

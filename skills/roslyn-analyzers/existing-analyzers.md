@@ -53,6 +53,11 @@ Check packages already in the graph when they are relevant to the requested beha
 Do not add an external dependency or block custom work solely because another project
 implements a similar rule.
 
+For open-ended requests, briefly check relevant maintained suites such as Roslynator,
+StyleCop.Analyzers, Meziantou.Analyzer, SonarAnalyzer, and domain-specific analyzers. This
+is advisory: do not add a dependency or block custom work merely because a similar rule
+exists elsewhere.
+
 ## How to tell what is already active
 
 When the result depends on current analyzer configuration, check what is running:

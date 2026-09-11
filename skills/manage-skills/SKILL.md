@@ -1,6 +1,6 @@
 ---
 name: manage-skills
-description: Manage Agent Skills across discovery, creation, installation, review, and removal. Use for scope, overlays, provenance, or sync.
+description: Find, create, install, review, update, or remove Agent Skills. Use for scope, overlays, provenance, or sync.
 license: MIT
 compatibility: Uses host-native skill discovery. GitHub CLI 2.90 or later enables provenance-aware cross-host install and update. The bundled user-copy installer requires PowerShell 7 and git; private GitHub sources also require GitHub CLI.
 metadata:
@@ -48,17 +48,17 @@ When a shared core needs repository specialization, choose the integration mecha
 deliberately:
 
 - Use an **overlay** when repository policy must be discovered whenever the shared core
-  runs. The mandatory loader gives one routing identity and reverse discovery from the
-  shared core to repository policy.
+  runs. When the overlay is installed, the core's loader gives one routing identity and
+  reverse discovery from the shared core to repository policy.
 - Use a **composing repository skill** when it owns a distinct trigger or outcome and can
   reliably load the shared dependency. Also prove the shared skill cannot bypass required
   repository policy; a local-to-shared reference alone is one-way discoverability.
 
 Initial context is `SKILL.md` plus every file the workflow unconditionally instructs the
-agent to read. The mandatory overlay loader therefore puts `overlay.md` in initial
-context. Keep it to direct bindings and routing. Put repository-only documentation and
-tools with their owning area, then link to them from the overlay instead of placing them
-in the vendored core directory.
+agent to read. When `overlay.md` exists, the loader puts it in initial context; an
+optional-overlay install without that file remains core-only. Keep overlays to direct
+bindings and routing. Put repository-only documentation and tools with their owning area,
+then link to them instead of placing them in the vendored core directory.
 
 ## Preserve the source boundary
 
