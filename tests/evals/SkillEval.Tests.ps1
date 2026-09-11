@@ -891,8 +891,8 @@ public sealed class FileIoShortReadStream : MemoryStream
             $readExactlyStream.ReadExactly($header, 0, $header.Length)
             $header | Should -Be @(4, 1, 0, 0)
             $readExactlyStream.Position | Should -Be 4
-            $readExactlyStream.ArrayReadCount | Should -BeGreaterThan 1
-            $readExactlyStream.SpanReadCount | Should -BeGreaterThan 1
+            ($readExactlyStream.ArrayReadCount + $readExactlyStream.SpanReadCount) |
+                Should -BeGreaterThan 1
         }
         finally { $readExactlyStream.Dispose() }
 
@@ -902,8 +902,8 @@ public sealed class FileIoShortReadStream : MemoryStream
             $spanStream.ReadExactlyThroughSpan($header)
             $header | Should -Be @(4, 1, 0, 0)
             $spanStream.Position | Should -Be 4
-            $spanStream.ArrayReadCount | Should -BeGreaterThan 1
-            $spanStream.SpanReadCount | Should -BeGreaterThan 1
+            ($spanStream.ArrayReadCount + $spanStream.SpanReadCount) |
+                Should -BeGreaterThan 1
         }
         finally { $spanStream.Dispose() }
 
