@@ -56,6 +56,7 @@ public static class OrdinaryPreferences
         {
             using (stream)
             {
+                EnsureOwnerAccess(stream);
                 stream.Write(payload);
             }
 
@@ -74,6 +75,22 @@ public static class OrdinaryPreferences
             }
 
             throw;
+        }
+    }
+
+    private static void EnsureOwnerAccess(FileStream stream)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        UnixFileMode required = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        UnixFileMode actual = File.GetUnixFileMode(stream.SafeFileHandle);
+        if ((actual & required) != required)
+        {
+            throw new UnauthorizedAccessException(
+                "The created settings file does not grant the owner read and write access.");
         }
     }
 }

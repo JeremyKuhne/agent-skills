@@ -99,6 +99,40 @@ public static class TrustedFileWrites
             options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
         }
 
-        return File.Open(path, options);
+        FileStream stream = File.Open(path, options);
+        if (OperatingSystem.IsWindows())
+        {
+            return stream;
+        }
+
+        try
+        {
+            UnixFileMode required = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            UnixFileMode actual = File.GetUnixFileMode(stream.SafeFileHandle);
+            if ((actual & required) != required)
+            {
+                throw new UnauthorizedAccessException(
+                    "The created file does not grant the owner read and write access.");
+            }
+
+            return stream;
+        }
+        catch (Exception operationError)
+        {
+            try
+            {
+                stream.Dispose();
+                File.Delete(path);
+            }
+            catch (Exception cleanupError)
+            {
+                throw new AggregateException(
+                    "File creation failed and cleanup also failed.",
+                    operationError,
+                    cleanupError);
+            }
+
+            throw;
+        }
     }
 }

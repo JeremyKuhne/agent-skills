@@ -147,8 +147,12 @@ This selects non-roaming app data on Windows, configuration on Linux, and
 Application Support on macOS. The helper rejects an empty or relative root,
 creates the application directory, writes a uniquely named sibling file, closes
 it, and requests replacement. It inherits the Windows ACL and requests `700`
-for a new Unix application directory and `600` for the new file. Existing
-directories are reused, not certified or recursively repaired.
+for a new Unix application directory and `600` for the new file. Before
+publishing on Unix, it verifies that the resulting file mode retains owner read
+and write access; a restrictive `umask` therefore fails the save instead of
+publishing an unreadable file. Existing directories are reused, not certified
+or recursively repaired, and a mode check does not establish effective ACL
+access on every filesystem.
 
 **Accepted risk:** normal account protections are assumed, one writer owns each
 update, and the latest replaceable preference may be lost after an unexpected
@@ -248,9 +252,9 @@ TrustedFileWrites.PublishLastWriterWins(trustedRoot, "state", payload);
 
 `trustedRoot` must meet the prerequisites throughout the operation. On Windows
 the file inherits the verified file-inheritable ACL. On Unix the code requests
-`600` at creation; the filesystem may reduce bits, and effective ACL policy still
-belongs to the parent-trust decision. The byte-array recipe suits bounded
-configuration, not arbitrarily large uploads.
+`600` at creation and rejects a result without owner read and write mode bits;
+effective ACL policy still belongs to the parent-trust decision. The byte-array
+recipe suits bounded configuration, not arbitrarily large uploads.
 
 The publisher has no delete-old or copy-over fallback. It deletes a staging path
 on failure only after its own exclusive open succeeded. If cleanup also fails,

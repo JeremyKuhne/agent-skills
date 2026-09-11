@@ -108,8 +108,8 @@ It uses natural prompts for ordinary preferences/scratch, public versus sensitiv
 caches, privileged AppData consumption, mixed audit findings, understandable
 writer questions, durable saves, administrator exclusions, hostile existing
 directories, empty roots, and a pipe near miss. Four audit cases inspect
-synthetic source and deployment facts with writing available but forbidden by
-the requested audit scope.
+synthetic source and deployment facts with the write tool denied and an
+unchanged worktree required as defense in depth.
 
 On Windows, **34 focused deterministic checks passed** for the scenario registry,
 pattern syntax, coherent and contradictory responses, actual invocation evidence,
@@ -140,7 +140,7 @@ including six source-backed read-only audits and one pipe near miss.
 
 With the CI-pinned native Copilot CLI 1.0.63 selected explicitly, the final
 Windows validation reported **95 passed, 0 failed** for the evaluation-harness
-test file and **373 passed, 0 failed, 9 skipped** for the full deterministic
+test file and **373 passed, 0 failed, 11 skipped** for the full deterministic
 suite. All new response checks and compiled fixture checks passed, including
 the accepted theme-default precedence, the wrong machine-default save target,
 and the user override of an enforced policy value. No real model evaluation,

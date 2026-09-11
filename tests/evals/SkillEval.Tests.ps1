@@ -699,8 +699,13 @@ Describe 'File I/O behavioral evaluation checks' {
             })
         $fixtureAudits.Count | Should -Be 6
         foreach ($scenario in $fixtureAudits) {
-            $scenario.allowedTools | Should -Contain 'write'
-            $scenario.deniedTools | Should -Not -Contain 'write'
+            $scenario.allowedTools | Should -Not -Contain 'write'
+            $scenario.deniedTools | Should -Contain 'write'
+            $arguments = @(New-SkillEvalArguments -Scenario $scenario `
+                    -PluginDirectory $TestDrive -Model 'test-model' `
+                    -TranscriptPath (Join-Path $TestDrive "$($scenario.id).md"))
+            @($arguments | Where-Object { $_ -eq '--allow-tool=write' }).Count | Should -Be 0
+            @($arguments | Where-Object { $_ -eq '--deny-tool=write' }).Count | Should -Be 1
         }
     }
 
@@ -716,7 +721,7 @@ Describe 'File I/O behavioral evaluation checks' {
             else {
                 $scenario.prompt | Should -Match '^Am I saving this right\?'
                 $scenario.workspaceFixturePath | Should -Be 'fixtures/dotnet-file-creation-audit'
-                $scenario.allowedTools | Should -Contain 'write'
+                $scenario.deniedTools | Should -Contain 'write'
                 $scenario.requireUnchangedWorktree | Should -BeTrue
             }
         }
@@ -844,13 +849,28 @@ using System.IO;
 
 public sealed class FileIoShortReadStream : MemoryStream
 {
+    public int ArrayReadCount { get; private set; }
+    public int SpanReadCount { get; private set; }
+
     public FileIoShortReadStream(byte[] bytes) : base(bytes)
     {
     }
 
     public override int Read(byte[] buffer, int offset, int count)
     {
+        ArrayReadCount++;
         return base.Read(buffer, offset, Math.Min(count, 1));
+    }
+
+    public override int Read(Span<byte> buffer)
+    {
+        SpanReadCount++;
+        return base.Read(buffer.Slice(0, Math.Min(buffer.Length, 1)));
+    }
+
+    public void ReadExactlyThroughSpan(byte[] buffer)
+    {
+        ReadExactly(buffer.AsSpan());
     }
 }
 '@
@@ -860,13 +880,32 @@ public sealed class FileIoShortReadStream : MemoryStream
         try {
             [FileIoAuditFixture.Storage]::ReadRecordLength($stream) | Should -Be 4
             $stream.Position | Should -Be 1
-            $stream.Position = 0
-            $header = [byte[]]::new(4)
-            $stream.ReadExactly($header, 0, $header.Length)
-            $header | Should -Be @(4, 1, 0, 0)
-            $stream.Position | Should -Be 4
+            $stream.ArrayReadCount | Should -Be 1
+            $stream.SpanReadCount | Should -Be 0
         }
         finally { $stream.Dispose() }
+
+        $readExactlyStream = [FileIoShortReadStream]::new([byte[]](4, 1, 0, 0))
+        try {
+            $header = [byte[]]::new(4)
+            $readExactlyStream.ReadExactly($header, 0, $header.Length)
+            $header | Should -Be @(4, 1, 0, 0)
+            $readExactlyStream.Position | Should -Be 4
+            $readExactlyStream.ArrayReadCount | Should -BeGreaterThan 1
+            $readExactlyStream.SpanReadCount | Should -BeGreaterThan 1
+        }
+        finally { $readExactlyStream.Dispose() }
+
+        $spanStream = [FileIoShortReadStream]::new([byte[]](4, 1, 0, 0))
+        try {
+            $header = [byte[]]::new(4)
+            $spanStream.ReadExactlyThroughSpan($header)
+            $header | Should -Be @(4, 1, 0, 0)
+            $spanStream.Position | Should -Be 4
+            $spanStream.ArrayReadCount | Should -BeGreaterThan 1
+            $spanStream.SpanReadCount | Should -BeGreaterThan 1
+        }
+        finally { $spanStream.Dispose() }
 
         $cache = Join-Path $TestDrive 'public-index'
         [FileIoAuditFixture.Storage]::ReadPublicIndex($cache) | Should -Match 'rebuilt'

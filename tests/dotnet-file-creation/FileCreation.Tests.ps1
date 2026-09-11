@@ -21,6 +21,18 @@ Describe 'Cross-platform file creation behavior' {
             Add-Type -Path $ordinaryRecipePath
         }
 
+        if (-not $IsWindows -and -not ('FileCreationNativeMethods' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System.Runtime.InteropServices;
+
+public static class FileCreationNativeMethods
+{
+    [DllImport("libc", EntryPoint = "umask", SetLastError = true)]
+    public static extern uint SetUmask(uint mask);
+}
+'@
+        }
+
         function New-TempRoot {
             [System.IO.Directory]::CreateTempSubdirectory('skilltest_').FullName
         }
@@ -135,6 +147,28 @@ Describe 'Cross-platform file creation behavior' {
 
                 ([int]$directoryMode -band 0x1FF -band -bnot [int]$script:OwnerOnlyDirectory) | Should -Be 0
                 ([int]$fileMode -band 0x1FF -band -bnot [int]$script:OwnerOnlyFile) | Should -Be 0
+            }
+            finally { Remove-Item -LiteralPath $root -Recurse -Force }
+        }
+
+        It 'fails without replacing preferences when umask removes owner access on Unix' -Skip:$IsWindows {
+            $root = New-TempRoot
+            try {
+                $directory = [OrdinaryPreferences]::CreateDirectory($root)
+                $path = [System.IO.Path]::Join($directory, 'settings.json')
+                [System.IO.File]::WriteAllText($path, 'previous')
+                $previousMask = [FileCreationNativeMethods]::SetUmask(0x1FF)
+                try {
+                    Get-ThrownException {
+                        [OrdinaryPreferences]::Save(
+                            $root,
+                            [System.Text.Encoding]::UTF8.GetBytes('replacement'))
+                    } | Should -BeOfType ([System.UnauthorizedAccessException])
+                }
+                finally { [void][FileCreationNativeMethods]::SetUmask($previousMask) }
+
+                [System.IO.File]::ReadAllText($path) | Should -Be 'previous'
+                @(Get-ChildItem -LiteralPath $directory -Force).Count | Should -Be 1
             }
             finally { Remove-Item -LiteralPath $root -Recurse -Force }
         }
@@ -260,6 +294,32 @@ Describe 'Cross-platform file creation behavior' {
                 [TrustedFileWrites]::PublishLastWriterWins($root, 'settings', [byte[]](1, 2, 3))
                 $mode = Get-Mode -Path ([TrustedFileWrites]::GetPath($root, 'settings'))
                 ([int]$mode -band -bnot [int]$script:OwnerOnlyFile) | Should -Be 0
+            }
+            finally { Remove-Item -LiteralPath $root -Recurse -Force }
+        }
+
+        It 'fails and removes new files when umask removes owner access on Unix' -Skip:$IsWindows {
+            $root = New-TempRoot
+            try {
+                $destination = [TrustedFileWrites]::GetPath($root, 'settings')
+                [System.IO.File]::WriteAllText($destination, 'previous')
+                $previousMask = [FileCreationNativeMethods]::SetUmask(0x1FF)
+                try {
+                    Get-ThrownException {
+                        [TrustedFileWrites]::CreateNew($root, 'new').Dispose()
+                    } | Should -BeOfType ([System.UnauthorizedAccessException])
+                    Get-ThrownException {
+                        [TrustedFileWrites]::PublishLastWriterWins(
+                            $root,
+                            'settings',
+                            [System.Text.Encoding]::UTF8.GetBytes('replacement'))
+                    } | Should -BeOfType ([System.UnauthorizedAccessException])
+                }
+                finally { [void][FileCreationNativeMethods]::SetUmask($previousMask) }
+
+                [TrustedFileWrites]::GetPath($root, 'new') | Should -Not -Exist
+                [System.IO.File]::ReadAllText($destination) | Should -Be 'previous'
+                @(Get-ChildItem -LiteralPath $root -Force).Count | Should -Be 1
             }
             finally { Remove-Item -LiteralPath $root -Recurse -Force }
         }

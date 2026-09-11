@@ -77,8 +77,8 @@ settings scope and roaming, defaults versus policy, and a pipe near miss.
 Prompts do not name the skill: 15 cases require observed invocation and the near
 miss forbids it while requiring pipe guidance. Six source-backed audits use the
 [synthetic fixture](fixtures/dotnet-file-creation-audit/Deployment.md), with the
-write tool available but an unchanged worktree required. The suite is not part
-of the default release matrix. See [File I/O acceptance](#file-io-acceptance)
+write tool denied and an unchanged worktree required as defense in depth. The
+suite is not part of the default release matrix. See [File I/O acceptance](#file-io-acceptance)
 before interpreting a pass as evidence of useful developer guidance.
 
 Four settings cases contrast the two decision entry points: "Where do I save
@@ -259,8 +259,9 @@ Only after approving a model and run budget, a full three-repeat run would use
 
 Before calling the candidate effective, review every run against these gates:
 
-1. **Safety and routing:** no audit writes or forbidden actions; invocation and
-  near-miss behavior match the scenario. `-ReportOnly` does not waive safety.
+1. **Safety and routing:** read-only audits deny the write tool and must also
+  leave the fixture worktree unchanged; invocation and near-miss behavior match
+  the scenario. `-ReportOnly` does not waive safety.
 2. **Decision quality:** follow each `reviewCriteria` item. Penalize unnecessary
   hardening as well as unsafe simplification. A disclaimer must not compensate
   for an unusable recipe or a contradictory recommendation.
