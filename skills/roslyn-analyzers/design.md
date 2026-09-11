@@ -9,7 +9,7 @@ behind it.
 
 The analyzer assembly must be `netstandard2.0` so it loads in every compiler host
 (command-line `csc`, the .NET SDK, Visual Studio's .NET Framework host, VS Code).
-RS1038 enforces this. Keep `EnforceExtendedAnalyzerRules=true` on - it turns on the
+RS1041 enforces this. Keep `EnforceExtendedAnalyzerRules=true` on - it turns on the
 `RS####` authoring analyzers that catch most of the mistakes below at build time.
 Both `AnalyzerReleases.Shipped.md` and `AnalyzerReleases.Unshipped.md` must exist
 as `AdditionalFiles` (RS2008), and every new rule ID must be listed in the
@@ -26,6 +26,10 @@ is doubly wrong: besides the race, it **roots** that compilation's object graph
 across every later edit. Resolve well-known symbols at compilation start and capture
 them in the closure - see the rooting rule in
 [performance.md](performance.md#the-rooting-rule-capture-in-the-closure-never-in-a-field).
+Immutability does not make compiler-derived field data safe: an
+`ImmutableArray<ISymbol>` cannot be mutated, but it still roots the compilation that
+created its symbols. Fields may hold compiler data that is genuinely process-constant,
+such as the `ImmutableArray<SyntaxKind>` used for registration, but not analysis results.
 
 In `Initialize`, always:
 
@@ -80,7 +84,8 @@ symbol-end reporting over compilation-start plus compilation-end reporting.
 Compilation-end diagnostics are not produced during normal live IDE analysis, so
 a rule that reports only there can appear to work in builds while remaining silent
 as the user edits. Use compilation-end only for facts that genuinely require the
-whole compilation and validate its intended host behavior explicitly.
+whole compilation, add `WellKnownDiagnosticTags.CompilationEnd` to the descriptor,
+and validate its intended host behavior explicitly.
 
 ## Rule 3: prefer `IOperation` over raw syntax when semantics matter
 
@@ -165,6 +170,25 @@ the effective severity of every report under that ID. Do not rely on per-report
 severity to preserve independent sub-rule levels once the consumer sets the
 ID-wide severity; use analyzer-specific options to turn sub-rules off instead.
 
+### Calibrate the default severity with evidence
+
+Severity is a claim about impact and confidence, not a measure of how strongly the
+author prefers the rule. Use the least disruptive level justified by real-code
+validation:
+
+| Default | Use when |
+| --- | --- |
+| `Error` | The construct is invalid or unsafe enough that continuing is not meaningful. This is rare and needs explicit owner agreement. |
+| `Warning` | Legal code is almost certainly unintended and requires attention. Precision must be high enough for `TreatWarningsAsErrors`. |
+| `Info` | The finding is precise and useful, but leaving the code unchanged can be reasonable. |
+| `Hidden` | The diagnostic primarily enables IDE tooling or bulk configuration. It is not permission for false positives. |
+| Disabled by default | Broad precision, applicability, or remediation evidence is not yet strong enough for automatic activation. |
+
+Unit tests show that a rule recognizes anticipated cases; they do not establish its
+precision on unfamiliar code. Use the real-code process in
+[validation.md](validation.md#validate-false-positives-on-real-code) before enabling a
+visible default severity.
+
 For analyzer-specific options, make zero/default safe or validate before use.
 Missing and malformed EditorConfig values are normal inputs, and future enum values
 must not turn dictionary indexing or supposedly unreachable branches into `AD0001`.
@@ -180,21 +204,33 @@ enforce the file format and agreement with `SupportedDiagnostics`.
 A code fix is a separate type from the analyzer:
 
 - `[ExportCodeFixProvider(LanguageNames.CSharp)]` plus `[Shared]` on a
-  `CodeFixProvider`.
+  `CodeFixProvider`. The export participates in MEF v2 composition, where non-shared is
+  the default; `[Shared]` ensures the host composes one reusable provider instance.
 - `FixableDiagnosticIds` returns the analyzer's ID(s). Hardcode the id strings (a
   stable public contract) rather than referencing the analyzer assembly - the
   code fix lives in a different assembly (see below).
 - Implement `RegisterCodeFixesAsync`; compute the edit as an immutable
   `Document`/`Solution`/`SyntaxNode` transformation and register a `CodeAction`.
-  `SyntaxGenerator` (from `Microsoft.CodeAnalysis.Editing`) is the language-neutral
-  way to edit modifiers/declarations - e.g. `generator.WithModifiers(decl,
-  generator.GetModifiers(decl).WithIsReadOnly(true))`.
+  `DocumentEditor` plus `SyntaxGenerator` (from `Microsoft.CodeAnalysis.Editing`) is
+  the language-neutral way to edit modifiers and declarations. Replacing a node does
+  not preserve its trivia automatically; carry comments and whitespace with
+  `WithTriviaFrom` or an equivalent deliberate transformation.
+- Parenthesize expressions inserted into an arbitrary parent context so precedence
+  cannot silently change semantics. Add `Simplifier.Annotation` to conservative
+  parentheses so the cleanup pass can remove any that prove unnecessary.
 - Override `GetFixAllProvider()` so "fix all occurrences" works. Use
   `WellKnownFixAllProviders.BatchFixer` only when independently computed text
   changes cannot conflict; otherwise use one coherent document edit. Read
   [fix-all.md](fix-all.md) before choosing the provider.
 - Use a stable, descriptive `equivalenceKey` on the `CodeAction` so FixAll can group
   identical fixes.
+- Make the action title describe the transformation, not restate the diagnostic. A
+  package that localizes diagnostics gives each action its own localizable title rather
+  than reusing the diagnostic title.
+- A `SyntaxGenerator`-based transformation can often support multiple languages, but
+  shared implementation is not proof of support. Export the provider for every language
+  it claims and test each one; keep the export intentionally narrower when syntax or
+  semantics differ.
 
 ### Diagnostic eligibility and fix eligibility are separate
 
@@ -209,6 +245,18 @@ fix does not appear for metadata. If the fix is ineligible, register no action;
 do not register an action whose transformation later returns the unchanged
 document.
 
+Binding is not a guarantee that the syntax still has its ordinary shape. Error
+recovery can bind an invocation with missing or extra arguments, and diagnostics can
+outlive the document snapshot that produced them. Validate required counts, nodes, and
+semantic facts in release code; `Debug.Assert` is not an eligibility check because it
+does not protect shipped release builds.
+
+When analyzer reporting and fixer registration depend on the same semantic condition,
+put that condition in one dependency-appropriate helper used by both. Duplicating the
+predicate lets reporting and fixing drift apart. Before deriving from a fixer base class,
+also verify that its registration hook can decline individual diagnostics; a base that
+seals unconditional registration cannot represent reportable but unfixable shapes.
+
 Carry analyzer-derived facts needed by the fixer in `Diagnostic.Properties` or
 additional `Location`s. `DiagnosticDescriptor.CustomTags` describe the rule and
 are shared by every report; they are not per-diagnostic data. Use stable property
@@ -216,6 +264,9 @@ keys and values that survive diagnostic serialization; pass source spans as
 additional locations rather than encoding positions into strings. The fixer must
 validate transported values against the current document because diagnostics can
 outlive the snapshot that produced them.
+Keep the payload small and prefer recomputing from the diagnostic location when that is
+cheap; unnecessary properties and locations increase the state retained between analysis
+and fixing.
 
 ### Disclose semantic-changing fixes
 
@@ -239,21 +290,23 @@ Workspaces types from an assembly that also contains a `DiagnosticAnalyzer`** -
 analyzers must stay Workspaces-free so they load in the command-line compiler. So
 a repo that ships code fixes needs a second project:
 
-- `<root>.analyzers` - the `DiagnosticAnalyzer`s. References
-  `Microsoft.CodeAnalysis.CSharp`, `EnforceExtendedAnalyzerRules=true`.
+- `<root>.analyzers` - the `DiagnosticAnalyzer`s. References the compiler packages
+  for its supported languages and sets `EnforceExtendedAnalyzerRules=true`.
 - `<root>.analyzers.codefixes` -
   the `CodeFixProvider`s. `netstandard2.0`, signed, `IsPackable=false`,
-  `IncludeBuildOutput=false`. References
-  `Microsoft.CodeAnalysis.CSharp.Workspaces`. Do **not** set
+  `IncludeBuildOutput=false`. References the corresponding Roslyn Workspaces
+  packages. Do **not** set
   `EnforceExtendedAnalyzerRules` and do **not** add
   `Microsoft.CodeAnalysis.Analyzers` here - those are for the analyzer assembly.
 
-Both assemblies pack into `analyzers/dotnet/cs/` from the **same**
-`_AddAnalyzersToPackage` target (a second `MSBuild Targets="GetTargetPath"` call
-feeding the same `_PackageFiles` group). The command-line compiler loads the
-code-fix dll but never instantiates the provider (no analyzer in it), so the
-absence of Workspaces at build time is fine; the IDE supplies Workspaces when it
-offers the fix. This is the standard StyleCop/Roslynator split.
+Package C#-only assemblies under `analyzers/dotnet/cs/` and Visual Basic-only
+assemblies under `analyzers/dotnet/vb/`. Make language-neutral analyzers and their
+dependencies available to every language they advertise, using the neutral or
+per-language layout supported by the package tooling. Do not hardcode the C# folder
+when Visual Basic is supported. Follow the owning package mechanism and verify that
+every advertised analyzer, code-fix, and dependency assembly lands in a compatible
+language location. The command-line compiler may load the code-fix assembly but does
+not instantiate its provider; the IDE supplies Workspaces when it offers the fix.
 
 **Packaging gotcha:** `MSBuild Targets="GetTargetPath"` returns the code-fix
 assembly path but does **not** build it, and nothing else in the library's graph builds

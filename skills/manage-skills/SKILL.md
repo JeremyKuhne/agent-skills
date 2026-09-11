@@ -1,6 +1,6 @@
 ---
 name: manage-skills
-description: Find, build, install, review, update, retire, and share agent skills at repository or user scope. Use when asked to find a skill, build/create one, install/add/vendor one for a project or person, review its routing or workflow, update/sync it, retire/remove it, or reconcile a local change against the commons vs an overlay. Covers host-specific locations, personal-skill privacy, provenance-aware tooling, and the full skill lifecycle. For frontmatter/schema/link diagnostics, use `agent-files-review`.
+description: Manage Agent Skills across discovery, creation, installation, review, and removal. Use for scope, overlays, provenance, or sync.
 license: MIT
 compatibility: Uses host-native skill discovery. GitHub CLI 2.90 or later enables provenance-aware cross-host install and update. The bundled user-copy installer requires PowerShell 7 and git; private GitHub sources also require GitHub CLI.
 metadata:
@@ -18,123 +18,68 @@ metadata:
 If `overlay.md` exists beside this file, read it before acting; it contains
 repository-specific bindings. This core remains usable without it.
 
-The lifecycle skill for project and personal Agent Skills: discover one, choose
-its source ownership and runtime scope, install it for the intended hosts, review
-whether it guides agents effectively, update or retire it, and keep local changes
-in sync with the shared set. It turns "find a skill", "build a skill", "install
-this for me", "add this to the repo", "is this skill effective", "update the
-skill", and "remove this skill" into actions aligned with the sharing model
-instead of ad-hoc copies.
+Keep source ownership separate from installation scope. A portable core can be a
+project or user install; a repository-specific skill belongs to that repository; a
+personal skill can remain outside every repository.
 
-Keep two decisions separate. **Source ownership** says whether a skill is portable
-and shared, repository-specific, or personal/private. **Installation scope** says
-where a host discovers a runtime copy: project, user, plugin/managed, or remote.
-A portable core can be installed at project or user scope; a private personal skill
-can remain born-local without entering a repository. The Agent Skills specification
-defines package shape, not discovery paths or precedence; each host owns those.
-
-## The six verbs
+## Route the request
 
 | Ask | Do | Detail |
 | --- | --- | ------ |
-| "find a skill for X", "is there a skill that does X" | Tiered search (local -> commons -> public), with an applicability check for this repo. | [find.md](find.md) |
-| "build a skill for X", "create a skill" | **Run find first.** Only author new if it exists nowhere; otherwise vendor or tweak the existing one. | [build.md](build.md) |
-| "install this skill", "add this for me", "vendor this into the repo" | Choose source ownership, target surfaces, scope, and host path; for an existing repository, gather overlay material and resolve overlap before writing. | [install.md](install.md) |
-| "review this skill", "is this skill effective" | Review invocation, workflow closure, progressive disclosure, portability, and lifecycle placement; then run the applicable file validation. | [review.md](review.md) |
-| "update the skill", "sync my change", "pull skill updates" | Pull upstream drift; or push a local improvement, classified common (ask before upstreaming) vs deviation (overlay). | [update.md](update.md) |
-| "retire this skill", "remove this skill" | Find dependents and replacements first, then deprecate or remove without leaving stale routing, catalog, packaging, or validation state. | [retire.md](retire.md) |
+| Find or compare | Search installed, commons, then public sources; check applicability. | [find.md](find.md) |
+| Create or build | Search first, then reuse, adapt, or author according to the requested ownership and behavior. | [build.md](build.md) |
+| Install or vendor | Choose owner, scope, hosts, and destination; integrate project installs. | [install.md](install.md) |
+| Review | Check routing, execution, context cost, portability, and lifecycle placement. | [review.md](review.md) |
+| Update or sync | Compare the installed artifact with its pin; classify common changes and local deviations. | [update.md](update.md) |
+| Retire or remove | Find dependents and installed targets before removal. | [retire.md](retire.md) |
 
-These chain: `build` begins with `find`; an install request runs `find` and the
-public-source security gate before `install`; a project-scope install into an
-existing repository also runs [integrate.md](integrate.md) before writing;
-`build`, `install`, and `update` finish with `review`; and `review` finishes with
-`agent-files-review` for repository-backed file validation or the bundled
-normal validator and host diagnostics for a repository-free personal source. A
-local skill that needs a tweak follows `update` so core/overlay ownership stays
-explicit. `retire` inventories every installed scope and host before removing
-anything.
+Start with the selected detail page. Load only additional pages that its branch
+explicitly invokes. Creation starts with `find`; project installation into an existing
+repository also runs `integrate`; create, install, and update finish with `review` and
+the canonical owner's file checks.
 
-## The golden rule
+## Choose ownership and composition
 
-When you change a skill that was vendored from the commons: **never let a vendored
-core diverge silently.** A vendored core is a mirror of upstream. Classify the
-edit, then place it - and **nothing about upstreaming is automatic**:
+- **Shared core:** portable behavior another repository can consume unchanged.
+- **Repository skill:** one repository's paths, policy, or distinct workflow.
+- **Personal skill:** one person's private or cross-project behavior.
 
-- **Local deviation** (the change is specific to this repo) -> move it into the
-  repo's **overlay**, and restore the vendored core to match upstream.
-- **Common** (the change helps every consumer) -> it *should* go upstream, but
-  upstreaming is not always plausible. **Ask** before attempting it; never open a
-  commons PR unprompted. If upstreamed, re-pin to the new version; if not yet,
-  keep it as a recorded *pending-upstream divergence* so it is intentional, not
-  silent.
+When a shared core needs repository specialization, choose the integration mechanism
+deliberately:
 
-So a vendored-core edit ends in one of three **recorded** states - upstreamed,
-moved to the overlay, or a tracked pending-upstream divergence - never an
-unexplained one. Provenance frontmatter identifies the source repo, ref, and tree
-SHA. The independent normalized local-to-recorded-pin comparison in `update`
-detects unexplained local changes. `gh skill update` checks the recorded SHA
-against the remote but does not hash local content. See [update.md](update.md).
+- Use an **overlay** when repository policy must be discovered whenever the shared core
+  runs. The mandatory loader gives one routing identity and reverse discovery from the
+  shared core to repository policy.
+- Use a **composing repository skill** when it owns a distinct trigger or outcome and can
+  reliably load the shared dependency. Also prove the shared skill cannot bypass required
+  repository policy; a local-to-shared reference alone is one-way discoverability.
 
-## Conventions every skill follows
+Initial context is `SKILL.md` plus every file the workflow unconditionally instructs the
+agent to read. The mandatory overlay loader therefore puts `overlay.md` in initial
+context. Keep it to direct bindings and routing. Put repository-only documentation and
+tools with their owning area, then link to them from the overlay instead of placing them
+in the vendored core directory.
 
-Whatever the verb, the result must satisfy its canonical owner's rules. A
-shared core uses its commons' strict format and publication gates; a
-repository-specific skill uses that repository's local policy; a personal
-source needs no repository format or catalog. Use `agent-files-review` for
-repository-backed file checks. For a repository-free personal source, use the
-bundled normal validator, target-host diagnostics, and direct resource/link
-inspection. [build.md](build.md) defines these branches.
+## Preserve the source boundary
 
-Use the required `technical-writing` skill after behavior and routing are
-settled. It owns human and agent comprehension, grounding, and reader cost;
-this skill retains lifecycle placement and semantic correctness, while
-`agent-files-review` retains file correctness. A prose pass must preserve
-literal trigger phrases, requirement strength, tool names, permission
-boundaries, and stop conditions.
+A vendored core remains an unchanged mirror of its immutable pin. Classify every local
+core edit:
 
-For the `SKILL.md` frontmatter check specifically, this skill bundles
-[scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1) - a dependency-free
-PowerShell port of the Agent Skills spec validator - so the check runs anywhere
-the skill is vendored, without the upstream tool. Run it on the skill directory:
-`pwsh scripts/Validate-Skills.ps1 <skill-dir>`. A commons portfolio uses
-`-RequirePortfolioMetadata` to enforce its metadata and overlay contract.
+- common behavior -> ask before upstreaming, then re-pin after it lands;
+- repository deviation -> move it to the overlay; or
+- common change not yet upstreamed -> record an exact pending divergence.
 
-For deterministic user-scope copies, this skill also bundles
-[scripts/Install-UserSkill.ps1](scripts/Install-UserSkill.ps1). Read
-[install.md](install.md) and any local overlay before running it. The skill does
-not pre-approve shell access; script execution remains subject to the host's
-normal terminal/tool permission flow.
+Never leave unexplained core drift. See [update.md](update.md) for the comparison and
+pin workflow.
 
-For a new downstream binding, run [integrate.md](integrate.md), then start from
-`assets/overlay.md.tmpl`, replace its skill and pin tokens, and keep every
-accepted local path and concrete cross-reference in that overlay.
+## Validate and stop
 
-## Sub-pages
+Follow the canonical owner's rules. Use `agent-files-review` and `technical-writing` for
+repository-backed sources. For repository-free personal skills, use the bundled validator,
+host diagnostics, and direct resource checks.
 
-- [find.md](find.md) - the tiered search, the applicability check, and the
-  recommendation report.
-- [build.md](build.md) - the find-first decision tree, the security gate for
-  public sources, and canonical source ownership (born-repository,
-  born-personal, or born-shared).
-- [install.md](install.md) - source ownership vs runtime scope, host locations,
-  personal-skill privacy, tool selection, verification, and lifecycle effects.
-- [integrate.md](integrate.md) - pre-write discovery of repository bindings,
-  semantic overlap classification, and separately approved deduplication.
-- [evaluations.md](evaluations.md) - should/should-not install cases for scope,
-  host collisions, private skills, tooling fallbacks, updates, and retirement.
-- [review.md](review.md) - semantic and lifecycle review: invocation, agent
-  execution, progressive disclosure, portability, overlap, and maintenance.
-- [update.md](update.md) - the pull (drift) and push (common vs deviation)
-  flows and the provenance mechanics behind the golden rule.
-- [retire.md](retire.md) - dependency-first deprecation or removal without stale
-  routing, catalog, packaging, or validation state.
-
-## Disambiguation
-
-`manage-skills` operates on **skill lifecycle and effectiveness**: discover, add,
-review semantic workflow quality, vendor, and sync. It is not
-`agent-files-review`, which validates **agent-file correctness**: frontmatter,
-schema/conventions, mirror sync, whitespace, links, and diagnostics. A complete
-skill review uses both in that order; neither substitutes for the other. For an
-overlay, `manage-skills` decides what belongs there, while `agent-files-review`
-validates the resulting overlay file.
+- Validate a skill with [scripts/Validate-Skills.ps1](scripts/Validate-Skills.ps1).
+- Use [scripts/Install-UserSkill.ps1](scripts/Install-UserSkill.ps1) only after the
+  user-scope privacy and target checks in [install.md](install.md).
+- Start a downstream overlay from [assets/overlay.md.tmpl](assets/overlay.md.tmpl) after
+  completing [integrate.md](integrate.md).

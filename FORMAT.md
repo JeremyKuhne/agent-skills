@@ -44,7 +44,8 @@ e.g. [detail.md](detail.md).
 
 - `name` - lowercase, digits, hyphens; max 64 chars; matches the directory name.
 - `description` - what the skill does **and when to use it**, with trigger
-  phrasing. This is the entire auto-invocation surface; write it "pushy".
+  phrasing. This is the auto-invocation surface; keep it concise and specific
+  rather than inventorying the whole workflow.
 
 Use `compatibility` when the workflow requires a particular runtime, CLI, MCP
 server, network capability, or operating system. Other optional Agent Skills
@@ -153,12 +154,26 @@ bindings were reviewed against. Start from
 `core-pin` and re-review the bindings. The overlay may link to repository files;
 the portable core may not.
 
+Use an overlay when repository policy must be discovered whenever the core runs. The
+mandatory loader provides reverse discovery from the shared core to repository policy
+and avoids competing skill identities. A separate composing repository skill is
+appropriate for a distinct trigger or outcome only when both shared-dependency
+availability and reverse discovery from the shared skill are reliable; a
+local-to-shared reference alone can bypass repository policy.
+
+Initial context is `SKILL.md` plus every file the workflow unconditionally instructs the
+agent to read. The mandatory loader therefore puts `overlay.md` in initial context. Keep
+it concise. Put repository-only documentation and tools with their owning area, outside
+the vendored core directory, and link to them from the overlay.
+
 ## Thin core plus sibling files
 
 Keep each `SKILL.md` body small - the whole body loads on every trigger, while
 sibling files load only when referenced. When a skill grows past roughly 150
 lines, split the deep detail into sibling `*.md` files and leave the core as an
-overview that links to them.
+overview that links to them. This does not reduce context when the workflow
+unconditionally requires reading the sibling. `metadata.requires` controls installation
+dependencies; it does not itself put another skill's files in initial context.
 
 ## Code examples
 
