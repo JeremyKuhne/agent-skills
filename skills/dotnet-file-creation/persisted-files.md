@@ -135,9 +135,9 @@ ordinary path.
 For a preferences object already held by the application:
 
 ```csharp
-Environment.SpecialFolder folder = OperatingSystem.IsWindows()
-   ? Environment.SpecialFolder.LocalApplicationData
-   : Environment.SpecialFolder.ApplicationData;
+Environment.SpecialFolder configuration = Environment.SpecialFolder.ApplicationData;
+Environment.SpecialFolder windowsLocal = Environment.SpecialFolder.LocalApplicationData;
+Environment.SpecialFolder folder = OperatingSystem.IsWindows() ? windowsLocal : configuration;
 string dataRoot = Environment.GetFolderPath(folder, Environment.SpecialFolderOption.Create);
 byte[] payload = JsonSerializer.SerializeToUtf8Bytes(preferences);
 string settingsPath = OrdinaryPreferences.Save(dataRoot, payload);

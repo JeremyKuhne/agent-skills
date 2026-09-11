@@ -138,9 +138,10 @@ values, shared defaults with user saves/reset behavior, and protected policy
 that user preferences must not override. This brings the suite to **16 cases**,
 including six source-backed read-only audits and one pipe near miss.
 
-The full deterministic evaluation-harness run on Windows reported **94 passed
-and 1 failed**. The failure was native Copilot CLI discovery, not a settings
-case. All new response checks and compiled fixture checks passed, including
+With the CI-pinned native Copilot CLI 1.0.63 selected explicitly, the final
+Windows validation reported **95 passed, 0 failed** for the evaluation-harness
+test file and **373 passed, 0 failed, 9 skipped** for the full deterministic
+suite. All new response checks and compiled fixture checks passed, including
 the accepted theme-default precedence, the wrong machine-default save target,
 and the user override of an enforced policy value. No real model evaluation,
 profile-roaming deployment test, or novice-user study was run.

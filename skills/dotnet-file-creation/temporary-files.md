@@ -11,20 +11,20 @@ permission audit for disposable work:
 DirectoryInfo scratch = Directory.CreateTempSubdirectory("exampleapp_");
 try
 {
-  string path = Path.Join(scratch.FullName, "work.txt");
-  File.WriteAllText(path, "intermediate data");
-  string result = File.ReadAllText(path);
+    string path = Path.Join(scratch.FullName, "work.txt");
+    File.WriteAllText(path, "intermediate data");
+    string result = File.ReadAllText(path);
 }
 finally
 {
-  try
-  {
-    scratch.Delete(recursive: true);
-  }
-  catch (Exception cleanupError) when (cleanupError is IOException or UnauthorizedAccessException)
-  {
-    System.Diagnostics.Trace.TraceWarning("Scratch cleanup failed: {0}", cleanupError.Message);
-  }
+    try
+    {
+        scratch.Delete(recursive: true);
+    }
+    catch (Exception cleanupError) when (cleanupError is IOException or UnauthorizedAccessException)
+    {
+        System.Diagnostics.Trace.TraceWarning("Scratch cleanup failed: {0}", cleanupError.Message);
+    }
 }
 ```
 
