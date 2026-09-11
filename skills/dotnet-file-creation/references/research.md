@@ -51,7 +51,7 @@ The focused Pester suite compiled and exercised the bundled
 [ordinary preferences example](../assets/OrdinaryPreferences.cs) and
 [TrustedFileWrites recipe](../assets/TrustedFileWrites.cs) on Windows
 10.0.26200, NTFS, PowerShell 7.6.6, and its hosted .NET 10.0.12 runtime:
-**49 passed, 0 failed, 7 Unix-only cases skipped** after the ordinary-path change.
+**49 passed, 0 failed, 9 Unix-only cases skipped** in the final focused shard.
 
 Coverage includes ordinary application-directory creation, new/updated settings,
 shorter replacement payloads, reuse of existing ordinary storage, failed-save

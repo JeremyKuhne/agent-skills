@@ -10,7 +10,7 @@ on every platform or filesystem.
 | Behavior | Result |
 | --- | --- |
 | `FileMode.CreateNew` over an existing file | Throws `IOException` |
-| `File.Move(source, destination, overwrite: true)` | Replaces the destination, removes the source |
+| Successful `File.Move(source, destination, overwrite: true)` | Replaces the destination and removes the source; sharing or filesystem constraints can reject the request |
 | `FileShare.None` blocking a second .NET open | Observed with default locking on the tested local filesystems, not universal |
 | Special-folder APIs | Select locations; do not prove ownership, privacy, availability, or local storage |
 
