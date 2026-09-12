@@ -106,6 +106,19 @@ Expected:
   semantics; and
 - require consumer validation if public.
 
+### C# 8 generic syntax boundary
+
+Input removes `default!` from a nullable-enabled C# 8 project and considers an
+unconstrained `T?` replacement.
+
+Expected:
+
+- inspect the language version independently of the target framework;
+- reject unconstrained `T?` because C# 8 reports `CS8627`;
+- use `[MaybeNull] T` for a maybe-default return or
+  `[MaybeNullWhen(false)] out T` for a failure-only allowance; and
+- do not raise the language version solely to silence the diagnostic.
+
 ### Generic `Try*` output
 
 Input assigns `default!` to `out T value` on failure.

@@ -2,7 +2,7 @@
 name: csharp-nullability-remediation
 description: Remove or audit C# null-forgiving operators (`!`, `null!`, `default!`) without hiding nullability defects or changing contracts accidentally. Use when asked to "remove null-forgiving operators", "fix a diagnostic that bans null forgiveness", "replace null! or default!", reduce suppressions, or resolve nullable warnings exposed after deleting `!`. Not for authoring the analyzer itself or enabling nullable across a whole repository.
 license: MIT
-compatibility: Requires a C# project with a compiler build command. Public-contract and hot-path changes may also require consumer and performance validation.
+compatibility: Requires a C# 8 or later project with a compiler build command; unconstrained T? syntax requires C# 9 or later.
 metadata:
   applicability: dotnet
   binding: optional-overlay
@@ -40,9 +40,8 @@ new code tells the truth about values that can be null.
 
 ## Workflow
 
-1. **Establish scope.** Identify the project, nullable context, target
-   frameworks, generated/vendored policy, and whether the affected surface is
-   public or performance-sensitive.
+1. **Establish scope.** Record the nullable context, language version, target
+   frameworks, source policy, and public or hot-path exposure.
 2. **Inventory real operators.** Prefer compiler/analyzer diagnostics or syntax
    parsing over textual `!` matches. Group sites by code shape and contract owner.
 3. **Run a removal probe.** Delete `!` at one representative site and run the
@@ -90,21 +89,21 @@ Use a compact ledger rather than a count-only summary:
 
 | Site | Suppressed diagnostic | Runtime null contract | Remedy | Validation |
 | --- | --- | --- | --- | --- |
-| `path:line` | `CS86xx` or none | valid / invalid / inactive / proven impossible | code or retained suppression | command and result |
+| `path:line` | compiler or analyzer ID, or none | valid / invalid / inactive / proven impossible | code or retained suppression | command and result |
 
 Name any sites intentionally left unchanged and the evidence still needed.
 
 ## Related workflows
 
-- Use the repository's analyzer-authoring skill when the task is to create or
-  change the diagnostic rule itself.
-- Use its downlevel/polyfill skill when nullable-analysis attributes are missing
-  from an older target framework.
-- Use its performance skill before changing a measured hot path solely to avoid
+- Use `roslyn-analyzers` when the task is to create or change the diagnostic rule
+  itself.
+- Use `dotnet-polyfills` when nullable-analysis attributes are missing from an
+  older target framework.
+- Use `performance-testing` before changing a measured hot path solely to avoid
   a suppression.
-- Use its security-review workflow when nullability assumptions guard unsafe,
-  reflection, deserialization, interop, or untrusted-input boundaries.
-- Run its pre-PR review after remediation changes are complete.
+- Use `security-review` when nullability assumptions guard unsafe, reflection,
+  deserialization, interop, or untrusted-input boundaries.
+- Run `pre-pr-self-review` after remediation changes are complete.
 
 The consuming repository binds those skill names and concrete commands in its
 overlay.

@@ -36,6 +36,20 @@ Describe 'C# nullability remediation skill contract' {
         $script:Evaluations | Should -Match 'empty `Nullable<U>`'
     }
 
+    It 'supports C# 8 while gating unconstrained nullable type parameters' {
+        $script:Skill | Should -Match 'Requires a C# 8 or later project'
+        $script:Skill | Should -Match 'unconstrained T\? syntax requires C# 9 or later'
+        $script:Skill | Should -Match 'nullable context, language version'
+        $script:Remediation | Should -Match 'C# 8 reports `CS8627`'
+        $script:Remediation | Should -Match '\[MaybeNull\] T.*on C# 8'
+        $script:Evaluations | Should -Match 'C# 8 generic syntax boundary'
+    }
+
+    It 'does not treat required members as a framework lifecycle guarantee' {
+        $script:Remediation | Should -Match '`required` is a C# 11 construction-site obligation'
+        $script:Remediation | Should -Match 'framework activators can bypass object-initializer'
+    }
+
     It 'guards public metadata and inherited contracts with consumer builds' {
         $script:Verification | Should -Match 'compile representative consumers'
         $script:Verification | Should -Match 'test overrides and interface implementations for `CS876x`'
@@ -50,8 +64,18 @@ Describe 'C# nullability remediation skill contract' {
 
     It 'routes neighboring work to the owning workflow' {
         $script:Skill | Should -Match 'Not for authoring the analyzer itself'
+        $script:Skill | Should -Match 'Use `roslyn-analyzers`'
+        $script:Skill | Should -Match 'Use `dotnet-polyfills`'
+        $script:Skill | Should -Match 'Use `performance-testing`'
+        $script:Skill | Should -Match 'Use `security-review`'
+        $script:Skill | Should -Match 'Run `pre-pr-self-review`'
         $script:Evaluations | Should -Match 'Write a Roslyn analyzer that bans the null-forgiving operator'
         $script:Evaluations | Should -Match 'Make `MaybeNullWhenAttribute` available on \.NET Framework'
         $script:Evaluations | Should -Match 'Enable nullable reference types in a new repository'
+    }
+
+    It 'uses a general diagnostic ledger and conditions analyzer-loading checks' {
+        $script:Skill | Should -Match 'compiler or analyzer ID, or none'
+        $script:Verification | Should -Match 'when a diagnostic analyzer participates in the remediation'
     }
 }

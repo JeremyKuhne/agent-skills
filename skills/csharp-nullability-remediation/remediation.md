@@ -39,7 +39,7 @@ in the non-null branch, capture it directly:
 ```csharp
 if (GetValue() is { } value)
 {
-  Use(value);
+    Use(value);
 }
 ```
 
@@ -76,11 +76,19 @@ generator.
 
 Make the contract say so:
 
-- use `T?` / `string?` when callers should observe and handle null;
-- use `[MaybeNull]` when a generic API returns a maybe-default `T` and changing the
-  declared type is unsuitable;
+- use a concrete nullable reference type such as `string?` when callers should
+  observe and handle null;
+- use unconstrained `T?` on C# 9 or later when generic callers should observe a
+  maybe-default result;
+- use `[MaybeNull] T` on C# 8 for the same generic return contract;
 - use `[MaybeNullWhen(false)]` for an `out T` that may be null on failure; or
 - use `[NotNullWhen(true)] out T?` when success specifically guarantees non-null.
+
+Inspect the language version separately from the target framework. Unconstrained
+`T?` requires C# 9 or later; C# 8 reports `CS8627`. On C# 8, keep the ordinary `T`
+declaration and express maybe-null results with `[MaybeNull]` or
+`[MaybeNullWhen]`, or add a constraint only when the abstraction already requires
+it.
 
 These attributes are not interchangeable for an unconstrained type parameter.
 `[MaybeNullWhen(false)] out T` relaxes the ordinary `T` contract only on failure,
@@ -158,10 +166,16 @@ might never run.
 Check, in order:
 
 1. constructor injection or a constructor/factory that returns a valid object;
-2. `required` or framework-specific annotations that the framework honors;
-3. nullable storage with a checked accessor;
-4. a lifecycle method with a truthful `[MemberNotNull]` contract; and
-5. a narrow compiler/rule suppression with a reason naming the framework guarantee.
+2. `required` only when compiler-checked creation and nullable warnings enforce non-null assignment;
+3. framework-specific annotations or contracts enforced before every read;
+4. nullable storage with a checked accessor;
+5. a lifecycle method with a truthful `[MemberNotNull]` contract; and
+6. a narrow compiler/rule suppression with a reason naming the framework guarantee.
+
+`required` is a C# 11 construction-site obligation, not a runtime lifecycle
+guarantee. Reflection and framework activators can bypass object-initializer
+enforcement, and source callers can explicitly assign null subject to nullable
+warnings.
 
 Do not change a required runtime dependency into an optional API merely to remove
 `!`. Do not claim that dependency injection, deserialization, or model binding ran
@@ -273,12 +287,25 @@ When `T Get<T>()` delegates to `TryGet<T>([MaybeNullWhen(false)] out T value)` a
 throws on failure, its normal return satisfies the ordinary `T` contract. Do not add
 `[return: MaybeNull]` merely because the temporary must hold default on failure. Use
 an explicit method type with nullable temporary storage when inference would otherwise
-weaken the type, then let the conditional annotation narrow the successful path:
+weaken the type. On C# 9 or later, let the conditional annotation narrow nullable
+temporary storage:
 
 ```csharp
 if (!TryGet<T>(out T? value))
 {
-  throw new InvalidOperationException();
+    throw new InvalidOperationException();
+}
+
+return value;
+```
+
+On C# 8, where unconstrained `T?` produces `CS8627`, keep the ordinary `T`
+declaration and let `[MaybeNullWhen(false)]` narrow the successful path:
+
+```csharp
+if (!TryGet<T>(out T value))
+{
+    throw new InvalidOperationException();
 }
 
 return value;
