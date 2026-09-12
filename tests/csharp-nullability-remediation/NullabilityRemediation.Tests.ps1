@@ -24,6 +24,7 @@ Describe 'C# nullability remediation skill contract' {
     It 'requires a compiler probe before selecting a nontrivial remedy' {
         $script:Skill | Should -Match 'Remove one representative `!` first and compile'
         $script:Skill | Should -Match 'Capture the warning id, message, natural\s+type, converted type'
+        $script:Verification | Should -Match 'each nullable or null-forgiving diagnostic observed by the probe'
         $script:Evaluations | Should -Match 'Compiler probe is blocked'
         $script:Evaluations | Should -Match 'restore the reversible probe'
     }
@@ -32,6 +33,7 @@ Describe 'C# nullability remediation skill contract' {
         $script:Remediation | Should -Match '\[NotNullWhen\(true\)\] out T\?'
         $script:Remediation | Should -Match '\[NotNullWhen\(false\)\] out T\?'
         $script:Remediation | Should -Match '\[MaybeNullWhen\(false\)\] out T'
+        $script:Remediation | Should -Match 'every\s+`true` return must still satisfy the ordinary `T` contract'
         $script:Remediation | Should -Match 'successful lookup of a stored null'
         $script:Evaluations | Should -Match 'empty `Nullable<U>`'
     }

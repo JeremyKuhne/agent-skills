@@ -68,10 +68,11 @@ nullable when the opposite result may produce null, and do not make callers repe
 `result is not null` to compensate for a missing postcondition. Do not add a
 `[NotNullWhen]` promise for a result side that can legitimately produce null, such
 as a successful "not applicable" result or a successful lookup of a stored null.
-This does not prohibit `[MaybeNullWhen]`, which relaxes the ordinary contract on
-the named result side rather than promising non-null on the other side. If the target
-lacks the attribute, use the repository's approved downlevel package or source
-generator.
+`[MaybeNullWhen(false)] out T` permits a maybe-default result only on `false`; every
+`true` return must still satisfy the ordinary `T` contract. If success can produce a
+null reference where `T` is non-nullable, declare a nullable output instead. If the
+target lacks the attribute, use the repository's approved downlevel package or
+source generator.
 
 ### Null is a valid result
 

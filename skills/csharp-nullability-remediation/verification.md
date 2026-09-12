@@ -8,7 +8,7 @@ checks to the contract that changed.
 After each representative edit:
 
 1. compile the narrowest project and target framework that reaches the site;
-2. confirm the original nullable warning and null-forgiving diagnostic are gone;
+2. confirm each nullable or null-forgiving diagnostic observed by the probe is gone;
 3. check for new warnings at callers and implementations; and
 4. run the nearest behavior test, including the null or invalid-state branch.
 
