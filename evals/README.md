@@ -63,10 +63,13 @@ audit findings, listener-starvation troubleshooting, and a `System.IO.Pipelines`
 near miss. It is not part of the default release matrix in
 `Invoke-SkillEvalMatrix.ps1`.
 
-`scenarios/performance-testing.json` is an opt-in three-case domain suite. It
+`scenarios/performance-testing.json` is an opt-in ten-case domain suite. It
 covers a valid fresh-process phased measurement, rejection of an exit-zero run
-with no discovered/populated work, and refusal to compare CPU time across
-unverified sampling denominators. It is not part of the default release matrix.
+with no discovered/populated work, refusal to compare CPU time across unverified
+sampling denominators, evaluated ETW package preflight, live-corpus mutation,
+common-mode oracle defects, native call-count evidence, pool-state allocation,
+callback exit contracts, and shared-output build serialization. It is not part
+of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,

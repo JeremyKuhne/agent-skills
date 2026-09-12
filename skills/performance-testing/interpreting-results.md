@@ -73,8 +73,10 @@ With `[MemoryDiagnoser]` (or `--memory`), each row of the results table includes
 
 ### Reading the numbers
 
-- **`Allocated` is the primary signal.** A method that should be allocation-free
-  must report `-` or `0 B`. Anything else is a regression.
+- **`Allocated` is the primary signal.** For a method with no shared pool or
+  cache state that should be allocation-free, any stable nonzero value is a
+  regression. For pool-backed code, match state and repeat a surprising row as
+  described below before classifying it.
 - A `Ratio` column appears when one method is `Baseline = true`. Use it together
   with `Allocated` to confirm a perf change is not just trading CPU for
   allocations (or vice versa).
@@ -85,6 +87,19 @@ With `[MemoryDiagnoser]` (or `--memory`), each row of the results table includes
   `object`, non-generic interfaces, or `string.Format`.
 - When a repository supports .NET Framework and a modern target, measure both;
   their JITs and BCLs can allocate differently.
+
+### Interpret pool-backed allocation in matched state
+
+For `ArrayPool<T>` or another shared cache, distinguish per-operation object
+allocation from an occasional pool refill or new high-water allocation. Compare
+`Allocated` only under matched process launch, warmup, profiler, and workload state.
+One surprising row should trigger a matched rerun, not an immediate claim that the
+candidate regressed or became allocation-free.
+
+Report cold and warm pool-state behavior separately when both matter. BenchmarkDotNet
+`Allocated` remains cumulative managed bytes per operation for that run; a sampled
+allocation profile does not become cumulative allocated bytes, and neither measure
+alone establishes retained memory.
 
 ### Where the report lives
 
