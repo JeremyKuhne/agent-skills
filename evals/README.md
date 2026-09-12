@@ -68,6 +68,25 @@ covers a valid fresh-process phased measurement, rejection of an exit-zero run
 with no discovered/populated work, and refusal to compare CPU time across
 unverified sampling denominators. It is not part of the default release matrix.
 
+[scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
+opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
+public versus credential caches, privileged consumption of user AppData, mixed
+audit findings, a novice-facing writer question, durable-save requirements,
+administrator exclusions, known hostile preexisting directories, empty roots,
+settings scope and roaming, defaults versus policy, and a pipe near miss.
+Prompts do not name the skill: 15 cases require observed invocation and the near
+miss forbids it while requiring pipe guidance. Six source-backed audits use the
+[synthetic fixture](fixtures/dotnet-file-creation-audit/Deployment.md), with the
+write tool denied and an unchanged worktree required as defense in depth. The
+suite is not part of the default release matrix. See [File I/O acceptance](#file-io-acceptance)
+before interpreting a pass as evidence of useful developer guidance.
+
+Four settings cases contrast the two decision entry points: "Where do I save
+this?" designs per-user global settings and a roaming/local split; "Am I saving
+this right?" audits shared defaults with user overrides and mandatory-policy
+precedence. The latter cases check both loading and saving, not folder selection
+alone.
+
 Copilot CLI 1.0.63 emits structured JSONL when the model invokes the `skill`
 tool. Positive cases require their primary skill invocation, and cross-skill
 cases can require companion invocations. Near misses forbid the primary skill.
@@ -198,6 +217,69 @@ By default reports go to a unique temporary directory. `summary.json` and
 stdout, stderr, transcript, shim log, and scored evidence. Prompts and
 transcripts remain local and are not uploaded automatically. Retain an aggregate
 summary with release evidence when needed, then remove local run artifacts.
+
+## File I/O acceptance
+
+The file I/O suite has been authored and its deterministic checks run; no model
+baseline is claimed. Each scenario's `reviewCriteria` is a **human-review
+rubric**, not a field automatically evaluated by the scorer. Required and
+forbidden response patterns are coarse checks, calibrated with synthetic
+coherent answers and contradictory additions. They do not prove that generated
+code works, that an answer is proportionate, or that a novice understands it.
+
+Run the suite-specific deterministic checks without a model or Copilot CLI:
+
+```pwsh
+Import-Module Pester -RequiredVersion 5.7.1
+$configuration = New-PesterConfiguration
+$configuration.Run.Path = './tests/evals/SkillEval.Tests.ps1'
+$configuration.Run.Throw = $true
+$configuration.Filter.FullName = 'File I/O behavioral evaluation checks.*'
+Invoke-Pester -Configuration $configuration
+```
+
+These checks cover schema/pattern validity, affirmative versus negated advice,
+contradictions despite matching required phrases, invocation evidence, audit
+mutation safety, fixture staging, and the fixture's actual short-read/cache
+behavior. Settings checks cover both entry points, scope/roaming advice, a save
+that wrongly targets machine defaults, and user values overriding mandatory
+policy. Synthetic scorer responses are not candidate model outputs.
+
+Only after approving a model and run budget, a full three-repeat run would use
+48 model invocations:
+
+```pwsh
+./evals/Invoke-SkillEvals.ps1 `
+  -ScenarioPath ./evals/scenarios/dotnet-file-creation.json `
+  -Model gpt-5.4 `
+  -RunCount 3 `
+  -MaxConcurrency 2 `
+  -ReportOnly
+```
+
+Before calling the candidate effective, review every run against these gates:
+
+1. **Safety and routing:** read-only audits deny the write tool and must also
+  leave the fixture worktree unchanged; invocation and near-miss behavior match
+  the scenario. `-ReportOnly` does not waive safety.
+2. **Decision quality:** follow each `reviewCriteria` item. Penalize unnecessary
+  hardening as well as unsafe simplification. A disclaimer must not compensate
+  for an unusable recipe or a contradictory recommendation.
+3. **Executable output:** for preferences and scratch, inspect generated code
+  before execution, compile it in an isolated .NET 10 project, and exercise the
+  stated happy/failure cases with synthetic paths. Record this separately; the
+  generic transcript scorer does not compile or execute returned code. Never
+  invoke the fixture's privileged maintenance method against real files.
+4. **Question quality:** a question must change the recommendation, use concepts
+  the developer can answer, and explain the consequence. The clarification
+  scenario is single-turn; `--no-ask-user` means the harness does not supply a
+  follow-up answer or measure the complete conversation.
+
+Record each manual gate as passed, failed, or not checked, with a short reason
+and the run identifier. Keep automated pattern passes and reviewed outcomes
+separate; not checked is not passed. Human review of these responses is not a
+novice-user study, and local code tests are not cross-platform or power-loss
+certification. Keep responses and any generated-code projects local and ignored.
 
 ## Human A/B review
 

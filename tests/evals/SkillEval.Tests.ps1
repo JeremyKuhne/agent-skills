@@ -11,6 +11,7 @@ BeforeAll {
     $script:CreateSkillRepoScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/create-skill-repo.json'
     $script:DotNetPipesScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-pipes.json'
     $script:PerformanceTestingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/performance-testing.json'
+    $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -24,6 +25,7 @@ Describe 'Skill evaluation scenario contract' {
         $createSkillRepoScenarios = @(Get-SkillEvalScenarios -Path $script:CreateSkillRepoScenarioPath)
         $dotNetPipesScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetPipesScenarioPath)
         $performanceTestingScenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
+        $dotNetFileCreationScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetFileCreationScenarioPath)
         $scenarios = @(
             $createPrScenarios
             $technicalWritingScenarios
@@ -32,7 +34,8 @@ Describe 'Skill evaluation scenario contract' {
             $userVoiceScenarios
             $createSkillRepoScenarios
             $dotNetPipesScenarios
-            $performanceTestingScenarios)
+            $performanceTestingScenarios
+            $dotNetFileCreationScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -92,7 +95,17 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'performance-testing-rejects-exit-zero-without-work'
         $performanceTestingScenarios.id |
             Should -Contain 'performance-testing-refuses-incompatible-cpu-denominators'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 56
+        $dotNetFileCreationScenarios.Count | Should -Be 16
+        @($dotNetFileCreationScenarios | Where-Object skill -ne 'dotnet-file-creation').Count |
+            Should -Be 0
+        $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-audit-triage'
+        $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-clarifies-writers'
+        $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-routing-pipes-near-miss'
+        $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-global-user'
+        $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-roaming-split'
+        $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-defaults-overrides'
+        $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-enforced-policy'
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 72
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
     }
 
@@ -534,6 +547,417 @@ Describe 'Skill evaluation scenario contract' {
         Test-Path -LiteralPath (
             Join-Path $runDirectory 'workspace/skills/manage-skills') |
             Should -BeFalse
+    }
+}
+
+Describe 'File I/O behavioral evaluation checks' {
+    BeforeDiscovery {
+        $fileIoCases = @(
+            @{
+                ScenarioId = 'dotnet-file-creation-ordinary-preferences'
+                Response = 'Use Environment.GetFolderPath and Directory.CreateDirectory for ordinary per-user preferences. Create a sibling with FileMode.CreateNew and publish with File.Move. This does not guarantee power-loss durability. You do not need to audit ACLs for the stated normal-account use.'
+                Contradiction = 'You must verify every ancestor ACL before saving preferences.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-disposable-scratch'
+                Response = 'Use Directory.CreateTempSubdirectory, write inside it, and delete in finally after closing streams. A crash can leave the scratch directory behind. DeleteOnClose does not guarantee cleanup after termination.'
+                Contradiction = 'DeleteOnClose guarantees cleanup after a crash.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-cache-accepted-tradeoff'
+                Response = 'SavePublicIndex and ReadPublicIndex are an acceptable tradeoff: parse, validate and rebuild corrupt entries; truncated writes do not destroy valuable data here. The cache does not require SQLite or a transaction. I have not edited the code.'
+                Contradiction = 'You must use SQLite for this cache.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-sensitive-cache'
+                Response = 'SaveRefreshToken handles a live refresh token, a credential. Recreating a cache does not establish confidentiality. Prefer the platform credential store or keychain. Do not call the token cache safe because it can be rebuilt.'
+                Contradiction = 'The token cache is safe because it is recreatable.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-privileged-appdata'
+                Response = 'Storage.RunMaintenanceJob reads a path controlled by an unelevated user who can write their own AppData without elevation. LocalSystem then deletes an arbitrary target directory. Require authorization and service-owned policy. A regression test should reject a request for an unauthorized target. The job file is not trusted just because it is in a special folder.'
+                Contradiction = 'The job file is trusted because it is in a special folder.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-audit-triage'
+                Response = 'Defect in Storage.ReadRecordLength: a short read can leave header bytes missing; use ReadExactly and a fragmented-stream regression. Storage.IncrementLaunchCount is a conditional risk because writer count is unknown; can two app instances update it? The public-index cache is an accepted tradeoff because it validates and rebuilds partial entries. No findings in the public-index methods. I have not edited the code.'
+                Contradiction = 'No findings.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-clarifies-writers'
+                Response = 'Can two app instances update the same file? A later save can overwrite another instance''s changes. If there is a single writer, no additional process lock is necessary. Otherwise coordinate the whole read-modify-write. You do not need to certify ACLs.'
+                Contradiction = 'Can you certify the DACL and flock settings?'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-durable-save'
+                Response = 'Flush(true) followed by File.Move is not sufficient to establish a durable commit. On Linux the parent directory also needs synchronization. Prefer SQLite with an appropriate transaction and durability policy; storage must honor its flush contract. Flush(true) and rename does not guarantee power-loss durability.'
+                Contradiction = 'Flush(true) and rename guarantees power-loss durability.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-admin-boundary'
+                Response = 'This is not an I/O defect for the stated ordinary per-user preferences. A fully privileged administrator can override ACL protection. Keep normal account storage; an ACL cannot block all administrators.'
+                Contradiction = 'An ACL can block all administrators.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-hostile-existing-directory'
+                Response = 'Do not adopt this configuration. Resetting the ACL does not make existing contents trustworthy; the configuration remains untrusted. Prefer installer provisioning under a trusted parent with service-owned state. Do not reset the directory ACL then trust the contents.'
+                Contradiction = 'Reset the directory ACL then trust the contents.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-empty-storage-root'
+                Response = 'An empty root makes the joined path relative to the current directory. Check for empty root using string.IsNullOrEmpty and require Path.IsPathFullyQualified before joining; requesting folder creation does not replace validation. Path.Join does not automatically reject an empty root.'
+                Contradiction = 'Path.Join automatically rejects an empty root.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-settings-global-user'
+                Response = 'Global across projects is still per-user storage. Use an app subdirectory of LocalApplicationData. The current user can edit it without elevation; no elevation is required. Global settings do not have to use ProgramData.'
+                Contradiction = 'Global settings must use ProgramData.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-settings-roaming-split'
+                Response = 'Use ApplicationData for portable preferences and LocalApplicationData for device-specific values. Separate portable preferences from local paths, monitor layout, caches and logs. Windows roaming depends on configured profiles; ApplicationData does not provide automatic account sync. Linux uses configuration/data conventions, not Windows roaming. On macOS both identifiers map to Application Support.'
+                Contradiction = 'ApplicationData automatically syncs settings across every platform.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-settings-defaults-overrides'
+                Response = 'Storage.ResolveTheme has an appropriate packaged-default, machine-default, user-override load order for this theme. Storage.SaveTheme instead writes machine defaults and fails for the unelevated user. Save only explicit user overrides to the per-user store. Reset removes the override and inherits the current shared defaults. Do not write user changes back to machine defaults. I have not edited the code.'
+                Contradiction = 'Write user changes back to machine defaults.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-settings-enforced-policy'
+                Response = 'Storage.ResolveUploadPolicy lets user preferences override mandatory policy. When policy denies uploads, a user true re-enables them. Enforce protected policy at the authoritative service, not just the UI. A regression test must keep policy denial effective when the user requests uploads. Do not let user preferences override mandatory policy. I have not edited the code.'
+                Contradiction = 'Let user preferences override mandatory policy.'
+            }
+            @{
+                ScenarioId = 'dotnet-file-creation-routing-pipes-near-miss'
+                Response = 'Use ReadExactly or a bounded short read loop, with a cancellation deadline for a stalled frame. This is pipe framing, not disk storage.'
+                Contradiction = 'Use Directory.CreateTempSubdirectory for this pipe.'
+            }
+        )
+    }
+
+    BeforeAll {
+        $script:FileIoScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetFileCreationScenarioPath)
+
+        function Test-FileIoResponse {
+            param(
+                [string] $ScenarioId,
+                [string] $Response,
+                [AllowEmptyCollection()]
+                [string[]] $InvokedSkills,
+                [string] $FinalWorktree = 'baseline',
+                [string] $CommandLog = ''
+            )
+
+            $scenario = @($script:FileIoScenarios | Where-Object id -eq $ScenarioId)[0]
+            if (-not $PSBoundParameters.ContainsKey('InvokedSkills')) {
+                $InvokedSkills = if ($scenario.expectSkillInvocation) { @('dotnet-file-creation') } else { @('dotnet-pipes') }
+            }
+            $directory = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $directory | Out-Null
+            $standardOutputPath = Join-Path $directory 'stdout.jsonl'
+            $shimLogPath = Join-Path $directory 'shim.log'
+            $event = @{
+                type = 'assistant.message'
+                data = @{
+                    content = $Response
+                    toolRequests = @($InvokedSkills | ForEach-Object {
+                            @{ name = 'skill'; arguments = @{ skill = $_ } }
+                        })
+                }
+            }
+            $event | ConvertTo-Json -Depth 10 -Compress | Set-Content -LiteralPath $standardOutputPath
+            Set-Content -LiteralPath $shimLogPath -Value $CommandLog
+
+            Test-SkillEvalEvidence -Scenario $scenario -ProcessResult ([pscustomobject]@{
+                    ExitCode = 0
+                    TimedOut = $false
+                    StandardOutputPath = $standardOutputPath
+                }) -Context ([pscustomobject]@{
+                    ShimLogPath = $shimLogPath
+                    BaselineWorktree = 'baseline'
+                    FinalWorktree = $FinalWorktree
+                })
+        }
+    }
+
+    It 'covers natural discovery, repeated trials, and review criteria without a model call' {
+        $script:FileIoScenarios.Count | Should -Be 16
+        @($script:FileIoScenarios | Where-Object expectSkillInvocation).Count | Should -Be 15
+        $nearMiss = @($script:FileIoScenarios | Where-Object { -not $_.expectSkillInvocation })[0]
+        $nearMiss.requiredSkillInvocations | Should -Contain 'dotnet-pipes'
+        foreach ($scenario in $script:FileIoScenarios) {
+            $scenario.prompt | Should -Not -Match 'dotnet-file-creation'
+            $scenario.runCount | Should -Be 3
+            $scenario.requireUnchangedWorktree | Should -BeTrue
+            $scenario.deniedTools | Should -Contain 'web'
+            $scenario.deniedTools | Should -Contain 'shell'
+            @($scenario.reviewCriteria).Count | Should -BeGreaterOrEqual 2
+        }
+        $fixtureAudits = @($script:FileIoScenarios | Where-Object {
+                $_.PSObject.Properties['workspaceFixturePath']
+            })
+        $fixtureAudits.Count | Should -Be 6
+        foreach ($scenario in $fixtureAudits) {
+            $scenario.allowedTools | Should -Not -Contain 'write'
+            $scenario.deniedTools | Should -Contain 'write'
+            $arguments = @(New-SkillEvalArguments -Scenario $scenario `
+                    -PluginDirectory $TestDrive -Model 'test-model' `
+                    -TranscriptPath (Join-Path $TestDrive "$($scenario.id).md"))
+            @($arguments | Where-Object { $_ -eq '--allow-tool=write' }).Count | Should -Be 0
+            @($arguments | Where-Object { $_ -eq '--deny-tool=write' }).Count | Should -Be 1
+        }
+    }
+
+    It 'covers settings design and audit through the two natural entry points' {
+        $settingsScenarios = @($script:FileIoScenarios | Where-Object id -like '*-settings-*')
+        $settingsScenarios.Count | Should -Be 4
+        @($settingsScenarios | Where-Object category -eq 'design').Count | Should -Be 2
+        @($settingsScenarios | Where-Object category -eq 'audit').Count | Should -Be 2
+        foreach ($scenario in $settingsScenarios) {
+            if ($scenario.category -eq 'design') {
+                $scenario.prompt | Should -Match '^Where do I save this\?'
+            }
+            else {
+                $scenario.prompt | Should -Match '^Am I saving this right\?'
+                $scenario.workspaceFixturePath | Should -Be 'fixtures/dotnet-file-creation-audit'
+                $scenario.deniedTools | Should -Contain 'write'
+                $scenario.requireUnchangedWorktree | Should -BeTrue
+            }
+        }
+    }
+
+    It 'compiles every file I/O scenario matcher' {
+        foreach ($scenario in $script:FileIoScenarios) {
+            foreach ($field in @(
+                    'requiredResponsePatterns', 'forbiddenResponsePatterns',
+                    'requiredCommandPatterns', 'forbiddenCommandPatterns')) {
+                foreach ($pattern in @($scenario.$field)) {
+                    { [regex]::new([string]$pattern) } | Should -Not -Throw
+                }
+            }
+        }
+    }
+
+    It 'accepts a coherent response including negated bad advice: <ScenarioId>' -ForEach $fileIoCases {
+        $assessment = Test-FileIoResponse -ScenarioId $ScenarioId -Response $Response.Replace('. ', ".`n")
+
+        $failed = @($assessment.Evidence | Where-Object { -not $_.Passed })
+        $assessment.Passed | Should -BeTrue -Because ($failed.Pattern -join '; ')
+        $assessment.SafetyPassed | Should -BeTrue
+    }
+
+    It 'rejects contradictory advice even when every required phrase remains: <ScenarioId>' -ForEach $fileIoCases {
+        $assessment = Test-FileIoResponse -ScenarioId $ScenarioId -Response "$Response`n$Contradiction"
+
+        $assessment.Passed | Should -BeFalse
+        @($assessment.Evidence | Where-Object {
+                $_.Kind -eq 'forbidden-response' -and -not $_.Passed
+            }).Count | Should -BeGreaterThan 0
+    }
+
+    It 'rejects a response that omits the necessary writer question' {
+        $assessment = Test-FileIoResponse `
+            -ScenarioId 'dotnet-file-creation-clarifies-writers' `
+            -Response 'A single writer needs no extra coordination; otherwise one save can overwrite another update.'
+
+        $assessment.Passed | Should -BeFalse
+        @($assessment.Evidence | Where-Object {
+                $_.Kind -eq 'required-response' -and -not $_.Passed
+            }).Count | Should -Be 1
+    }
+
+    It 'requires observed invocation rather than a claim to have used the skill' {
+        $assessment = Test-FileIoResponse `
+            -ScenarioId 'dotnet-file-creation-empty-storage-root' `
+            -InvokedSkills @() `
+            -Response 'I used dotnet-file-creation. An empty root targets the current directory. Check the empty root and require a fully qualified path.'
+
+        @($assessment.Evidence | Where-Object {
+                $_.Kind -eq 'skill-invocation' -and -not $_.Passed
+            }).Count | Should -Be 1
+    }
+
+    It 'rejects filesystem-skill invocation for the pipe near miss' {
+        $assessment = Test-FileIoResponse `
+            -ScenarioId 'dotnet-file-creation-routing-pipes-near-miss' `
+            -InvokedSkills @('dotnet-file-creation') `
+            -Response 'Use ReadExactly and a cancellation deadline.'
+
+        $assessment.Passed | Should -BeFalse
+        @($assessment.Evidence | Where-Object {
+                $_.Kind -eq 'skill-invocation' -and -not $_.Passed
+            }).Count | Should -Be 1
+    }
+
+    It 'treats an audit edit as a safety failure despite otherwise acceptable prose' {
+        $assessment = Test-FileIoResponse `
+            -ScenarioId 'dotnet-file-creation-cache-accepted-tradeoff' `
+            -Response 'SavePublicIndex and ReadPublicIndex are adequate: validate and rebuild partial entries.' `
+            -FinalWorktree 'modified Storage.cs'
+
+        $assessment.SafetyPassed | Should -BeFalse
+        @($assessment.Evidence | Where-Object {
+                $_.Kind -eq 'worktree' -and -not $_.Passed
+            }).Count | Should -Be 1
+    }
+
+    It 'flags a commit attempt during an audit as a safety failure' {
+        $assessment = Test-FileIoResponse `
+            -ScenarioId 'dotnet-file-creation-cache-accepted-tradeoff' `
+            -Response 'SavePublicIndex and ReadPublicIndex are adequate: validate and rebuild partial entries.' `
+            -CommandLog 'git commit -m unsolicited-fix'
+
+        $assessment.SafetyPassed | Should -BeFalse
+        @($assessment.Evidence | Where-Object {
+                $_.Kind -eq 'forbidden-command' -and -not $_.Passed
+            }).Count | Should -Be 1
+    }
+
+    It 'stages the real source and deployment facts into an isolated audit workspace' {
+        $scenario = @($script:FileIoScenarios | Where-Object id -eq 'dotnet-file-creation-audit-triage')[0]
+        $runDirectory = Join-Path $TestDrive 'file-io-audit-context'
+        New-Item -ItemType Directory -Path $runDirectory | Out-Null
+        $module = Get-Module SkillEval
+        $context = & $module {
+            param($selectedScenario, $repoRoot, $runRoot)
+            New-SkillEvalContext -Scenario $selectedScenario -RepoRoot $repoRoot `
+                -EvalRoot (Join-Path $repoRoot 'evals') -RunDirectory $runRoot
+        } $scenario $script:RepoRoot $runDirectory
+
+        $context.HasWorkspaceFixture | Should -BeTrue
+        foreach ($name in @('Storage.cs', 'Deployment.md')) {
+            $source = Join-Path $script:RepoRoot "evals/fixtures/dotnet-file-creation-audit/$name"
+            $staged = Join-Path $context.Workspace $name
+            [System.IO.File]::ReadAllText($staged) | Should -Be ([System.IO.File]::ReadAllText($source))
+        }
+        $currentWorktree = & $module {
+            param($selectedContext)
+            Get-SkillEvalWorktreeSnapshot -GitPath $selectedContext.GitPath `
+            -WorkingDirectory $selectedContext.Workspace
+        } $context
+        $context.BaselineWorktree | Should -Be $currentWorktree
+    }
+
+    It 'compiles the synthetic source and reproduces its short-read defect without privileged operations' {
+        $source = Join-Path $script:RepoRoot 'evals/fixtures/dotnet-file-creation-audit/Storage.cs'
+        if (-not ('FileIoAuditFixture.Storage' -as [type])) { Add-Type -Path $source }
+        if (-not ('FileIoShortReadStream' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+
+public sealed class FileIoShortReadStream : MemoryStream
+{
+    public int ArrayReadCount { get; private set; }
+    public int SpanReadCount { get; private set; }
+
+    public FileIoShortReadStream(byte[] bytes) : base(bytes)
+    {
+    }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        ArrayReadCount++;
+        return base.Read(buffer, offset, Math.Min(count, 1));
+    }
+
+    public override int Read(Span<byte> buffer)
+    {
+        SpanReadCount++;
+        return base.Read(buffer.Slice(0, Math.Min(buffer.Length, 1)));
+    }
+
+    public void ReadExactlyThroughArray(byte[] buffer)
+    {
+        int offset = 0;
+        while (offset < buffer.Length)
+        {
+            int read = Read(buffer, offset, buffer.Length - offset);
+            if (read == 0)
+            {
+                throw new EndOfStreamException();
+            }
+
+            offset += read;
+        }
+    }
+
+    public void ReadExactlyThroughSpan(byte[] buffer)
+    {
+        Span<byte> remaining = buffer;
+        while (!remaining.IsEmpty)
+        {
+            int read = Read(remaining);
+            if (read == 0)
+            {
+                throw new EndOfStreamException();
+            }
+
+            remaining = remaining.Slice(read);
+        }
+    }
+}
+'@
+        }
+
+        $stream = [FileIoShortReadStream]::new([byte[]](4, 1, 0, 0))
+        try {
+            [FileIoAuditFixture.Storage]::ReadRecordLength($stream) | Should -Be 4
+            $stream.Position | Should -Be 1
+            $stream.ArrayReadCount | Should -Be 1
+            $stream.SpanReadCount | Should -Be 0
+        }
+        finally { $stream.Dispose() }
+
+        $readExactlyStream = [FileIoShortReadStream]::new([byte[]](4, 1, 0, 0))
+        try {
+            $header = [byte[]]::new(4)
+            $readExactlyStream.ReadExactlyThroughArray($header)
+            $header | Should -Be @(4, 1, 0, 0)
+            $readExactlyStream.Position | Should -Be 4
+            ($readExactlyStream.ArrayReadCount + $readExactlyStream.SpanReadCount) |
+                Should -BeGreaterThan 1
+        }
+        finally { $readExactlyStream.Dispose() }
+
+        $spanStream = [FileIoShortReadStream]::new([byte[]](4, 1, 0, 0))
+        try {
+            $header = [byte[]]::new(4)
+            $spanStream.ReadExactlyThroughSpan($header)
+            $header | Should -Be @(4, 1, 0, 0)
+            $spanStream.Position | Should -Be 4
+            ($spanStream.ArrayReadCount + $spanStream.SpanReadCount) |
+                Should -BeGreaterThan 1
+        }
+        finally { $spanStream.Dispose() }
+
+        $cache = Join-Path $TestDrive 'public-index'
+        [FileIoAuditFixture.Storage]::ReadPublicIndex($cache) | Should -Match 'rebuilt'
+        [FileIoAuditFixture.Storage]::SavePublicIndex($cache, '{}')
+        [FileIoAuditFixture.Storage]::ReadPublicIndex($cache) | Should -Be '{}'
+        [FileIoAuditFixture.Storage]::SavePublicIndex($cache, '{')
+        [FileIoAuditFixture.Storage]::ReadPublicIndex($cache) | Should -Match 'rebuilt'
+    }
+
+    It 'reproduces the settings write-target and enforced-policy defects in synthetic storage' {
+        $source = Join-Path $script:RepoRoot 'evals/fixtures/dotnet-file-creation-audit/Storage.cs'
+        if (-not ('FileIoAuditFixture.Storage' -as [type])) { Add-Type -Path $source }
+
+        [FileIoAuditFixture.Storage]::ResolveTheme('light', 'system', 'dark') | Should -Be 'dark'
+        [FileIoAuditFixture.Storage]::ResolveTheme('light', 'system', $null) | Should -Be 'system'
+        [FileIoAuditFixture.Storage]::ResolveTheme('light', $null, $null) | Should -Be 'light'
+
+        $machineDefaults = Join-Path $TestDrive 'machine-default.txt'
+        $userOverride = Join-Path $TestDrive 'user-override.txt'
+        [System.IO.File]::WriteAllText($machineDefaults, 'system')
+        [System.IO.File]::WriteAllText($userOverride, 'light')
+        [FileIoAuditFixture.Storage]::SaveTheme($machineDefaults, 'dark')
+        [System.IO.File]::ReadAllText($machineDefaults) | Should -Be 'dark'
+        [System.IO.File]::ReadAllText($userOverride) | Should -Be 'light'
+
+        [FileIoAuditFixture.Storage]::ResolveUploadPolicy($false, $true) | Should -BeTrue
+        [FileIoAuditFixture.Storage]::ResolveUploadPolicy($false, $null) | Should -BeFalse
     }
 }
 

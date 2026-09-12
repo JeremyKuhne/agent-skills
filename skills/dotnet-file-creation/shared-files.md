@@ -1,47 +1,75 @@
 # Shared machine-wide files
 
+## Confirm that the setting is machine-wide
+
+For both "where do I save this?" and "am I saving this right?", start with the
+[settings scope and layering rules](persisted-files.md). "Global" across one
+person's projects is per-user; it does not belong in ProgramData just because
+it is called global. Continue here when the store serves multiple users on a
+computer or supplies privileged policy.
+
+Shared defaults can be read-only to ordinary applications while each person
+saves overrides in their own store. That does not require a machine-wide writable
+file. Enforced policy is a different case: the authoritative consumer must
+prevent user overrides of protected keys, not merely choose a protected folder.
+
 ## There is no portable machine-writable location
 
-`Environment.SpecialFolder.CommonApplicationData` looks like the answer. It is
-not, because the two platforms mean different things by it:
+`Environment.SpecialFolder.CommonApplicationData` selects a conventional
+location, not a portable writable or trusted store. Typical mappings differ:
 
 | | Windows | Linux |
 | --- | --- | --- |
 | Path | `C:\ProgramData` | `/usr/share` |
-| Writable by an ordinary process | Yes, any user can create a top-level entry | No, root-owned |
-| Safe to create lazily at first run | **No** | Not possible |
+| Writable by an ordinary process | Default policy can permit creating subdirectories; inspect actual ACLs | Normally administrator-managed, not user-writable |
+| Safe to trust a lazy first-run create | **No** | **No**; existing objects and access policy still need validation |
 
-So the same call gives you a directory any standard user can squat on Windows,
-and a directory you cannot write at all on Linux. Code that does
-`Directory.CreateDirectory(CommonApplicationData + "/YourApp")` and then trusts
-the result is wrong on Windows and broken on Linux.
+First-run name squatting is possible wherever untrusted accounts can create the
+application directory. `Directory.CreateDirectory` can return an existing
+directory without proving who created it, what it contains, or where its links
+lead. A successful call is never the trust decision.
 
 ## Decide whether you need shared *storage* or shared *trust*
 
 Most designs that reach for a machine-wide directory want one of these instead:
 
-- **Per-user state that merely happens to be the same for every user.** Use
-  per-user storage and accept the duplication. It is almost always cheaper than
-  defending a shared location.
-- **Read-only content that ships with the product.** Put it beside the
-  installation. Writes then require the same privilege the installer had.
+- **Common starting preferences with personal customization.** Load packaged or
+  provisioned read-only defaults and save only explicit per-user overrides.
+  Do not copy the merged defaults into every user's settings, where future
+  default changes would be hidden, or let a preferences save rewrite the shared
+  source. Independent rebuildable caches can still use per-user copies.
+- **Read-only content that ships with the product.** Use the installation's
+  protected content location. An arbitrary executable directory, portable
+  unpacked app, or user-writable install is not automatically trusted.
 - **Small machine-wide configuration.** Use a store the platform already
   protects: the Windows registry under `HKEY_LOCAL_MACHINE`, or a path your
   package provisions on Linux.
 
-If you genuinely need machine-wide *writable* state, it must be provisioned with
-the right ownership before any unprivileged code can reach it.
+If unprivileged users can write data later consumed by an elevated service,
+treat that data as untrusted even when the directory was provisioned correctly.
+For privileged state, prefer a dedicated service identity that owns writes and
+validates requests through an authenticated interface. Shared write access is
+not shared trust.
 
 ## Provision it at install time
 
 | Platform | Mechanism |
 | --- | --- |
 | Windows | Windows Installer `MsiLockPermissionsEx` on a created folder, or a registry key under `HKLM\SOFTWARE\<Vendor>\<Product>` |
-| Linux | A path under `/var/lib/<app>` or `/etc/<app>` created by the package with an explicit owner and mode |
+| Linux | A package-provisioned `/var/lib/<app>` for mutable state; `/etc/<app>` for configuration, with explicit ownership, mode, and ACL policy |
 | macOS | A path under `/Library/Application Support/<app>` created by the installer |
 
-Provisioning removes the first-run race entirely: the location is never absent
-while an unprivileged process could create it first.
+Provisioning must itself handle preexisting or name-squatted entries. Create
+with the final policy beneath a trusted ancestor, or validate an already trusted
+object and its contents. Do not merely reset its ACL/mode and adopt it. Correct
+provisioning establishes a boundary for later runs; running at install time
+does not by itself remove a race or certify an existing tree.
+
+Once a private application/service parent meets
+[permissions.md](permissions.md), the bundled
+[assets/TrustedFileWrites.cs](assets/TrustedFileWrites.cs) recipe can create or
+publish files there. A directory intentionally writable by mutually untrusted
+users does not meet that recipe's prerequisites.
 
 ## If you must create it at run time
 
@@ -53,25 +81,27 @@ API problem:
 - If the root already exists, validate it and **fail closed**. Repairing a
   directory somebody else created leaves their data in place under a descriptor
   that now looks trustworthy.
-- Trust the owner, not the permission bits. On both platforms an unprivileged
-  caller can produce permissive-looking metadata; only ownership is hard to
-  forge.
+- Validate both the owner and effective access, including ancestors and existing
+  contents. A trusted owner alone is insufficient if untrusted accounts have
+  write, delete-child, or policy-changing rights. Restrictive-looking modes or
+  a DACL alone do not establish provenance.
 - Never recursively delete a machine-wide path assembled from untrusted
   components.
 
-On Windows this is involved enough to be its own topic; the Windows ACL skill
-covers descriptor creation, root-anchored trust validation, and the deletion
-hazards. On Unix the same shape applies with ownership and mode in place of the
-descriptor: check `File.GetUnixFileMode` for group and other write bits, and
-confirm the owning UID, which requires either a native call or a shelled `stat`
-because the BCL does not expose file ownership.
+On Windows, the Windows ACL skill owns descriptor creation and root-anchored
+trust validation. If that workflow is unavailable, stop and require trusted
+provisioning rather than inventing a reduced ACL check. On Unix, BCL mode APIs
+do not expose the owning UID or the full ACL policy. A `stat` query followed by
+an open is still a race when ancestors can change. macOS extended ACLs and
+network-server permission models require their own validation.
 
 ## Sharing between processes, not between users
 
 If the requirement is coordination rather than storage, prefer a mechanism that
 does not leave a file behind:
 
-- A named mutex or semaphore for mutual exclusion.
+- An appropriately scoped and protected OS coordination primitive, after
+  checking platform support and name-squatting rules.
 - A lock file opened with `FileShare.None`, kept **inside per-user storage**, for
   cooperating instances of the same user.
 - A socket or pipe for actual communication.
@@ -79,6 +109,11 @@ does not leave a file behind:
 A file in a shared directory used as a flag is the pattern most likely to be
 hijacked, because its name is predictable and its location is writable by
 everyone.
+
+Named primitives are not automatically secure substitutes: identities,
+namespaces, access control, and supported operations differ by platform.
+The complete cooperative lock protocol and its limits are in
+[persisted-files.md](persisted-files.md).
 
 ## Reading machine-wide data written by someone else
 
