@@ -327,7 +327,8 @@ Expected:
 - Chooses an overlay unless reverse discovery and shared-dependency availability can
   be verified for every target host and remote environment.
 - Makes overlay presence an invariant for this installation because repository policy is
-  mandatory, then verifies direct core selection loads it.
+  mandatory, then verifies direct core selection follows the core's pre-action read
+  instruction.
 - Counts the installed core and overlay together. An optional-overlay install without the
   file remains core-only when no mandatory repository policy depends on it.
 - Keeps the overlay concise and links to repository docs and tools in their owning area

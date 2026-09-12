@@ -32,11 +32,11 @@ Choose how repository behavior reaches the portable core before writing either f
 Use an **overlay** when direct core selection should discover local policy. For an
 `optional-overlay` core, that route exists only in installations containing the file. If
 the policy is mandatory for the target installation, record overlay presence as an
-installation invariant and verify that direct core selection loads it. Use
-`required-overlay` only when the core is invalid without an overlay in every installation.
-When installed, count the overlay in initial context. Keep it to direct bindings and
-routing; put repository-only documentation and tools with their owning area and link to
-them.
+installation invariant and verify that direct core selection follows the core's pre-action
+read instruction. Use `required-overlay` only when the core is invalid without an overlay
+in every installation. When installed, count the overlay in initial context. Keep it to
+direct bindings and routing; put repository-only documentation and tools with their owning
+area and link to them.
 
 Use a **composing repository skill** when the local workflow has a distinct trigger or
 outcome. Verify both directions before choosing it:

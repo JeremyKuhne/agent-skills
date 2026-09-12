@@ -34,17 +34,19 @@ and a local-only stop.
 require both the owning workflow and `technical-writing` to invoke while
 forbidding the remote action.
 
-`scenarios/manage-skills.json` covers six behaviors: project integration before
+`scenarios/manage-skills.json` covers seven behaviors: project integration before
 vendoring into an existing repository, local drift despite a pinned unchanged
 upstream, exact pending-divergence reconciliation with extra unexplained drift,
 ownership-specific authoring gates, intentionally distinct authoring despite an
-overlapping shared skill, and overlay selection when one-way composition cannot
-provide reverse discovery. The project-integration fixture contains a differently
-named local skill, canonical and generated agent guidance, documentation-derived
-bindings, and an unrelated keyword match. Every scenario is read-only and preserves
-approval boundaries. The overlap and composition scenarios require small labeled
-decision outputs so polarity and contradictory recommendations are scored as one
-contract instead of independent free-prose keyword matches.
+overlapping shared skill, overlay selection when one-way composition cannot provide
+reverse discovery, and a code-readability near miss. The local-drift prompt and near
+miss do not name the skill, so they exercise description-based routing. The
+project-integration fixture contains a differently named local skill, canonical and
+generated agent guidance, documentation-derived bindings, and an unrelated keyword
+match. Every scenario is read-only and preserves approval boundaries. The overlap and
+composition scenarios require small labeled decision outputs so polarity and
+contradictory recommendations are scored as one contract instead of independent
+free-prose keyword matches.
 
 `scenarios/create-skill-repo.json` contains seven scenarios for the
 repository-local bootstrap workflow. They cover novice-oriented role
@@ -74,6 +76,11 @@ sampling denominators, evaluated ETW package preflight, live-corpus mutation,
 common-mode oracle defects, native call-count evidence, pool-state allocation,
 callback exit contracts, and shared-output build serialization. It is not part
 of the default release matrix.
+
+`scenarios/roslyn-analyzers.json` is an opt-in two-case routing suite. Its natural
+prompts require the analyzer skill for diagnostic, code-fix, and Fix All work, while
+routing application runtime performance to `performance-testing`. It is not part of
+the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,

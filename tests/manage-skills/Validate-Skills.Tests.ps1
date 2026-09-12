@@ -427,11 +427,11 @@ If `overlay.md` exists beside this file, read it before acting.
             $r.Output | Should -Match 'All 1 skill'
         }
 
-        It 'requires the loader cue for an overlay-aware core' {
+        It 'requires the pre-action read instruction for an overlay-aware core' {
             $dir = New-SkillFixture -Name 'missing-cue' -Frontmatter (New-PortfolioFrontmatter -Name 'missing-cue')
             $r = Invoke-Validator -Arguments @($dir, '-RequirePortfolioMetadata')
             $r.ExitCode | Should -Be 1
-            $r.Output | Should -Match 'requires this loader cue'
+            $r.Output | Should -Match 'requires this pre-action read instruction'
         }
 
         It 'requires overlay.md for a required binding' {

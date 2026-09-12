@@ -25,7 +25,7 @@
       "category": "maintenance",
       "evidenceKind": "direct-invocation",
       "profile": "clean-feature",
-      "prompt": "Use manage-skills to decide whether this installed skill is clean and safe to update. It records immutable pin v1 and remains pinned. `gh skill update --dry-run` skipped it, and the remote tree has not moved. The installed authored SKILL.md body and references/checklist.md both differ from the exact v1 artifact. There is no overlay or pending-divergence record. The available read-only tools may be used only to locate and load the manage-skills workflow instructions. Base the analysis exclusively on these supplied case facts; do not inspect additional project evidence, access a remote, run commands, change the pin, or modify anything. State the required checks and disposition.",
+      "prompt": "Decide whether this installed Agent Skill is clean and safe to update. It records immutable pin v1 and remains pinned. `gh skill update --dry-run` skipped it, and the remote tree has not moved. The installed authored SKILL.md body and references/checklist.md both differ from the exact v1 artifact. There is no overlay or pending-divergence record. The available read-only tools may be used only to locate and load the applicable workflow instructions. Base the analysis exclusively on these supplied case facts; do not inspect additional project evidence, access a remote, run commands, change the pin, or modify anything. State the required checks and disposition.",
       "runCount": 3,
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
@@ -102,6 +102,24 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^git (?:add|commit)(?: |$)", "(?m)^gh (?:skill install|pr create)(?: |$)"],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "manage-skills-routing-code-readability-near-miss",
+      "skill": "manage-skills",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a C# method with six nested conditionals and duplicated null checks. Recommend how to flatten the control flow and clarify the names. No Agent Skill discovery, authoring, installation, review, update, synchronization, or removal is in scope. Do not edit files or run commands.",
+      "runCount": 3,
+      "expectSkillInvocation": false,
+      "requiredSkillInvocations": ["code-comprehension"],
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)(?:guard clause|early return|flatten|extract)", "(?i)(?:duplicate|null check|naming)"],
+      "forbiddenResponsePatterns": ["(?i)gh skill (?:find|install|update|remove)", "(?i)(?:install|vendor)[^\r\n]{0,80}(?:Agent )?Skill"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
     }
   ]

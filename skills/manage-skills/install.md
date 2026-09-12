@@ -400,7 +400,7 @@ Do not stop at file creation. Verify:
   required repository surfaces and classified every material binding, overlap,
   duplicate, and conflict before writing;
 - for an overlay carrying mandatory policy, the target installation contains the file and
-  direct shared-core selection follows its loader;
+  direct shared-core selection follows the core's pre-action read instruction;
 - for a composing skill, both direct repository-skill and direct shared-core selection
   reach required repository policy;
 - existing guidance changed only through separately approved consolidation, and

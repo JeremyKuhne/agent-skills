@@ -57,10 +57,11 @@ deliberately:
   repository policy; a local-to-shared reference alone is one-way discoverability.
 
 Initial context is `SKILL.md` plus every file the workflow unconditionally instructs the
-agent to read. When `overlay.md` exists, the loader puts it in initial context; an
-optional-overlay install without that file remains core-only. Keep overlays to direct
-bindings and routing. Put repository-only documentation and tools with their owning area,
-then link to them instead of placing them in the vendored core directory.
+agent to read. When `overlay.md` exists, the core's pre-action instruction requires the
+agent to read it, so count the overlay in initial context; an optional-overlay installation
+without that file remains core-only. Keep overlays to direct bindings and routing. Put
+repository-only documentation and tools with their owning area, then link to them instead
+of placing them in the vendored core directory.
 
 ## Preserve the source boundary
 

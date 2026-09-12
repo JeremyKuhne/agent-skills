@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "roslyn-analyzers-routing-code-fix-fix-all",
+      "skill": "roslyn-analyzers",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Design a Roslyn diagnostic and code fix for C# that reports public methods with more than five parameters. Include the diagnostic descriptor, analyzer registration, a Fix All strategy, and focused tests. Return a plan only; do not edit files or run commands.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["DiagnosticDescriptor", "DiagnosticAnalyzer", "CodeFixProvider", "(?i)(?:FixAllProvider|BatchFixer|Fix All)", "(?i)(?:Microsoft\\.CodeAnalysis\\.Testing|analyzer test|code fix test)"],
+      "forbiddenResponsePatterns": ["(?i)runtime benchmark is the primary validation"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "roslyn-analyzers-routing-runtime-performance-near-miss",
+      "skill": "roslyn-analyzers",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Measure and reduce runtime allocations in a .NET JSON parser under representative production inputs. Establish a baseline, isolate process state, validate outputs, and report uncertainty. This is application runtime performance; do not propose compiler diagnostics, code fixes, or suppressors. Do not edit files or run commands.",
+      "runCount": 3,
+      "expectSkillInvocation": false,
+      "requiredSkillInvocations": ["performance-testing"],
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)baseline", "(?i)(?:fresh process|matched process|process state|BenchmarkDotNet)", "(?i)(?:validate|correctness|oracle)", "(?i)(?:uncertainty|variance|confidence)"],
+      "forbiddenResponsePatterns": ["DiagnosticAnalyzer", "CodeFixProvider", "DiagnosticSuppressor"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    }
+  ]
+}

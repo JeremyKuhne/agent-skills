@@ -12,6 +12,7 @@ BeforeAll {
     $script:DotNetPipesScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-pipes.json'
     $script:PerformanceTestingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/performance-testing.json'
     $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
+    $script:RoslynAnalyzersScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/roslyn-analyzers.json'
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -26,6 +27,7 @@ Describe 'Skill evaluation scenario contract' {
         $dotNetPipesScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetPipesScenarioPath)
         $performanceTestingScenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
         $dotNetFileCreationScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetFileCreationScenarioPath)
+        $roslynAnalyzersScenarios = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath)
         $scenarios = @(
             $createPrScenarios
             $technicalWritingScenarios
@@ -35,7 +37,8 @@ Describe 'Skill evaluation scenario contract' {
             $createSkillRepoScenarios
             $dotNetPipesScenarios
             $performanceTestingScenarios
-            $dotNetFileCreationScenarios)
+            $dotNetFileCreationScenarios
+            $roslynAnalyzersScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -54,7 +57,7 @@ Describe 'Skill evaluation scenario contract' {
                 'technical-writing-artifact-repository-documentation')) {
             $technicalWritingScenarios.id | Should -Contain $artifactScenario
         }
-        $manageSkillsScenarios.Count | Should -Be 6
+        $manageSkillsScenarios.Count | Should -Be 7
         @($manageSkillsScenarios | Where-Object skill -ne 'manage-skills').Count |
             Should -Be 0
         $manageSkillsScenarios.id |
@@ -69,6 +72,8 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'manage-skills-distinct-overlap-authoring'
         $manageSkillsScenarios.id |
             Should -Contain 'manage-skills-overlay-reverse-discovery'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-routing-code-readability-near-miss'
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
         $userVoiceScenarios.Count | Should -Be 8
@@ -119,12 +124,40 @@ Describe 'Skill evaluation scenario contract' {
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-roaming-split'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-defaults-overrides'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-enforced-policy'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 81
+        $roslynAnalyzersScenarios.Count | Should -Be 2
+        @($roslynAnalyzersScenarios | Where-Object skill -ne 'roslyn-analyzers').Count |
+            Should -Be 0
+        $roslynAnalyzersScenarios.id |
+            Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
+        $roslynAnalyzersScenarios.id |
+            Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 84
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
+        @($manageSkillsScenarios |
+                Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
+            Should -Not -Match 'manage-skills'
+        @($roslynAnalyzersScenarios.prompt | Where-Object { $_ -match 'roslyn-analyzers' }).Count |
+            Should -Be 0
     }
 
     It 'compiles every manage-skills scenario pattern' {
         $scenarios = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath)
+        foreach ($scenario in $scenarios) {
+            foreach ($field in @(
+                    'requiredResponsePatterns',
+                    'forbiddenResponsePatterns',
+                    'requiredCommandPatterns',
+                    'forbiddenCommandPatterns')) {
+                foreach ($pattern in @($scenario.$field)) {
+                    { [regex]::new([string] $pattern) } |
+                        Should -Not -Throw -Because "$($scenario.id).$field must contain valid regular expressions"
+                }
+            }
+        }
+    }
+
+    It 'compiles every roslyn-analyzers scenario pattern' {
+        $scenarios = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath)
         foreach ($scenario in $scenarios) {
             foreach ($field in @(
                     'requiredResponsePatterns',

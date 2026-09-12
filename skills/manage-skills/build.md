@@ -148,7 +148,7 @@ Use that strict mode only when the owning commons adopts those fields. Add or
 regenerate a catalog only when its local policy requires one. Keep repository
 paths, cross-references, and examples out of the core; put consumer bindings in
 an overlay. For this portfolio contract, an overlay-aware core carries the
-loader sentence and a downstream overlay can start from
+pre-action read instruction and a downstream overlay can start from
 `assets/overlay.md.tmpl`.
 
 Run every additional validator, link check, artifact-isolation check, and catalog

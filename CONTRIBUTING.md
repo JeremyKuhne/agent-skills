@@ -33,8 +33,8 @@ reference; the essentials:
   monikers, or links into a particular repository's tree. Anything a core truly
   needs travels with it as a bundled `references/` doc or a portable sibling;
   everything repo-specific belongs in the consuming repo's `overlay.md`.
-- Fill every portfolio metadata field and use the exact overlay loader sentence
-  from [FORMAT.md](FORMAT.md). Distinguish hard `requires` from optional
+- Fill every portfolio metadata field and use the exact overlay pre-action read
+  instruction from [FORMAT.md](FORMAT.md). Distinguish hard `requires` from optional
   `related` handoffs.
 - Include at least one positive trigger example and one near-miss that should not
   invoke the skill. For a behavior change, state the expected output or artifact

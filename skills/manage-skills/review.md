@@ -105,10 +105,10 @@ not stated or tested.
 - Keep `SKILL.md` focused on triggers, non-negotiable rules, workflow selection, and
   links to detail.
 - Initial context is `SKILL.md` plus every file the workflow unconditionally instructs
-  the agent to read. Include an overlay when it exists and the loader requires reading it;
-  a valid optional-overlay install without the file remains core-only. Compare that cost
-  with the focused workflow it replaces; splitting text into another unconditionally read
-  file does not reduce context cost.
+  the agent to read. Include an overlay when it exists because the core's pre-action
+  instruction requires the agent to read it; a valid optional-overlay installation without
+  the file remains core-only. Compare that cost with the focused workflow it replaces;
+  splitting text into another unconditionally read file does not reduce context cost.
 - Put long recipes, references, platform variants, and uncommon recovery procedures
   in purpose-named sibling pages.
 - Keep overlays to direct bindings and routing. Remove provenance narrative and rationale
@@ -184,8 +184,9 @@ For a composing-skill change, exercise the same repository-specific request from
 entry points: once when the repository skill is selected and once when the shared core
 is selected directly. Both must load required repository policy. For an overlay, prove
 that the target installation contains the file and direct shared-core selection follows
-the loader. Also test a host or remote environment where a composing skill's shared
-dependency is absent; it must fail clearly or provide an approved fallback.
+the core's pre-action read instruction. Also test a host or remote environment where a
+composing skill's shared dependency is absent; it must fail clearly or provide an approved
+fallback.
 
 For a changed vendored skill, verify both sides:
 
