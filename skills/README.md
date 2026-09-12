@@ -14,6 +14,7 @@ host-read location) with `gh skill install`.
 | [scratch-buffer-strategy](./scratch-buffer-strategy/SKILL.md) | choosing a scratch-buffer strategy (zeroed `stackalloc` vs `[SkipLocalsInit]` vs `BufferScope<T>` vs `ArrayPool` rental), "should I rent or stackalloc?", net481/net10 size crossovers | Portable core with an optional overlay. Bundles `references/arraypool-performance.md` (the measured net481/net10 backing data). |
 | [manage-skills](./manage-skills/SKILL.md) | "find a skill for X", "build a skill" / "create a skill", "review this skill" / "is this skill effective", "update the skill", "retire this skill" / "remove this skill", reconcile a local skill change against the commons vs a repo overlay | Portable core with an optional overlay. Sibling pages cover find, build, semantic review, update, and dependency-first retirement; bundles the strict validator and overlay template, and delegates file correctness to `agent-files-review`. |
 | [dotnet-polyfills](./dotnet-polyfills/SKILL.md) | "use a modern .NET API on .NET Framework", setting up PolySharp or the official downlevel packages (`System.Memory`, `Microsoft.Bcl.*`), "which package supplies this type downlevel", "is this already polyfilled" | Portable core with an optional overlay. Bundles `references/packages.md`; names `KlutzyNinja.Touki` as an additive source. |
+| [csharp-nullability-remediation](./csharp-nullability-remediation/SKILL.md) | "remove null-forgiving operators", "fix a diagnostic that bans null forgiveness", "replace `null!` / `default!`", reduce suppressions, or fix nullable warnings exposed after deleting `!` | Portable core with an optional overlay. Requires a compiler probe before nontrivial remediation and validates public metadata, generic contracts, protocol state, and hot-path changes. |
 | [cswin32-interop](./cswin32-interop/SKILL.md) | "replace `[DllImport]` with CsWin32", generated `PInvoke.*` / Win32 types, native ownership and size units, platform / TFM guards, or public owner/extender composition | Portable core with an optional overlay. General P/Invoke layer; required by `cswin32-com`. |
 | [cswin32-com](./cswin32-com/SKILL.md) | struct-based COM with `ComScope`, `IID.Get`, raw vtables, activation, `IComIID`, caller-owned CCW references, `Advise` / `Unadvise`, or cross-assembly CCWs | Portable core with an optional overlay. Requires `cswin32-interop` for the shared blittable-signature and P/Invoke rules. |
 | [il-copy-inspection](./il-copy-inspection/SKILL.md) | "find struct copies", "is this a defensive copy", "check for boxing in IL", "did the compiler emit a copy here", "audit a `[NonCopyable]` type after build" | Portable core with an optional overlay. Bundles `references/copy-opcodes.md`; post-build counterpart to a source analyzer. |
@@ -53,6 +54,14 @@ comprehension, and tone gates and conditionally invokes an installed personal
 `user-voice-profile` for attributed first-person realization. The personalized
 runtime skill is never a commons core or public dependency.
 
+`csharp-nullability-remediation` owns removing or auditing null-forgiving
+operators and repairing nullable contracts exposed by that work.
+`roslyn-analyzers` owns authoring the diagnostic that reports the syntax,
+`dotnet-polyfills` owns making nullable-analysis attributes available on older
+targets, and `performance-testing` owns measurement when a remediation changes
+a hot path. Join `security-review` when the assumption crosses unsafe,
+deserialization, reflection, interop, or untrusted-input boundaries.
+
 ## Portfolio contract
 
 <!-- portfolio-matrix:start -->
@@ -63,6 +72,7 @@ runtime skill is never a commons core or public dependency.
 | [agent-files-review](./agent-files-review/SKILL.md) | `agent-customization` | `optional-overlay` | `local-write` | `canary` | - | `manage-skills`, `technical-writing` |
 | [code-comprehension](./code-comprehension/SKILL.md) | `universal` | `optional-overlay` | `advisory` | `canary` | - | `pre-pr-self-review` |
 | [create-pr](./create-pr/SKILL.md) | `git-github` | `optional-overlay` | `remote-write` | `canary` | `technical-writing` | `pre-pr-self-review`, `address-pr-feedback` |
+| [csharp-nullability-remediation](./csharp-nullability-remediation/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `experimental` | - | `dotnet-polyfills`, `performance-testing`, `pre-pr-self-review`, `roslyn-analyzers`, `security-review` |
 | [cswin32-com](./cswin32-com/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | `cswin32-interop` | `security-review`, `il-copy-inspection` |
 | [cswin32-interop](./cswin32-interop/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `cswin32-com`, `dotnet-polyfills`, `scratch-buffer-strategy`, `security-review` |
 | [dotnet-file-creation](./dotnet-file-creation/SKILL.md) | `dotnet` | `optional-overlay` | `local-write` | `canary` | - | `windows-acls`, `security-review` |
