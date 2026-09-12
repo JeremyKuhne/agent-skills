@@ -273,6 +273,28 @@ Describe 'Skill evaluation scenario contract' {
         }
     }
 
+    It 'distinguishes affirmative authoring from negated continuation' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath |
+            Where-Object id -eq 'manage-skills-distinct-overlap-authoring')[0]
+        $compliant = @(
+            'The overlap is distinct and the policy boundary is different.'
+            'Continue with a repository-owned skill.'
+            'A dependency is not required.') -join ' '
+        $contradictory = @(
+            'The overlap is distinct and the policy boundary is different.'
+            'Do not continue with a repository-owned skill.'
+            'A dependency is not required.') -join ' '
+
+        @($scenario.requiredResponsePatterns | Where-Object { $compliant -notmatch $_ }).Count |
+            Should -Be 0
+        @($scenario.forbiddenResponsePatterns | Where-Object { $compliant -match $_ }).Count |
+            Should -Be 0
+        @($scenario.requiredResponsePatterns | Where-Object { $contradictory -notmatch $_ }).Count |
+            Should -Be 0
+        @($scenario.forbiddenResponsePatterns | Where-Object { $contradictory -match $_ }).Count |
+            Should -BeGreaterThan 0
+    }
+
     It 'permits a compliant lifecycle response: <CaseName>' -ForEach @(
         @{
             CaseName = 'pinned drift warns against unpinning'

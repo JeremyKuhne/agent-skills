@@ -82,7 +82,7 @@
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?i)(?:overlap|shared)[^\r\n]{0,160}(?:distinct|different|does not)", "(?i)(?:continue|proceed|author|create|build)[^\r\n]{0,160}(?:repository|repo)[ -]?(?:owned|specific)?[^\r\n]{0,100}skill", "(?i)(?:trigger|outcome|owner|policy)[^\r\n]{0,120}(?:boundary|distinct|different)", "(?i)(?:dependency|depend)[^\r\n]{0,120}(?:not required|not automatic|only if|unless)"],
-      "forbiddenResponsePatterns": ["(?i)(?:cannot|must not|do not)[^\r\n]{0,100}(?:author|create|build)[^\r\n]{0,100}(?:because|since)[^\r\n]{0,80}(?:shared|existing)", "(?i)must[^\r\n]{0,80}(?:reuse|depend on)[^\r\n]{0,80}(?:shared|existing)"],
+      "forbiddenResponsePatterns": ["(?i)(?:cannot|must not|do not)[^\r\n]{0,100}(?:author|create|build)[^\r\n]{0,100}(?:because|since)[^\r\n]{0,80}(?:shared|existing)", "(?i)must[^\r\n]{0,80}(?:reuse|depend on)[^\r\n]{0,80}(?:shared|existing)", "(?i)(?:cannot|must not|do not|don't)[^\r\n]{0,80}(?:continue|proceed|author|create|build)[^\r\n]{0,160}(?:repository|repo)[ -]?(?:owned|specific)?[^\r\n]{0,100}skill"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^git (?:add|commit)(?: |$)", "(?m)^gh (?:skill install|pr create)(?: |$)"],
       "requireUnchangedWorktree": true
