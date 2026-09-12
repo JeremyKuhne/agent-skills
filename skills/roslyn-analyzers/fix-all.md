@@ -114,10 +114,14 @@ fixture does not distinguish FixAll from an ordinary code fix.
 Read harness failures before changing the expected iteration count. In
 `Microsoft.CodeAnalysis.Testing`, `Expected '1' iterations but found '2'` requires
 inspecting the diagnostics and actions remaining after the first pass. Repair unexpected
-non-convergence. Intentionally unfixable residual diagnostics can cause a final no-op
-pass; assert those residual diagnostics and use a negative `NumberOfFixAllIterations` to
-specify a bounded "up to N iterations" expectation only after distinguishing that stable
-case from non-convergence. A `CodeActionValidationMode` failure means the changed syntax
-tree differs from reparsing its text; fix the transformation rather than weakening
-validation. Also distinguish either failure from an ordinary expected-text diff,
-including a fixture whose newline convention differs from the generated document.
+non-convergence. A positive `NumberOfFixAllIterations` asserts an exact count. A negative
+value selects upper-limit mode: the harness uses its absolute value as the iteration
+budget, stops when diagnostics stabilize or no action is available, and fails if the
+budget is exceeded. Use that mode only for asserted, intentionally unfixable residual
+diagnostics.
+
+For non-`None` `CodeActionValidationMode`, the harness compares the produced syntax tree
+with a tree reparsed from its text. `SemanticStructure` ignores trivia; `Full` includes
+it. Inspect the active mode and repair unexpected structure or trivia differences rather
+than weakening validation. Distinguish these failures from an ordinary expected-text
+diff, including a fixture whose newline convention differs from the generated document.

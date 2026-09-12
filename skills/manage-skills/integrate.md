@@ -29,12 +29,14 @@ instruction-file section may already own the same outcome.
 
 Choose how repository behavior reaches the portable core before writing either form.
 
-Use an **overlay** when local policy specializes the core and must apply whenever the
-core is selected. The mandatory loader provides reverse discovery from the shared core
-to repository policy and keeps one skill identity. Count both files in initial context
-because the workflow unconditionally requires reading the overlay. Keep it to direct
-bindings and routing; put repository-only documentation and tools with their owning area
-and link to them.
+Use an **overlay** when direct core selection should discover local policy. For an
+`optional-overlay` core, that route exists only in installations containing the file. If
+the policy is mandatory for the target installation, record overlay presence as an
+installation invariant and verify that direct core selection loads it. Use
+`required-overlay` only when the core is invalid without an overlay in every installation.
+When installed, count the overlay in initial context. Keep it to direct bindings and
+routing; put repository-only documentation and tools with their owning area and link to
+them.
 
 Use a **composing repository skill** when the local workflow has a distinct trigger or
 outcome. Verify both directions before choosing it:
@@ -126,6 +128,7 @@ Stop before writing when:
 
 - a conflict or ambiguous workflow owner remains unresolved;
 - the selected integration mechanism has an unresolved dependency or reverse-discovery path;
+- mandatory repository policy has no verified overlay-presence or equivalent enforcement;
 - a same-name installation conflict remains unresolved under
   [install.md](install.md);
 - required repository surfaces could not be inspected; or

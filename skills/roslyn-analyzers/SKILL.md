@@ -1,6 +1,6 @@
 ---
 name: roslyn-analyzers
-description: Build Roslyn analyzers, fixes, and suppressors. Use for Fix All, enablement, or analyzer performance; runtime uses performance-testing.
+description: Build Roslyn analyzers, code fixes, and suppressors. Use for analyzer Fix All, analyzer enablement, or analyzer performance. For runtime performance, use performance-testing.
 license: MIT
 compatibility: Requires the .NET SDK, Roslyn packages, and a test project capable of running Microsoft.CodeAnalysis.Testing fixtures.
 metadata:

@@ -47,9 +47,11 @@ the canonical owner's file checks.
 When a shared core needs repository specialization, choose the integration mechanism
 deliberately:
 
-- Use an **overlay** when repository policy must be discovered whenever the shared core
-  runs. When the overlay is installed, the core's loader gives one routing identity and
-  reverse discovery from the shared core to repository policy.
+- Use an **overlay** when direct core selection should discover repository policy. An
+  optional overlay provides that route only where the file is installed. If the policy
+  is mandatory for one installation, verify overlay presence as an installation
+  invariant. Use `required-overlay` only when the core is invalid without an overlay in
+  every installation.
 - Use a **composing repository skill** when it owns a distinct trigger or outcome and can
   reliably load the shared dependency. Also prove the shared skill cannot bypass required
   repository policy; a local-to-shared reference alone is one-way discoverability.

@@ -58,6 +58,10 @@ StyleCop.Analyzers, Meziantou.Analyzer, SonarAnalyzer, and domain-specific analy
 is advisory: do not add a dependency or block custom work merely because a similar rule
 exists elsewhere.
 
+If a third-party suite is selected, pin its version, inspect the rules and severities it
+enables by default, enable the intended rules deliberately, and validate the configured
+package against the consumer. Do not accept the package's defaults without review.
+
 ## How to tell what is already active
 
 When the result depends on current analyzer configuration, check what is running:

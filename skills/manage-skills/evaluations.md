@@ -307,6 +307,9 @@ Expected:
 - Otherwise records the routing boundary and continues with repository-skill authoring.
 - Does not add an external dependency solely because another project implements a
   similar workflow.
+- Returns exactly these four labeled lines with no other prose:
+  `Decision: author-repository-skill`, `Overlap: distinct`,
+  `Dependency: not-required`, and `Boundary: trigger-policy-owner`.
 
 ## 19. Overlay versus composing-skill discovery
 
@@ -323,12 +326,19 @@ Expected:
   policy.
 - Chooses an overlay unless reverse discovery and shared-dependency availability can
   be verified for every target host and remote environment.
-- When an overlay is installed, counts the core and overlay together because the loader
-  requires reading both. An optional-overlay install without the file remains core-only.
+- Makes overlay presence an invariant for this installation because repository policy is
+  mandatory, then verifies direct core selection loads it.
+- Counts the installed core and overlay together. An optional-overlay install without the
+  file remains core-only when no mandatory repository policy depends on it.
 - Keeps the overlay concise and links to repository docs and tools in their owning area
   rather than placing those resources inside the vendored core directory.
 - Exercises the repository request from both entry points when composing skills are
   selected.
+- Returns exactly these six labeled lines with no other prose:
+  `Decision: overlay`, `Overlay-presence: required-for-installation`,
+  `Reverse-discovery: installed-overlay`,
+  `Initial-context: core-plus-installed-overlay`, `Resources: owning-area`, and
+  `Composing-skill: reject-no-reverse-discovery`.
 
 ## Acceptance
 

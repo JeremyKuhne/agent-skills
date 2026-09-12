@@ -154,13 +154,15 @@ bindings were reviewed against. Start from
 `core-pin` and re-review the bindings. The overlay may link to repository files;
 the portable core may not.
 
-Use an overlay when repository policy must be discovered whenever the core runs. Every
-overlay-aware core carries the loader instruction, but `optional-overlay` reads the file
-only when it exists; `required-overlay` requires it. An installed overlay provides reverse
-discovery from the shared core to repository policy and avoids competing skill identities.
-A separate composing repository skill is appropriate for a distinct trigger or outcome
-only when both shared-dependency availability and reverse discovery from the shared skill
-are reliable; a local-to-shared reference alone can bypass repository policy.
+Use an overlay when repository policy should be discovered from direct core selection.
+Every overlay-aware core carries the loader instruction, but `optional-overlay` reads the
+file only when it exists. If repository policy is mandatory for one consuming
+installation, make overlay presence an installation invariant and verify that direct core
+selection loads it. Use `required-overlay` only when the core itself is invalid without an
+overlay in every installation. A separate composing repository skill is appropriate for a
+distinct trigger or outcome only when dependency availability and reverse discovery from
+the shared skill are reliable; a local-to-shared reference alone can bypass repository
+policy.
 
 Initial context is `SKILL.md` plus every file the workflow unconditionally instructs the
 agent to read. When an overlay exists, the loader puts it in initial context; an

@@ -42,7 +42,9 @@ overlapping shared skill, and overlay selection when one-way composition cannot
 provide reverse discovery. The project-integration fixture contains a differently
 named local skill, canonical and generated agent guidance, documentation-derived
 bindings, and an unrelated keyword match. Every scenario is read-only and preserves
-approval boundaries.
+approval boundaries. The overlap and composition scenarios require small labeled
+decision outputs so polarity and contradictory recommendations are scored as one
+contract instead of independent free-prose keyword matches.
 
 `scenarios/create-skill-repo.json` contains seven scenarios for the
 repository-local bootstrap workflow. They cover novice-oriented role

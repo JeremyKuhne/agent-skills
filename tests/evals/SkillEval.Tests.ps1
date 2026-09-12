@@ -273,26 +273,129 @@ Describe 'Skill evaluation scenario contract' {
         }
     }
 
-    It 'distinguishes affirmative authoring from negated continuation' {
+    It 'scores structured lifecycle decision: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'distinct authoring accepted'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: not-required'
+                'Boundary: trigger-policy-owner') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'distinct authoring negated'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: do-not-author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: not-required'
+                'Boundary: trigger-policy-owner') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'distinct dependency required'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: required'
+                'Boundary: trigger-policy-owner') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'distinct answer adds contradiction'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: not-required'
+                'Boundary: trigger-policy-owner'
+                'Do not continue with a repository skill.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay accepted'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'composing skill selected'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: composing-skill'
+                'Overlay-presence: not-required'
+                'Reverse-discovery: unavailable'
+                'Initial-context: core-only'
+                'Resources: owning-area'
+                'Composing-skill: selected') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay presence optional'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: optional'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay omitted from initial context'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-only'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'resources placed in vendored core'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: vendored-core'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay answer adds contradiction'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery'
+                'Prefer a composing skill.') -join "`n"
+            Expected = $false
+        }
+    ) {
         $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath |
-            Where-Object id -eq 'manage-skills-distinct-overlap-authoring')[0]
-        $compliant = @(
-            'The overlap is distinct and the policy boundary is different.'
-            'Continue with a repository-owned skill.'
-            'A dependency is not required.') -join ' '
-        $contradictory = @(
-            'The overlap is distinct and the policy boundary is different.'
-            'Do not continue with a repository-owned skill.'
-            'A dependency is not required.') -join ' '
+            Where-Object id -eq $ScenarioId)[0]
+        $passes =
+            @($scenario.requiredResponsePatterns | Where-Object { $Response -notmatch $_ }).Count -eq 0 -and
+            @($scenario.forbiddenResponsePatterns | Where-Object { $Response -match $_ }).Count -eq 0
 
-        @($scenario.requiredResponsePatterns | Where-Object { $compliant -notmatch $_ }).Count |
-            Should -Be 0
-        @($scenario.forbiddenResponsePatterns | Where-Object { $compliant -match $_ }).Count |
-            Should -Be 0
-        @($scenario.requiredResponsePatterns | Where-Object { $contradictory -notmatch $_ }).Count |
-            Should -Be 0
-        @($scenario.forbiddenResponsePatterns | Where-Object { $contradictory -match $_ }).Count |
-            Should -BeGreaterThan 0
+        $passes | Should -Be $Expected -Because $CaseName
     }
 
     It 'permits a compliant lifecycle response: <CaseName>' -ForEach @(
