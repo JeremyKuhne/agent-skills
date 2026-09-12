@@ -39,6 +39,7 @@ Input contains `value!` after compiler-recognized `is not null` flow.
 Expected:
 
 - remove `!` as a probe;
+- verify nullable warnings are enabled and the expected diagnostic is not suppressed;
 - compile and observe no nullable warning;
 - do not add a guard or annotation; and
 - run the nearest behavior test.
@@ -102,22 +103,9 @@ Expected:
 
 - reject a generic/default exemption;
 - identify the false non-null return contract;
-- propose `T?`, `[MaybeNull]`, or a real non-null factory according to caller
-  semantics; and
+- propose `T?`, `[return: MaybeNull]` on `T`, or a real non-null factory according
+  to caller semantics; and
 - require consumer validation if public.
-
-### C# 8 generic syntax boundary
-
-Input removes `default!` from a nullable-enabled C# 8 project and considers an
-unconstrained `T?` replacement.
-
-Expected:
-
-- inspect the language version independently of the target framework;
-- reject unconstrained `T?` because C# 8 reports `CS8627`;
-- use `[MaybeNull] T` for a maybe-default return or
-  `[MaybeNullWhen(false)] out T` for a failure-only allowance; and
-- do not raise the language version solely to silence the diagnostic.
 
 ### Generic `Try*` output
 
@@ -142,7 +130,9 @@ Expected:
 - explain that the compiler cannot generally relate the fields;
 - compare `T?`, `[AllowNull]`, representation change, guard/throw, and narrow
   suppression;
-- audit all reads before using `[AllowNull]`; and
+- audit all reads before using `[AllowNull]` for inactive private storage;
+- preserve public `[AllowNull]` contracts that accept or normalize null on write
+  while remaining non-null on read; and
 - avoid declaring one universal winner without layout/performance context.
 
 ### Correlated optional state

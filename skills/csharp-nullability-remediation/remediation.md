@@ -6,9 +6,10 @@ spelling does not.
 
 ## First question: what did `!` suppress?
 
-If removing `!` produces no nullable warning, it was redundant for the current
-flow state. Remove it and run the focused behavior check. Do not add a replacement
-annotation or guard.
+Before calling `!` redundant, verify that nullable warnings are enabled at the site
+and that the expected diagnostic is not hidden by `NoWarn`, editor configuration, or
+a pragma. If removing `!` then produces no nullable warning, remove it and run the
+focused behavior check without adding a replacement annotation or guard.
 
 Common compiler diagnostics are:
 
@@ -78,17 +79,12 @@ Make the contract say so:
 
 - use a concrete nullable reference type such as `string?` when callers should
   observe and handle null;
-- use unconstrained `T?` on C# 9 or later when generic callers should observe a
-  maybe-default result;
-- use `[MaybeNull] T` on C# 8 for the same generic return contract;
+- use unconstrained `T?` when generic callers should observe a maybe-default
+  result;
+- use `[return: MaybeNull]` on a `T` return when preserving the ordinary generic
+  declaration;
 - use `[MaybeNullWhen(false)]` for an `out T` that may be null on failure; or
 - use `[NotNullWhen(true)] out T?` when success specifically guarantees non-null.
-
-Inspect the language version separately from the target framework. Unconstrained
-`T?` requires C# 9 or later; C# 8 reports `CS8627`. On C# 8, keep the ordinary `T`
-declaration and express maybe-null results with `[MaybeNull]` or
-`[MaybeNullWhen]`, or add a constraint only when the abstraction already requires
-it.
 
 These attributes are not interchangeable for an unconstrained type parameter.
 `[MaybeNullWhen(false)] out T` relaxes the ordinary `T` contract only on failure,
@@ -149,17 +145,18 @@ type's contract before choosing this shape.
 ### A helper initializes members
 
 Prefer direct constructor initialization. When a helper establishes the state,
-use `[MemberNotNull]` or `[MemberNotNullWhen]` only if every normal return satisfies
-the postcondition. `[MemberNotNullWhen]` also describes a Boolean protocol transition,
-such as a reference-type enumerator's `MoveNext()` guaranteeing a nullable `Current`
-property is non-null on `true`. Audit every matching return and any mutating methods
-that can invalidate the state. Do not use a receiver-state postcondition to describe
-state established by a non-readonly mutable struct method: calling it through a
-readonly variable, field, or `in` parameter can mutate a defensive copy while flow
-analysis narrows the original receiver. A readonly discriminator that only observes
-existing struct state can still have a truthful postcondition. These attributes
-describe state after a completed call; they do not describe a framework callback that
-might never run.
+use `[MemberNotNull]` only if every normal return satisfies the postcondition. Use
+`[MemberNotNullWhen(value, ...)]` only if every return with the specified Boolean
+value satisfies it. The conditional form describes a protocol transition such as a
+reference-type enumerator's `MoveNext()` guaranteeing a nullable `Current` property
+is non-null on `true`. Audit every matching return and any mutating methods that can
+invalidate the state. Do not use a receiver-state postcondition to describe state
+established by a non-readonly mutable struct method: calling it through a readonly
+variable, field, or `in` parameter can mutate a defensive copy while flow analysis
+narrows the original receiver. A readonly discriminator that only observes existing
+struct state can still have a truthful postcondition. These attributes describe state
+after a completed call; they do not describe a framework callback that might never
+run.
 
 ### A framework initializes the member later
 
@@ -190,7 +187,10 @@ but only after every read and cleanup path has been audited.
 
 Generic syntax is not an exemption. Classify the use:
 
-- **Return:** use `T?` or `[MaybeNull]` if default is observable.
+- **Return:** keep `T` when `default(T)` is an ordinary value, including for
+  `where T : struct`. When default represents absence, use `T?` if that preserves
+  the intended type semantics, or `[return: MaybeNull]` on `T` if the declaration
+  must remain unchanged.
 - **`Try*` output:** use a conditional postcondition matching actual success
   semantics.
 - **Inactive field:** consider `T?`, `[AllowNull]`, a tagged representation, or a
@@ -202,9 +202,12 @@ Generic syntax is not an exemption. Classify the use:
 - **`where T : struct`:** default cannot be a null reference, so forgiveness is
   unnecessary.
 
-`[AllowNull]` permits a null write while reads retain the non-null declared type. It
-moves trust to the declaration and can hide an invalid read. Use it only for private
-storage whose state guard is independently enforced and tested.
+For inactive storage, `[AllowNull]` permits a null write while reads retain the
+non-null declared type. It moves trust to the declaration and can hide an invalid
+read, so use this remedy only for private storage whose state guard is independently
+enforced and tested. Public `[AllowNull]` is valid when the public write contract
+accepts null while reads remain non-null, such as a property setter that normalizes
+null; verify both accessor contracts.
 
 ### Generic constraints
 
@@ -287,23 +290,10 @@ When `T Get<T>()` delegates to `TryGet<T>([MaybeNullWhen(false)] out T value)` a
 throws on failure, its normal return satisfies the ordinary `T` contract. Do not add
 `[return: MaybeNull]` merely because the temporary must hold default on failure. Use
 an explicit method type with nullable temporary storage when inference would otherwise
-weaken the type. On C# 9 or later, let the conditional annotation narrow nullable
-temporary storage:
+weaken the type. Let the conditional annotation narrow nullable temporary storage:
 
 ```csharp
 if (!TryGet<T>(out T? value))
-{
-    throw new InvalidOperationException();
-}
-
-return value;
-```
-
-On C# 8, where unconstrained `T?` produces `CS8627`, keep the ordinary `T`
-declaration and let `[MaybeNullWhen(false)]` narrow the successful path:
-
-```csharp
-if (!TryGet<T>(out T value))
 {
     throw new InvalidOperationException();
 }

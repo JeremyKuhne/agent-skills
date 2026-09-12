@@ -36,18 +36,30 @@ Describe 'C# nullability remediation skill contract' {
         $script:Evaluations | Should -Match 'empty `Nullable<U>`'
     }
 
-    It 'supports C# 8 while gating unconstrained nullable type parameters' {
-        $script:Skill | Should -Match 'Requires a C# 8 or later project'
-        $script:Skill | Should -Match 'unconstrained T\? syntax requires C# 9 or later'
-        $script:Skill | Should -Match 'nullable context, language version'
-        $script:Remediation | Should -Match 'C# 8 reports `CS8627`'
-        $script:Remediation | Should -Match '\[MaybeNull\] T.*on C# 8'
-        $script:Evaluations | Should -Match 'C# 8 generic syntax boundary'
+    It 'uses the .NET 10 SDK C# compiler baseline and explicit return targets' {
+        $script:Skill | Should -Match 'Requires the \.NET 10 SDK or later'
+        $script:Skill | Should -Match 'C# 14 compiler'
+        $script:Skill | Should -Match 'nullable context, effective SDK/compiler'
+        $script:Remediation | Should -Match '\[return: MaybeNull\].*`T` return'
+        $script:Evaluations | Should -Match '\[return: MaybeNull\].*on `T`'
+        "$script:Remediation`n$script:Evaluations" | Should -Not -Match 'C# 8|C# 9|CS8627'
     }
 
     It 'does not treat required members as a framework lifecycle guarantee' {
         $script:Remediation | Should -Match '`required` is a C# 11 construction-site obligation'
         $script:Remediation | Should -Match 'framework activators can bypass object-initializer'
+    }
+
+    It 'distinguishes unconditional and Boolean-conditional member postconditions' {
+        $script:Remediation | Should -Match '\[MemberNotNull\].*every normal return'
+        $script:Remediation | Should -Match '\[MemberNotNullWhen\(value, \.\.\.\)\].*specified Boolean'
+    }
+
+    It 'qualifies warning-free probes, generic defaults, and AllowNull storage' {
+        $script:Remediation | Should -Match 'nullable warnings are enabled at the site'
+        $script:Remediation | Should -Match 'where T : struct.*default represents absence'
+        $script:Remediation | Should -Match 'Public `\[AllowNull\]` is valid'
+        $script:Evaluations | Should -Match 'expected diagnostic is not suppressed'
     }
 
     It 'guards public metadata and inherited contracts with consumer builds' {
@@ -58,7 +70,7 @@ Describe 'C# nullability remediation skill contract' {
 
     It 'rejects receiver-state postconditions on mutating struct copies' {
         $script:Remediation | Should -Match 'non-readonly mutable struct method'
-        $script:Remediation | Should -Match 'mutate a defensive copy while flow\s+analysis narrows the original receiver'
+        $script:Remediation | Should -Match 'mutate a defensive copy while flow\s+analysis\s+narrows the original receiver'
         $script:Evaluations | Should -Match 'verify the hazard with an `in` or readonly-field consumer'
     }
 
@@ -76,6 +88,8 @@ Describe 'C# nullability remediation skill contract' {
 
     It 'uses a general diagnostic ledger and conditions analyzer-loading checks' {
         $script:Skill | Should -Match 'compiler or analyzer ID, or none'
-        $script:Verification | Should -Match 'when a diagnostic analyzer participates in the remediation'
+        $script:Verification | Should -Match 'when a diagnostic analyzer participates'
+        $script:Verification | Should -Match 'compile a representative violation.*expected\s+diagnostic'
+        $script:Verification | Should -Not -Match 'acyclic bootstrap|producer source gate'
     }
 }

@@ -77,7 +77,7 @@ Before calling the remediation complete:
 4. run public-consumer or package checks when annotations changed;
 5. run performance checks for any accepted hot-path rewrite;
 6. verify generated/vendored exclusions are configuration-based and documented; and
-7. when a diagnostic analyzer participates in the remediation, prove every intended project loads it through an acyclic bootstrap or producer source gate.
+7. when a diagnostic analyzer participates, compile a representative violation and confirm each intended project emits the expected diagnostic.
 
 Report commands that could not run and why. Do not convert an unavailable check into
 a pass.

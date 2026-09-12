@@ -2,7 +2,7 @@
 name: csharp-nullability-remediation
 description: Remove or audit C# null-forgiving operators (`!`, `null!`, `default!`) without hiding nullability defects or changing contracts accidentally. Use when asked to "remove null-forgiving operators", "fix a diagnostic that bans null forgiveness", "replace null! or default!", reduce suppressions, or resolve nullable warnings exposed after deleting `!`. Not for authoring the analyzer itself or enabling nullable across a whole repository.
 license: MIT
-compatibility: Requires a C# 8 or later project with a compiler build command; unconstrained T? syntax requires C# 9 or later.
+compatibility: Requires the .NET 10 SDK or later and its C# 14 compiler; target frameworks may be older.
 metadata:
   applicability: dotnet
   binding: optional-overlay
@@ -40,8 +40,7 @@ new code tells the truth about values that can be null.
 
 ## Workflow
 
-1. **Establish scope.** Record the nullable context, language version, target
-   frameworks, source policy, and public or hot-path exposure.
+1. **Establish scope.** Record nullable context, effective SDK/compiler, targets, source policy, and public or hot-path exposure.
 2. **Inventory real operators.** Prefer compiler/analyzer diagnostics or syntax
    parsing over textual `!` matches. Group sites by code shape and contract owner.
 3. **Run a removal probe.** Delete `!` at one representative site and run the
