@@ -155,7 +155,12 @@ Describe 'Skill evaluation scenario contract' {
         @{
             CaseName = 'ETW package preflight'
             ScenarioId = 'performance-testing-preflights-benchmarkdotnet-etw-package'
-            Response = 'Do not start the UAC capture now. Before UAC, preflight the evaluated PackageReference items, add BenchmarkDotNet.Diagnostics.Windows, and build in Release. A central package version is not sufficient for inclusion.'
+            Response = 'Do not start the UAC capture now. Before UAC, preflight the evaluated PackageReference items, add BenchmarkDotNet.Diagnostics.Windows as a PackageReference, and build in Release. A central package version is not sufficient for inclusion.'
+        },
+        @{
+            CaseName = 'ETW central version explanation'
+            ScenarioId = 'performance-testing-preflights-benchmarkdotnet-etw-package'
+            Response = 'Directory.Packages.props already includes the version, but the benchmark project still needs the BenchmarkDotNet.Diagnostics.Windows PackageReference. Before UAC, preflight the evaluated items, add BenchmarkDotNet.Diagnostics.Windows as a PackageReference, and build in Release.'
         },
         @{
             CaseName = 'live corpus mutation'
@@ -185,7 +190,7 @@ Describe 'Skill evaluation scenario contract' {
         @{
             CaseName = 'shared output serialization'
             ScenarioId = 'performance-testing-serializes-shared-output-builds'
-            Response = 'Run the MSBuild build, test, and BenchmarkDotNet child sequentially because they share obj and bin. They may run concurrently only with distinct intermediate and output trees. Read-only analysis of immutable traces may run in parallel.'
+            Response = 'Run the MSBuild build, test, and BenchmarkDotNet child sequentially because they share obj and bin. They may run concurrently only with distinct intermediate and output trees and distinct BenchmarkDotNet artifact directories. Read-only analysis of immutable traces may run in parallel.'
         }
     ) {
         $scenario = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath |
@@ -205,6 +210,12 @@ Describe 'Skill evaluation scenario contract' {
             ScenarioId = 'performance-testing-preflights-benchmarkdotnet-etw-package'
             Response = 'Directory.Packages.props supplies the version and already includes the package, so do not add the PackageReference. Before UAC, preflight the evaluated project and run a Release build with BenchmarkDotNet.Diagnostics.Windows.'
             ExpectForbidden = $true
+        },
+        @{
+            CaseName = 'ETW add action names unrelated package'
+            ScenarioId = 'performance-testing-preflights-benchmarkdotnet-etw-package'
+            Response = 'Do not start UAC. Add Newtonsoft.Json as a PackageReference, mention BenchmarkDotNet.Diagnostics.Windows, run a Release build, and preflight evaluated items before UAC. A central version is not sufficient.'
+            ExpectForbidden = $false
         },
         @{
             CaseName = 'pool state matches warmup only'
@@ -237,9 +248,9 @@ Describe 'Skill evaluation scenario contract' {
             ExpectForbidden = $false
         },
         @{
-            CaseName = 'shared builds run in parallel'
+            CaseName = 'shared builds isolate only intermediate tree'
             ScenarioId = 'performance-testing-serializes-shared-output-builds'
-            Response = 'Run the build, test, and BenchmarkDotNet child in parallel even though they share obj and bin. Immutable trace analysis may also run in parallel.'
+            Response = 'Run the build, test, and BenchmarkDotNet child sequentially because obj and bin are shared. Parallel work needs distinct intermediate directories. Read-only analysis of immutable traces may run in parallel.'
             ExpectForbidden = $false
         }
     ) {
