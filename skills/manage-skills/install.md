@@ -9,6 +9,12 @@ not define discovery roots, precedence, synchronization, or installation tools.
 Those belong to each host and change independently. Re-check host documentation
 before changing a fleet-wide mapping.
 
+## Preflight
+
+Resolve the requested source through [find.md](find.md). For a public source, run the
+[security gate](build.md#security-gate-for-public-sources) before choosing scope,
+destination, or tooling. Do not install an unreviewed candidate.
+
 ## 1. Separate ownership from scope
 
 Decide all three dimensions explicitly. One does not imply another:
@@ -75,12 +81,13 @@ gate searches local skills, agent files, documentation, and relevant
 implementation surfaces for repository bindings, differently named workflow
 overlap, duplicate guidance, and conflicts.
 
-A request to install the new core and overlay does not authorize changes to
-existing guidance. Present consolidation edits separately and obtain explicit
-approval before applying them. Whenever overlap could remain after the current
-decision, ask directly in the same response whether the user wants to record the
-overlap or its disposition; create no persistent record by default. Stop when a
-conflict or ambiguous workflow owner remains unresolved.
+A request to install the new core and accepted integration files does not authorize
+changes to existing guidance. Present consolidation edits separately and obtain
+explicit approval before applying them. Whenever overlap could remain after the
+current decision, ask directly in the same response whether the user wants to
+record the overlap or its disposition; create no persistent record by default.
+Stop when a conflict, ambiguous workflow owner, or composition discovery gap remains
+unresolved.
 
 User-scope installation does not run this repository integration gate. An empty
 greenfield skill-repository scaffold generates its initial bindings through its
@@ -342,6 +349,9 @@ This skill bundles
 that user-scope copy contract. Run it by its resolved local path after the scope,
 duplicate-name, and privacy gates pass:
 
+Running the installer remains subject to the host's normal terminal and tool permission
+flow; this skill does not pre-authorize execution.
+
 ```pwsh
 pwsh <resolved-installer-path> `
   -SourceSkillPath <skill-directory> `
@@ -389,6 +399,10 @@ Do not stop at file creation. Verify:
 - for an existing-repository project install, the integration gate searched the
   required repository surfaces and classified every material binding, overlap,
   duplicate, and conflict before writing;
+- for an overlay carrying mandatory policy, the target installation contains the file and
+  direct shared-core selection follows the core's pre-action read instruction;
+- for a composing skill, both direct repository-skill and direct shared-core selection
+  reach required repository policy;
 - existing guidance changed only through separately approved consolidation, and
   the user was asked whether to record any intentional overlap that remained;
 - the skill appears at the intended scope and resolved path;

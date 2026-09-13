@@ -44,7 +44,8 @@ e.g. [detail.md](detail.md).
 
 - `name` - lowercase, digits, hyphens; max 64 chars; matches the directory name.
 - `description` - what the skill does **and when to use it**, with trigger
-  phrasing. This is the entire auto-invocation surface; write it "pushy".
+  phrasing. This is the auto-invocation surface; keep it concise and specific
+  rather than inventorying the whole workflow.
 
 Use `compatibility` when the workflow requires a particular runtime, CLI, MCP
 server, network capability, or operating system. Other optional Agent Skills
@@ -130,7 +131,7 @@ that declared bundle before resolving links.
 
 `overlay.md` is the standard sibling for repository-specific bindings. A core
 with `binding: optional-overlay` or `binding: required-overlay` includes this
-exact loader instruction near the top of `SKILL.md`:
+exact pre-action read instruction near the top of `SKILL.md`:
 
 > If `overlay.md` exists beside this file, read it before acting; it contains
 > repository-specific bindings. This core remains usable without it.
@@ -153,12 +154,31 @@ bindings were reviewed against. Start from
 `core-pin` and re-review the bindings. The overlay may link to repository files;
 the portable core may not.
 
+Use an overlay when repository policy should be discovered from direct core selection.
+Every overlay-aware core carries the pre-action read instruction. An `optional-overlay`
+installation requires that read only when the file exists. If repository policy is
+mandatory for one consuming installation, make overlay presence an installation invariant
+and verify that direct core selection follows that instruction. Use `required-overlay` only
+when the core itself is invalid without an overlay in every installation. A separate
+composing repository skill is appropriate for a distinct trigger or outcome only when
+dependency availability and reverse discovery from the shared skill are reliable; a
+local-to-shared reference alone can bypass repository policy.
+
+Initial context is `SKILL.md` plus every file the workflow unconditionally instructs the
+agent to read. When an overlay exists, the core's pre-action instruction requires the agent
+to read it, so count the overlay in initial context; an `optional-overlay` installation
+without the file remains core-only. Keep overlays concise. Put
+repository-only documentation and tools with their owning area, outside the vendored core
+directory, and link to them from the overlay.
+
 ## Thin core plus sibling files
 
 Keep each `SKILL.md` body small - the whole body loads on every trigger, while
 sibling files load only when referenced. When a skill grows past roughly 150
 lines, split the deep detail into sibling `*.md` files and leave the core as an
-overview that links to them.
+overview that links to them. This does not reduce context when the workflow
+unconditionally requires reading the sibling. `metadata.requires` controls installation
+dependencies; it does not itself put another skill's files in initial context.
 
 ## Code examples
 

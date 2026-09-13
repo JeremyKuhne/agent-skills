@@ -1,13 +1,15 @@
 # Build a skill
 
-Detail for the [manage-skills](SKILL.md) skill. "Build a skill for X" / "create a
-skill" does **not** start by writing a new skill. It starts by finding one.
+Detail for the [manage-skills](SKILL.md) skill. Start an open-ended creation request
+by checking existing skills. If the user explicitly requests a distinct skill, use
+the check to identify overlap and boundaries rather than treating any match as a
+reason to refuse.
 
 ## The find-first decision tree
 
-Reinventing a skill that already exists - in this repo, the commons, or a public
-catalog - is the failure mode this path exists to prevent. Always run
-[find.md](find.md) first, then act on the result:
+Run [find.md](find.md) first, then compare each result with the requested behavior,
+owner, audience, and trigger. Reuse a skill that fully fits; do not force reuse when
+the requested semantics or ownership are materially different.
 
 ### 1. Run find
 
@@ -15,16 +17,20 @@ Run [find.md](find.md) before writing anything.
 
 ### 2. Already installed at the requested host and scope
 
-Do not build. If it does not quite fit, follow [update.md](update.md) and classify
-the change before editing any installed copy. A hit at another scope is not
-equivalent; route the existing source through [install.md](install.md).
+If it fully fits, do not build. For a common improvement, follow
+[update.md](update.md) before editing the installed copy. For repository specialization,
+run [integrate.md](integrate.md) before adding or changing project policy. If the
+requested skill has a distinct trigger, outcome, or owner, record that boundary and
+continue with the applicable authoring path. A hit at another scope is not equivalent;
+route the existing source through [install.md](install.md).
 
 ### 3. In the commons
 
-Do not build. Choose scope and required hosts with [install.md](install.md). For
-an existing-repository project copy, run [integrate.md](integrate.md) before
-writing so the thin overlay comes from repository evidence and semantic overlap
-is resolved. For a Copilot project copy:
+If it fully fits, choose scope and required hosts with [install.md](install.md). For
+an existing-repository project copy, run [integrate.md](integrate.md) before writing
+so the integration comes from repository evidence and semantic overlap is resolved. If
+the requirement is distinct, use that integration check to choose an overlay or a
+separate composing skill. For a Copilot project copy:
 
 ```pwsh
 gh skill install JeremyKuhne/agent-skills <skill> --pin vX.Y.Z `
@@ -52,12 +58,12 @@ cannot be obtained, keep installation blocked.
 
 ### 4. In a public catalog
 
-Do not build from scratch. Apply the security gate below. If it is good, install
-it at the selected scope; if it is close but imperfect, fork it into the commons
-and install that. A mediocre public skill is usually worth adapting over a blank
-start.
+Apply the security gate below. If the candidate fully fits, install it at the
+selected scope. If it is reusable but incomplete, adapt it through the appropriate
+shared or local ownership path. If it only overlaps, record the distinction and
+continue rather than making an unrelated source authoritative.
 
-### 5. Nowhere
+### 5. No suitable skill, or an intentionally distinct skill
 
 Build new using the next section.
 
@@ -79,7 +85,7 @@ exposed secrets). Before installing anything from a public source:
 - Treat a cloned repo's `.agents/` as untrusted code: opening it can load skills
   into a trusted session.
 
-## Building a new skill (it exists nowhere)
+## Building a new or intentionally distinct skill
 
 ### Choose canonical source ownership first
 
@@ -142,7 +148,7 @@ Use that strict mode only when the owning commons adopts those fields. Add or
 regenerate a catalog only when its local policy requires one. Keep repository
 paths, cross-references, and examples out of the core; put consumer bindings in
 an overlay. For this portfolio contract, an overlay-aware core carries the
-loader sentence and a downstream overlay can start from
+pre-action read instruction and a downstream overlay can start from
 `assets/overlay.md.tmpl`.
 
 Run every additional validator, link check, artifact-isolation check, and catalog

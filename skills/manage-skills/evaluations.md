@@ -291,6 +291,56 @@ Expected:
   optional checks are reported as not run.
 - Ownership remains separate from runtime scope in all three paths.
 
+## 18. Explicit distinct skill with an overlapping candidate
+
+Setup:
+
+- A shared skill covers part of a repository workflow.
+- The user explicitly requests a repository-owned skill with different policy and
+  trigger boundaries.
+
+Expected:
+
+- Runs the find check and reports the overlap without treating the shared candidate as
+  automatically authoritative.
+- Reuses the shared skill only if it fully meets the requested behavior and ownership.
+- Otherwise records the routing boundary and continues with repository-skill authoring.
+- Does not add an external dependency solely because another project implements a
+  similar workflow.
+- Returns exactly these four labeled lines with no other prose:
+  `Decision: author-repository-skill`, `Overlap: distinct`,
+  `Dependency: not-required`, and `Boundary: trigger-policy-owner`.
+
+## 19. Overlay versus composing-skill discovery
+
+Setup:
+
+- A portable core can trigger directly for a repository request.
+- Repository policy must apply to that request.
+- A proposed repository skill can load the shared core, but the shared core has no
+  host-supported reverse route to the repository skill.
+
+Expected:
+
+- Rejects one-way skill composition because direct core selection can bypass repository
+  policy.
+- Chooses an overlay unless reverse discovery and shared-dependency availability can
+  be verified for every target host and remote environment.
+- Makes overlay presence an invariant for this installation because repository policy is
+  mandatory, then verifies direct core selection follows the core's pre-action read
+  instruction.
+- Counts the installed core and overlay together. An optional-overlay install without the
+  file remains core-only when no mandatory repository policy depends on it.
+- Keeps the overlay concise and links to repository docs and tools in their owning area
+  rather than placing those resources inside the vendored core directory.
+- Exercises the repository request from both entry points when composing skills are
+  selected.
+- Returns exactly these six labeled lines with no other prose:
+  `Decision: overlay`, `Overlay-presence: required-for-installation`,
+  `Reverse-discovery: installed-overlay`,
+  `Initial-context: core-plus-installed-overlay`, `Resources: owning-area`, and
+  `Composing-skill: reject-no-reverse-discovery`.
+
 ## Acceptance
 
 For a lifecycle change:

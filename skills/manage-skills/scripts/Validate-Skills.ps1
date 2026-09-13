@@ -31,8 +31,8 @@
 
     With -RequirePortfolioMetadata, also enforces this commons' portable-core
     policy: metadata.portability/applicability/binding/risk/maturity/requires/
-    related, the optional-overlay loader cue, and overlay.md frontmatter when an
-    overlay is present.
+    related, the optional-overlay pre-action read instruction, and overlay.md
+    frontmatter when an overlay is present.
 
     The frontmatter parser handles inline scalars, `>`/`|` block scalars, and one
     level of scalar-valued `metadata:` mapping, with `---` matched line by line.
@@ -87,7 +87,7 @@ $AllowedApplicability = @('universal', 'git-github', 'agent-customization', 'dot
 $AllowedBinding = @('none', 'optional-overlay', 'required-overlay')
 $AllowedRisk = @('advisory', 'local-write', 'remote-write')
 $AllowedMaturity = @('experimental', 'canary', 'stable')
-$OverlayCue = 'If `overlay.md` exists beside this file, read it before acting'
+$OverlayReadInstruction = 'If `overlay.md` exists beside this file, read it before acting'
 # Spec scalar fields. If one of these is given a block/flow mapping or sequence
 # instead of a scalar it is rejected; unknown top-level fields are not shape-checked.
 $KnownScalarFields = @('name', 'description', 'license', 'compatibility', 'allowed-tools')
@@ -397,8 +397,8 @@ function Test-OverlayContract ($metadata, [string] $raw, [string] $dir) {
     $overlayPath = Join-Path $dir 'overlay.md'
     $hasOverlay = Test-Path -LiteralPath $overlayPath -PathType Leaf
 
-    if (@('optional-overlay', 'required-overlay') -ccontains $binding -and -not $raw.Contains($OverlayCue)) {
-        "metadata.binding '$binding' requires this loader cue in SKILL.md: $OverlayCue"
+    if (@('optional-overlay', 'required-overlay') -ccontains $binding -and -not $raw.Contains($OverlayReadInstruction)) {
+        "metadata.binding '$binding' requires this pre-action read instruction in SKILL.md: $OverlayReadInstruction"
     }
     if ($binding -ceq 'required-overlay' -and -not $hasOverlay) {
         "metadata.binding 'required-overlay' requires overlay.md beside SKILL.md"

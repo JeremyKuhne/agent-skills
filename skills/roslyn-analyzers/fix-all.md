@@ -110,3 +110,20 @@ provider so the test proves it used the intended bulk path. Include a positive
 control with at least two independent occurrences: mutating the fixture or
 provider to process only one diagnostic must fail the test. A passing single-item
 fixture does not distinguish FixAll from an ordinary code fix.
+
+Read harness failures before changing the expected iteration count. In
+`Microsoft.CodeAnalysis.Testing`, `Expected '1' iterations but found '2'` requires
+inspecting the diagnostics and actions remaining after the first pass. Repair unexpected
+non-convergence. A positive `NumberOfFixAllIterations` asserts an exact count. A negative
+value selects upper-limit mode: the harness uses its absolute value as the iteration
+budget, stops when diagnostics stabilize or no action is available, and fails if the
+budget is exceeded. Use upper-limit mode when bounded convergence is the contract and
+fewer passes are acceptable, including ordinary successful fixes. Use a positive value
+only when the exact pass count matters. Assert intentionally unfixable residual
+diagnostics separately.
+
+For non-`None` `CodeActionValidationMode`, the harness compares the produced syntax tree
+with a tree reparsed from its text. `SemanticStructure` ignores trivia; `Full` includes
+it. Inspect the active mode and repair unexpected structure or trivia differences rather
+than weakening validation. Distinguish these failures from an ordinary expected-text
+diff, including a fixture whose newline convention differs from the generated document.
