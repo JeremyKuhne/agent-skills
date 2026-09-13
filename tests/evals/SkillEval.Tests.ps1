@@ -172,6 +172,59 @@ Describe 'Skill evaluation scenario contract' {
         }
     }
 
+    It 'scores structured roslyn-analyzers response: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'analyzer plan accepted'
+            ScenarioId = 'roslyn-analyzers-routing-code-fix-fix-all'
+            Response = @(
+                'Descriptor: define-DiagnosticDescriptor'
+                'Analyzer: implement-DiagnosticAnalyzer'
+                'Code-fix: implement-CodeFixProvider'
+                'Fix-all: provide-FixAllProvider'
+                'Tests: add-Microsoft.CodeAnalysis.Testing') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'analyzer plan negated'
+            ScenarioId = 'roslyn-analyzers-routing-code-fix-fix-all'
+            Response = @(
+                'Descriptor: do-not-define-DiagnosticDescriptor'
+                'Analyzer: do-not-implement-DiagnosticAnalyzer'
+                'Code-fix: do-not-implement-CodeFixProvider'
+                'Fix-all: do-not-provide-FixAllProvider'
+                'Tests: do-not-add-Microsoft.CodeAnalysis.Testing') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'runtime plan accepted'
+            ScenarioId = 'roslyn-analyzers-routing-runtime-performance-near-miss'
+            Response = @(
+                'Measurement: establish-baseline'
+                'Process-state: matched'
+                'Correctness: validate-output'
+                'Uncertainty: report') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'runtime plan negated'
+            ScenarioId = 'roslyn-analyzers-routing-runtime-performance-near-miss'
+            Response = @(
+                'Measurement: do-not-establish-baseline'
+                'Process-state: unmatched'
+                'Correctness: do-not-validate-output'
+                'Uncertainty: do-not-report') -join "`n"
+            Expected = $false
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $passes =
+            @($scenario.requiredResponsePatterns | Where-Object { $Response -notmatch $_ }).Count -eq 0 -and
+            @($scenario.forbiddenResponsePatterns | Where-Object { $Response -match $_ }).Count -eq 0
+
+        $passes | Should -Be $Expected -Because $CaseName
+    }
+
     It 'compiles every performance-testing scenario pattern' {
         $scenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
         foreach ($scenario in $scenarios) {

@@ -117,8 +117,10 @@ inspecting the diagnostics and actions remaining after the first pass. Repair un
 non-convergence. A positive `NumberOfFixAllIterations` asserts an exact count. A negative
 value selects upper-limit mode: the harness uses its absolute value as the iteration
 budget, stops when diagnostics stabilize or no action is available, and fails if the
-budget is exceeded. Use that mode only for asserted, intentionally unfixable residual
-diagnostics.
+budget is exceeded. Use upper-limit mode when bounded convergence is the contract and
+fewer passes are acceptable, including ordinary successful fixes. Use a positive value
+only when the exact pass count matters. Assert intentionally unfixable residual
+diagnostics separately.
 
 For non-`None` `CodeActionValidationMode`, the harness compares the produced syntax tree
 with a tree reparsed from its text. `SemanticStructure` ignores trivia; `Full` includes

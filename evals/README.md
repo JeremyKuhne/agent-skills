@@ -79,8 +79,9 @@ of the default release matrix.
 
 `scenarios/roslyn-analyzers.json` is an opt-in two-case routing suite. Its natural
 prompts require the analyzer skill for diagnostic, code-fix, and Fix All work, while
-routing application runtime performance to `performance-testing`. It is not part of
-the default release matrix.
+routing application runtime performance to `performance-testing`. Both cases use exact
+labeled outputs so affirmative plans and explicit refusals cannot satisfy the same
+keyword patterns. It is not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
