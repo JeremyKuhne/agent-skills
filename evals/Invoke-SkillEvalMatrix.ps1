@@ -177,10 +177,13 @@ $scorerRevisions = @($documents.Summary.ScorerRevision | Sort-Object -Unique)
 if ($candidateRevisions.Count -ne 1 -or $scorerRevisions.Count -ne 1) {
     throw "Matrix revisions differ: candidate=$($candidateRevisions.Count), scorer=$($scorerRevisions.Count)."
 }
+$clientIdentity = Get-SkillEvalClientIdentity -Summary $documents.Summary
 $summary = [pscustomobject]@{
     SchemaVersion = 1
     GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
     Model = $Model
+    CopilotVersion = $clientIdentity.CopilotVersion
+    CopilotExecutableSha256 = $clientIdentity.CopilotExecutableSha256
     MaxConcurrency = $MaxConcurrency
     MatrixTimeoutMinutes = $MatrixTimeoutMinutes
     WallTimeMilliseconds = $stopwatch.ElapsedMilliseconds

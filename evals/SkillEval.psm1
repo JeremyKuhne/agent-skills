@@ -124,6 +124,15 @@ function Resolve-SkillEvalCopilotPath {
 
     function Test-NativeExecutable ([string] $Path) {
         if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+        if (-not $IsWindows) {
+            try { $mode = [System.IO.File]::GetUnixFileMode($Path) }
+            catch { return $false }
+            $executeBits = [int](
+                [System.IO.UnixFileMode]::UserExecute -bor
+                [System.IO.UnixFileMode]::GroupExecute -bor
+                [System.IO.UnixFileMode]::OtherExecute)
+            if (([int]$mode -band $executeBits) -eq 0) { return $false }
+        }
         $stream = [System.IO.File]::OpenRead($Path)
         try {
             $header = [byte[]]::new(4)
@@ -175,6 +184,69 @@ function Resolve-SkillEvalCopilotPath {
     return [string]$nativeCommands[0].Source
 }
 
+function Get-SkillEvalValidatedCopilotVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Output
+    )
+
+    $version = $Output.Trim()
+    $versionMatch = [regex]::Match(
+        $version,
+        '^GitHub Copilot CLI (?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?<prerelease>-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:\.|\s|$)')
+    if (-not $versionMatch.Success) {
+        throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
+    }
+
+    $reportedVersion = [version]::new(
+        [int]$versionMatch.Groups['major'].Value,
+        [int]$versionMatch.Groups['minor'].Value,
+        [int]$versionMatch.Groups['patch'].Value)
+    $minimumVersion = [version]::new(1, 0, 63)
+    if ($reportedVersion -lt $minimumVersion -or
+        ($reportedVersion -eq $minimumVersion -and
+            $versionMatch.Groups['prerelease'].Success)) {
+        throw "Copilot CLI 1.0.63 or later is required; selected executable reported: $version"
+    }
+    return $version
+}
+
+function Get-SkillEvalClientIdentity {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [object[]] $Summary
+    )
+
+    if ($Summary.Count -eq 0) {
+        throw 'Matrix client identity is incomplete because no document summaries were provided.'
+    }
+    $identities = foreach ($documentSummary in $Summary) {
+        $versionProperty = $documentSummary.PSObject.Properties['CopilotVersion']
+        $hashProperty = $documentSummary.PSObject.Properties['CopilotExecutableSha256']
+        $version = if ($versionProperty) { [string]$versionProperty.Value } else { '' }
+        $hash = if ($hashProperty) { [string]$hashProperty.Value } else { '' }
+        if ([string]::IsNullOrWhiteSpace($version) -or $hash -notmatch '^[0-9A-Fa-f]{64}$') {
+            throw 'Matrix client identity is incomplete or invalid in a document summary.'
+        }
+        [pscustomobject]@{
+            CopilotVersion = $version
+            CopilotExecutableSha256 = $hash.ToUpperInvariant()
+        }
+    }
+    $versions = @($identities.CopilotVersion | Sort-Object -Unique -CaseSensitive)
+    $hashes = @($identities.CopilotExecutableSha256 | Sort-Object -Unique)
+    if ($versions.Count -ne 1 -or $hashes.Count -ne 1) {
+        throw "Matrix client identities differ: versions=$($versions.Count), hashes=$($hashes.Count)."
+    }
+    return [pscustomobject]@{
+        CopilotVersion = $versions[0]
+        CopilotExecutableSha256 = $hashes[0]
+    }
+}
+
 function Get-SkillEvalCopilotVersion ([string] $CopilotPath) {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $CopilotPath
@@ -200,11 +272,7 @@ function Get-SkillEvalCopilotVersion ([string] $CopilotPath) {
         if ($process.ExitCode -ne 0) {
             throw "Copilot CLI version query exited with code $($process.ExitCode):`n$output"
         }
-        $version = $output.Trim()
-        if ($version -notmatch '^GitHub Copilot CLI \d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?:\.|\s|$)') {
-            throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
-        }
-        return $version
+        return Get-SkillEvalValidatedCopilotVersion -Output $output
     }
     finally { $process.Dispose() }
 }
@@ -1094,6 +1162,9 @@ function Write-SkillEvalSummary {
     if (-not [string]::IsNullOrWhiteSpace([string]$Summary.CopilotExecutableSha256)) {
         $lines.Add("- Copilot executable SHA-256: ``$($Summary.CopilotExecutableSha256)``")
     }
+    if ($Summary.PSObject.Properties['CopilotExecutableEvidenceVerified']) {
+        $lines.Add("- Copilot executable evidence verified: ``$($Summary.CopilotExecutableEvidenceVerified.ToString().ToLowerInvariant())``")
+    }
     $lines.Add("- Scenario revision: ``$($Summary.ScenarioRevision)``")
     $lines.Add("- Candidate revision: ``$($Summary.CandidateRevision)``")
     $lines.Add("- Fixture revision: ``$($Summary.FixtureRevision)``")
@@ -1472,6 +1543,7 @@ function Invoke-SkillEvalSuite {
             }).Count
         CopilotVersion = $copilotVersion
         CopilotExecutableSha256 = $copilotExecutableSha256
+        CopilotExecutableEvidenceVerified = $true
         PowerShellVersion = $PSVersionTable.PSVersion.ToString()
         OperatingSystem = $PSVersionTable.OS
         Runs = $resultArray
@@ -1510,6 +1582,24 @@ function Invoke-SkillEvalRescore {
     }
     $sourceSummary = Get-Content -LiteralPath $sourceSummaryPath -Raw |
         ConvertFrom-Json
+    $sourceCopilotVersion = if ($sourceSummary.PSObject.Properties['CopilotVersion']) {
+        [string]$sourceSummary.CopilotVersion
+    }
+    else { '' }
+    $sourceCopilotExecutableSha256 = if (
+        $sourceSummary.PSObject.Properties['CopilotExecutableSha256']) {
+        [string]$sourceSummary.CopilotExecutableSha256
+    }
+    else { '' }
+    $isDeterministicExecutorEvidence = $sourceCopilotVersion -ceq 'fake-executor'
+    $hasCopilotExecutableHash = $sourceCopilotExecutableSha256 -match '^[0-9A-Fa-f]{64}$'
+    $copilotExecutableEvidenceVerified = $isDeterministicExecutorEvidence -or
+        (-not [string]::IsNullOrWhiteSpace($sourceCopilotVersion) -and
+            $hasCopilotExecutableHash)
+    if (-not $copilotExecutableEvidenceVerified -and
+        -not $AllowLegacyUnverifiedEvidence) {
+        throw 'Source summary lacks a Copilot executable SHA-256; use -AllowLegacyUnverifiedEvidence only to accept legacy real-client evidence without executable hashing.'
+    }
     $outputPath = [System.IO.Path]::GetFullPath($OutputDirectory)
     if ($outputPath -ceq $resolvedInputDirectory) {
         throw 'Rescore output must differ from the immutable source directory.'
@@ -1689,11 +1779,12 @@ function Invoke-SkillEvalRescore {
                 $_.TimedOut -or $_.ExitCode -ne 0 -or
                 -not [string]::IsNullOrWhiteSpace([string]$_.Error)
             }).Count
-        CopilotVersion = [string]$sourceSummary.CopilotVersion
-        CopilotExecutableSha256 = if ($sourceSummary.PSObject.Properties['CopilotExecutableSha256']) {
-            [string]$sourceSummary.CopilotExecutableSha256
+        CopilotVersion = $sourceCopilotVersion
+        CopilotExecutableSha256 = if ($hasCopilotExecutableHash) {
+            $sourceCopilotExecutableSha256.ToUpperInvariant()
         }
         else { $null }
+        CopilotExecutableEvidenceVerified = $copilotExecutableEvidenceVerified
         PowerShellVersion = $PSVersionTable.PSVersion.ToString()
         OperatingSystem = $PSVersionTable.OS
         Runs = $resultArray
@@ -1707,6 +1798,7 @@ Export-ModuleMember -Function @(
     'New-SkillEvalArguments',
     'Resolve-SkillEvalCopilotPath',
     'Get-SkillEvalCopilotVersion',
+    'Get-SkillEvalClientIdentity',
     'Test-SkillEvalEvidence',
     'Get-SkillEvalExitCode',
     'Invoke-SkillEvalSuite',

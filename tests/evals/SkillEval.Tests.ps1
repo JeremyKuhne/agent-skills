@@ -699,6 +699,21 @@ Describe 'Skill evaluation scenario contract' {
         finally { $env:PATH = $savedPath }
     }
 
+    It 'rejects a native Copilot file without a Unix execute bit' -Skip:$IsWindows {
+        $nativePath = Join-Path $TestDrive 'copilot'
+        $signature = if ($IsLinux) {
+            [byte[]](0x7F, 0x45, 0x4C, 0x46)
+        }
+        else { [byte[]](0xFE, 0xED, 0xFA, 0xCF) }
+        [System.IO.File]::WriteAllBytes($nativePath, $signature)
+        [System.IO.File]::SetUnixFileMode(
+            $nativePath,
+            [System.IO.UnixFileMode]'UserRead, UserWrite')
+
+        { Resolve-SkillEvalCopilotPath -CopilotPath $nativePath } |
+            Should -Throw '*not a native executable for this host*'
+    }
+
     It 'rejects a non-Copilot native executable without changing the caller update setting' {
         $savedAutoUpdate = [Environment]::GetEnvironmentVariable(
             'COPILOT_AUTO_UPDATE', 'Process')
@@ -715,6 +730,31 @@ Describe 'Skill evaluation scenario contract' {
             }
             else { $env:COPILOT_AUTO_UPDATE = $savedAutoUpdate }
         }
+    }
+
+    It 'requires Copilot CLI 1.0.63 or later' {
+        $module = Get-Module SkillEval
+
+        & $module {
+            Get-SkillEvalValidatedCopilotVersion `
+                -Output "GitHub Copilot CLI 1.0.63.`nUpdate check disabled."
+        } | Should -Be "GitHub Copilot CLI 1.0.63.`nUpdate check disabled."
+        & $module {
+            Get-SkillEvalValidatedCopilotVersion `
+                -Output 'GitHub Copilot CLI 1.1.0.'
+        } | Should -Be 'GitHub Copilot CLI 1.1.0.'
+        {
+            & $module {
+                Get-SkillEvalValidatedCopilotVersion `
+                    -Output 'GitHub Copilot CLI 1.0.62.'
+            }
+        } | Should -Throw '*1.0.63 or later*'
+        {
+            & $module {
+                Get-SkillEvalValidatedCopilotVersion `
+                    -Output 'GitHub Copilot CLI 1.0.63-preview.1'
+            }
+        } | Should -Throw '*1.0.63 or later*'
     }
 
     It 'exposes explicit native client selection through both evaluation entry points' {
@@ -736,6 +776,37 @@ Describe 'Skill evaluation scenario contract' {
         $matrixContent | Should -Match 'Resolve-SkillEvalCopilotPath -CopilotPath \$CopilotPath'
         $forwardingText = "'-CopilotPath', " + '$using:resolvedCopilotPath'
         $matrixContent | Should -Match ([regex]::Escape($forwardingText))
+        $matrixContent | Should -Match 'Get-SkillEvalClientIdentity -Summary \$documents\.Summary'
+        $matrixContent | Should -Match 'CopilotVersion = \$clientIdentity\.CopilotVersion'
+        $matrixContent | Should -Match 'CopilotExecutableSha256 = \$clientIdentity\.CopilotExecutableSha256'
+    }
+
+    It 'requires one complete client identity across matrix summaries' {
+        $summaries = @(
+            [pscustomobject]@{
+                CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
+                CopilotExecutableSha256 = 'A' * 64
+            }
+            [pscustomobject]@{
+                CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
+                CopilotExecutableSha256 = 'a' * 64
+            }
+        )
+
+        $identity = Get-SkillEvalClientIdentity -Summary $summaries
+        $identity.CopilotVersion | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
+        $identity.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
+
+        $summaries[1].CopilotVersion = 'GitHub Copilot CLI 1.0.64.'
+        { Get-SkillEvalClientIdentity -Summary $summaries } |
+            Should -Throw '*client identities differ*'
+        $summaries[1].CopilotVersion = $summaries[0].CopilotVersion
+        $summaries[1].CopilotExecutableSha256 = 'B' * 64
+        { Get-SkillEvalClientIdentity -Summary $summaries } |
+            Should -Throw '*client identities differ*'
+        $summaries[1].PSObject.Properties.Remove('CopilotExecutableSha256')
+        { Get-SkillEvalClientIdentity -Summary $summaries } |
+            Should -Throw '*client identity is incomplete*'
     }
 
     It 'installs a personal fixture outside the public plugin copy' {
@@ -1858,6 +1929,7 @@ Describe 'Skill evaluation runner' {
         $summary.InfrastructureFailureCount | Should -Be 0
         $summary.CopilotVersion | Should -Be 'fake-executor'
         $summary.CopilotExecutableSha256 | Should -BeNullOrEmpty
+        $summary.CopilotExecutableEvidenceVerified | Should -BeTrue
         $summary.RequestedMaxConcurrency | Should -Be 8
         $summary.MaxConcurrency | Should -Be 1
         $summary.WallTimeMilliseconds | Should -BeGreaterThan 0
@@ -1891,6 +1963,8 @@ Describe 'Skill evaluation runner' {
             Should -Match ([regex]::Escape($summary.CandidateRevision))
         (Get-Content -LiteralPath (Join-Path $outputDirectory 'summary.md') -Raw) |
             Should -Match 'Copilot CLI: `fake-executor`'
+        (Get-Content -LiteralPath (Join-Path $outputDirectory 'summary.md') -Raw) |
+            Should -Match 'Copilot executable evidence verified: `true`'
         $summary.Runs[0].RunDirectory | Should -Not -Be $summary.Runs[1].RunDirectory
 
         $sourceOutputPath = Join-Path $summary.Runs[0].RunDirectory 'stdout.jsonl'
@@ -1917,8 +1991,34 @@ Describe 'Skill evaluation runner' {
         $rescored.Runs.SourceScenarioRevision | Should -Be $summary.Runs.ScenarioRevision
         $rescored.ModelOutputEvidenceVerified | Should -BeTrue
         $rescored.WorktreeEvidenceVerified | Should -BeTrue
+        $rescored.CopilotExecutableEvidenceVerified | Should -BeTrue
         (Get-FileHash -LiteralPath $sourceOutputPath -Algorithm SHA256).Hash |
             Should -Be $sourceOutputRevision
+
+        $legacyClientInput = Join-Path $TestDrive 'legacy-client-input'
+        Copy-Item -LiteralPath $outputDirectory -Destination $legacyClientInput -Recurse
+        $legacyClientSummaryPath = Join-Path $legacyClientInput 'summary.json'
+        $legacyClientSummary = Get-Content -LiteralPath $legacyClientSummaryPath -Raw |
+            ConvertFrom-Json
+        $legacyClientSummary.CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
+        $legacyClientSummary.PSObject.Properties.Remove('CopilotExecutableSha256')
+        $legacyClientSummary | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $legacyClientSummaryPath
+        {
+            Invoke-SkillEvalRescore `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -InputDirectory $legacyClientInput `
+                -OutputDirectory (Join-Path $TestDrive 'rejected-legacy-client')
+        } | Should -Throw '*lacks a Copilot executable SHA-256*'
+        $legacyClientRescore = Invoke-SkillEvalRescore `
+            -RepoRoot $script:RepoRoot `
+            -ScenarioPath $script:ScenarioPath `
+            -InputDirectory $legacyClientInput `
+            -OutputDirectory (Join-Path $TestDrive 'accepted-legacy-client') `
+            -AllowLegacyUnverifiedEvidence
+        $legacyClientRescore.CopilotExecutableSha256 | Should -BeNullOrEmpty
+        $legacyClientRescore.CopilotExecutableEvidenceVerified | Should -BeFalse
 
         $invalidRunNumbers = @('../outside', '0')
         for ($invalidIndex = 0; $invalidIndex -lt $invalidRunNumbers.Count; $invalidIndex++) {

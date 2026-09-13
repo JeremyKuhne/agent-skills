@@ -231,6 +231,12 @@ separate derived summary, and never rewrites source transcripts or JSONL:
   -OutputDirectory ./artifacts/rescored
 ```
 
+Rescoring retains the source client version and executable SHA-256. A legacy
+real-client summary without that hash fails by default. Use
+`-AllowLegacyUnverifiedEvidence` only for a deliberate compatibility analysis;
+the derived JSON and Markdown mark its Copilot executable evidence unverified.
+Deterministic fake-executor evidence has no client binary and remains exempt.
+
 After a rescore passes, run only each changed scenario three times to measure
 fresh model variance. Do not regenerate an unchanged document merely because a
 matcher changed.

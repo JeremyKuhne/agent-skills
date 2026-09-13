@@ -163,9 +163,20 @@ Describe 'Agent file CI contract' {
         $workflow | Should -Match '(?m)^          \./tests/plugin/Invoke-PluginSmoke\.ps1 -CopilotPath \$copilotPath\r?$'
         $pluginSmoke | Should -Match '(?ms)\[Parameter\(Mandatory\)\]\r?\n\s*\[string\] \$CopilotPath'
         $pluginSmoke | Should -Match 'not a native executable for this host'
+        $pluginSmoke | Should -Match 'GetUnixFileMode'
         $pluginSmoke | Should -Match "'COPILOT_AUTO_UPDATE'"
-        $pluginSmoke | Should -Match "\$env:COPILOT_AUTO_UPDATE = 'false'"
+        $pluginSmoke | Should -Match (
+            [regex]::Escape('$env:COPILOT_AUTO_UPDATE = ''false'''))
         $pluginSmoke | Should -Match 'Copilot executable SHA-256:'
+    }
+
+    It 'documents the explicit native client required by release plugin smoke' {
+        $release = Get-Content -LiteralPath (
+            Join-Path $script:RepoRoot 'RELEASING.md') -Raw
+
+        $release | Should -Match 'COPILOT_NATIVE_PATH'
+        $release | Should -Match '(?m)^\./tests/plugin/Invoke-PluginSmoke\.ps1 -CopilotPath \$copilotPath\r?$'
+        $release | Should -Not -Match '(?m)^\./tests/plugin/Invoke-PluginSmoke\.ps1\s*$'
     }
 
     It 'rejects a launcher passed to the repository plugin smoke script' {
@@ -174,6 +185,22 @@ Describe 'Agent file CI contract' {
         [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')
 
         { & $pluginSmoke -CopilotPath $launcherPath } |
+            Should -Throw '*not a native executable for this host*'
+    }
+
+    It 'rejects a non-executable native file in repository plugin smoke on Unix' -Skip:$IsWindows {
+        $pluginSmoke = Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1'
+        $nativePath = Join-Path $TestDrive 'copilot'
+        $signature = if ($IsLinux) {
+            [byte[]](0x7F, 0x45, 0x4C, 0x46)
+        }
+        else { [byte[]](0xFE, 0xED, 0xFA, 0xCF) }
+        [System.IO.File]::WriteAllBytes($nativePath, $signature)
+        [System.IO.File]::SetUnixFileMode(
+            $nativePath,
+            [System.IO.UnixFileMode]'UserRead, UserWrite')
+
+        { & $pluginSmoke -CopilotPath $nativePath } |
             Should -Throw '*not a native executable for this host*'
     }
 }

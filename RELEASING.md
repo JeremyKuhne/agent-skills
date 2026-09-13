@@ -24,6 +24,11 @@ label them **Breaking** and give consumers an explicit migration.
 
 Run from a clean checkout of the candidate commit:
 
+Install the native Copilot CLI package for the release host at the version
+pinned by CI, then set `COPILOT_NATIVE_PATH` to its exact `copilot` or
+`copilot.exe` path. Shell, npm, and editor launchers are not release evidence
+and are rejected by the smoke script.
+
 ```pwsh
 npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"
 ./tools/Validate-AgentFiles.ps1
@@ -34,7 +39,11 @@ Get-ChildItem ./skills -Directory | ForEach-Object {
 }
 ./tools/Update-SkillCatalog.ps1
 Invoke-Pester ./tests
-./tests/plugin/Invoke-PluginSmoke.ps1
+if ([string]::IsNullOrWhiteSpace($env:COPILOT_NATIVE_PATH)) {
+  throw 'Set COPILOT_NATIVE_PATH to the pinned native Copilot CLI executable.'
+}
+$copilotPath = (Resolve-Path -LiteralPath $env:COPILOT_NATIVE_PATH).Path
+./tests/plugin/Invoke-PluginSmoke.ps1 -CopilotPath $copilotPath
 ./tests/repository/Invoke-SyntheticConsumer.ps1
 ./tests/engineering-baseline/Invoke-ScaffoldCanary.ps1 -Archetype library -TestRunner mstest
 ```

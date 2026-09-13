@@ -164,15 +164,29 @@ Describe 'New-SkillRepository' {
         $pluginSmokeContent | Should -Match '(?ms)\[Parameter\(Mandatory\)\]\r?\n\s*\[string\] \$CopilotPath'
         $pluginSmokeContent | Should -Not -Match 'Get-Command copilot'
         $pluginSmokeContent | Should -Match 'not a native executable for this host'
+        $pluginSmokeContent | Should -Match 'GetUnixFileMode'
         $pluginSmokeContent | Should -Match '& \$resolvedCopilotPath plugin marketplace add'
         $pluginSmokeContent | Should -Match "'COPILOT_AUTO_UPDATE'"
-        $pluginSmokeContent | Should -Match "\$env:COPILOT_AUTO_UPDATE = 'false'"
+        $pluginSmokeContent | Should -Match (
+            [regex]::Escape('$env:COPILOT_AUTO_UPDATE = ''false'''))
         $pluginSmokeContent | Should -Match 'Copilot executable SHA-256:'
 
         $launcherPath = Join-Path $TestDrive $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
         [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')
         { & $pluginSmoke -CopilotPath $launcherPath } |
             Should -Throw '*not a native executable for this host*'
+        if (-not $IsWindows) {
+            $signature = if ($IsLinux) {
+                [byte[]](0x7F, 0x45, 0x4C, 0x46)
+            }
+            else { [byte[]](0xFE, 0xED, 0xFA, 0xCF) }
+            [System.IO.File]::WriteAllBytes($launcherPath, $signature)
+            [System.IO.File]::SetUnixFileMode(
+                $launcherPath,
+                [System.IO.UnixFileMode]'UserRead, UserWrite')
+            { & $pluginSmoke -CopilotPath $launcherPath } |
+                Should -Throw '*not a native executable for this host*'
+        }
     }
 
     It 'creates only the documented Claude runtime root for Claude-only consumers' {

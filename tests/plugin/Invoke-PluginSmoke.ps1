@@ -12,6 +12,15 @@ $ErrorActionPreference = 'Stop'
 
 function Test-NativeExecutable ([string] $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    if (-not $IsWindows) {
+        try { $mode = [System.IO.File]::GetUnixFileMode($Path) }
+        catch { return $false }
+        $executeBits = [int](
+            [System.IO.UnixFileMode]::UserExecute -bor
+            [System.IO.UnixFileMode]::GroupExecute -bor
+            [System.IO.UnixFileMode]::OtherExecute)
+        if (([int]$mode -band $executeBits) -eq 0) { return $false }
+    }
     $stream = [System.IO.File]::OpenRead($Path)
     try {
         $header = [byte[]]::new(4)
