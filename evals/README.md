@@ -363,5 +363,8 @@ count visible.
 report, not that the run passed. Missing or malformed reports leave aggregate
 test counts `null`; valid counts remain available on the individual shards.
 Process failures, timeouts, or unusable reports return failure with diagnostic
-log paths. A failed child report must contain failure evidence and use a nonzero
-process exit. Existing version-1 summaries can still supply scheduling durations.
+log paths. A usable `Passed` report requires a completed worker, exit code zero,
+at least one test, and no failed/not-run/inconclusive work. A usable `Failed`
+report requires a completed worker, an actual nonzero exit, and failure evidence.
+Every other worker/report combination leaves aggregate counts unknown. Existing
+version-1 summaries can still supply scheduling durations.

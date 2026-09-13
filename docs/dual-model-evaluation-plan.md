@@ -1,9 +1,9 @@
 # Sol and Luna skill evaluation plan
 
-- Status: E1.1 review fixes validated locally; publishing the follow-up,
-  merging, subsequent implementation, and paid execution await separate approval
+- Status: E1.1 second-review follow-up approved for publication; merging,
+   subsequent implementation, and paid execution await separate approval
 - Assessment date: 2026-09-12
-- Repository baseline: `main` at `27ab2e08a7e564181169135fffbc5f0c200d82c7`
+- Repository baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`
 - Target models: GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`)
 - Reasoning effort: `medium` for both models
 - Scope: every published skill, including missing scenarios; retain existing
@@ -25,11 +25,11 @@ been authorized. Status last reviewed: 2026-09-12.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
-| E1 | Trustworthy runner and client prerequisites | Awaiting decision | E1.1 review fixes pass focused tests locally; follow-up publication and remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
+| E1 | Trustworthy runner and client prerequisites | In progress | E1.1 second-review publication approved; remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
 | E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
-| E5 | Full portfolio coverage ready | Not started | E3 | All four coverage obligations mapped for all 25 skills, including nullability remediation; fixtures, held-out variants, C# 14 checks, and reviewed outcome rubrics ready. Existing 9-of-25 primary targeting is not a validation pass. |
+| E5 | Full portfolio coverage ready | Not started | E3 | All four coverage obligations mapped for all 25 skills, including nullability remediation; fixtures, held-out variants, C# 14 checks, and reviewed outcome rubrics ready. Existing 10-of-25 primary targeting is not a validation pass. |
 | E6 | Both-model qualification and Luna decision | Not started | E4 and E5; qualification budget/analysis approval | Frozen campaign assessed against absolute gates for each model, quality margin, and cost advantage; report validated, failed, or inconclusive and separately whether Luna is preferred. |
 | E7 | Constrained CI mode and host decision | Not started | E4; hosted experiment approval | Replay/live alternatives and compatible hosts compared for the whole-job time/cost target; select/rework/defer recorded. Live CI and recurring spend retain their separate policy/security/budget gates. |
 
@@ -40,13 +40,17 @@ with E1's first recorded checks; it does not wait for E6 or a metrics service.
 
 ### First work item: E1.1
 
-- State: awaiting decision; review fixes validated locally on 2026-09-12 for
+- State: in progress; rebased second-review fixes validated and approved for
+   publication on 2026-09-12 for
    [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86).
 - Implementer: GitHub Copilot; milestone acceptance: repository maintainer.
-- Implementation commit: `5a4c1d9`.
-- Reviewed head: `d8c7552`.
-- Next action: complete broader validation, then request approval to commit/push
-   the feedback round and publish thread replies. Merge and model runs are not authorized.
+- Published implementation commit: `5a4c1d9`; reviewed head: `d8c7552`; first
+   feedback head: `3fdf562`.
+- Local rebase onto `254f1e5`: equivalent commits `ef6b932`, `ced9616`, and
+   `fd8da57`; publishing them requires an approved force-with-lease update.
+- Next action: commit, force-push with lease, reconcile the PR body, publish the
+   two thread replies, wait for CI, and request one fresh review as approved.
+   Merge and model runs are not authorized.
 - First weekly cost checkpoint: 2026-09-19.
 - Owning entry point: [tests/Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1).
 - [x] Add a focused negative control reproducing discovery failure with zero
@@ -113,6 +117,64 @@ skips, no unexecuted tests, and no infrastructure failure across 16 shards in
 `29D3DA6864C5988EF4DC3C5B1F2622B1F67F8C94BB38CB93AFA4207F0C032C84`.
 Repository-wide Markdown lint and diff checks passed. Publication is pending; no reply,
 thread resolution, commit, push, re-review request, merge, or model run occurred.
+
+The second requested review on `3fdf562` supplied one nonempty Copilot review
+body, two unresolved inline threads, three body-only findings, no conversation
+comments, and green deterministic checks. It found two additional unusable-
+report states: a stale report from a timed-out or failed worker, and a valid-
+looking `Passed` report paired with a nonzero exit while `CountsComplete` stayed
+true. It also found that the PR description still reported the initial 18 focused
+tests and 419-test full run after the first feedback round had reached 22 and
+423. All five occurrences are valid; the three evidence comments share the same
+stale-PR-body root cause.
+
+The second local repair defines the accepted protocol before trusting counts:
+a completed worker must supply either `Passed` with exit zero, nonempty work,
+and no failure/not-run/inconclusive evidence, or `Failed` with an actual nonzero
+exit and failure evidence. Every other combination is an infrastructure error
+with incomplete aggregate counts. Two additional real-process fixtures write a
+report before timeout or before a post-exit worker failure. The current 24
+focused controls pass. The exact pre-rebase second-review candidate passed 425 tests with
+zero failures, 11 skips, no unexecuted tests, and no infrastructure failures
+across 16 shards in 78.8 seconds. The fresh native Copilot CLI remained version
+1.0.63 with SHA256
+`29D3DA6864C5988EF4DC3C5B1F2622B1F67F8C94BB38CB93AFA4207F0C032C84` before
+and after the run. The receipt is under the OS temporary directory at
+`copilot-validation-d2b79d25b0d14178a334f3eebcfee4c8/second-review-validation.json`.
+Updating the remote PR description is a separate pending write; do not request
+another review while its scope and current validation evidence remain stale.
+
+After rebasing onto `254f1e5`, the updated upstream evaluation contracts added
+15 passing tests. The exact rebased candidate passed 440 tests with zero
+failures, 11 skips, no unexecuted tests, and no infrastructure failures across
+16 shards in 78.3 seconds. All 25 source skills passed the strict portfolio and
+`skills-ref@0.1.5` validators; Markdown, mirror, local links, catalog, and diff
+checks passed. The native Copilot CLI remained 1.0.63 with the same hash before
+and after. Hosted CI and the remote PR body still refer to the pre-rebase head.
+
+### Why local review missed repeated findings
+
+The first repair was example-driven: it implemented the review's explicit
+`exit 0` and no-failure-evidence cases without enumerating the worker/report
+state space. Worse, the original `nonzero-exit` test asserted that counts stayed
+complete; the local reviewer treated that implementation-derived assertion as
+an oracle instead of checking it against the stated unknown-count contract. The
+review prompt was also anchored on the four known findings, and the same-class
+reviewer supplied no independent runtime exploration. Green tests therefore
+proved our chosen expectations, not that the protocol was complete.
+
+The evidence miss was procedural rather than technical: tests were added after
+the PR description copied `18` and `419`, but the description was not refreshed
+before re-review. The plans explicitly identify copied totals as a risk, yet the
+workflow still used them. The broad PR also combines executable changes with
+large planning documents, increasing the claim surface and review cost.
+
+For subsequent E1 slices, write the valid-state table before implementation;
+derive negative controls from every invalid state; require local reviewers to
+challenge test expectations, not cite them as independent proof; and compare
+the exact outgoing PR body with the final diff and receipt before each review
+request. Prefer links to current-head receipts over copied counts. Split future
+plan-only and executable work when they can land independently.
 
 The next E1 slice is deterministic absent/launcher/native-client handling and
 separation of real plugin integration from hermetic tests. Do not combine E1.1
@@ -198,21 +260,22 @@ The [matrix entry point](../evals/Invoke-SkillEvalMatrix.ps1),
 model, revisions, durations, and outcomes, but does not aggregate inference-token
 usage or verify the serving model in its summary.
 
-After syncing main on 2026-09-12, the existing scenario parser produced this
-inventory without invoking a model. The sync added the nullability-remediation
-skill and seven performance-testing scenarios; it did not change the six-document
-default matrix or the single-model execution contract.
+After rebasing onto current main on 2026-09-12, the existing scenario parser
+produced this inventory without invoking a model. The two main updates added the
+nullability-remediation skill, seven performance-testing scenarios, three
+manage-skills scenarios, and two Roslyn analyzer scenarios. They did not change
+the six-document default matrix or the single-model execution contract.
 
 | Measure | Observed value |
 | --- | ---: |
 | Published skills | 25 |
-| Scenario documents, including opt-in suites | 9 |
-| Scenarios | 79 |
-| Configured runs per model | 237 |
-| Existing-scenario runs for both models | 474 |
-| Published skills appearing as primary scenario targets | 9 of 25 |
+| Scenario documents, including opt-in suites | 10 |
+| Scenarios | 84 |
+| Configured runs per model | 252 |
+| Existing-scenario runs for both models | 504 |
+| Published skills appearing as primary scenario targets | 10 of 25 |
 
-The 474-run figure excludes new coverage, retries, and any additional holdout
+The 504-run figure excludes new coverage, retries, and any additional holdout
 cases. It is not a proposed immediate budget. Existing scenarios do not all
 provide outcome or implicit-routing evidence. Companion invocation alone does
 not demonstrate a skill's independent effectiveness.
@@ -221,7 +284,7 @@ Primary scenarios are missing for `agent-files-review`, `code-comprehension`,
 `csharp-nullability-remediation`, `cswin32-com`, `cswin32-interop`, `dotnet-polyfills`,
 `framework-jit-optimization`, `fuzz-testing`,
 `github-actions-cost-optimization`, `il-copy-inspection`,
-`pre-pr-self-review`, `roslyn-analyzers`, `scratch-buffer-strategy`,
+`pre-pr-self-review`, `scratch-buffer-strategy`,
 `security-review`, `windows-acls`, and `winui-win32-hosting`.
 
 The new [nullability-remediation skill](../skills/csharp-nullability-remediation/SKILL.md)

@@ -254,30 +254,38 @@ foreach ($processResult in @($normalizedProcessResults | Sort-Object Index)) {
             if ($reported.TotalCount -ne $accountedTests) {
                 throw 'Pester test counts do not reconcile.'
             }
-            if ($reported.Result -eq 'Passed' -and
-                ($reported.FailedCount -gt 0 -or $reported.FailedBlocksCount -gt 0 -or
-                    $reported.FailedContainersCount -gt 0)) {
-                throw 'A passing Pester result contains failures.'
+            $workerCompleted = -not $processResult.TimedOut -and
+                [string]::IsNullOrWhiteSpace([string]$processResult.WorkerError) -and
+                $null -ne $processResult.ExitCode
+            if (-not $workerCompleted) {
+                throw 'A Pester result came from an incomplete shard worker.'
             }
             $failureEvidence = $reported.FailedCount + $reported.FailedBlocksCount +
                 $reported.FailedContainersCount + $reported.NotRunCount +
                 $reported.InconclusiveCount
-            if ($reported.Result -eq 'Failed' -and $failureEvidence -eq 0) {
-                throw 'A failed Pester result contains no failure evidence.'
+            if ($reported.Result -eq 'Passed') {
+                if ($reported.TotalCount -eq 0) {
+                    throw 'No Pester tests were discovered.'
+                }
+                if ($failureEvidence -gt 0) {
+                    throw 'A passing Pester result contains failed, not-run, or inconclusive work.'
+                }
+                if ($processResult.ExitCode -ne 0) {
+                    throw 'A passed Pester result came from an unsuccessful shard process.'
+                }
             }
-            if ($reported.Result -eq 'Failed' -and $processResult.ExitCode -eq 0) {
-                throw 'A failed Pester result came from a successful shard process.'
+            else {
+                if ($failureEvidence -eq 0) {
+                    throw 'A failed Pester result contains no failure evidence.'
+                }
+                if ($processResult.ExitCode -eq 0) {
+                    throw 'A failed Pester result came from a successful shard process.'
+                }
             }
             foreach ($property in $countProperties) { $shard.$property = $reported.$property }
             $shard.CountsComplete = $true
             $shard.DurationMilliseconds = $reported.DurationMilliseconds
             $shard.Result = $reported.Result
-            if ($reported.TotalCount -eq 0 -and $reported.Result -eq 'Passed') {
-                $shard.Error = 'No Pester tests were discovered.'
-            }
-            elseif ($reported.NotRunCount -gt 0 -or $reported.InconclusiveCount -gt 0) {
-                $shard.Error = 'Pester left tests not run or inconclusive.'
-            }
         }
         catch {
             $shard.Error = "Invalid Pester shard result: $($_.Exception.Message)"
@@ -288,9 +296,6 @@ foreach ($processResult in @($normalizedProcessResults | Sort-Object Index)) {
     }
     if ($processResult.TimedOut) {
         $shard.Error = "Pester shard timed out. $($shard.Error)".TrimEnd()
-    }
-    elseif ($processResult.ExitCode -ne 0 -and $shard.Result -eq 'Passed' -and -not $shard.Error) {
-        $shard.Error = "Pester shard process exited with code $($processResult.ExitCode)."
     }
     if ($shard.Error) { $shard.Result = 'Error' }
     $shards.Add($shard)

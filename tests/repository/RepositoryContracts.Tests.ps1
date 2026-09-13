@@ -87,7 +87,10 @@ Describe 'Healthy fixture' {
                 ExitCode = $exitCode
                 Output = $output -join [Environment]::NewLine
                 Summary = $summary
-                Log = Get-Content -LiteralPath $summary.Shards[0].LogPath -Raw
+                Log = if (Test-Path -LiteralPath $summary.Shards[0].LogPath -PathType Leaf) {
+                    Get-Content -LiteralPath $summary.Shards[0].LogPath -Raw
+                }
+                else { '' }
             }
         }
     }
@@ -172,8 +175,9 @@ Describe 'Teardown fixture' {
         $run = Invoke-ShardFixture 'empty-discovery' "Describe 'Empty fixture' { }"
 
         $run.ExitCode | Should -Not -Be 0
-        $run.Summary.TotalCount | Should -Be 0
-        $run.Summary.FailedCount | Should -Be 0
+        $run.Summary.TotalCount | Should -BeNullOrEmpty
+        $run.Summary.FailedCount | Should -BeNullOrEmpty
+        $run.Summary.CountsComplete | Should -BeFalse
         $run.Summary.Shards[0].Error | Should -Match 'No Pester tests were discovered'
     }
 
@@ -233,8 +237,8 @@ BeforeDiscovery {
         @{ Kind = 'passing-container-failure'; Overrides = @{ FailedContainersCount = 1 }; CountsComplete = $false }
         @{ Kind = 'failed-without-evidence'; Overrides = @{ Result = 'Failed' }; CountsComplete = $false }
         @{ Kind = 'failed-with-zero-exit'; Overrides = @{ Result = 'Failed'; PassedCount = 0; FailedCount = 1 }; CountsComplete = $false }
-        @{ Kind = 'not-run'; Overrides = @{ PassedCount = 0; NotRunCount = 1 }; CountsComplete = $true }
-        @{ Kind = 'inconclusive'; Overrides = @{ PassedCount = 0; InconclusiveCount = 1 }; CountsComplete = $true }
+        @{ Kind = 'not-run'; Overrides = @{ PassedCount = 0; NotRunCount = 1 }; CountsComplete = $false }
+        @{ Kind = 'inconclusive'; Overrides = @{ PassedCount = 0; InconclusiveCount = 1 }; CountsComplete = $false }
     ) {
         $reported = [ordered]@{
             Path = Join-Path (Join-Path $TestDrive $Kind) 'Fixture.Tests.ps1'
@@ -288,11 +292,12 @@ BeforeDiscovery {
 '@
 
         $run.ExitCode | Should -Not -Be 0
-        $run.Summary.PassedCount | Should -Be 1
-        $run.Summary.FailedCount | Should -Be 0
+        $run.Summary.PassedCount | Should -BeNullOrEmpty
+        $run.Summary.FailedCount | Should -BeNullOrEmpty
+        $run.Summary.CountsComplete | Should -BeFalse
         $run.Summary.InfrastructureFailureCount | Should -Be 1
         $run.Summary.Shards[0].ExitCode | Should -Be 23
-        $run.Summary.Shards[0].Error | Should -Match 'exited with code 23'
+        $run.Summary.Shards[0].Error | Should -Match 'successful shard process'
     }
 
     It 'retains healthy shard evidence without presenting incomplete totals as complete' {
@@ -344,6 +349,70 @@ Describe 'Timeout fixture' {
         $run.Summary.Shards[0].TimedOut | Should -BeTrue
         $run.Summary.Shards[0].ExitCode | Should -Be -1
         $run.Summary.Shards[0].Error | Should -Match 'timed out'
+    }
+
+    It 'rejects a failed report written before the child times out' {
+        $reported = [ordered]@{
+            Path = Join-Path (Join-Path $TestDrive 'timeout-with-report') 'Fixture.Tests.ps1'
+            Result = 'Failed'
+            PassedCount = 0
+            FailedCount = 1
+            SkippedCount = 0
+            NotRunCount = 0
+            InconclusiveCount = 0
+            TotalCount = 1
+            FailedBlocksCount = 0
+            FailedContainersCount = 0
+            DurationMilliseconds = 0
+        }
+        $run = Invoke-ShardFixture 'timeout-with-report' `
+            -ReportedResult ($reported | ConvertTo-Json) `
+            -RunnerArguments @('-ShardTimeoutSeconds', '3') -Content @'
+BeforeDiscovery {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'reported-result.json') `
+        -Destination (Join-Path $PSScriptRoot 'reports/shard-0.json')
+    [System.Threading.Thread]::Sleep([System.Threading.Timeout]::Infinite)
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.Result | Should -Be 'Failed'
+        $run.Summary.CountsComplete | Should -BeFalse
+        $run.Summary.TotalCount | Should -BeNullOrEmpty
+        $run.Summary.Shards[0].TimedOut | Should -BeTrue
+        $run.Summary.Shards[0].Error | Should -Match 'incomplete shard worker'
+    }
+
+    It 'rejects a failed report when the worker fails after the child exits' {
+        $reported = [ordered]@{
+            Path = Join-Path (Join-Path $TestDrive 'worker-error-with-report') 'Fixture.Tests.ps1'
+            Result = 'Failed'
+            PassedCount = 0
+            FailedCount = 1
+            SkippedCount = 0
+            NotRunCount = 0
+            InconclusiveCount = 0
+            TotalCount = 1
+            FailedBlocksCount = 0
+            FailedContainersCount = 0
+            DurationMilliseconds = 0
+        }
+        $run = Invoke-ShardFixture 'worker-error-with-report' `
+            -ReportedResult ($reported | ConvertTo-Json) -Content @'
+BeforeDiscovery {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'reported-result.json') `
+        -Destination (Join-Path $PSScriptRoot 'reports/shard-0.json')
+    New-Item -ItemType Directory -Path (Join-Path $PSScriptRoot 'reports/shard-0.log') | Out-Null
+    [System.Environment]::Exit(1)
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.Result | Should -Be 'Failed'
+        $run.Summary.CountsComplete | Should -BeFalse
+        $run.Summary.TotalCount | Should -BeNullOrEmpty
+        $run.Summary.Shards[0].ExitCode | Should -Be 1
+        $run.Summary.Shards[0].Error | Should -Match 'incomplete shard worker'
     }
 }
 

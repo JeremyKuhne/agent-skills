@@ -4,7 +4,7 @@
 - Assessment date: 2026-09-11 local time; GitHub evidence extends through
   2026-09-12 UTC
 - Historical assessment baseline: `main` at `8abda52550b6e9b53f88f81da38b46905f5b3f74`
-- Planning baseline: `main` at `27ab2e08a7e564181169135fffbc5f0c200d82c7`, synced
+- Planning baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`, rebased
   on 2026-09-12
 - Review mode: explicit Copilot requests; the maintainer reported automatic
   requests disabled on 2026-09-12
@@ -84,10 +84,11 @@ dedicated metrics automation waits until the scorecard proves useful.
 
 ## Evidence and method
 
-The planning baseline includes the new C# nullability-remediation skill and
-expanded performance-testing scenarios. The
+The planning baseline includes the C# nullability-remediation skill, expanded
+performance-testing and manage-skills scenarios, and Roslyn analyzer routing
+scenarios. The
 [evaluation plan](dual-model-evaluation-plan.md) now tracks 25 published skills
-and 79 registered scenarios, including the nullability skill's missing model
+and 84 registered scenarios, including the nullability skill's missing model
 coverage. The PR sample and local timings below remain historical observations
 at `8abda52`; they were not rerun or relabeled as current-main evidence.
 
@@ -305,6 +306,23 @@ consumer canaries while repairing the gaps below.
   control but requires repeated coordination during one feedback task. Session
   evidence shows repeated investigation/publication prompts; its share of
   elapsed time is unknown. Measure it rather than attributing all delay to CI.
+
+### E1.1 review-cycle evidence
+
+PR #86 demonstrated two failure modes this plan is meant to remove. The first
+feedback repair added examples for the reported branches but did not define the
+complete worker/report protocol. A local same-class review accepted a test that
+encoded the wrong completeness expectation, and the next remote pass found the
+adjacent timeout, missing-exit, and stale-report states. Require a valid-state
+table and tests derived from its complement for stateful runners and parsers;
+review the assertions as potential defects, not as independent evidence.
+
+The same PR copied test totals into its body and then requested re-review after
+adding tests without refreshing those totals. That produced three additional
+finding occurrences from one stale-evidence cause. The re-review gate must compare
+the exact outgoing PR body with the final candidate and receipt. Prefer links or
+generated summaries over copied counts, and do not request review while a known
+remote description update still lacks authorization.
 
 ## Testing strategy and technology
 
