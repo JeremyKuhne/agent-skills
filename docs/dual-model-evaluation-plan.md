@@ -1,6 +1,6 @@
 # Sol and Luna skill evaluation plan
 
-- Status: E1.1 validated locally and approved for PR publication; subsequent
+- Status: E1.1 published for review; subsequent
    implementation, merging, and paid execution await separate approval
 - Assessment date: 2026-09-12
 - Repository baseline: `main` at `27ab2e08a7e564181169135fffbc5f0c200d82c7`
@@ -25,7 +25,7 @@ been authorized. Status last reviewed: 2026-09-12.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
-| E1 | Trustworthy runner and client prerequisites | In progress | E1.1 PR publication approved; remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
+| E1 | Trustworthy runner and client prerequisites | In progress | E1.1 submitted in PR #86; remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
 | E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
@@ -40,11 +40,12 @@ with E1's first recorded checks; it does not wait for E6 or a metrics service.
 
 ### First work item: E1.1
 
-- State: in progress; local implementation validated and PR publication approved
-   on 2026-09-12.
+- State: in progress; local implementation validated and published for review
+   on 2026-09-12 in [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86).
 - Implementer: GitHub Copilot; milestone acceptance: repository maintainer.
-- Next action: commit, push, open the PR, and request Copilot code review as
-   approved on 2026-09-12. Merge and model runs are not authorized.
+- Implementation commit: `5a4c1d9`.
+- Next action: complete the authorized Copilot code-review request and triage
+   CI/review results. Merge, feedback publication, and model runs need separate approval.
 - First weekly cost checkpoint: 2026-09-19.
 - Owning entry point: [tests/Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1).
 - [x] Add a focused negative control reproducing discovery failure with zero
