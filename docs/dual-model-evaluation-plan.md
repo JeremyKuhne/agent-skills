@@ -1,7 +1,7 @@
 # Sol and Luna skill evaluation plan
 
-- Status: E1.1 published for review; subsequent
-   implementation, merging, and paid execution await separate approval
+- Status: E1.1 review fixes validated locally; publishing the follow-up,
+  merging, subsequent implementation, and paid execution await separate approval
 - Assessment date: 2026-09-12
 - Repository baseline: `main` at `27ab2e08a7e564181169135fffbc5f0c200d82c7`
 - Target models: GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`)
@@ -25,7 +25,7 @@ been authorized. Status last reviewed: 2026-09-12.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
-| E1 | Trustworthy runner and client prerequisites | In progress | E1.1 submitted in PR #86; remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
+| E1 | Trustworthy runner and client prerequisites | Awaiting decision | E1.1 review fixes pass focused tests locally; follow-up publication and remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
 | E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
@@ -40,12 +40,13 @@ with E1's first recorded checks; it does not wait for E6 or a metrics service.
 
 ### First work item: E1.1
 
-- State: in progress; local implementation validated and published for review
-   on 2026-09-12 in [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86).
+- State: awaiting decision; review fixes validated locally on 2026-09-12 for
+   [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86).
 - Implementer: GitHub Copilot; milestone acceptance: repository maintainer.
 - Implementation commit: `5a4c1d9`.
-- Next action: complete the authorized Copilot code-review request and triage
-   CI/review results. Merge, feedback publication, and model runs need separate approval.
+- Reviewed head: `d8c7552`.
+- Next action: complete broader validation, then request approval to commit/push
+   the feedback round and publish thread replies. Merge and model runs are not authorized.
 - First weekly cost checkpoint: 2026-09-19.
 - Owning entry point: [tests/Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1).
 - [x] Add a focused negative control reproducing discovery failure with zero
@@ -57,7 +58,7 @@ with E1's first recorded checks; it does not wait for E6 or a metrics service.
 - [x] Review the local diff and report its evidence and remaining risks before
    requesting any separately authorized commit or publication action.
 
-Validation on 2026-09-12 reproduced the discovery false green before the fix:
+Initial validation on 2026-09-12 reproduced the discovery false green before the fix:
 the healthy control passed and the discovery-failure control failed because the
 runner returned zero. After the fix, all 18
 [runner contracts](../tests/repository/RepositoryContracts.Tests.ps1) passed.
@@ -75,9 +76,12 @@ host, real timeout/process-start fault injection, and the full contributor gate
 were not run.
 
 Subsequent PR-publication validation passed the complete Windows Pester suite
-with the CI-pinned Copilot CLI 1.0.63 supplied through `-PathPrefix`. A run with
-CLI 1.0.83 reproduced the existing generated-plugin installation failure; CLI
-resolution/integration compatibility remains a later slice, not an E1.1 fix.
+with a temporary npm tree whose package manifests reported Copilot CLI 1.0.63.
+That tree's native executable later self-reported 1.0.83, so that run is not
+pinned-version evidence. A fresh tree with `COPILOT_AUTO_UPDATE=false` was
+verified as 1.0.63 before and after the feedback-round full suite. CLI identity
+and update control remain a later E1 slice rather than an assumption derived
+from package metadata.
 The publication receipt is under the OS temporary directory at
 `agent-skills-e1.1-final-4fbd4bf9606949e2a73af9e78882fb13/publication.json` and
 contains the complete result and tested source hashes. Full Markdown lint,
@@ -85,6 +89,30 @@ mirror/link/catalog, and strict/reference skill validation also passed. The
 exact lychee 0.24.2 offline gate remains for hosted CI because its local Windows
 binary could not load a required DLL; local file-target checks are not a
 substitute. No model evaluation ran.
+
+The first requested Copilot review on `d8c7552` supplied one nonempty review
+body, three unresolved inline threads, one body-only finding, no replies, and no
+conversation comments. All four findings were valid:
+
+- Inline `3998248943`: a worker exception could abort before summary creation.
+- Inline `3998248956`: a failed report with no evidence or a zero process exit
+   could retain trusted aggregate counts.
+- Inline `3998248974`: the repository contract file declared PowerShell 7.0
+   while invoking the 7.2 runner.
+- Review `5188924563`, body finding 1: the timeout path lacked an actual killed-
+   child test.
+
+The local follow-up captures worker errors per work item, normalizes missing
+worker results, rejects the inverse failed-report contradictions, raises the
+repository contract minimum to PowerShell 7.2, and adds a three-second real
+process-tree timeout fixture. The fail-before run had 18 prior controls pass and
+four new controls fail at the reported gaps. All 22 controls pass after the
+repair. The full feedback-round suite passed 423 tests with zero failures, 11
+skips, no unexecuted tests, and no infrastructure failure across 16 shards in
+78.4 seconds. The native 1.0.63 executable hash was
+`29D3DA6864C5988EF4DC3C5B1F2622B1F67F8C94BB38CB93AFA4207F0C032C84`.
+Repository-wide Markdown lint and diff checks passed. Publication is pending; no reply,
+thread resolution, commit, push, re-review request, merge, or model run occurred.
 
 The next E1 slice is deterministic absent/launcher/native-client handling and
 separation of real plugin integration from hermetic tests. Do not combine E1.1

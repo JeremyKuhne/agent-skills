@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+#Requires -Version 7.2
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 BeforeAll {
@@ -57,6 +57,7 @@ Describe 'Pester shard runner' {
             [string] $Name,
             [string] $Content,
             [string] $ReportedResult,
+            [string[]] $RunnerArguments,
             [switch] $IncludeHealthy) {
             $root = Join-Path $TestDrive $Name
             [System.IO.Directory]::CreateDirectory($root) | Out-Null
@@ -78,7 +79,7 @@ Describe 'Healthy fixture' {
             $reportDirectory = Join-Path $root 'reports'
             $output = @(& $script:ShardPwsh -NoProfile -File $script:ShardRunner `
                     -Path $testPath -OutputDirectory $reportDirectory `
-                    -MaxConcurrency 2 -PesterVersion 5.7.1 2>&1)
+                    -MaxConcurrency 2 -PesterVersion 5.7.1 @RunnerArguments 2>&1)
             $exitCode = $LASTEXITCODE
             $summary = Get-Content -LiteralPath (Join-Path $reportDirectory 'summary.json') -Raw |
                 ConvertFrom-Json
@@ -230,6 +231,8 @@ BeforeDiscovery {
         @{ Kind = 'negative-count'; Overrides = @{ PassedCount = -1 }; CountsComplete = $false }
         @{ Kind = 'counts-mismatch'; Overrides = @{ TotalCount = 2 }; CountsComplete = $false }
         @{ Kind = 'passing-container-failure'; Overrides = @{ FailedContainersCount = 1 }; CountsComplete = $false }
+        @{ Kind = 'failed-without-evidence'; Overrides = @{ Result = 'Failed' }; CountsComplete = $false }
+        @{ Kind = 'failed-with-zero-exit'; Overrides = @{ Result = 'Failed'; PassedCount = 0; FailedCount = 1 }; CountsComplete = $false }
         @{ Kind = 'not-run'; Overrides = @{ PassedCount = 0; NotRunCount = 1 }; CountsComplete = $true }
         @{ Kind = 'inconclusive'; Overrides = @{ PassedCount = 0; InconclusiveCount = 1 }; CountsComplete = $true }
     ) {
@@ -306,6 +309,41 @@ BeforeDiscovery { [System.Environment]::Exit(0) }
         $healthyShard = @($run.Summary.Shards | Where-Object Result -EQ 'Passed')
         $healthyShard.Count | Should -Be 1
         $healthyShard[0].PassedCount | Should -Be 1
+    }
+
+    It 'reports a worker process startup failure through the normal summary' {
+        $missingPowerShell = Join-Path $TestDrive 'missing/pwsh.exe'
+        $run = Invoke-ShardFixture 'process-start-failure' `
+            -RunnerArguments @('-PowerShellPath', $missingPowerShell) -Content @'
+Describe 'Unreachable fixture' {
+    It 'cannot run' { $true | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.Result | Should -Be 'Failed'
+        $run.Summary.InfrastructureFailureCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -BeFalse
+        $run.Summary.TotalCount | Should -BeNullOrEmpty
+        $run.Summary.Shards[0].Error | Should -Match 'worker failed'
+        $run.Summary.Shards[0].LogPath | Should -Not -BeNullOrEmpty
+    }
+
+    It 'kills and reports a child that exceeds its timeout' {
+        $run = Invoke-ShardFixture 'timeout' `
+            -RunnerArguments @('-ShardTimeoutSeconds', '3') -Content @'
+Describe 'Timeout fixture' {
+    It 'never completes' { [System.Threading.Thread]::Sleep([System.Threading.Timeout]::Infinite) }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.Result | Should -Be 'Failed'
+        $run.Summary.InfrastructureFailureCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -BeFalse
+        $run.Summary.Shards[0].TimedOut | Should -BeTrue
+        $run.Summary.Shards[0].ExitCode | Should -Be -1
+        $run.Summary.Shards[0].Error | Should -Match 'timed out'
     }
 }
 

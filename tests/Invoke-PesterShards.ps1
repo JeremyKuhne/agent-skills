@@ -7,7 +7,10 @@ param(
     [int] $MaxConcurrency = 4,
     [ValidateRange(1, 240)]
     [int] $ShardTimeoutMinutes = 30,
+    [ValidateRange(0, 3600)]
+    [int] $ShardTimeoutSeconds = 0,
     [version] $PesterVersion = '5.7.1',
+    [string] $PowerShellPath,
     [string] $PathPrefix,
     [string] $BaselineSummaryPath,
     [string] $ShardPath,
@@ -105,60 +108,116 @@ $workItems = @(for ($index = 0; $index -lt $orderedTestFiles.Count; $index++) {
 $scheduledWorkItems = @($workItems |
     Sort-Object @{ Expression = 'EstimatedDurationMilliseconds'; Descending = $true }, Path)
 
-$pwshPath = [string]@(Get-Command pwsh -CommandType Application -All -ErrorAction Stop)[0].Source
+$pwshPath = if ([string]::IsNullOrWhiteSpace($PowerShellPath)) {
+    [string]@(Get-Command pwsh -CommandType Application -All -ErrorAction Stop)[0].Source
+}
+else { [System.IO.Path]::GetFullPath($PowerShellPath) }
 $scriptPath = $PSCommandPath
 $pesterVersionText = $PesterVersion.ToString()
-$shardTimeoutMilliseconds = $ShardTimeoutMinutes * 60 * 1000
+$shardTimeoutMilliseconds = if ($ShardTimeoutSeconds -gt 0) {
+    $ShardTimeoutSeconds * 1000
+}
+else { $ShardTimeoutMinutes * 60 * 1000 }
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $processResults = @($scheduledWorkItems | ForEach-Object -Parallel {
-        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-        $startInfo.FileName = $using:pwshPath
-        $startInfo.UseShellExecute = $false
-        $startInfo.RedirectStandardOutput = $true
-        $startInfo.RedirectStandardError = $true
-        foreach ($argument in @(
-                '-NoProfile',
-                '-File', $using:scriptPath,
-                '-ShardPath', $_.Path,
-                '-ResultPath', $_.ResultPath,
-                '-PesterVersion', $using:pesterVersionText,
-                '-PathPrefix', [string]$using:PathPrefix)) {
-            $startInfo.ArgumentList.Add($argument)
+        $workItem = $_
+        $process = $null
+        $started = $false
+        try {
+            $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = $using:pwshPath
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+            foreach ($argument in @(
+                    '-NoProfile',
+                    '-File', $using:scriptPath,
+                    '-ShardPath', $workItem.Path,
+                    '-ResultPath', $workItem.ResultPath,
+                    '-PesterVersion', $using:pesterVersionText,
+                    '-PathPrefix', [string]$using:PathPrefix)) {
+                $startInfo.ArgumentList.Add($argument)
+            }
+            $process = [System.Diagnostics.Process]::new()
+            $process.StartInfo = $startInfo
+            $started = $process.Start()
+            if (-not $started) { throw "Could not start Pester shard '$($workItem.Path)'." }
+            $standardOutput = $process.StandardOutput.ReadToEndAsync()
+            $standardError = $process.StandardError.ReadToEndAsync()
+            $completed = $process.WaitForExit($using:shardTimeoutMilliseconds)
+            if (-not $completed) {
+                $process.Kill($true)
+                $process.WaitForExit()
+            }
+            $output = @(
+                $standardOutput.GetAwaiter().GetResult()
+                $standardError.GetAwaiter().GetResult()) -join [Environment]::NewLine
+            $output | Set-Content -LiteralPath $workItem.LogPath
+            [pscustomobject]@{
+                Index = $workItem.Index
+                ExitCode = if ($completed) { $process.ExitCode } else { -1 }
+                TimedOut = -not $completed
+                ResultPath = $workItem.ResultPath
+                LogPath = $workItem.LogPath
+                WorkerError = $null
+            }
         }
-        $process = [System.Diagnostics.Process]::new()
-        $process.StartInfo = $startInfo
-        $started = $process.Start()
-        if (-not $started) { throw "Could not start Pester shard '$($_.Path)'." }
-        $standardOutput = $process.StandardOutput.ReadToEndAsync()
-        $standardError = $process.StandardError.ReadToEndAsync()
-        $completed = $process.WaitForExit($using:shardTimeoutMilliseconds)
-        if (-not $completed) {
-            $process.Kill($true)
-            $process.WaitForExit()
+        catch {
+            $workerError = "Pester shard worker failed: $($_.Exception.Message)"
+            $workerExitCode = $null
+            if ($started -and $null -ne $process) {
+                try {
+                    if (-not $process.HasExited) {
+                        $process.Kill($true)
+                        $process.WaitForExit()
+                    }
+                    if ($process.HasExited) { $workerExitCode = $process.ExitCode }
+                }
+                catch {
+                    $workerError += " Cleanup failed: $($_.Exception.Message)"
+                }
+            }
+            try { $workerError | Set-Content -LiteralPath $workItem.LogPath }
+            catch { $workerError += " Log write failed: $($_.Exception.Message)" }
+            [pscustomobject]@{
+                Index = $workItem.Index
+                ExitCode = $workerExitCode
+                TimedOut = $false
+                ResultPath = $workItem.ResultPath
+                LogPath = $workItem.LogPath
+                WorkerError = $workerError
+            }
         }
-        $output = @(
-            $standardOutput.GetAwaiter().GetResult()
-            $standardError.GetAwaiter().GetResult()) -join [Environment]::NewLine
-        $output | Set-Content -LiteralPath $_.LogPath
-        [pscustomobject]@{
-            Index = $_.Index
-            ExitCode = if ($completed) { $process.ExitCode } else { -1 }
-            TimedOut = -not $completed
-            ResultPath = $_.ResultPath
-            LogPath = $_.LogPath
+        finally {
+            if ($null -ne $process) { $process.Dispose() }
         }
     } -ThrottleLimit $MaxConcurrency)
 $stopwatch.Stop()
-if ($processResults.Count -ne $workItems.Count -or
-    @($processResults.Index | Sort-Object -Unique).Count -ne $workItems.Count) {
-    throw "Expected $($workItems.Count) distinct Pester shard process results but received $($processResults.Count)."
+$runnerErrors = [System.Collections.Generic.List[string]]::new()
+$expectedIndices = @($workItems.Index)
+foreach ($unexpectedResult in @($processResults | Where-Object { $_.Index -notin $expectedIndices })) {
+    $runnerErrors.Add("Received an unexpected Pester worker result for index '$($unexpectedResult.Index)'.") | Out-Null
 }
+$normalizedProcessResults = @(foreach ($workItem in $workItems) {
+        $matches = @($processResults | Where-Object Index -EQ $workItem.Index)
+        if ($matches.Count -eq 1) { $matches[0] }
+        else {
+            [pscustomobject]@{
+                Index = $workItem.Index
+                ExitCode = $null
+                TimedOut = $false
+                ResultPath = $workItem.ResultPath
+                LogPath = $workItem.LogPath
+                WorkerError = "Expected one Pester worker result but received $($matches.Count)."
+            }
+        }
+    })
 
 $countProperties = @(
     'PassedCount', 'FailedCount', 'SkippedCount', 'NotRunCount',
     'InconclusiveCount', 'TotalCount', 'FailedBlocksCount', 'FailedContainersCount')
 $shards = [System.Collections.Generic.List[object]]::new()
-foreach ($processResult in @($processResults | Sort-Object Index)) {
+foreach ($processResult in @($normalizedProcessResults | Sort-Object Index)) {
     $shard = [pscustomobject]@{
         Path = $orderedTestFiles[$processResult.Index]
         Result = 'Error'
@@ -167,7 +226,10 @@ foreach ($processResult in @($processResults | Sort-Object Index)) {
         ExitCode = $processResult.ExitCode
         TimedOut = $processResult.TimedOut
         LogPath = $processResult.LogPath
-        Error = $null
+        Error = if ([string]::IsNullOrWhiteSpace([string]$processResult.WorkerError)) {
+            $null
+        }
+        else { [string]$processResult.WorkerError }
     }
     foreach ($property in $countProperties) {
         $shard | Add-Member -NotePropertyName $property -NotePropertyValue $null
@@ -197,6 +259,15 @@ foreach ($processResult in @($processResults | Sort-Object Index)) {
                     $reported.FailedContainersCount -gt 0)) {
                 throw 'A passing Pester result contains failures.'
             }
+            $failureEvidence = $reported.FailedCount + $reported.FailedBlocksCount +
+                $reported.FailedContainersCount + $reported.NotRunCount +
+                $reported.InconclusiveCount
+            if ($reported.Result -eq 'Failed' -and $failureEvidence -eq 0) {
+                throw 'A failed Pester result contains no failure evidence.'
+            }
+            if ($reported.Result -eq 'Failed' -and $processResult.ExitCode -eq 0) {
+                throw 'A failed Pester result came from a successful shard process.'
+            }
             foreach ($property in $countProperties) { $shard.$property = $reported.$property }
             $shard.CountsComplete = $true
             $shard.DurationMilliseconds = $reported.DurationMilliseconds
@@ -212,7 +283,7 @@ foreach ($processResult in @($processResults | Sort-Object Index)) {
             $shard.Error = "Invalid Pester shard result: $($_.Exception.Message)"
         }
     }
-    else {
+    elseif (-not $shard.Error) {
         $shard.Error = 'Pester shard did not produce a result.'
     }
     if ($processResult.TimedOut) {
@@ -225,19 +296,25 @@ foreach ($processResult in @($processResults | Sort-Object Index)) {
     $shards.Add($shard)
 }
 
-$countsComplete = @($shards | Where-Object { -not $_.CountsComplete }).Count -eq 0
+$countsComplete = $runnerErrors.Count -eq 0 -and
+    @($shards | Where-Object { -not $_.CountsComplete }).Count -eq 0
 $failedShards = @($shards | Where-Object { $_.Result -ne 'Passed' })
+$infrastructureFailureCount = @($shards | Where-Object Error).Count + $runnerErrors.Count
 $summary = [pscustomobject]@{
     SchemaVersion = 2
     GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
     PesterVersion = $PesterVersion.ToString()
     MaxConcurrency = $MaxConcurrency
     ShardTimeoutMinutes = $ShardTimeoutMinutes
+    ShardTimeoutSeconds = if ($ShardTimeoutSeconds -gt 0) { $ShardTimeoutSeconds } else { $null }
+    ShardTimeoutMilliseconds = $shardTimeoutMilliseconds
+    PowerShellPath = $pwshPath
     ShardCount = $shards.Count
     WallTimeMilliseconds = $stopwatch.ElapsedMilliseconds
-    Result = if ($failedShards.Count -gt 0) { 'Failed' } else { 'Passed' }
+    Result = if ($failedShards.Count -gt 0 -or $runnerErrors.Count -gt 0) { 'Failed' } else { 'Passed' }
     FailedShardCount = $failedShards.Count
-    InfrastructureFailureCount = @($shards | Where-Object Error).Count
+    InfrastructureFailureCount = $infrastructureFailureCount
+    RunnerErrors = $runnerErrors.ToArray()
     CountsComplete = $countsComplete
     Shards = $shards.ToArray()
 }
@@ -260,7 +337,8 @@ Write-Host "Pester shard reports: $resolvedOutputDirectory"
 foreach ($shard in $failedShards) {
     Write-Host "Failed shard '$($shard.Path)': $($shard.Result). $($shard.Error) Log: $($shard.LogPath)"
 }
-if ($failedShards.Count -gt 0) {
+foreach ($runnerError in $runnerErrors) { Write-Host "Pester runner error: $runnerError" }
+if ($failedShards.Count -gt 0 -or $runnerErrors.Count -gt 0) {
     throw 'One or more Pester shards failed.'
 }
 $global:LASTEXITCODE = 0
