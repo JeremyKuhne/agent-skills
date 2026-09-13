@@ -330,7 +330,15 @@ Use `-PathPrefix` for local tool directories needed only by child processes.
 The runner writes one log/result per shard and an aggregate `summary.json`.
 Supply a previous aggregate through `-BaselineSummaryPath` to start historically
 slow shards first. Each shard has a hard process-tree timeout controlled by
-`-ShardTimeoutMinutes`.
+`-ShardTimeoutMinutes`. Use `-ShardTimeoutSeconds` for focused fault injection;
+a positive seconds value overrides the minute setting, and zero retains the
+minute setting. The summary records the configured and effective timeout.
+
+The runner discovers a native `pwsh` executable by default. Supply
+`-PowerShellPath` to select an explicit compatible executable or to exercise
+process-start failure handling. The runner and its repository contract tests
+require PowerShell 7.2 or later. Worker startup failures are retained as
+per-shard errors with diagnostic log paths rather than aborting summary creation.
 
 The schema-version-2 summary reports overall `Result`, `FailedShardCount`, and
 `InfrastructureFailureCount`. Discovery and setup/teardown errors retain their
@@ -343,4 +351,5 @@ count visible.
 report, not that the run passed. Missing or malformed reports leave aggregate
 test counts `null`; valid counts remain available on the individual shards.
 Process failures, timeouts, or unusable reports return failure with diagnostic
-log paths. Existing version-1 summaries can still supply scheduling durations.
+log paths. A failed child report must contain failure evidence and use a nonzero
+process exit. Existing version-1 summaries can still supply scheduling durations.
