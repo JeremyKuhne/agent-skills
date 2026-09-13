@@ -12,6 +12,7 @@ BeforeAll {
     $script:DotNetPipesScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-pipes.json'
     $script:PerformanceTestingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/performance-testing.json'
     $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
+    $script:RoslynAnalyzersScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/roslyn-analyzers.json'
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -26,6 +27,7 @@ Describe 'Skill evaluation scenario contract' {
         $dotNetPipesScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetPipesScenarioPath)
         $performanceTestingScenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
         $dotNetFileCreationScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetFileCreationScenarioPath)
+        $roslynAnalyzersScenarios = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath)
         $scenarios = @(
             $createPrScenarios
             $technicalWritingScenarios
@@ -35,7 +37,8 @@ Describe 'Skill evaluation scenario contract' {
             $createSkillRepoScenarios
             $dotNetPipesScenarios
             $performanceTestingScenarios
-            $dotNetFileCreationScenarios)
+            $dotNetFileCreationScenarios
+            $roslynAnalyzersScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -54,7 +57,7 @@ Describe 'Skill evaluation scenario contract' {
                 'technical-writing-artifact-repository-documentation')) {
             $technicalWritingScenarios.id | Should -Contain $artifactScenario
         }
-        $manageSkillsScenarios.Count | Should -Be 4
+        $manageSkillsScenarios.Count | Should -Be 7
         @($manageSkillsScenarios | Where-Object skill -ne 'manage-skills').Count |
             Should -Be 0
         $manageSkillsScenarios.id |
@@ -65,6 +68,12 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'manage-skills-reconciles-exact-divergence'
         $manageSkillsScenarios.id |
             Should -Contain 'manage-skills-ownership-specific-authoring'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-distinct-overlap-authoring'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-overlay-reverse-discovery'
+        $manageSkillsScenarios.id |
+            Should -Contain 'manage-skills-routing-code-readability-near-miss'
         $publishingWorkflowScenarios.Count | Should -Be 3
         @($publishingWorkflowScenarios.skill | Sort-Object -Unique).Count | Should -Be 3
         $userVoiceScenarios.Count | Should -Be 8
@@ -115,8 +124,20 @@ Describe 'Skill evaluation scenario contract' {
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-roaming-split'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-defaults-overrides'
         $dotNetFileCreationScenarios.id | Should -Contain 'dotnet-file-creation-settings-enforced-policy'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 79
+        $roslynAnalyzersScenarios.Count | Should -Be 2
+        @($roslynAnalyzersScenarios | Where-Object skill -ne 'roslyn-analyzers').Count |
+            Should -Be 0
+        $roslynAnalyzersScenarios.id |
+            Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
+        $roslynAnalyzersScenarios.id |
+            Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 84
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
+        @($manageSkillsScenarios |
+                Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
+            Should -Not -Match 'manage-skills'
+        @($roslynAnalyzersScenarios.prompt | Where-Object { $_ -match 'roslyn-analyzers' }).Count |
+            Should -Be 0
     }
 
     It 'compiles every manage-skills scenario pattern' {
@@ -133,6 +154,75 @@ Describe 'Skill evaluation scenario contract' {
                 }
             }
         }
+    }
+
+    It 'compiles every roslyn-analyzers scenario pattern' {
+        $scenarios = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath)
+        foreach ($scenario in $scenarios) {
+            foreach ($field in @(
+                    'requiredResponsePatterns',
+                    'forbiddenResponsePatterns',
+                    'requiredCommandPatterns',
+                    'forbiddenCommandPatterns')) {
+                foreach ($pattern in @($scenario.$field)) {
+                    { [regex]::new([string] $pattern) } |
+                        Should -Not -Throw -Because "$($scenario.id).$field must contain valid regular expressions"
+                }
+            }
+        }
+    }
+
+    It 'scores structured roslyn-analyzers response: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'analyzer plan accepted'
+            ScenarioId = 'roslyn-analyzers-routing-code-fix-fix-all'
+            Response = @(
+                'Descriptor: define-DiagnosticDescriptor'
+                'Analyzer: implement-DiagnosticAnalyzer'
+                'Code-fix: implement-CodeFixProvider'
+                'Fix-all: provide-FixAllProvider'
+                'Tests: add-Microsoft.CodeAnalysis.Testing') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'analyzer plan negated'
+            ScenarioId = 'roslyn-analyzers-routing-code-fix-fix-all'
+            Response = @(
+                'Descriptor: do-not-define-DiagnosticDescriptor'
+                'Analyzer: do-not-implement-DiagnosticAnalyzer'
+                'Code-fix: do-not-implement-CodeFixProvider'
+                'Fix-all: do-not-provide-FixAllProvider'
+                'Tests: do-not-add-Microsoft.CodeAnalysis.Testing') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'runtime plan accepted'
+            ScenarioId = 'roslyn-analyzers-routing-runtime-performance-near-miss'
+            Response = @(
+                'Measurement: establish-baseline'
+                'Process-state: matched'
+                'Correctness: validate-output'
+                'Uncertainty: report') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'runtime plan negated'
+            ScenarioId = 'roslyn-analyzers-routing-runtime-performance-near-miss'
+            Response = @(
+                'Measurement: do-not-establish-baseline'
+                'Process-state: unmatched'
+                'Correctness: do-not-validate-output'
+                'Uncertainty: do-not-report') -join "`n"
+            Expected = $false
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $passes =
+            @($scenario.requiredResponsePatterns | Where-Object { $Response -notmatch $_ }).Count -eq 0 -and
+            @($scenario.forbiddenResponsePatterns | Where-Object { $Response -match $_ }).Count -eq 0
+
+        $passes | Should -Be $Expected -Because $CaseName
     }
 
     It 'compiles every performance-testing scenario pattern' {
@@ -267,6 +357,131 @@ Describe 'Skill evaluation scenario contract' {
         else {
             $missingPatterns.Count | Should -BeGreaterThan 0 -Because $CaseName
         }
+    }
+
+    It 'scores structured lifecycle decision: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'distinct authoring accepted'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: not-required'
+                'Boundary: trigger-policy-owner') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'distinct authoring negated'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: do-not-author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: not-required'
+                'Boundary: trigger-policy-owner') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'distinct dependency required'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: required'
+                'Boundary: trigger-policy-owner') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'distinct answer adds contradiction'
+            ScenarioId = 'manage-skills-distinct-overlap-authoring'
+            Response = @(
+                'Decision: author-repository-skill'
+                'Overlap: distinct'
+                'Dependency: not-required'
+                'Boundary: trigger-policy-owner'
+                'Do not continue with a repository skill.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay accepted'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'composing skill selected'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: composing-skill'
+                'Overlay-presence: not-required'
+                'Reverse-discovery: unavailable'
+                'Initial-context: core-only'
+                'Resources: owning-area'
+                'Composing-skill: selected') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay presence optional'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: optional'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay omitted from initial context'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-only'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'resources placed in vendored core'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: vendored-core'
+                'Composing-skill: reject-no-reverse-discovery') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overlay answer adds contradiction'
+            ScenarioId = 'manage-skills-overlay-reverse-discovery'
+            Response = @(
+                'Decision: overlay'
+                'Overlay-presence: required-for-installation'
+                'Reverse-discovery: installed-overlay'
+                'Initial-context: core-plus-installed-overlay'
+                'Resources: owning-area'
+                'Composing-skill: reject-no-reverse-discovery'
+                'Prefer a composing skill.') -join "`n"
+            Expected = $false
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:ManageSkillsScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $passes =
+            @($scenario.requiredResponsePatterns | Where-Object { $Response -notmatch $_ }).Count -eq 0 -and
+            @($scenario.forbiddenResponsePatterns | Where-Object { $Response -match $_ }).Count -eq 0
+
+        $passes | Should -Be $Expected -Because $CaseName
     }
 
     It 'permits a compliant lifecycle response: <CaseName>' -ForEach @(

@@ -60,6 +60,10 @@ with the repository's eval harness:
   setup work; irrelevant skills are not vendored "just in case".
 - **Dependencies:** `requires` and `related` match actual workflow routing; optional
   skills have a local fallback instead of a dead end.
+- **Composition:** an installed overlay supplies the core-to-repository tie, or a composing
+  skill proves both shared-dependency availability and reverse discovery from the shared
+  skill. Mandatory local policy has an explicit overlay-presence or equivalent
+  installation invariant. A one-way local-to-shared reference can bypass it.
 - **Installation:** target hosts and scope match the audience, duplicate names
   resolve to the intended source, and a project/user hit is not mistaken for the
   other scope.
@@ -76,6 +80,9 @@ An effective skill lets an agent decide, act, validate, and stop without inventi
 missing policy.
 
 - The entry point exposes a fast decision path; deep detail is linked, not front-loaded.
+- Treat repository examples as integration evidence, not presumed-correct design.
+  Compare them with the shared core and authoritative repository bindings; stop on an
+  unresolved conflict instead of assuming either source wins.
 - Preconditions, permissions, irreversible actions, and secret boundaries are explicit.
 - Decision branches name the next action and the evidence that selects it.
 - Happy path, absent dependency, malformed/failed output, and cleanup/recovery paths
@@ -97,8 +104,15 @@ not stated or tested.
 
 - Keep `SKILL.md` focused on triggers, non-negotiable rules, workflow selection, and
   links to detail.
+- Initial context is `SKILL.md` plus every file the workflow unconditionally instructs
+  the agent to read. Include an overlay when it exists because the core's pre-action
+  instruction requires the agent to read it; a valid optional-overlay installation without
+  the file remains core-only. Compare that cost with the focused workflow it replaces;
+  splitting text into another unconditionally read file does not reduce context cost.
 - Put long recipes, references, platform variants, and uncommon recovery procedures
   in purpose-named sibling pages.
+- Keep overlays to direct bindings and routing. Remove provenance narrative and rationale
+  already represented by frontmatter or canonical documentation.
 - Prefer one canonical rule with short pointers over duplicated checklists that can
   drift.
 - Use tables for routing/selection, numbered steps for sequence, and checklists for
@@ -117,6 +131,8 @@ retain unrelated branches in working memory before choosing the first action.
 - Every new overlay binding traces to repository evidence gathered through
   [integrate.md](integrate.md), and links to canonical local guidance instead of
   copying rules that can drift.
+- Repository-only documentation and tools remain with their owning area rather than
+  becoming extra files inside the vendored core directory. The overlay links to them.
 - Source ownership and runtime scope are orthogonal. A portable core may be a
   user install; a born-personal skill may have no repository home. Reclassifying
   scope does not reclassify ownership.
@@ -163,6 +179,14 @@ created no default persistent note.
 Treat an unresolved ownership/scope mismatch or duplicate name as a blocking
 finding, not residual risk. For a pin change, require a disposition for every
 overlay and pending divergence at the candidate pin.
+
+For a composing-skill change, exercise the same repository-specific request from both
+entry points: once when the repository skill is selected and once when the shared core
+is selected directly. Both must load required repository policy. For an overlay, prove
+that the target installation contains the file and direct shared-core selection follows
+the core's pre-action read instruction. Also test a host or remote environment where a
+composing skill's shared dependency is absent; it must fail clearly or provide an approved
+fallback.
 
 For a changed vendored skill, verify both sides:
 

@@ -50,9 +50,9 @@ workflow (mirror, links, validator, whitespace) stays in [SKILL.md](SKILL.md).
   `metadata.maturity`, `metadata.requires`, and `metadata.related`. Use the
   repository's `FORMAT.md` vocabulary; relationship names must resolve and the
   required graph must remain acyclic.
-- For `optional-overlay` or `required-overlay`, keep the standard loader sentence
-  in the core. An `overlay.md` starts with `core` and `core-pin`; `core` matches
-  the directory, and a required overlay must exist.
+- For `optional-overlay` or `required-overlay`, keep the standard pre-action read
+  instruction in the core. An `overlay.md` starts with `core` and `core-pin`; `core`
+  matches the directory, and a required overlay must exist.
 - A name/dir mismatch causes the skill to silently fail to load. Always
   verify by running both the strict bundled validator and `skills-ref`.
 

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "roslyn-analyzers-routing-code-fix-fix-all",
+      "skill": "roslyn-analyzers",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Design a Roslyn diagnostic and code fix for C# that reports public methods with more than five parameters. Include the diagnostic descriptor, analyzer registration, a Fix All strategy, and focused tests. Do not edit files or run commands. Return exactly these five labeled lines with no other prose: `Descriptor: define-DiagnosticDescriptor`, `Analyzer: implement-DiagnosticAnalyzer`, `Code-fix: implement-CodeFixProvider`, `Fix-all: provide-FixAllProvider`, and `Tests: add-Microsoft.CodeAnalysis.Testing`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Descriptor:\\s*define-DiagnosticDescriptor\\s*\\r?\\nAnalyzer:\\s*implement-DiagnosticAnalyzer\\s*\\r?\\nCode-fix:\\s*implement-CodeFixProvider\\s*\\r?\\nFix-all:\\s*provide-FixAllProvider\\s*\\r?\\nTests:\\s*add-Microsoft\\.CodeAnalysis\\.Testing\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "roslyn-analyzers-routing-runtime-performance-near-miss",
+      "skill": "roslyn-analyzers",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Measure and reduce runtime allocations in a .NET JSON parser under representative production inputs. Establish a baseline, isolate process state, validate outputs, and report uncertainty. This is application runtime performance; do not propose compiler diagnostics, code fixes, or suppressors. Do not edit files or run commands. Return exactly these four labeled lines with no other prose: `Measurement: establish-baseline`, `Process-state: matched`, `Correctness: validate-output`, and `Uncertainty: report`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": false,
+      "requiredSkillInvocations": ["performance-testing"],
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Measurement:\\s*establish-baseline\\s*\\r?\\nProcess-state:\\s*matched\\s*\\r?\\nCorrectness:\\s*validate-output\\s*\\r?\\nUncertainty:\\s*report\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    }
+  ]
+}
