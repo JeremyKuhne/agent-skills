@@ -1,7 +1,7 @@
 # Sol and Luna skill evaluation plan
 
 - Status: E1.1 is merged; E1.2 deterministic client prerequisites are locally
-   validated and await a commit decision. Publication and paid execution require
+   validated. Milestone acceptance, integration, and paid execution remain
    separate decisions.
 - Assessment date: 2026-09-12
 - Repository baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`
@@ -189,8 +189,8 @@ start E1.1.
 - State: awaiting decision; local implementation and validation completed on
    2026-09-13.
 - Implementer: GitHub Copilot; milestone acceptance: repository maintainer.
-- Next action: repository maintainer decides whether to commit and publish the
-   reviewed local change. Model runs remain separate.
+- Next action: repository maintainer reviews the integration evidence and accepts
+   or reworks E1.2. Model runs remain separate.
 - [x] Replace ambient resolver tests with controlled absent, launcher-only, and
    native executable fixtures.
 - [x] Resolve one native client per suite/matrix, pass it to every worker, and
