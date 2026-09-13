@@ -324,6 +324,14 @@ the exact outgoing PR body with the final candidate and receipt. Prefer links or
 generated summaries over copied counts, and do not request review while a known
 remote description update still lacks authorization.
 
+A later pass found the versioned milestone tracker still naming a force-push,
+body update, CI wait, and review request after those actions had completed. That
+state becomes stale as soon as the action succeeds and can trigger a recursive
+documentation-only review round. Keep exact head, check, request, and thread
+state in the PR timeline or session handoff. Durable plans record milestone
+state, accepted evidence, decisions, and historical snapshots, not each pending
+remote operation.
+
 ## Testing strategy and technology
 
 ### Explicit test tiers

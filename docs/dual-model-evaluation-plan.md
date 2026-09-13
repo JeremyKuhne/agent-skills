@@ -1,7 +1,8 @@
 # Sol and Luna skill evaluation plan
 
-- Status: E1.1 second-review follow-up approved for publication; merging,
-   subsequent implementation, and paid execution await separate approval
+- Status: E1.1 implementation is under review in PR #86; the PR owns live head,
+  check, and review state. Merge, subsequent implementation, and paid execution
+  require separate decisions.
 - Assessment date: 2026-09-12
 - Repository baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`
 - Target models: GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`)
@@ -25,7 +26,7 @@ been authorized. Status last reviewed: 2026-09-12.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
-| E1 | Trustworthy runner and client prerequisites | In progress | E1.1 second-review publication approved; remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
+| E1 | Trustworthy runner and client prerequisites | In progress | E1.1 is under review in PR #86; remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
 | E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
@@ -40,17 +41,12 @@ with E1's first recorded checks; it does not wait for E6 or a metrics service.
 
 ### First work item: E1.1
 
-- State: in progress; rebased second-review fixes validated and approved for
-   publication on 2026-09-12 for
-   [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86).
+- State: in progress; implementation and review fixes are under review in
+   [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86). The PR timeline
+   is authoritative for its current head, checks, requests, and unresolved threads.
 - Implementer: GitHub Copilot; milestone acceptance: repository maintainer.
-- Published implementation commit: `5a4c1d9`; reviewed head: `d8c7552`; first
-   feedback head: `3fdf562`.
-- Local rebase onto `254f1e5`: equivalent commits `ef6b932`, `ced9616`, and
-   `fd8da57`; publishing them requires an approved force-with-lease update.
-- Next action: commit, force-push with lease, reconcile the PR body, publish the
-   two thread replies, wait for CI, and request one fresh review as approved.
-   Merge and model runs are not authorized.
+- Next action: complete PR #86 review and obtain the maintainer's milestone
+   decision, then select the next E1 slice. Merge and model runs remain separate.
 - First weekly cost checkpoint: 2026-09-19.
 - Owning entry point: [tests/Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1).
 - [x] Add a focused negative control reproducing discovery failure with zero
@@ -150,7 +146,14 @@ failures, 11 skips, no unexecuted tests, and no infrastructure failures across
 16 shards in 78.3 seconds. All 25 source skills passed the strict portfolio and
 `skills-ref@0.1.5` validators; Markdown, mirror, local links, catalog, and diff
 checks passed. The native Copilot CLI remained 1.0.63 with the same hash before
-and after. Hosted CI and the remote PR body still refer to the pre-rebase head.
+and after. This paragraph is a historical local-validation snapshot; current
+hosted checks and published PR evidence live on PR #86.
+
+The next requested review raised one inline and one body-only occurrence of the
+same valid documentation issue: the tracked current-status and pre-rebase-evidence
+sentences had become stale after their remote actions completed. The local fix
+removes transient head/check/request steps from this durable tracker and labels
+dated validation paragraphs as historical snapshots.
 
 ### Why local review missed repeated findings
 
@@ -185,11 +188,17 @@ start E1.1.
 ### Tracking rules
 
 Use `Not started`, `Ready`, `In progress`, `Awaiting decision`, `Blocked`, and
-`Done`. At every work-session handoff or meaningful validation result, update
-the active checklist and milestone state with the owner, last-update date,
-evidence/commit/PR link when one exists, blocker or required decision, and exact
-next action. Mark completed checklist items as work finishes, not all at once
-at the end. A milestone can span several focused changes.
+`Done`. This document records milestone state, owner, durable evidence links,
+decisions, and the next milestone-level action. Mark completed checklist items
+as work finishes, not all at once at the end. A milestone can span several
+focused changes.
+
+The active PR or issue owns transient publication state: exact current head,
+running checks, pending review requests, unresolved threads, and the next remote
+write. Do not commit that state into the same PR after each operation; doing so
+creates a new head and makes the statement stale by construction. Update this
+plan when scope, dependencies, milestone evidence, or the maintainer's decision
+changes, and label intermediate validation records as historical snapshots.
 
 `Done` requires the exit evidence, recorded maintainer acceptance, and integration
 of any required code change. Locally passing work awaiting publication remains
@@ -197,12 +206,11 @@ of any required code change. Locally passing work awaiting publication remains
 and recording a negative decision can finish that milestone but cannot pass a
 quality gate; name the follow-up item and preserve the failed result.
 
-Use this document for state and link to detailed receipts outside the source
-tree; do not duplicate raw results or maintain a second status spreadsheet.
-Retain the active next-action note when sessions change. Commit these plan files
-on explicit approval so the tracker is durable; until then they remain local
-drafts. GitHub milestones/issues may mirror the IDs after a separately approved
-remote setup, but no GitHub tracking objects have been created.
+Use this document for durable state and link to detailed receipts outside the
+source tree; do not duplicate raw results or maintain a second status spreadsheet.
+Retain transient handoff state in the session or PR timeline. Commit plan changes
+on explicit approval. GitHub milestones/issues may mirror the IDs after a
+separately approved remote setup, but no GitHub tracking objects have been created.
 
 Schedule the first weekly cost checkpoint seven days after E1 starts, then
 weekly; also review after each campaign and milestone decision. Enter the next
