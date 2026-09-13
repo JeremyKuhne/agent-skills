@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+#Requires -Version 7.2
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 BeforeAll {
@@ -33,6 +33,30 @@ BeforeAll {
             ExitCode = $LASTEXITCODE
             Output = $output -join [Environment]::NewLine
         }
+    }
+
+    function Get-AgentFileScriptFunctionModule (
+        [string] $Path,
+        [string] $FunctionName) {
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $Path,
+            [ref]$null,
+            [ref]$parseErrors)
+        if ($parseErrors.Count -gt 0) {
+            throw "Could not parse '$Path': $($parseErrors -join '; ')"
+        }
+        $functions = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -ceq $FunctionName
+                }, $true))
+        if ($functions.Count -ne 1) {
+            throw "Expected one '$FunctionName' function in '$Path'; found $($functions.Count)."
+        }
+        $moduleScript = [scriptblock]::Create(
+            "$($functions[0].Extent.Text)`nExport-ModuleMember -Function $FunctionName")
+        return New-Module -ScriptBlock $moduleScript
     }
 }
 
@@ -157,6 +181,7 @@ Describe 'Agent file CI contract' {
         $pluginSmoke = Get-Content -LiteralPath (
             Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1') -Raw
 
+        $pluginSmoke | Should -Match '(?m)^#Requires -Version 7\.2\r?$'
         $workflow | Should -Match '@github/copilot-linux-x64@1\.0\.63'
         $workflow | Should -Match '(?m)^          \$copilotPath = \(Resolve-Path -LiteralPath \('
         $workflow | Should -Not -Match 'Get-Command copilot'
@@ -168,6 +193,27 @@ Describe 'Agent file CI contract' {
         $pluginSmoke | Should -Match (
             [regex]::Escape('$env:COPILOT_AUTO_UPDATE = ''false'''))
         $pluginSmoke | Should -Match 'Copilot executable SHA-256:'
+    }
+
+    It 'rejects unsupported Copilot versions in repository plugin smoke' {
+        $pluginSmoke = Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1'
+        $module = Get-AgentFileScriptFunctionModule `
+            -Path $pluginSmoke `
+            -FunctionName 'Get-ValidatedCopilotVersion'
+
+        & $module {
+            Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.63.'
+        } | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
+        & $module {
+            Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.1.0.'
+        } | Should -BeExactly 'GitHub Copilot CLI 1.1.0.'
+        { & $module {
+                Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.62.'
+            } } | Should -Throw '*1.0.63 or later*'
+        { & $module {
+                Get-ValidatedCopilotVersion `
+                    -Output 'GitHub Copilot CLI 1.0.63-preview.1'
+            } } | Should -Throw '*1.0.63 or later*'
     }
 
     It 'documents the explicit native client required by release plugin smoke' {

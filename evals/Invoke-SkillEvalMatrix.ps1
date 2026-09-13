@@ -184,6 +184,7 @@ $summary = [pscustomobject]@{
     Model = $Model
     CopilotVersion = $clientIdentity.CopilotVersion
     CopilotExecutableSha256 = $clientIdentity.CopilotExecutableSha256
+    CopilotExecutableEvidenceVerified = $clientIdentity.CopilotExecutableEvidenceVerified
     MaxConcurrency = $MaxConcurrency
     MatrixTimeoutMinutes = $MatrixTimeoutMinutes
     WallTimeMilliseconds = $stopwatch.ElapsedMilliseconds

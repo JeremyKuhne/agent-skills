@@ -226,10 +226,15 @@ function Get-SkillEvalClientIdentity {
     $identities = foreach ($documentSummary in $Summary) {
         $versionProperty = $documentSummary.PSObject.Properties['CopilotVersion']
         $hashProperty = $documentSummary.PSObject.Properties['CopilotExecutableSha256']
+        $verifiedProperty = $documentSummary.PSObject.Properties[
+            'CopilotExecutableEvidenceVerified']
         $version = if ($versionProperty) { [string]$versionProperty.Value } else { '' }
         $hash = if ($hashProperty) { [string]$hashProperty.Value } else { '' }
         if ([string]::IsNullOrWhiteSpace($version) -or $hash -notmatch '^[0-9A-Fa-f]{64}$') {
             throw 'Matrix client identity is incomplete or invalid in a document summary.'
+        }
+        if (-not $verifiedProperty -or -not [bool]$verifiedProperty.Value) {
+            throw 'Matrix client identity is unverified in a document summary.'
         }
         [pscustomobject]@{
             CopilotVersion = $version
@@ -244,6 +249,7 @@ function Get-SkillEvalClientIdentity {
     return [pscustomobject]@{
         CopilotVersion = $versions[0]
         CopilotExecutableSha256 = $hashes[0]
+        CopilotExecutableEvidenceVerified = $true
     }
 }
 

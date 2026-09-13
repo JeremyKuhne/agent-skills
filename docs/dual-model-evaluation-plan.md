@@ -206,11 +206,11 @@ start E1.1.
 
 The final local deterministic run did not use `-PathPrefix`, install or resolve a
 Copilot client, expose CI-only environment flags, or invoke a model. All 16
-fresh-process shards completed in 78.346 seconds on Windows with PowerShell
-7.6.6 and Pester 5.7.1: 449 tests passed, 13 were intentionally skipped, and
+fresh-process shards completed in 79.806 seconds on Windows with PowerShell
+7.6.6 and Pester 5.7.1: 450 tests passed, 13 were intentionally skipped, and
 none failed, remained unexecuted, or reported infrastructure failure. The
 schema-version-2 receipt is under the OS temporary directory at
-`agent-skills-pr87-feedback-d278831e1a52402a88ccdb20235a5a49/pester/summary.json`.
+`agent-skills-pr87-review2-2a8edc4e9dd34103a8642f84fb802581/pester/summary.json`.
 
 The separate integration check installed fresh `@github/copilot` and native
 Windows x64 packages at 1.0.63 in an isolated temporary tree, passed the exact
@@ -218,10 +218,10 @@ native executable to the current smoke script, and used a fresh Copilot home.
 The executable reported 1.0.63 and retained SHA-256
 `29D3DA6864C5988EF4DC3C5B1F2622B1F67F8C94BB38CB93AFA4207F0C032C84` before
 and after the run. Plugin installation found 25 skills, two agents, and one MCP
-configuration; the isolated setup and check completed in 10.079 seconds. The
+configuration; the isolated setup and check completed in 9.142 seconds. The
 receipt, including current source hashes,
 is under the OS temporary directory at
-`plugin-integration-4dec74aa7a23450885768787ad992139/integration-receipt.json`.
+`agent-skills-plugin-smoke-dfdf64cfd21f48da854b21a9d7ddecee/integration-receipt.json`.
 
 Repository-wide validation also passed the agent-file mirror check, all 151
 local agent-file links, both validators for all 25 skills, the catalog drift
@@ -237,6 +237,13 @@ gaps. The local follow-up now checks Unix execute bits, enforces CLI 1.0.63 or
 later, carries one consistent client identity into matrix summaries, marks
 legacy rescoring without a client hash as unverified, fixes environment-neutral
 contract assertions, and passes the required native path in the release runbook.
+
+The next current-head review found five valid gaps and one false positive. The
+follow-up enforces the same client version floor in repository and generated
+smoke scripts, aligns their Unix-mode callers with PowerShell 7.2, and carries
+verified client-evidence state into matrix summaries. The reported sequential
+path defect was not present: both sequential and parallel execution receive the
+already resolved Copilot path.
 
 Remaining host evidence is deliberately narrow. The deterministic suite and
 real plugin smoke ran on Windows with PowerShell 7.6.6, not the minimum 7.2

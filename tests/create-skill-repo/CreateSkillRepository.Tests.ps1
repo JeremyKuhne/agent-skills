@@ -11,6 +11,30 @@ BeforeAll {
         '.agents/skills/create-skill-repo/SKILL.md')
     $script:Publishing = Join-Path $script:RepoRoot (
         '.agents/skills/create-skill-repo/publishing.md')
+
+    function Get-ScaffoldScriptFunctionModule (
+        [string] $Path,
+        [string] $FunctionName) {
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $Path,
+            [ref]$null,
+            [ref]$parseErrors)
+        if ($parseErrors.Count -gt 0) {
+            throw "Could not parse '$Path': $($parseErrors -join '; ')"
+        }
+        $functions = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -ceq $FunctionName
+                }, $true))
+        if ($functions.Count -ne 1) {
+            throw "Expected one '$FunctionName' function in '$Path'; found $($functions.Count)."
+        }
+        $moduleScript = [scriptblock]::Create(
+            "$($functions[0].Extent.Text)`nExport-ModuleMember -Function $FunctionName")
+        return New-Module -ScriptBlock $moduleScript
+    }
 }
 
 Describe 'Decision interview' {
@@ -170,6 +194,20 @@ Describe 'New-SkillRepository' {
         $pluginSmokeContent | Should -Match (
             [regex]::Escape('$env:COPILOT_AUTO_UPDATE = ''false'''))
         $pluginSmokeContent | Should -Match 'Copilot executable SHA-256:'
+
+        $versionModule = Get-ScaffoldScriptFunctionModule `
+            -Path $pluginSmoke `
+            -FunctionName 'Get-ValidatedCopilotVersion'
+        & $versionModule {
+            Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.63.'
+        } | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
+        { & $versionModule {
+                Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.62.'
+            } } | Should -Throw '*1.0.63 or later*'
+        { & $versionModule {
+                Get-ValidatedCopilotVersion `
+                    -Output 'GitHub Copilot CLI 1.0.63-preview.1'
+            } } | Should -Throw '*1.0.63 or later*'
 
         $launcherPath = Join-Path $TestDrive $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
         [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')

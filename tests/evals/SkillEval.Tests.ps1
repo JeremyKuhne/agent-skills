@@ -779,6 +779,7 @@ Describe 'Skill evaluation scenario contract' {
         $matrixContent | Should -Match 'Get-SkillEvalClientIdentity -Summary \$documents\.Summary'
         $matrixContent | Should -Match 'CopilotVersion = \$clientIdentity\.CopilotVersion'
         $matrixContent | Should -Match 'CopilotExecutableSha256 = \$clientIdentity\.CopilotExecutableSha256'
+        $matrixContent | Should -Match 'CopilotExecutableEvidenceVerified = \$clientIdentity\.CopilotExecutableEvidenceVerified'
     }
 
     It 'requires one complete client identity across matrix summaries' {
@@ -786,16 +787,19 @@ Describe 'Skill evaluation scenario contract' {
             [pscustomobject]@{
                 CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
                 CopilotExecutableSha256 = 'A' * 64
+                CopilotExecutableEvidenceVerified = $true
             }
             [pscustomobject]@{
                 CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
                 CopilotExecutableSha256 = 'a' * 64
+                CopilotExecutableEvidenceVerified = $true
             }
         )
 
         $identity = Get-SkillEvalClientIdentity -Summary $summaries
         $identity.CopilotVersion | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
         $identity.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
+        $identity.CopilotExecutableEvidenceVerified | Should -BeTrue
 
         $summaries[1].CopilotVersion = 'GitHub Copilot CLI 1.0.64.'
         { Get-SkillEvalClientIdentity -Summary $summaries } |
@@ -804,6 +808,11 @@ Describe 'Skill evaluation scenario contract' {
         $summaries[1].CopilotExecutableSha256 = 'B' * 64
         { Get-SkillEvalClientIdentity -Summary $summaries } |
             Should -Throw '*client identities differ*'
+        $summaries[1].CopilotExecutableSha256 = $summaries[0].CopilotExecutableSha256
+        $summaries[1].CopilotExecutableEvidenceVerified = $false
+        { Get-SkillEvalClientIdentity -Summary $summaries } |
+            Should -Throw '*client identity is unverified*'
+        $summaries[1].CopilotExecutableEvidenceVerified = $true
         $summaries[1].PSObject.Properties.Remove('CopilotExecutableSha256')
         { Get-SkillEvalClientIdentity -Summary $summaries } |
             Should -Throw '*client identity is incomplete*'

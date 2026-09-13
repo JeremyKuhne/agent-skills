@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+#Requires -Version 7.2
 [CmdletBinding()]
 param(
     [string] $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path,
@@ -44,6 +44,28 @@ function Test-NativeExecutable ([string] $Path) {
     return $false
 }
 
+function Get-ValidatedCopilotVersion ([string] $Output) {
+    $version = $Output.Trim()
+    $versionMatch = [regex]::Match(
+        $version,
+        '^GitHub Copilot CLI (?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?<prerelease>-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:\.|\s|$)')
+    if (-not $versionMatch.Success) {
+        throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
+    }
+
+    $reportedVersion = [version]::new(
+        [int]$versionMatch.Groups['major'].Value,
+        [int]$versionMatch.Groups['minor'].Value,
+        [int]$versionMatch.Groups['patch'].Value)
+    $minimumVersion = [version]::new(1, 0, 63)
+    if ($reportedVersion -lt $minimumVersion -or
+        ($reportedVersion -eq $minimumVersion -and
+            $versionMatch.Groups['prerelease'].Success)) {
+        throw "Copilot CLI 1.0.63 or later is required; selected executable reported: $version"
+    }
+    return $version
+}
+
 $resolvedCopilotPath = (Resolve-Path -LiteralPath $CopilotPath -ErrorAction Stop).Path
 $expectedName = if ($IsWindows) { 'copilot.exe' } else { 'copilot' }
 if ([System.IO.Path]::GetFileName($resolvedCopilotPath) -cne $expectedName) {
@@ -86,10 +108,8 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Copilot CLI version query failed:`n$($versionOutput -join [Environment]::NewLine)"
     }
-    $copilotVersion = ($versionOutput -join [Environment]::NewLine).Trim()
-    if ($copilotVersion -notmatch '^GitHub Copilot CLI \d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?:\.|\s|$)') {
-        throw "Selected executable did not identify itself as GitHub Copilot CLI: $copilotVersion"
-    }
+    $copilotVersion = Get-ValidatedCopilotVersion `
+        -Output ($versionOutput -join [Environment]::NewLine)
     if ((Get-FileHash -LiteralPath $resolvedCopilotPath -Algorithm SHA256).Hash -cne
         $copilotExecutableSha256) {
         throw 'The selected Copilot CLI executable changed during version verification.'
