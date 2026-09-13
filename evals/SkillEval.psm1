@@ -1599,11 +1599,19 @@ function Invoke-SkillEvalRescore {
     else { '' }
     $isDeterministicExecutorEvidence = $sourceCopilotVersion -ceq 'fake-executor'
     $hasCopilotExecutableHash = $sourceCopilotExecutableSha256 -match '^[0-9A-Fa-f]{64}$'
-    $copilotExecutableEvidenceVerified = $isDeterministicExecutorEvidence -or
-        (-not [string]::IsNullOrWhiteSpace($sourceCopilotVersion) -and
-            $hasCopilotExecutableHash)
+    $sourceVerificationProperty = $sourceSummary.PSObject.Properties[
+        'CopilotExecutableEvidenceVerified']
+    $sourceMarksCopilotEvidenceUnverified = $sourceVerificationProperty -and
+        -not [bool]$sourceVerificationProperty.Value
+    $copilotExecutableEvidenceVerified = -not $sourceMarksCopilotEvidenceUnverified -and
+        ($isDeterministicExecutorEvidence -or
+            (-not [string]::IsNullOrWhiteSpace($sourceCopilotVersion) -and
+                $hasCopilotExecutableHash))
     if (-not $copilotExecutableEvidenceVerified -and
         -not $AllowLegacyUnverifiedEvidence) {
+        if ($sourceMarksCopilotEvidenceUnverified) {
+            throw 'Source summary marks Copilot executable evidence unverified; use -AllowLegacyUnverifiedEvidence only to retain it as unverified evidence.'
+        }
         throw 'Source summary lacks a Copilot executable SHA-256; use -AllowLegacyUnverifiedEvidence only to accept legacy real-client evidence without executable hashing.'
     }
     $outputPath = [System.IO.Path]::GetFullPath($OutputDirectory)

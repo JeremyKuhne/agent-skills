@@ -2029,6 +2029,33 @@ Describe 'Skill evaluation runner' {
         $legacyClientRescore.CopilotExecutableSha256 | Should -BeNullOrEmpty
         $legacyClientRescore.CopilotExecutableEvidenceVerified | Should -BeFalse
 
+        $unverifiedClientInput = Join-Path $TestDrive 'unverified-client-input'
+        Copy-Item -LiteralPath $outputDirectory -Destination $unverifiedClientInput -Recurse
+        $unverifiedClientSummaryPath = Join-Path $unverifiedClientInput 'summary.json'
+        $unverifiedClientSummary = Get-Content `
+            -LiteralPath $unverifiedClientSummaryPath `
+            -Raw | ConvertFrom-Json
+        $unverifiedClientSummary.CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
+        $unverifiedClientSummary.CopilotExecutableSha256 = 'A' * 64
+        $unverifiedClientSummary.CopilotExecutableEvidenceVerified = $false
+        $unverifiedClientSummary | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $unverifiedClientSummaryPath
+        {
+            Invoke-SkillEvalRescore `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -InputDirectory $unverifiedClientInput `
+                -OutputDirectory (Join-Path $TestDrive 'rejected-unverified-client')
+        } | Should -Throw '*marks Copilot executable evidence unverified*'
+        $unverifiedClientRescore = Invoke-SkillEvalRescore `
+            -RepoRoot $script:RepoRoot `
+            -ScenarioPath $script:ScenarioPath `
+            -InputDirectory $unverifiedClientInput `
+            -OutputDirectory (Join-Path $TestDrive 'accepted-unverified-client') `
+            -AllowLegacyUnverifiedEvidence
+        $unverifiedClientRescore.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
+        $unverifiedClientRescore.CopilotExecutableEvidenceVerified | Should -BeFalse
+
         $invalidRunNumbers = @('../outside', '0')
         for ($invalidIndex = 0; $invalidIndex -lt $invalidRunNumbers.Count; $invalidIndex++) {
             $invalidInput = Join-Path $TestDrive "invalid-run-$invalidIndex"
