@@ -48,6 +48,267 @@ BeforeAll {
     $script:SkillNames = @($script:SkillRecords.Name)
 }
 
+Describe 'Pester shard runner' {
+    BeforeAll {
+        $script:ShardRunner = Join-Path $script:RepoRoot 'tests/Invoke-PesterShards.ps1'
+        $script:ShardPwsh = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
+
+        function Invoke-ShardFixture (
+            [string] $Name,
+            [string] $Content,
+            [string] $ReportedResult,
+            [switch] $IncludeHealthy) {
+            $root = Join-Path $TestDrive $Name
+            [System.IO.Directory]::CreateDirectory($root) | Out-Null
+            $fixturePath = Join-Path $root 'Fixture.Tests.ps1'
+            [System.IO.File]::WriteAllText($fixturePath, $Content)
+            if ($PSBoundParameters.ContainsKey('ReportedResult')) {
+                [System.IO.File]::WriteAllText(
+                    (Join-Path $root 'reported-result.json'), $ReportedResult)
+            }
+            $testPath = $fixturePath
+            if ($IncludeHealthy) {
+                [System.IO.File]::WriteAllText((Join-Path $root 'Healthy.Tests.ps1'), @'
+Describe 'Healthy fixture' {
+    It 'passes' { $true | Should -BeTrue }
+}
+'@)
+                $testPath = $root
+            }
+            $reportDirectory = Join-Path $root 'reports'
+            $output = @(& $script:ShardPwsh -NoProfile -File $script:ShardRunner `
+                    -Path $testPath -OutputDirectory $reportDirectory `
+                    -MaxConcurrency 2 -PesterVersion 5.7.1 2>&1)
+            $exitCode = $LASTEXITCODE
+            $summary = Get-Content -LiteralPath (Join-Path $reportDirectory 'summary.json') -Raw |
+                ConvertFrom-Json
+            [pscustomobject]@{
+                ExitCode = $exitCode
+                Output = $output -join [Environment]::NewLine
+                Summary = $summary
+                Log = Get-Content -LiteralPath $summary.Shards[0].LogPath -Raw
+            }
+        }
+    }
+
+    It 'reports a healthy shard with real test counts' {
+        $run = Invoke-ShardFixture 'healthy' @'
+Describe 'Healthy fixture' {
+    It 'passes' { $true | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Be 0 -Because $run.Output
+        $run.Summary.SchemaVersion | Should -Be 2
+        $run.Summary.Result | Should -Be 'Passed'
+        $run.Summary.ShardCount | Should -Be 1
+        $run.Summary.PassedCount | Should -Be 1
+        $run.Summary.FailedCount | Should -Be 0
+        $run.Summary.TotalCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -BeTrue
+        $run.Summary.InfrastructureFailureCount | Should -Be 0
+        $run.Summary.Shards[0].ExitCode | Should -Be 0
+    }
+
+    It 'fails when discovery fails before any tests are counted' {
+        $run = Invoke-ShardFixture 'discovery-failure' @'
+BeforeDiscovery { throw 'Synthetic discovery failure.' }
+Describe 'Unreachable fixture' {
+    It 'cannot run' { $true | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0 -Because $run.Output
+        $run.Summary.FailedCount | Should -Be 0
+        $run.Summary.TotalCount | Should -Be 0
+        $run.Summary.FailedContainersCount | Should -Be 1
+        $run.Summary.Shards[0].ExitCode | Should -Not -Be 0
+        $run.Log | Should -Match 'Synthetic discovery failure'
+    }
+
+    It 'reports an assertion failure as a failed test, not an infrastructure failure' {
+        $run = Invoke-ShardFixture 'assertion-failure' @'
+Describe 'Assertion fixture' {
+    It 'fails' { $false | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.FailedCount | Should -Be 1
+        $run.Summary.TotalCount | Should -Be 1
+        $run.Summary.InfrastructureFailureCount | Should -Be 0
+        $run.Summary.CountsComplete | Should -BeTrue
+    }
+
+    It 'fails when block setup fails' {
+        $run = Invoke-ShardFixture 'setup-failure' @'
+Describe 'Setup fixture' {
+    BeforeAll { throw 'Synthetic setup failure.' }
+    It 'cannot run' { $true | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.FailedBlocksCount | Should -Be 1
+        $run.Log | Should -Match 'Synthetic setup failure'
+    }
+
+    It 'fails teardown even when every test passed' {
+        $run = Invoke-ShardFixture 'teardown-failure' @'
+Describe 'Teardown fixture' {
+    AfterAll { throw 'Synthetic teardown failure.' }
+    It 'passes' { $true | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.PassedCount | Should -Be 1
+        $run.Summary.FailedCount | Should -Be 0
+        $run.Summary.FailedBlocksCount | Should -Be 1
+    }
+
+    It 'rejects empty discovery with an explicit reason' {
+        $run = Invoke-ShardFixture 'empty-discovery' "Describe 'Empty fixture' { }"
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.TotalCount | Should -Be 0
+        $run.Summary.FailedCount | Should -Be 0
+        $run.Summary.Shards[0].Error | Should -Match 'No Pester tests were discovered'
+    }
+
+    It 'keeps intentional skips distinct from empty discovery' {
+        $run = Invoke-ShardFixture 'skipped' @'
+Describe 'Skipped fixture' {
+    It 'is intentionally skipped' -Skip { throw 'Must not run.' }
+}
+'@
+
+        $run.ExitCode | Should -Be 0 -Because $run.Output
+        $run.Summary.PassedCount | Should -Be 0
+        $run.Summary.SkippedCount | Should -Be 1
+        $run.Summary.TotalCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -BeTrue
+    }
+
+    It 'fails a child without a result without inventing test counts' {
+        $run = Invoke-ShardFixture 'missing-result' @'
+BeforeDiscovery { [System.Environment]::Exit(0) }
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.PassedCount | Should -BeNullOrEmpty
+        $run.Summary.FailedCount | Should -BeNullOrEmpty
+        $run.Summary.TotalCount | Should -BeNullOrEmpty
+        $run.Summary.InfrastructureFailureCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -BeFalse
+        $run.Summary.Shards[0].ExitCode | Should -Be 0
+        $run.Summary.Shards[0].Error | Should -Match 'did not produce a result'
+    }
+
+    It 'rejects an invalid child result: <Kind>' -ForEach @(
+        @{ Kind = 'malformed-json'; ReportedResult = '{' }
+        @{ Kind = 'missing-fields'; ReportedResult = '{}' }
+    ) {
+        $run = Invoke-ShardFixture $Kind -ReportedResult $ReportedResult -Content @'
+BeforeDiscovery {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'reported-result.json') `
+        -Destination (Join-Path $PSScriptRoot 'reports/shard-0.json')
+    [System.Environment]::Exit(0)
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.FailedCount | Should -BeNullOrEmpty
+        $run.Summary.TotalCount | Should -BeNullOrEmpty
+        $run.Summary.InfrastructureFailureCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -BeFalse
+        $run.Summary.Shards[0].Error | Should -Match 'Invalid Pester shard result'
+    }
+
+    It 'rejects a contradictory child result: <Kind>' -ForEach @(
+        @{ Kind = 'wrong-path'; Overrides = @{ Path = 'wrong.Tests.ps1' }; CountsComplete = $false }
+        @{ Kind = 'negative-count'; Overrides = @{ PassedCount = -1 }; CountsComplete = $false }
+        @{ Kind = 'counts-mismatch'; Overrides = @{ TotalCount = 2 }; CountsComplete = $false }
+        @{ Kind = 'passing-container-failure'; Overrides = @{ FailedContainersCount = 1 }; CountsComplete = $false }
+        @{ Kind = 'not-run'; Overrides = @{ PassedCount = 0; NotRunCount = 1 }; CountsComplete = $true }
+        @{ Kind = 'inconclusive'; Overrides = @{ PassedCount = 0; InconclusiveCount = 1 }; CountsComplete = $true }
+    ) {
+        $reported = [ordered]@{
+            Path = Join-Path (Join-Path $TestDrive $Kind) 'Fixture.Tests.ps1'
+            Result = 'Passed'
+            PassedCount = 1
+            FailedCount = 0
+            SkippedCount = 0
+            NotRunCount = 0
+            InconclusiveCount = 0
+            TotalCount = 1
+            FailedBlocksCount = 0
+            FailedContainersCount = 0
+            DurationMilliseconds = 0
+        }
+        foreach ($property in $Overrides.Keys) { $reported[$property] = $Overrides[$property] }
+        $run = Invoke-ShardFixture $Kind -ReportedResult ($reported | ConvertTo-Json) -Content @'
+BeforeDiscovery {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'reported-result.json') `
+        -Destination (Join-Path $PSScriptRoot 'reports/shard-0.json')
+    [System.Environment]::Exit(0)
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.Result | Should -Be 'Failed'
+        $run.Summary.InfrastructureFailureCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -Be $CountsComplete
+        $run.Summary.Shards[0].Error | Should -Not -BeNullOrEmpty
+    }
+
+    It 'rejects a passing report when the process exits unsuccessfully' {
+        $reported = [ordered]@{
+            Path = Join-Path (Join-Path $TestDrive 'nonzero-exit') 'Fixture.Tests.ps1'
+            Result = 'Passed'
+            PassedCount = 1
+            FailedCount = 0
+            SkippedCount = 0
+            NotRunCount = 0
+            InconclusiveCount = 0
+            TotalCount = 1
+            FailedBlocksCount = 0
+            FailedContainersCount = 0
+            DurationMilliseconds = 0
+        }
+        $run = Invoke-ShardFixture 'nonzero-exit' -ReportedResult ($reported | ConvertTo-Json) -Content @'
+BeforeDiscovery {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'reported-result.json') `
+        -Destination (Join-Path $PSScriptRoot 'reports/shard-0.json')
+    [System.Environment]::Exit(23)
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.PassedCount | Should -Be 1
+        $run.Summary.FailedCount | Should -Be 0
+        $run.Summary.InfrastructureFailureCount | Should -Be 1
+        $run.Summary.Shards[0].ExitCode | Should -Be 23
+        $run.Summary.Shards[0].Error | Should -Match 'exited with code 23'
+    }
+
+    It 'retains healthy shard evidence without presenting incomplete totals as complete' {
+        $run = Invoke-ShardFixture 'mixed-results' -IncludeHealthy -Content @'
+BeforeDiscovery { [System.Environment]::Exit(0) }
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.ShardCount | Should -Be 2
+        $run.Summary.FailedShardCount | Should -Be 1
+        $run.Summary.InfrastructureFailureCount | Should -Be 1
+        $run.Summary.CountsComplete | Should -BeFalse
+        $run.Summary.TotalCount | Should -BeNullOrEmpty
+        $healthyShard = @($run.Summary.Shards | Where-Object Result -EQ 'Passed')
+        $healthyShard.Count | Should -Be 1
+        $healthyShard[0].PassedCount | Should -Be 1
+    }
+}
+
 Describe 'Skill catalog contracts' {
     AfterEach {
         $fixturePath = Join-Path $TestDrive '[provenance-bearing-user-voice]'

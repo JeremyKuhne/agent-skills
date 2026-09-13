@@ -27,6 +27,7 @@ if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
     $configuration = New-PesterConfiguration
     $configuration.Run.Path = (Resolve-Path -LiteralPath $ShardPath).Path
     $configuration.Run.Throw = $false
+    $configuration.Run.Exit = $false
     $configuration.Run.PassThru = $true
     $configuration.Output.Verbosity = 'Normal'
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -34,13 +35,19 @@ if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
     $stopwatch.Stop()
     [pscustomobject]@{
         Path = (Resolve-Path -LiteralPath $ShardPath).Path
+        Result = [string]$result.Result
         PassedCount = $result.PassedCount
         FailedCount = $result.FailedCount
+        FailedBlocksCount = $result.FailedBlocksCount
+        FailedContainersCount = $result.FailedContainersCount
         SkippedCount = $result.SkippedCount
+        NotRunCount = $result.NotRunCount
+        InconclusiveCount = $result.InconclusiveCount
         TotalCount = $result.TotalCount
         DurationMilliseconds = $stopwatch.ElapsedMilliseconds
     } | ConvertTo-Json | Set-Content -LiteralPath $ResultPath
-    if ($result.FailedCount -gt 0) { exit 1 }
+    if ($result.Result -ne 'Passed' -or $result.TotalCount -eq 0 -or
+        $result.NotRunCount -gt 0 -or $result.InconclusiveCount -gt 0) { exit 1 }
     exit 0
 }
 
@@ -142,55 +149,118 @@ $processResults = @($scheduledWorkItems | ForEach-Object -Parallel {
         }
     } -ThrottleLimit $MaxConcurrency)
 $stopwatch.Stop()
+if ($processResults.Count -ne $workItems.Count -or
+    @($processResults.Index | Sort-Object -Unique).Count -ne $workItems.Count) {
+    throw "Expected $($workItems.Count) distinct Pester shard process results but received $($processResults.Count)."
+}
 
+$countProperties = @(
+    'PassedCount', 'FailedCount', 'SkippedCount', 'NotRunCount',
+    'InconclusiveCount', 'TotalCount', 'FailedBlocksCount', 'FailedContainersCount')
 $shards = [System.Collections.Generic.List[object]]::new()
 foreach ($processResult in @($processResults | Sort-Object Index)) {
-    if (Test-Path -LiteralPath $processResult.ResultPath -PathType Leaf) {
-        $shard = Get-Content -LiteralPath $processResult.ResultPath -Raw |
-            ConvertFrom-Json
-        $shard | Add-Member -NotePropertyName ExitCode -NotePropertyValue $processResult.ExitCode
-        $shard | Add-Member -NotePropertyName TimedOut -NotePropertyValue $processResult.TimedOut
-        $shard | Add-Member -NotePropertyName LogPath -NotePropertyValue $processResult.LogPath
+    $shard = [pscustomobject]@{
+        Path = $orderedTestFiles[$processResult.Index]
+        Result = 'Error'
+        CountsComplete = $false
+        DurationMilliseconds = $null
+        ExitCode = $processResult.ExitCode
+        TimedOut = $processResult.TimedOut
+        LogPath = $processResult.LogPath
+        Error = $null
     }
-    else {
-        $shard = [pscustomobject]@{
-            Path = $orderedTestFiles[$processResult.Index]
-            PassedCount = 0
-            FailedCount = 1
-            SkippedCount = 0
-            TotalCount = 1
-            DurationMilliseconds = 0
-            ExitCode = $processResult.ExitCode
-            TimedOut = $processResult.TimedOut
-            LogPath = $processResult.LogPath
+    foreach ($property in $countProperties) {
+        $shard | Add-Member -NotePropertyName $property -NotePropertyValue $null
+    }
+    if (Test-Path -LiteralPath $processResult.ResultPath -PathType Leaf) {
+        try {
+            $reported = Get-Content -LiteralPath $processResult.ResultPath -Raw |
+                ConvertFrom-Json
+            if ($reported -isnot [pscustomobject] -or
+                $reported.Path -cne $shard.Path -or
+                $reported.Result -cnotin @('Passed', 'Failed')) {
+                throw 'Expected a Pester result for the scheduled test file.'
+            }
+            foreach ($property in @($countProperties) + 'DurationMilliseconds') {
+                $value = $reported.$property
+                if (($value -isnot [int] -and $value -isnot [long]) -or $value -lt 0) {
+                    throw "Missing or invalid nonnegative integer '$property'."
+                }
+            }
+            $accountedTests = $reported.PassedCount + $reported.FailedCount +
+                $reported.SkippedCount + $reported.NotRunCount + $reported.InconclusiveCount
+            if ($reported.TotalCount -ne $accountedTests) {
+                throw 'Pester test counts do not reconcile.'
+            }
+            if ($reported.Result -eq 'Passed' -and
+                ($reported.FailedCount -gt 0 -or $reported.FailedBlocksCount -gt 0 -or
+                    $reported.FailedContainersCount -gt 0)) {
+                throw 'A passing Pester result contains failures.'
+            }
+            foreach ($property in $countProperties) { $shard.$property = $reported.$property }
+            $shard.CountsComplete = $true
+            $shard.DurationMilliseconds = $reported.DurationMilliseconds
+            $shard.Result = $reported.Result
+            if ($reported.TotalCount -eq 0 -and $reported.Result -eq 'Passed') {
+                $shard.Error = 'No Pester tests were discovered.'
+            }
+            elseif ($reported.NotRunCount -gt 0 -or $reported.InconclusiveCount -gt 0) {
+                $shard.Error = 'Pester left tests not run or inconclusive.'
+            }
+        }
+        catch {
+            $shard.Error = "Invalid Pester shard result: $($_.Exception.Message)"
         }
     }
+    else {
+        $shard.Error = 'Pester shard did not produce a result.'
+    }
+    if ($processResult.TimedOut) {
+        $shard.Error = "Pester shard timed out. $($shard.Error)".TrimEnd()
+    }
+    elseif ($processResult.ExitCode -ne 0 -and $shard.Result -eq 'Passed' -and -not $shard.Error) {
+        $shard.Error = "Pester shard process exited with code $($processResult.ExitCode)."
+    }
+    if ($shard.Error) { $shard.Result = 'Error' }
     $shards.Add($shard)
 }
 
+$countsComplete = @($shards | Where-Object { -not $_.CountsComplete }).Count -eq 0
+$failedShards = @($shards | Where-Object { $_.Result -ne 'Passed' })
 $summary = [pscustomobject]@{
-    SchemaVersion = 1
+    SchemaVersion = 2
     GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
     PesterVersion = $PesterVersion.ToString()
     MaxConcurrency = $MaxConcurrency
     ShardTimeoutMinutes = $ShardTimeoutMinutes
     ShardCount = $shards.Count
     WallTimeMilliseconds = $stopwatch.ElapsedMilliseconds
-    PassedCount = ($shards | Measure-Object -Property PassedCount -Sum).Sum
-    FailedCount = ($shards | Measure-Object -Property FailedCount -Sum).Sum
-    SkippedCount = ($shards | Measure-Object -Property SkippedCount -Sum).Sum
-    TotalCount = ($shards | Measure-Object -Property TotalCount -Sum).Sum
+    Result = if ($failedShards.Count -gt 0) { 'Failed' } else { 'Passed' }
+    FailedShardCount = $failedShards.Count
+    InfrastructureFailureCount = @($shards | Where-Object Error).Count
+    CountsComplete = $countsComplete
     Shards = $shards.ToArray()
+}
+foreach ($property in $countProperties) {
+    $count = if ($countsComplete) { ($shards | Measure-Object -Property $property -Sum).Sum } else { $null }
+    $summary | Add-Member -NotePropertyName $property -NotePropertyValue $count
 }
 $summary | ConvertTo-Json -Depth 10 |
     Set-Content -LiteralPath (Join-Path $resolvedOutputDirectory 'summary.json')
 $summary.Shards |
-    Select-Object Path, PassedCount, FailedCount, SkippedCount, DurationMilliseconds |
+    Select-Object Path, Result, PassedCount, FailedCount, SkippedCount, DurationMilliseconds |
     Format-Table -AutoSize
-Write-Host "Pester shards: $($summary.ShardCount); passed: $($summary.PassedCount); failed: $($summary.FailedCount); skipped: $($summary.SkippedCount); wall time: $($summary.WallTimeMilliseconds) ms."
+if ($countsComplete) {
+    Write-Host "Pester shards: $($summary.ShardCount); passed: $($summary.PassedCount); failed: $($summary.FailedCount); skipped: $($summary.SkippedCount); failed blocks: $($summary.FailedBlocksCount); failed containers: $($summary.FailedContainersCount); wall time: $($summary.WallTimeMilliseconds) ms."
+}
+else {
+    Write-Host "Pester shards: $($summary.ShardCount); test totals unknown because shard results are missing or invalid; wall time: $($summary.WallTimeMilliseconds) ms."
+}
 Write-Host "Pester shard reports: $resolvedOutputDirectory"
-if ($summary.FailedCount -gt 0 -or
-    @($summary.Shards | Where-Object { $_.ExitCode -ne 0 -or $_.TimedOut }).Count -gt 0) {
+foreach ($shard in $failedShards) {
+    Write-Host "Failed shard '$($shard.Path)': $($shard.Result). $($shard.Error) Log: $($shard.LogPath)"
+}
+if ($failedShards.Count -gt 0) {
     throw 'One or more Pester shards failed.'
 }
 $global:LASTEXITCODE = 0
