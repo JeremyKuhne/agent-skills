@@ -150,4 +150,30 @@ Describe 'Agent file CI contract' {
         $linkStep.Value | Should -Match '--offline'
         $linkStep.Value | Should -Match '"\*\*/\*\.md"'
     }
+
+    It 'passes the explicitly resolved pinned Copilot client to plugin smoke' {
+        $workflow = Get-Content -LiteralPath (
+            Join-Path $script:RepoRoot '.github/workflows/ci.yml') -Raw
+        $pluginSmoke = Get-Content -LiteralPath (
+            Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1') -Raw
+
+        $workflow | Should -Match '@github/copilot-linux-x64@1\.0\.63'
+        $workflow | Should -Match '(?m)^          \$copilotPath = \(Resolve-Path -LiteralPath \('
+        $workflow | Should -Not -Match 'Get-Command copilot'
+        $workflow | Should -Match '(?m)^          \./tests/plugin/Invoke-PluginSmoke\.ps1 -CopilotPath \$copilotPath\r?$'
+        $pluginSmoke | Should -Match '(?ms)\[Parameter\(Mandatory\)\]\r?\n\s*\[string\] \$CopilotPath'
+        $pluginSmoke | Should -Match 'not a native executable for this host'
+        $pluginSmoke | Should -Match "'COPILOT_AUTO_UPDATE'"
+        $pluginSmoke | Should -Match "\$env:COPILOT_AUTO_UPDATE = 'false'"
+        $pluginSmoke | Should -Match 'Copilot executable SHA-256:'
+    }
+
+    It 'rejects a launcher passed to the repository plugin smoke script' {
+        $pluginSmoke = Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1'
+        $launcherPath = Join-Path $TestDrive $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
+        [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')
+
+        { & $pluginSmoke -CopilotPath $launcherPath } |
+            Should -Throw '*not a native executable for this host*'
+    }
 }

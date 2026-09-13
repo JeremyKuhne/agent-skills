@@ -132,6 +132,14 @@ available; otherwise supply a token through the environment. Use
 `-IsolateCopilotHome:$false` only for a deliberate local diagnostic, never for
 release evidence.
 
+Evaluation entry points require a native Copilot executable. They reject shell,
+batch, npm, and editor launchers even when one is named `copilot`. If the native
+binary is not directly on `PATH`, pass its exact path to `-CopilotPath`; the
+matrix resolves it once and gives the same binary to every document worker.
+Reports record the version and SHA-256 from that selected executable, and version
+checks run with auto-update disabled. A missing or incompatible binary blocks a
+real run before any scenario is scheduled.
+
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
   -Model gpt-5.4 `
@@ -328,6 +336,13 @@ and retain only the aggregate evidence needed for the release decision.
   requested fresh run.
 
 ## Deterministic tests
+
+Ordinary Pester tests do not install, discover, or invoke a real Copilot client.
+They use injected executors and controlled absent/launcher/native fixtures. The
+repository and generated plugin-smoke scripts are separate integration entry
+points; CI installs a pinned client and passes its resolved command path
+explicitly. A developer can run the same integration with
+`./tests/plugin/Invoke-PluginSmoke.ps1 -CopilotPath <path>`.
 
 Run independent Pester files in isolated PowerShell processes:
 

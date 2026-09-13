@@ -120,19 +120,93 @@ function New-SkillEvalArguments {
 
 function Resolve-SkillEvalCopilotPath {
     [CmdletBinding()]
-    param()
+    param([string] $CopilotPath)
+
+    function Test-NativeExecutable ([string] $Path) {
+        if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+        $stream = [System.IO.File]::OpenRead($Path)
+        try {
+            $header = [byte[]]::new(4)
+            $read = $stream.Read($header, 0, $header.Length)
+        }
+        finally { $stream.Dispose() }
+
+        if ($IsWindows) {
+            return $read -ge 2 -and $header[0] -eq 0x4D -and $header[1] -eq 0x5A
+        }
+        if ($IsLinux) {
+            return $read -eq 4 -and $header[0] -eq 0x7F -and
+                $header[1] -eq 0x45 -and $header[2] -eq 0x4C -and $header[3] -eq 0x46
+        }
+        if ($IsMacOS) {
+            $signature = [Convert]::ToHexString($header)
+            return $read -eq 4 -and $signature -in @(
+                'FEEDFACE', 'FEEDFACF', 'CEFAEDFE', 'CFFAEDFE',
+                'CAFEBABE', 'BEBAFECA', 'CAFEBABF', 'BFBAFECA')
+        }
+        return $false
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CopilotPath)) {
+        $resolvedPath = (Resolve-Path -LiteralPath $CopilotPath -ErrorAction Stop).Path
+        $expectedName = if ($IsWindows) { 'copilot.exe' } else { 'copilot' }
+        if ([System.IO.Path]::GetFileName($resolvedPath) -cne $expectedName) {
+            throw "Copilot CLI path must name '$expectedName': $resolvedPath"
+        }
+        if (-not (Test-NativeExecutable $resolvedPath)) {
+            throw "Copilot CLI path is not a native executable for this host: $resolvedPath"
+        }
+        return $resolvedPath
+    }
 
     $commands = @(Get-Command copilot -CommandType Application -All -ErrorAction SilentlyContinue)
-    $preferred = @(if ($IsWindows) {
-        $commands | Where-Object { $_.Name -ceq 'copilot.exe' } | Select-Object -First 1
+    $nativeCommands = @($commands | Where-Object {
+            Test-NativeExecutable ([string]$_.Source)
+        })
+    if ($nativeCommands.Count -eq 0) {
+        $candidates = @($commands | ForEach-Object { [string]$_.Source } |
+            Sort-Object -Unique)
+        $detail = if ($candidates.Count -gt 0) {
+            " Launcher candidates were rejected: $($candidates -join ', ')."
+        }
+        else { '' }
+        throw "A native Copilot CLI executable was not found.$detail"
     }
-    else {
-        $commands | Where-Object { $_.Name -ceq 'copilot' } | Select-Object -First 1
-    })
-    if ($preferred.Count -eq 0) {
-        throw 'A native Copilot CLI executable was not found.'
+    return [string]$nativeCommands[0].Source
+}
+
+function Get-SkillEvalCopilotVersion ([string] $CopilotPath) {
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $CopilotPath
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.Environment['COPILOT_AUTO_UPDATE'] = 'false'
+    $startInfo.ArgumentList.Add('--version')
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) { throw 'Copilot CLI version process did not start.' }
+        $standardOutput = $process.StandardOutput.ReadToEndAsync()
+        $standardError = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(30 * 1000)) {
+            $process.Kill($true)
+            $process.WaitForExit()
+            throw 'Copilot CLI version query timed out.'
+        }
+        $output = @(
+            $standardOutput.GetAwaiter().GetResult()
+            $standardError.GetAwaiter().GetResult()) -join [Environment]::NewLine
+        if ($process.ExitCode -ne 0) {
+            throw "Copilot CLI version query exited with code $($process.ExitCode):`n$output"
+        }
+        $version = $output.Trim()
+        if ($version -notmatch '^GitHub Copilot CLI \d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?(?:\.|\s|$)') {
+            throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
+        }
+        return $version
     }
-    return [string]$preferred[0].Source
+    finally { $process.Dispose() }
 }
 
 function Invoke-SkillEvalGit {
@@ -867,6 +941,8 @@ function Invoke-SkillEvalProcess {
         [Parameter(Mandatory)]
         [int] $TimeoutMinutes,
 
+        [string] $CopilotPath,
+
         [scriptblock] $Executor,
 
         [switch] $IsolateCopilotHome = $true
@@ -929,9 +1005,11 @@ function Invoke-SkillEvalProcess {
         }
     }
 
-    $copilotPath = Resolve-SkillEvalCopilotPath
+    if ([string]::IsNullOrWhiteSpace($CopilotPath)) {
+        throw 'A resolved native Copilot CLI path is required for a real evaluation.'
+    }
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $copilotPath
+    $startInfo.FileName = $CopilotPath
     $startInfo.WorkingDirectory = $Context.Workspace
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
@@ -1012,6 +1090,10 @@ function Write-SkillEvalSummary {
     $lines.Add('# Skill evaluation summary')
     $lines.Add('')
     $lines.Add("- Model: ``$($Summary.Model)``")
+    $lines.Add("- Copilot CLI: ``$($Summary.CopilotVersion)``")
+    if (-not [string]::IsNullOrWhiteSpace([string]$Summary.CopilotExecutableSha256)) {
+        $lines.Add("- Copilot executable SHA-256: ``$($Summary.CopilotExecutableSha256)``")
+    }
     $lines.Add("- Scenario revision: ``$($Summary.ScenarioRevision)``")
     $lines.Add("- Candidate revision: ``$($Summary.CandidateRevision)``")
     $lines.Add("- Fixture revision: ``$($Summary.FixtureRevision)``")
@@ -1079,6 +1161,8 @@ function Invoke-SkillEvalWorkItem {
         [Parameter(Mandatory)]
         [datetime] $QueuedAtUtc,
 
+        [string] $CopilotPath,
+
         [scriptblock] $Executor,
 
         [switch] $IsolateCopilotHome = $true
@@ -1109,6 +1193,7 @@ function Invoke-SkillEvalWorkItem {
             -Context $context `
             -Model $Model `
             -TimeoutMinutes $TimeoutMinutes `
+            -CopilotPath $CopilotPath `
             -Executor $Executor `
             -IsolateCopilotHome:$IsolateCopilotHome
         $processMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
@@ -1217,6 +1302,8 @@ function Invoke-SkillEvalSuite {
         [ValidateRange(1, 32)]
         [int] $MaxConcurrency = 8,
 
+        [string] $CopilotPath,
+
         [scriptblock] $Executor,
 
         [switch] $IsolateCopilotHome = $true
@@ -1225,6 +1312,23 @@ function Invoke-SkillEvalSuite {
     $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
     $resolvedScenarioPath = (Resolve-Path -LiteralPath $ScenarioPath).Path
     $evalRoot = (Resolve-Path -LiteralPath (Join-Path (Split-Path $resolvedScenarioPath) '..')).Path
+    $resolvedCopilotPath = if ($Executor) {
+        $null
+    }
+    else { Resolve-SkillEvalCopilotPath -CopilotPath $CopilotPath }
+    $copilotExecutableSha256 = if ($Executor) {
+        $null
+    }
+    else { (Get-FileHash -LiteralPath $resolvedCopilotPath -Algorithm SHA256).Hash }
+    $copilotVersion = if ($Executor) {
+        'fake-executor'
+    }
+    else { Get-SkillEvalCopilotVersion -CopilotPath $resolvedCopilotPath }
+    if (-not $Executor -and
+        (Get-FileHash -LiteralPath $resolvedCopilotPath -Algorithm SHA256).Hash -cne
+        $copilotExecutableSha256) {
+        throw 'The selected Copilot CLI executable changed during version verification.'
+    }
     $candidateRevision = Get-SkillEvalCandidateRevision -RepoRoot $resolvedRepoRoot
     New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
     $resolvedOutputDirectory = (Resolve-Path -LiteralPath $OutputDirectory).Path
@@ -1266,6 +1370,7 @@ function Invoke-SkillEvalSuite {
                     -Model $Model `
                     -TimeoutMinutes $TimeoutMinutes `
                     -QueuedAtUtc $_.QueuedAtUtc `
+                    -CopilotPath $resolvedCopilotPath `
                     -Executor $Executor `
                     -IsolateCopilotHome:$IsolateCopilotHome
             })
@@ -1283,6 +1388,7 @@ function Invoke-SkillEvalSuite {
                         $OutputDirectory,
                         $Model,
                         $TimeoutMinutes,
+                        $CopilotPath,
                         $IsolateCopilotHome
                     )
 
@@ -1296,6 +1402,7 @@ function Invoke-SkillEvalSuite {
                         -Model $Model `
                         -TimeoutMinutes $TimeoutMinutes `
                         -QueuedAtUtc $WorkItem.QueuedAtUtc `
+                        -CopilotPath $CopilotPath `
                         -IsolateCopilotHome:$IsolateCopilotHome
                 } `
                     $_ `
@@ -1304,6 +1411,7 @@ function Invoke-SkillEvalSuite {
                     $using:resolvedOutputDirectory `
                     $using:Model `
                     $using:TimeoutMinutes `
+                    $using:resolvedCopilotPath `
                     $using:isolateCopilotHomeValue
             } -ThrottleLimit $effectiveMaxConcurrency)
     }
@@ -1362,7 +1470,8 @@ function Invoke-SkillEvalSuite {
         InfrastructureFailureCount = @($resultArray | Where-Object {
                 $_.TimedOut -or $_.ExitCode -ne 0 -or -not [string]::IsNullOrWhiteSpace([string]$_.Error)
             }).Count
-        CopilotVersion = if ($Executor) { 'fake-executor' } else { (& copilot --version 2>&1) -join ' ' }
+        CopilotVersion = $copilotVersion
+        CopilotExecutableSha256 = $copilotExecutableSha256
         PowerShellVersion = $PSVersionTable.PSVersion.ToString()
         OperatingSystem = $PSVersionTable.OS
         Runs = $resultArray
@@ -1581,6 +1690,10 @@ function Invoke-SkillEvalRescore {
                 -not [string]::IsNullOrWhiteSpace([string]$_.Error)
             }).Count
         CopilotVersion = [string]$sourceSummary.CopilotVersion
+        CopilotExecutableSha256 = if ($sourceSummary.PSObject.Properties['CopilotExecutableSha256']) {
+            [string]$sourceSummary.CopilotExecutableSha256
+        }
+        else { $null }
         PowerShellVersion = $PSVersionTable.PSVersion.ToString()
         OperatingSystem = $PSVersionTable.OS
         Runs = $resultArray
@@ -1593,6 +1706,7 @@ Export-ModuleMember -Function @(
     'Get-SkillEvalScenarios',
     'New-SkillEvalArguments',
     'Resolve-SkillEvalCopilotPath',
+    'Get-SkillEvalCopilotVersion',
     'Test-SkillEvalEvidence',
     'Get-SkillEvalExitCode',
     'Invoke-SkillEvalSuite',

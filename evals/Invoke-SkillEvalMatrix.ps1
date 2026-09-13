@@ -12,6 +12,7 @@ param(
     ),
     [string] $OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "agent-skills-matrix-$([guid]::NewGuid().ToString('N'))"),
     [string] $Model = 'gpt-5.4',
+    [string] $CopilotPath,
     [ValidateRange(0, 100)]
     [int] $RunCount = 0,
     [ValidateRange(1, 60)]
@@ -28,6 +29,7 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 Import-Module (Join-Path $PSScriptRoot 'SkillEval.psm1') -Force
+$resolvedCopilotPath = Resolve-SkillEvalCopilotPath -CopilotPath $CopilotPath
 $resolvedScenarioPaths = @($ScenarioPath | ForEach-Object {
         $path = if ([System.IO.Path]::IsPathRooted($_)) {
             $_
@@ -107,6 +109,7 @@ $processResults = @($workItems | ForEach-Object -Parallel {
                 '-ScenarioPath', $_.ScenarioPath,
                 '-OutputDirectory', $_.OutputDirectory,
                 '-Model', $using:Model,
+                '-CopilotPath', $using:resolvedCopilotPath,
                 '-TimeoutMinutes', [string]$using:TimeoutMinutes,
                 '-MaxConcurrency', [string]$_.Workers,
                 '-ReportOnly')) {

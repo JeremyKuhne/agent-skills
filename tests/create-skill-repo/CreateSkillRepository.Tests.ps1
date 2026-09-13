@@ -131,10 +131,12 @@ Describe 'New-SkillRepository' {
 
         $releaseWorkflow = Get-Content (
             Join-Path $root '.github/workflows/release.yml') -Raw
-        $releaseWorkflow | Should -Match '(?m)^ {6}- name: Install Copilot CLI$'
+        $releaseWorkflow | Should -Match '(?m)^ {6}- name: Install native Copilot CLI$'
         $releaseWorkflow | Should -Match '(?m)^ {6}- name: Smoke-test plugin installation$'
-        $releaseWorkflow | Should -Match '(?m)^ {8}run: npm install --global @github/copilot@1\.0\.63$'
-        $releaseWorkflow | Should -Match '(?m)^ {8}run: \./tests/Invoke-PluginSmoke\.ps1$'
+        $releaseWorkflow | Should -Match '@github/copilot-linux-x64@1\.0\.63'
+        $releaseWorkflow | Should -Match '(?m)^ {10}\$copilotPath = \(Resolve-Path -LiteralPath \('
+        $releaseWorkflow | Should -Not -Match 'Get-Command copilot'
+        $releaseWorkflow | Should -Match '(?m)^ {10}\./tests/Invoke-PluginSmoke\.ps1 -CopilotPath \$copilotPath\r?$'
 
         $plugin = Get-Content (Join-Path $root 'plugin.json') -Raw | ConvertFrom-Json
         $marketplace = Get-Content (
@@ -158,11 +160,19 @@ Describe 'New-SkillRepository' {
         $generatedTests = Invoke-Pester (Join-Path $root 'tests') -PassThru
         $generatedTests.FailedCount | Should -Be 0
         $pluginSmoke = Join-Path $root 'tests/Invoke-PluginSmoke.ps1'
-        if (Get-Command copilot -ErrorAction SilentlyContinue) {
-            { & $pluginSmoke } | Should -Not -Throw
-        } else {
-            { & $pluginSmoke } | Should -Throw '*Copilot CLI is required*'
-        }
+        $pluginSmokeContent = Get-Content -LiteralPath $pluginSmoke -Raw
+        $pluginSmokeContent | Should -Match '(?ms)\[Parameter\(Mandatory\)\]\r?\n\s*\[string\] \$CopilotPath'
+        $pluginSmokeContent | Should -Not -Match 'Get-Command copilot'
+        $pluginSmokeContent | Should -Match 'not a native executable for this host'
+        $pluginSmokeContent | Should -Match '& \$resolvedCopilotPath plugin marketplace add'
+        $pluginSmokeContent | Should -Match "'COPILOT_AUTO_UPDATE'"
+        $pluginSmokeContent | Should -Match "\$env:COPILOT_AUTO_UPDATE = 'false'"
+        $pluginSmokeContent | Should -Match 'Copilot executable SHA-256:'
+
+        $launcherPath = Join-Path $TestDrive $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
+        [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')
+        { & $pluginSmoke -CopilotPath $launcherPath } |
+            Should -Throw '*not a native executable for this host*'
     }
 
     It 'creates only the documented Claude runtime root for Claude-only consumers' {

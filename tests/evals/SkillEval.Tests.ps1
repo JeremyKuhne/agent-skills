@@ -13,6 +13,7 @@ BeforeAll {
     $script:PerformanceTestingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/performance-testing.json'
     $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
     $script:RoslynAnalyzersScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/roslyn-analyzers.json'
+    $script:PwshPath = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -650,16 +651,91 @@ Describe 'Skill evaluation scenario contract' {
         ($arguments -join ' ') | Should -Not -Match 'TOKEN='
     }
 
-    It 'resolves one native Copilot executable' {
-        $availableCommands = @(Get-Command copilot -CommandType Application -All -ErrorAction SilentlyContinue)
-        if ($availableCommands.Count -eq 0) {
-            { Resolve-SkillEvalCopilotPath } | Should -Throw '*native Copilot CLI executable*'
-            return
+    It 'resolves native Copilot deterministically: <CaseName>' -ForEach @(
+        @{ CaseName = 'absent'; Candidate = 'none'; Succeeds = $false }
+        @{ CaseName = 'launcher only'; Candidate = 'launcher'; Succeeds = $false }
+        @{ CaseName = 'native'; Candidate = 'native'; Succeeds = $true }
+    ) {
+        $root = Join-Path $TestDrive "copilot-$($CaseName.Replace(' ', '-'))"
+        New-Item -ItemType Directory -Path $root | Out-Null
+        if ($Candidate -eq 'launcher') {
+            $launcherPath = Join-Path $root $(if ($IsWindows) { 'copilot.cmd' } else { 'copilot' })
+            [System.IO.File]::WriteAllText($launcherPath, "#!/bin/sh`nexit 0`n")
+            if (-not $IsWindows) {
+                [System.IO.File]::SetUnixFileMode($launcherPath, [System.IO.UnixFileMode]'UserRead, UserWrite, UserExecute')
+            }
+        }
+        elseif ($Candidate -eq 'native') {
+            $nativePath = Join-Path $root $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
+            $signature = if ($IsWindows) {
+                [byte[]](0x4D, 0x5A, 0, 0)
+            }
+            elseif ($IsLinux) {
+                [byte[]](0x7F, 0x45, 0x4C, 0x46)
+            }
+            else { [byte[]](0xFE, 0xED, 0xFA, 0xCF) }
+            [System.IO.File]::WriteAllBytes($nativePath, $signature)
+            if (-not $IsWindows) {
+                [System.IO.File]::SetUnixFileMode($nativePath, [System.IO.UnixFileMode]'UserRead, UserWrite, UserExecute')
+            }
         }
 
-        $copilotPath = Resolve-SkillEvalCopilotPath
-        Test-Path -LiteralPath $copilotPath -PathType Leaf | Should -BeTrue
-        if ($IsWindows) { [System.IO.Path]::GetExtension($copilotPath) | Should -Be '.exe' }
+        $savedPath = $env:PATH
+        try {
+            $env:PATH = $root
+            if ($Succeeds) {
+                Resolve-SkillEvalCopilotPath | Should -Be $nativePath
+                Resolve-SkillEvalCopilotPath -CopilotPath $nativePath | Should -Be $nativePath
+            }
+            else {
+                { Resolve-SkillEvalCopilotPath } |
+                    Should -Throw '*native Copilot CLI executable was not found*'
+                if ($Candidate -eq 'launcher') {
+                    { Resolve-SkillEvalCopilotPath -CopilotPath $launcherPath } |
+                        Should -Throw '*Copilot CLI path*'
+                }
+            }
+        }
+        finally { $env:PATH = $savedPath }
+    }
+
+    It 'rejects a non-Copilot native executable without changing the caller update setting' {
+        $savedAutoUpdate = [Environment]::GetEnvironmentVariable(
+            'COPILOT_AUTO_UPDATE', 'Process')
+        try {
+            $env:COPILOT_AUTO_UPDATE = 'caller-setting'
+
+            { Get-SkillEvalCopilotVersion -CopilotPath $script:PwshPath } |
+                Should -Throw '*did not identify itself as GitHub Copilot CLI*'
+            $env:COPILOT_AUTO_UPDATE | Should -Be 'caller-setting'
+        }
+        finally {
+            if ($null -eq $savedAutoUpdate) {
+                Remove-Item Env:COPILOT_AUTO_UPDATE -ErrorAction SilentlyContinue
+            }
+            else { $env:COPILOT_AUTO_UPDATE = $savedAutoUpdate }
+        }
+    }
+
+    It 'exposes explicit native client selection through both evaluation entry points' {
+        $singleRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvals.ps1'
+        $matrixRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvalMatrix.ps1'
+        $parseErrors = $null
+        $singleAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $singleRunner, [ref]$null, [ref]$parseErrors)
+        $parseErrors.Count | Should -Be 0
+        $singleParameters = @($singleAst.ParamBlock.Parameters.Name.VariablePath.UserPath)
+        $matrixAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $matrixRunner, [ref]$null, [ref]$parseErrors)
+        $parseErrors.Count | Should -Be 0
+        $matrixParameters = @($matrixAst.ParamBlock.Parameters.Name.VariablePath.UserPath)
+        $matrixContent = Get-Content -LiteralPath $matrixRunner -Raw
+
+        $singleParameters | Should -Contain 'CopilotPath'
+        $matrixParameters | Should -Contain 'CopilotPath'
+        $matrixContent | Should -Match 'Resolve-SkillEvalCopilotPath -CopilotPath \$CopilotPath'
+        $forwardingText = "'-CopilotPath', " + '$using:resolvedCopilotPath'
+        $matrixContent | Should -Match ([regex]::Escape($forwardingText))
     }
 
     It 'installs a personal fixture outside the public plugin copy' {
@@ -1781,6 +1857,7 @@ Describe 'Skill evaluation runner' {
         $summary.SafetyFailureCount | Should -Be 0
         $summary.InfrastructureFailureCount | Should -Be 0
         $summary.CopilotVersion | Should -Be 'fake-executor'
+        $summary.CopilotExecutableSha256 | Should -BeNullOrEmpty
         $summary.RequestedMaxConcurrency | Should -Be 8
         $summary.MaxConcurrency | Should -Be 1
         $summary.WallTimeMilliseconds | Should -BeGreaterThan 0
@@ -1812,6 +1889,8 @@ Describe 'Skill evaluation runner' {
         Test-Path -LiteralPath (Join-Path $outputDirectory 'summary.md') | Should -BeTrue
         (Get-Content -LiteralPath (Join-Path $outputDirectory 'summary.md') -Raw) |
             Should -Match ([regex]::Escape($summary.CandidateRevision))
+        (Get-Content -LiteralPath (Join-Path $outputDirectory 'summary.md') -Raw) |
+            Should -Match 'Copilot CLI: `fake-executor`'
         $summary.Runs[0].RunDirectory | Should -Not -Be $summary.Runs[1].RunDirectory
 
         $sourceOutputPath = Join-Path $summary.Runs[0].RunDirectory 'stdout.jsonl'
@@ -1829,6 +1908,7 @@ Describe 'Skill evaluation runner' {
         $rescored.RescoredRunCount | Should -Be 2
         $rescored.EvidenceMode | Should -Be 'rescored'
         $rescored.ScorerRevision | Should -Be $summary.ScorerRevision
+        $rescored.CopilotExecutableSha256 | Should -BeNullOrEmpty
         $rescored.Runs.ModelOutputRevision | Should -Be $summary.Runs.ModelOutputRevision
         @($rescored.Runs | Where-Object { -not $_.ModelOutputEvidenceVerified }).Count |
             Should -Be 0
