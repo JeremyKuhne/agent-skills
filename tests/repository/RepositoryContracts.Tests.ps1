@@ -101,14 +101,18 @@ Describe 'PowerShell toolchain contract' {
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
-                '      - run: ./tools/Test-PowerShellToolchain.ps1',
+                '      - name: Validate PowerShell toolchain',
+                '        shell: pwsh',
+                '        run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-windows:',
                 '    runs-on: windows-latest',
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
-                '      - run: ./tools/Test-PowerShellToolchain.ps1')
+                '      - name: Validate PowerShell toolchain',
+                '        shell: pwsh',
+                '        run: ./tools/Test-PowerShellToolchain.ps1')
             Set-Content -LiteralPath (Join-Path $fixtureRoot '.github/workflows/full-ci.yml') `
                 -Value @(
                 'on:',
@@ -121,21 +125,27 @@ Describe 'PowerShell toolchain contract' {
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
-                '      - run: ./tools/Test-PowerShellToolchain.ps1',
+                '      - name: Validate PowerShell toolchain',
+                '        shell: pwsh',
+                '        run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-linux-x64:',
                 '    runs-on: ubuntu-latest',
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
-                '      - run: ./tools/Test-PowerShellToolchain.ps1',
+                '      - name: Validate PowerShell toolchain',
+                '        shell: pwsh',
+                '        run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-windows:',
                 '    runs-on: windows-latest',
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
-                '      - run: ./tools/Test-PowerShellToolchain.ps1',
+                '      - name: Validate PowerShell toolchain',
+                '        shell: pwsh',
+                '        run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-preview:',
                 '    runs-on: windows-latest',
                 '    steps:',
@@ -143,7 +153,9 @@ Describe 'PowerShell toolchain contract' {
                 '        with:',
                 '          dotnet-version: 11.0.x',
                 '          dotnet-quality: preview',
-                '      - run: ./tools/Test-PowerShellToolchain.ps1')
+                '      - name: Validate PowerShell toolchain',
+                '        shell: pwsh',
+                '        run: ./tools/Test-PowerShellToolchain.ps1')
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') -Value @(
                 '#Requires -Version 7.4',
                 "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
@@ -269,23 +281,34 @@ Describe 'PowerShell toolchain contract' {
         $fixtureRoot = New-ToolchainFixture 'workflow-powershell-validation'
         $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
         (Get-Content -LiteralPath $workflowPath -Raw).Replace(
-            '      - run: ./tools/Test-PowerShellToolchain.ps1', '') |
+            '        run: ./tools/Test-PowerShellToolchain.ps1', '') |
             Set-Content -LiteralPath $workflowPath
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum*"
+            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum in a pwsh step*"
     }
 
     It 'rejects a host job with a bare validation script line' {
         $fixtureRoot = New-ToolchainFixture 'workflow-bare-powershell-validation'
         $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
         (Get-Content -LiteralPath $workflowPath -Raw).Replace(
-            '      - run: ./tools/Test-PowerShellToolchain.ps1',
+            '        run: ./tools/Test-PowerShellToolchain.ps1',
             '      ./tools/Test-PowerShellToolchain.ps1') |
             Set-Content -LiteralPath $workflowPath
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum*"
+            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum in a pwsh step*"
+    }
+
+    It 'rejects a host job with a non-PowerShell validation shell' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-powershell-shell-drift'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            '        shell: pwsh', '        shell: bash') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum in a pwsh step*"
     }
 
     It 'rejects a workflow SDK that drifts from the manifest' {
@@ -502,6 +525,20 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*copies Pester version '$Value'*"
+    }
+
+    It 'rejects an unverifiable Pester module name in <Form>' -ForEach @(
+        @{ Form = 'positional'; Command = 'Import-Module $moduleName -RequiredVersion 5.7.1' }
+        @{ Form = 'named'; Command = 'Import-Module -Name $moduleName -RequiredVersion 5.7.1' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "dynamic-module-name-$Form"
+        $driftPath = Join-Path $fixtureRoot '.agents/Drift.ps1'
+        Set-Content -LiteralPath $driftPath -Value @(
+            "`$moduleName = 'Pester'",
+            ($Command.Replace('Import-Module', ('Import-' + 'Module'))))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must use a static module name*'
     }
 
     It 'rejects a reordered stale Pester module pin' {
@@ -779,6 +816,55 @@ jobs:
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +
                 'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects an unpinned nested Invoke-Pester command in <Kind>' -ForEach @(
+        @{
+            Kind = 'workflow'
+            Path = '.github/workflows/nested.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ('          1..1 | ForEach-Object { Invoke-' + 'Pester ./tests }'))
+        }
+        @{
+            Kind = 'Markdown fence'
+            Path = 'docs/nested.md'
+            Content = @(
+                '```pwsh',
+                ('1..1 | ForEach-Object { Invoke-' + 'Pester ./tests }'),
+                '```')
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "nested-invoke-$($Kind.Replace(' ', '-'))"
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects a stale Pester command in quoted workflow <Kind>' -ForEach @(
+        @{
+            Kind = 'module setup'
+            Command = 'Import-' + 'Module Pester -RequiredVersion 5.7.1'
+            Error = "*copies Pester version '5.7.1'*"
+        }
+        @{
+            Kind = 'invocation'
+            Command = 'Invoke-' + 'Pester ./tests'
+            Error = '*invokes Invoke-Pester without a preceding pinned Pester import*'
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "quoted-workflow-$($Kind.Replace(' ', '-'))"
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/quoted.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:', "      - run: '$Command'")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw $Error
     }
 
         It 'accepts an inline workflow step with a preceding pinned import' {
