@@ -125,6 +125,24 @@ $portablePesterFloor = if ($pesterVersionIsValid) {
     "$($pesterSemanticVersion.Major).$($pesterSemanticVersion.Minor)"
 }
 else { $pesterVersion }
+
+function Get-StaticStringAstValue ([object] $ExpressionAst) {
+    while ($ExpressionAst -is
+        [Management.Automation.Language.ConvertExpressionAst]) {
+        $ExpressionAst = $ExpressionAst.Child
+    }
+    if ($ExpressionAst -is
+        [Management.Automation.Language.StringConstantExpressionAst]) {
+        return [string]$ExpressionAst.Value
+    }
+    if ($ExpressionAst -is
+        [Management.Automation.Language.ExpandableStringExpressionAst] -and
+        $ExpressionAst.NestedExpressions.Count -eq 0) {
+        return [string]$ExpressionAst.Value
+    }
+    return $null
+}
+
 $testRoot = Join-Path $resolvedRoot 'tests'
 $testFiles = if (Test-Path -LiteralPath $testRoot -PathType Container) {
     @(Get-ChildItem -LiteralPath $testRoot -Filter '*.Tests.ps1' -File -Recurse)
@@ -174,10 +192,23 @@ else {
         $errors.Add("'tests/Invoke-PesterShards.ps1' does not parse: $($parseErrors -join '; ')") |
             Out-Null
     }
-    elseif ([string]$runnerAst.ScriptRequirements.RequiredPSVersion -cne
-        $minimumPowerShellVersion) {
-        $errors.Add("'tests/Invoke-PesterShards.ps1' must require PowerShell $minimumPowerShellVersion exactly.") |
-            Out-Null
+    else {
+        if ([string]$runnerAst.ScriptRequirements.RequiredPSVersion -cne
+            $minimumPowerShellVersion) {
+            $errors.Add("'tests/Invoke-PesterShards.ps1' must require PowerShell $minimumPowerShellVersion exactly.") |
+                Out-Null
+        }
+        $pesterVersionParameters = @($runnerAst.ParamBlock.Parameters |
+            Where-Object { $_.Name.VariablePath.UserPath -ieq 'PesterVersion' })
+        $runnerDefault = if ($pesterVersionParameters.Count -eq 1) {
+            Get-StaticStringAstValue -ExpressionAst (
+                $pesterVersionParameters[0].DefaultValue)
+        }
+        if ($pesterVersionParameters.Count -ne 1 -or
+            $runnerDefault -cne $pesterVersion) {
+            $errors.Add("'tests/Invoke-PesterShards.ps1' PesterVersion default must be '$pesterVersion'.") |
+                Out-Null
+        }
     }
 }
 
@@ -230,7 +261,10 @@ function Get-ToolchainWorkflowJobBody ([string] $Content, [string] $JobName) {
     return $match.Groups['body'].Value
 }
 
-function Get-MarkdownCommandScope ([string] $Content, [int] $Position) {
+function Get-MarkdownCommandScope (
+    [string] $Content,
+    [int] $Position,
+    [switch] $FencedOnly) {
     $lines = @([regex]::Matches($Content, '(?m)^.*(?:\r?\n|$)'))
     $targetLine = 0
     for ($index = 0; $index -lt $lines.Count; $index++) {
@@ -268,6 +302,7 @@ function Get-MarkdownCommandScope ([string] $Content, [int] $Position) {
         return $Content.Substring(
             $openFence.ContentStart, $Position - $openFence.ContentStart)
     }
+    if ($FencedOnly) { return $null }
     $priorContent = $Content.Substring(0, $Position)
     $paragraphBreaks = @([regex]::Matches($priorContent, '\r?\n\s*\r?\n'))
     $scopeStart = if ($paragraphBreaks.Count -gt 0) {
@@ -316,20 +351,6 @@ function Get-CommandParameterValueAst (
     return $null
 }
 
-function Get-StaticStringAstValue (
-    [object] $ExpressionAst) {
-    if ($ExpressionAst -is
-        [Management.Automation.Language.StringConstantExpressionAst]) {
-        return [string]$ExpressionAst.Value
-    }
-    if ($ExpressionAst -is
-        [Management.Automation.Language.ExpandableStringExpressionAst] -and
-        $ExpressionAst.NestedExpressions.Count -eq 0) {
-        return [string]$ExpressionAst.Value
-    }
-    return $null
-}
-
 function Test-CommandTargetsPester (
     [Management.Automation.Language.CommandAst] $CommandAst) {
     $elements = @($CommandAst.CommandElements)
@@ -356,6 +377,27 @@ function Test-CommandIsInRootScriptBlock (
         $ancestor = $ancestor.Parent
     }
     return [object]::ReferenceEquals($ancestor, $RootAst)
+}
+
+function Test-RootCommandAtOffset (
+    [string] $ScriptText,
+    [string] $CommandName,
+    [int] $Offset) {
+    if ([string]::IsNullOrWhiteSpace($ScriptText) -or $Offset -lt 0) {
+        return $false
+    }
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseInput(
+        $ScriptText, [ref]$tokens, [ref]$parseErrors)
+    return @($ast.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -ieq $CommandName
+            }, $true) | Where-Object {
+            (Test-CommandIsInRootScriptBlock -CommandAst $_ -RootAst $ast) -and
+                $_.CommandElements[0].Extent.StartOffset -eq $Offset
+        }).Count -gt 0
 }
 
 function Test-PinnedPesterImport (
@@ -504,7 +546,7 @@ foreach ($contract in $workflowContracts) {
             $errors.Add("'$($contract.Path)' job '$($contract.Job)' must run on manifest host '$expectedHost'.") |
                 Out-Null
         }
-            if ($jobBody -notmatch '(?m)^\s+(?:(?:-\s+)?run:\s+)?\./tools/Test-PowerShellToolchain\.ps1\s*$') {
+            if ($jobBody -notmatch '(?m)^\s+(?:-\s+)?run:\s+\./tools/Test-PowerShellToolchain\.ps1\s*$') {
                 $errors.Add("'$($contract.Path)' job '$($contract.Job)' must validate the manifest PowerShell minimum.") |
                 Out-Null
             }
@@ -533,7 +575,7 @@ $historicalPesterEvidencePaths = @(
     'docs/pr-review-effectiveness-plan.md'
 )
 $copiedVersionPatterns = @(
-    '(?i)-PesterVersion\s+(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
+    '(?i)-PesterVersion(?::\s*|\s+)(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
     '(?i)PesterVersion\s*=\s*(?<value>''[^'']*''|"[^"]*")'
 )
 $moduleSpecificationPattern =
@@ -592,7 +634,14 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 $_.Index -lt $commandMatch.Index -and
                 $_.Index + $_.Length -gt $commandMatch.Index
             } | Select-Object -First 1)
-        $commandScope = if ($containingInlineCode.Count -eq 1) {
+        $fencedCommandScope = if ($isMarkdown) {
+            Get-MarkdownCommandScope -Content $content `
+                -Position $scopePosition -FencedOnly
+        }
+        $commandScope = if ($null -ne $fencedCommandScope) {
+            $fencedCommandScope
+        }
+        elseif ($containingInlineCode.Count -eq 1) {
             $containingInlineCode[0].Groups['code'].Value
         }
         elseif ($isWorkflow) {
@@ -707,9 +756,71 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     }
     $rawInvokeMatches = @([regex]::Matches($content, $invokePesterPattern))
     $invocations = if ($isPinnedTest) { @() }
-    elseif ($isWorkflow -or $isMarkdown) {
-        @($rawInvokeMatches | ForEach-Object {
-                [pscustomobject]@{ Position = $_.Index; HereStringScope = $null }
+    elseif ($isWorkflow) {
+        @(foreach ($invokeMatch in $rawInvokeMatches) {
+                $candidateEnd = $invokeMatch.Index + $invokeMatch.Length
+                $candidateScope = Get-WorkflowRunScope -Content $content `
+                    -Position $candidateEnd
+                $lineStart = $content.LastIndexOf(
+                    "`n", [Math]::Max(0, $invokeMatch.Index - 1))
+                if ($lineStart -lt 0) { $lineStart = 0 } else { $lineStart++ }
+                if ($null -eq $candidateScope) {
+                    $candidateScope = $content.Substring(
+                        $lineStart, $candidateEnd - $lineStart)
+                }
+                $offset = $candidateScope.Length - $invokeMatch.Length
+                if (Test-RootCommandAtOffset -ScriptText $candidateScope `
+                        -CommandName $invokePesterName -Offset $offset) {
+                    $invocationScope = Get-WorkflowRunScope -Content $content `
+                        -Position $invokeMatch.Index
+                    if ($null -eq $invocationScope) {
+                        $invocationScope = $content.Substring(
+                            $lineStart, $invokeMatch.Index - $lineStart)
+                    }
+                    [pscustomobject]@{
+                        Position = $invokeMatch.Index
+                        HereStringScope = $null
+                        InvocationScope = $invocationScope
+                    }
+                }
+            })
+    }
+    elseif ($isMarkdown) {
+        @(foreach ($invokeMatch in $rawInvokeMatches) {
+                $candidateEnd = $invokeMatch.Index + $invokeMatch.Length
+                $candidateScope = Get-MarkdownCommandScope -Content $content `
+                    -Position $candidateEnd -FencedOnly
+                if ($null -ne $candidateScope) {
+                    $offset = $candidateScope.Length - $invokeMatch.Length
+                    if (Test-RootCommandAtOffset -ScriptText $candidateScope `
+                            -CommandName $invokePesterName -Offset $offset) {
+                        [pscustomobject]@{
+                            Position = $invokeMatch.Index
+                            HereStringScope = $null
+                            InvocationScope = Get-MarkdownCommandScope `
+                                -Content $content -Position $invokeMatch.Index `
+                                -FencedOnly
+                        }
+                    }
+                    continue
+                }
+                $containingInlineCode = @($inlineCodeMatches | Where-Object {
+                        $_.Index -lt $invokeMatch.Index -and
+                        $_.Index + $_.Length -gt $invokeMatch.Index
+                    } | Select-Object -First 1)
+                if ($containingInlineCode.Count -ne 1) { continue }
+                $scriptText = $containingInlineCode[0].Groups['code'].Value
+                $offset = $invokeMatch.Index -
+                    $containingInlineCode[0].Groups['code'].Index
+                if (Test-RootCommandAtOffset -ScriptText $scriptText `
+                        -CommandName $invokePesterName -Offset $offset) {
+                    [pscustomobject]@{
+                        Position = $invokeMatch.Index
+                        HereStringScope = $null
+                        InvocationScope = Get-MarkdownCommandScope `
+                            -Content $content -Position $invokeMatch.Index
+                    }
+                }
             })
     }
     else {
@@ -726,6 +837,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     [pscustomobject]@{
                         Position = $_.Extent.StartOffset
                         HereStringScope = $null
+                        InvocationScope = $null
                     }
                 }
             foreach ($invokeMatch in $rawInvokeMatches) {
@@ -735,17 +847,15 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     [pscustomobject]@{
                         Position = $invokeMatch.Index
                         HereStringScope = $hereStringScope
+                        InvocationScope = $null
                     }
                 }
             }
         )
     }
     foreach ($invocation in $invocations) {
-        $invocationScope = if ($isWorkflow) {
-            Get-WorkflowRunScope -Content $content -Position $invocation.Position
-        }
-        elseif ($isMarkdown) {
-            Get-MarkdownCommandScope -Content $content -Position $invocation.Position
+        $invocationScope = if ($null -ne $invocation.InvocationScope) {
+            $invocation.InvocationScope
         }
         elseif ($null -ne $invocation.HereStringScope) {
             $invocation.HereStringScope

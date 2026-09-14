@@ -149,7 +149,10 @@ Describe 'PowerShell toolchain contract' {
                 "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
                 "Describe 'Valid' { It 'is never run' { `$true | Should -BeTrue } }")
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1') `
-                -Value @('#Requires -Version 7.4', '[CmdletBinding()]', 'param()')
+                -Value @(
+                '#Requires -Version 7.4',
+                '[CmdletBinding()]',
+                "param([version] `$PesterVersion = '6.2.0')")
             Set-Content -LiteralPath (
                 Join-Path $fixtureRoot '.agents/skills/create-skill-repo/SKILL.md') `
                 -Value 'Requires PowerShell 7.4 and Pester 6.2.0.'
@@ -273,6 +276,18 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum*"
     }
 
+    It 'rejects a host job with a bare validation script line' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-bare-powershell-validation'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            '      - run: ./tools/Test-PowerShellToolchain.ps1',
+            '      ./tools/Test-PowerShellToolchain.ps1') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum*"
+    }
+
     It 'rejects a workflow SDK that drifts from the manifest' {
         $fixtureRoot = New-ToolchainFixture 'workflow-sdk-drift'
         $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
@@ -389,6 +404,30 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*'tests/Invoke-PesterShards.ps1' must require PowerShell 7.4 exactly*"
     }
 
+    It 'rejects a shard runner without a parameter block' {
+        $fixtureRoot = New-ToolchainFixture 'runner-missing-parameters'
+        $runnerPath = Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1'
+        Set-Content -LiteralPath $runnerPath -Value '#Requires -Version 7.4'
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*PesterVersion default must be '6.2.0'*"
+    }
+
+    It 'rejects a shard-runner <Kind> PesterVersion default' -ForEach @(
+        @{ Kind = 'stale cast'; Default = "[version]'5.7.1'" }
+        @{ Kind = 'environment-backed'; Default = '$env:PESTER_VERSION' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "runner-$($Kind.Replace(' ', '-'))-default"
+        $runnerPath = Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1'
+        Set-Content -LiteralPath $runnerPath -Value @(
+            '#Requires -Version 7.4',
+            '[CmdletBinding()]',
+            ("param([version] `$Pester" + "Version = $Default)"))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*PesterVersion default must be '6.2.0'*"
+    }
+
     It 'rejects a drifted copied Pester version in <Kind>' -ForEach @(
         @{
             Kind = 'module command'
@@ -427,6 +466,13 @@ Describe 'PowerShell toolchain contract' {
             Content = './tests/Invoke-PesterShards.ps1 -Pester' +
                 'Version ' + ('6.2.0' + '.1')
             Version = ('6.2.0' + '.1')
+        }
+        @{
+            Kind = 'colon-attached runner invocation'
+            Path = 'evals/colon.md'
+            Content = './tests/Invoke-PesterShards.ps1 -Pester' +
+                'Version:' + ('5.7' + '.1')
+            Version = ('5.7' + '.1')
         }
         @{
             Kind = 'runner default suffix'
@@ -617,11 +663,46 @@ Describe 'PowerShell toolchain contract' {
     It 'rejects floating Invoke-Pester guidance in a root file' {
         $fixtureRoot = New-ToolchainFixture 'floating-invoke'
         Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') -Value (
-            'Run Invoke-' + 'Pester ./tests.')
+            'Run `Invoke-' + 'Pester ./tests`.')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +
                 'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'ignores non-executing <Kind> Invoke-Pester text' -ForEach @(
+        @{
+            Kind = 'workflow comment'
+            Path = '.github/workflows/comment.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ('          # Invoke-' + 'Pester is documented here'))
+        }
+        @{
+            Kind = 'workflow string'
+            Path = '.github/workflows/string.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ("          Write-Output 'Invoke-" + "Pester is documented here'"))
+        }
+        @{
+            Kind = 'Markdown prose'
+            Path = 'docs/mention.md'
+            Content = 'The Invoke-' + 'Pester command runs the test suite.'
+        }
+        @{
+            Kind = 'Markdown fenced comment'
+            Path = 'docs/comment.md'
+            Content = @('```pwsh', ('# Invoke-' + 'Pester is documented here'), '```')
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "non-executing-$($Kind.Replace(' ', '-'))"
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'rejects an import in a different <Kind> Markdown code block' -ForEach @(
