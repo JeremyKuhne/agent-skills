@@ -779,6 +779,26 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
+    It 'ignores a copied Pester version in workflow <Kind>' -ForEach @(
+        @{
+            Kind = 'comment'
+            Command = '# PesterVersion = ''5.7.1'''
+        }
+        @{
+            Kind = 'string'
+            Command = 'Write-Output "PesterVersion = ''5.7.1''"'
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "workflow-version-$Kind"
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/version-text.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:', '      - run: |',
+            "          $Command")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects nonliteral Pester module pin <Value>' -ForEach @(
         @{ Name = 'environment'; Value = '$env:PESTER_VERSION' }
         @{ Name = 'four-part'; Value = ('6.2.0' + '.1') }
@@ -805,6 +825,17 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*must use a static module name*'
+    }
+
+    It 'rejects an unpinned statically assigned Pester module name' {
+        $fixtureRoot = New-ToolchainFixture 'assigned-pester-module-name'
+        $scriptPath = Join-Path $fixtureRoot '.agents/Drift.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$moduleName = 'Pester'",
+            'Import-Module $moduleName')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*invokes Pester without -RequiredVersion 6.2.0*'
     }
 
     It 'rejects a <Form> wildcard target that can resolve to Pester' -ForEach @(
@@ -1149,6 +1180,21 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*must use a static RequiredVersion for its Pester module requirement*'
     }
 
+    It 'rejects an unverifiable <Kind> module requirement name' -ForEach @(
+        @{ Kind = 'dynamic'; Value = '$moduleName' }
+        @{ Kind = 'wildcard'; Value = "'Pester*'" }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "unverifiable-$Kind-requirement-name"
+        $scriptPath = Join-Path $fixtureRoot '.agents/Drift.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$moduleName = 'Pester'",
+            ('$requirement = @{ ModuleName = ' + $Value +
+                "; RequiredVersion = '5.7.1' }"))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*Pester module requirement must use the exact static ModuleName*'
+    }
+
     It 'rejects a stale Pester module requirement in <Kind>' -ForEach @(
         @{
             Kind = 'Markdown fence'
@@ -1389,6 +1435,20 @@ jobs:
             '      - run: |',
             "          $Import",
             '          Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects an import in a scriptblock passed as command data' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-scriptblock-data-import'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/scriptblock-data.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:', '      - run: |',
+            ('          Write-Output { Import-' +
+                'Module Pester -RequiredVersion 6.2.0 }'),
+            ('          Invoke-' + 'Pester ./tests'))
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +

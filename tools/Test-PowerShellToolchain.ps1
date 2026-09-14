@@ -150,6 +150,10 @@ function Get-StaticStringAstValue ([object] $ExpressionAst) {
 
 function Get-StaticStringAstValues ([object] $ExpressionAst) {
     if ($null -eq $ExpressionAst) { return }
+    while ($ExpressionAst -is
+        [Management.Automation.Language.CommandExpressionAst]) {
+        $ExpressionAst = $ExpressionAst.Expression
+    }
     try { $value = $ExpressionAst.SafeGetValue() }
     catch {
         $value = Get-StaticStringAstValue -ExpressionAst $ExpressionAst
@@ -200,13 +204,35 @@ function Add-PesterModuleRequirementErrors (
             try { $table[$key] = $pair.Item2.SafeGetValue() }
             catch { $dynamicKeys.Add($key) | Out-Null }
         }
+        $hasVersionConstraint = $dynamicKeys.Contains('RequiredVersion') -or
+            $dynamicKeys.Contains('ModuleVersion') -or
+            @($table.Keys | Where-Object {
+                    [string]$_ -ieq 'RequiredVersion' -or
+                    [string]$_ -ieq 'ModuleVersion'
+                }).Count -gt 0
+        if ($dynamicKeys.Contains('ModuleName') -and $hasVersionConstraint) {
+            $ErrorList.Add("'$RelativePath' Pester module requirement must use the exact static ModuleName.") |
+                Out-Null
+            continue
+        }
         $moduleNameKey = @($table.Keys | Where-Object {
                 [string]$_ -ieq 'ModuleName'
             } | Select-Object -First 1)
-        if ($moduleNameKey.Count -ne 1 -or
-            [string]$table[$moduleNameKey[0]] -ine 'Pester') {
+        if ($moduleNameKey.Count -ne 1) {
             continue
         }
+        $moduleName = [string]$table[$moduleNameKey[0]]
+        if ([Management.Automation.WildcardPattern]::ContainsWildcardCharacters(
+                $moduleName) -and
+            [Management.Automation.WildcardPattern]::new(
+                $moduleName,
+                [Management.Automation.WildcardOptions]::IgnoreCase).IsMatch(
+                'Pester')) {
+            $ErrorList.Add("'$RelativePath' Pester module requirement must use the exact static ModuleName.") |
+                Out-Null
+            continue
+        }
+        if ($moduleName -ine 'Pester') { continue }
         if ($dynamicKeys.Contains('RequiredVersion')) {
             $ErrorList.Add("'$RelativePath' must use a static RequiredVersion for its Pester module requirement.") |
                 Out-Null
@@ -681,6 +707,43 @@ function Test-CommandTargetsPester (
         Where-Object { $_ -ieq 'Pester' }).Count -gt 0
 }
 
+function Test-CommandTargetsAssignedPester (
+    [Management.Automation.Language.CommandAst] $CommandAst,
+    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
+    $target = Get-CommandModuleTargetAst -CommandAst $CommandAst
+    if ($target -isnot [Management.Automation.Language.VariableExpressionAst] -or
+        $target.Splatted) {
+        return $false
+    }
+    $variableName = $target.VariablePath.UserPath
+    $assignments = @($RootAst.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.AssignmentStatementAst]
+            }, $true) | Where-Object {
+            $_.Extent.StartOffset -lt $CommandAst.Extent.StartOffset -and
+                $_.Left -is
+                    [Management.Automation.Language.VariableExpressionAst] -and
+                $_.Left.VariablePath.UserPath -ieq $variableName
+        } | Sort-Object { $_.Extent.StartOffset } -Descending)
+    foreach ($assignment in $assignments) {
+        return @(Get-StaticStringAstValues -ExpressionAst $assignment.Right |
+            Where-Object { $_ -ieq 'Pester' }).Count -gt 0
+    }
+    return $false
+}
+
+function Test-CommandInvokesScriptBlockArguments (
+    [Management.Automation.Language.CommandAst] $CommandAst) {
+    if ($CommandAst.InvocationOperator -in @(
+            [Management.Automation.Language.TokenKind]::Ampersand,
+            [Management.Automation.Language.TokenKind]::Dot)) {
+        return $true
+    }
+    return $CommandAst.GetCommandName() -in @(
+        'ForEach-Object', 'Where-Object', 'Invoke-Command', 'Measure-Command',
+        'Trace-Command', 'Start-Job', 'Start-ThreadJob')
+}
+
 function Test-CommandMayExecuteInScope (
     [Management.Automation.Language.CommandAst] $CommandAst,
     [Management.Automation.Language.ScriptBlockAst] $RootAst) {
@@ -697,6 +760,10 @@ function Test-CommandMayExecuteInScope (
         }
         elseif ($insideDeferredScriptBlock -and
             $ancestor -is [Management.Automation.Language.CommandAst]) {
+            if (-not (Test-CommandInvokesScriptBlockArguments `
+                    -CommandAst $ancestor)) {
+                return $false
+            }
             $insideDeferredScriptBlock = $false
         }
         elseif ($insideDeferredScriptBlock -and
@@ -963,6 +1030,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         [System.StringComparer]::Ordinal)
     $moduleRequirementScopes = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::Ordinal)
+    $assignedPesterModuleCommandTexts =
+        [System.Collections.Generic.HashSet[string]]::new(
+            [System.StringComparer]::Ordinal)
     $copiedVersionScopes = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::Ordinal)
     $sourceTokens = @()
@@ -998,6 +1068,11 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         -RootAst $sourceAst
                 })) {
             $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
+            if (Test-CommandTargetsAssignedPester -CommandAst $commandAst `
+                    -RootAst $sourceAst) {
+                $assignedPesterModuleCommandTexts.Add(
+                    $commandAst.Extent.Text) | Out-Null
+            }
         }
         $moduleRequirementScopes.Add($content) | Out-Null
     }
@@ -1060,6 +1135,11 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                             -RootAst $scopeAst
                     })) {
                 $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
+                if (Test-CommandTargetsAssignedPester -CommandAst $commandAst `
+                        -RootAst $scopeAst) {
+                    $assignedPesterModuleCommandTexts.Add(
+                        $commandAst.Extent.Text) | Out-Null
+                }
             }
         }
     }
@@ -1120,6 +1200,11 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 })
             $moduleTarget = Get-CommandModuleTargetAst -CommandAst $commandAst
             $moduleNames = @(Get-StaticStringAstValues -ExpressionAst $moduleTarget)
+            if ($moduleNames.Count -eq 0 -and
+                $requiredVersionIndices.Count -eq 0 -and
+                $assignedPesterModuleCommandTexts.Contains($commandText)) {
+                $moduleNames = @('Pester')
+            }
             if ($requiredVersionIndices.Count -gt 0 -and $moduleNames.Count -eq 0) {
                 $errors.Add("'$relativePath' Pester module validation must use a static module name.") |
                     Out-Null
@@ -1168,11 +1253,20 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         }
     }
     foreach ($versionScope in $copiedVersionScopes) {
+        $versionTokens = if ($isWorkflow) {
+            $tokens = $null
+            $parseErrors = $null
+            [Management.Automation.Language.Parser]::ParseInput(
+                $versionScope, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            @($tokens)
+        }
+        elseif ($isPowerShellSource) { $sourceTokens }
+        else { @() }
         foreach ($versionPattern in $copiedVersionPatterns) {
             foreach ($match in [regex]::Matches($versionScope, $versionPattern)) {
-                if ($isPowerShellSource -and
+                if (($isPowerShellSource -or $isWorkflow) -and
                     (Test-PositionIsInIgnoredPowerShellText `
-                        -Tokens $sourceTokens -Position $match.Index)) {
+                        -Tokens $versionTokens -Position $match.Index)) {
                     continue
                 }
                 $copiedVersion = $match.Groups['value'].Value
