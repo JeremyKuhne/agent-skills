@@ -767,6 +767,18 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '5.7.1'*"
     }
 
+    It 'accepts an escaped quoted PesterVersion in a workflow scalar' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-escaped-runner-version'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/quoted-version.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:',
+            ('      - run: "./tests/Invoke-PesterShards.ps1 -Pester' +
+                'Version \"6.2.0\""'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects nonliteral Pester module pin <Value>' -ForEach @(
         @{ Name = 'environment'; Value = '$env:PESTER_VERSION' }
         @{ Name = 'four-part'; Value = ('6.2.0' + '.1') }
@@ -1123,6 +1135,20 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '5.7.1'*"
     }
 
+    It 'rejects a dynamic RequiredVersion for a static Pester requirement' {
+        $fixtureRoot = New-ToolchainFixture 'dynamic-module-requirement-version'
+        $scriptPath = Join-Path $fixtureRoot '.agents/Drift.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$version = '6.2.0'",
+            '$requirement = @{',
+            "    ModuleName = 'Pester'",
+            '    RequiredVersion = $version',
+            '}')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must use a static RequiredVersion for its Pester module requirement*'
+    }
+
     It 'rejects a stale Pester module requirement in <Kind>' -ForEach @(
         @{
             Kind = 'Markdown fence'
@@ -1146,6 +1172,35 @@ Describe 'PowerShell toolchain contract' {
     ) {
         $fixtureRoot = New-ToolchainFixture (
             "scoped-requirement-$($Kind.Replace(' ', '-'))")
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'rejects a quoted ModuleName key in <Kind>' -ForEach @(
+        @{
+            Kind = 'Markdown fence'
+            Path = 'docs/quoted-module-key.md'
+            Content = @(
+                '```pwsh',
+                ('$requirement = @{ ''ModuleName'' = ''Pester''; ' +
+                    'RequiredVersion = ''5.7.1'' }'),
+                '```')
+        }
+        @{
+            Kind = 'workflow block'
+            Path = '.github/workflows/quoted-module-key.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ('          $requirement = @{ ''ModuleName'' = ''Pester''; ' +
+                    'RequiredVersion = ''5.7.1'' }'))
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture (
+            "quoted-module-key-$($Kind.Replace(' ', '-'))")
         $path = Join-Path $fixtureRoot $Path
         [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
         Set-Content -LiteralPath $path -Value $Content

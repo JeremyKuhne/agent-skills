@@ -191,13 +191,25 @@ function Add-PesterModuleRequirementErrors (
                 param($node)
                 $node -is [Management.Automation.Language.HashtableAst]
             }, $true))) {
-        try { $table = $hashtableAst.SafeGetValue() }
-        catch { continue }
+        $table = [ordered]@{}
+        $dynamicKeys = [Collections.Generic.HashSet[string]]::new(
+            [StringComparer]::OrdinalIgnoreCase)
+        foreach ($pair in $hashtableAst.KeyValuePairs) {
+            try { $key = [string]$pair.Item1.SafeGetValue() }
+            catch { continue }
+            try { $table[$key] = $pair.Item2.SafeGetValue() }
+            catch { $dynamicKeys.Add($key) | Out-Null }
+        }
         $moduleNameKey = @($table.Keys | Where-Object {
                 [string]$_ -ieq 'ModuleName'
             } | Select-Object -First 1)
         if ($moduleNameKey.Count -ne 1 -or
             [string]$table[$moduleNameKey[0]] -ine 'Pester') {
+            continue
+        }
+        if ($dynamicKeys.Contains('RequiredVersion')) {
+            $ErrorList.Add("'$RelativePath' must use a static RequiredVersion for its Pester module requirement.") |
+                Out-Null
             continue
         }
         $requiredVersionKey = @($table.Keys | Where-Object {
@@ -920,7 +932,8 @@ $copiedVersionPatterns = @(
     '(?i)-PesterVersion(?::\s*|(?:\s|`\r?\n)+)(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
     '(?i)PesterVersion\s*=\s*(?<value>''[^'']*''|"[^"]*")'
 )
-$moduleNamePropertyPattern = '(?i)\bModuleName\s*='
+$moduleNamePropertyPattern =
+    '(?i)(?:\bModuleName\b|[''"]ModuleName[''"])\s*='
 $moduleCommandNamePattern =
     '(?i)(?<![-\w])(?:Install-Module|Import-Module)(?![-\w])'
 $invokePesterName = 'Invoke' + '-Pester'
@@ -950,11 +963,26 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         [System.StringComparer]::Ordinal)
     $moduleRequirementScopes = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::Ordinal)
+    $copiedVersionScopes = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal)
     $sourceTokens = @()
     $inlineCodeMatches = if ($isMarkdown) {
         @([regex]::Matches($content, '`(?<code>[^`\r\n]+)`'))
     }
     else { @() }
+    if ($isWorkflow) {
+        foreach ($runKeyMatch in [regex]::Matches(
+                $content, '(?m)^\s*(?:-\s+)?run:')) {
+            $runScope = Get-WorkflowRunScope -Content $content `
+                -Position ($runKeyMatch.Index + $runKeyMatch.Length) -Complete
+            if ($null -ne $runScope) {
+                $copiedVersionScopes.Add($runScope) | Out-Null
+            }
+        }
+    }
+    else {
+        $copiedVersionScopes.Add($content) | Out-Null
+    }
     if ($isPowerShellSource) {
         $tokens = $null
         $parseErrors = $null
@@ -1139,21 +1167,26 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             }
         }
     }
-    foreach ($versionPattern in $copiedVersionPatterns) {
-        foreach ($match in [regex]::Matches($content, $versionPattern)) {
-            if ($isPowerShellSource -and
-                (Test-PositionIsInIgnoredPowerShellText `
-                    -Tokens $sourceTokens -Position $match.Index)) {
-                continue
-            }
-            $copiedVersion = $match.Groups['value'].Value
-            if (($copiedVersion.StartsWith("'") -and $copiedVersion.EndsWith("'")) -or
-                ($copiedVersion.StartsWith('"') -and $copiedVersion.EndsWith('"'))) {
-                $copiedVersion = $copiedVersion.Substring(1, $copiedVersion.Length - 2)
-            }
-            if ($copiedVersion -cne $pesterVersion) {
-                $errors.Add("'$relativePath' copies Pester version '$copiedVersion' instead of '$pesterVersion'.") |
-                    Out-Null
+    foreach ($versionScope in $copiedVersionScopes) {
+        foreach ($versionPattern in $copiedVersionPatterns) {
+            foreach ($match in [regex]::Matches($versionScope, $versionPattern)) {
+                if ($isPowerShellSource -and
+                    (Test-PositionIsInIgnoredPowerShellText `
+                        -Tokens $sourceTokens -Position $match.Index)) {
+                    continue
+                }
+                $copiedVersion = $match.Groups['value'].Value
+                if (($copiedVersion.StartsWith("'") -and
+                        $copiedVersion.EndsWith("'")) -or
+                    ($copiedVersion.StartsWith('"') -and
+                        $copiedVersion.EndsWith('"'))) {
+                    $copiedVersion = $copiedVersion.Substring(
+                        1, $copiedVersion.Length - 2)
+                }
+                if ($copiedVersion -cne $pesterVersion) {
+                    $errors.Add("'$relativePath' copies Pester version '$copiedVersion' instead of '$pesterVersion'.") |
+                        Out-Null
+                }
             }
         }
     }
