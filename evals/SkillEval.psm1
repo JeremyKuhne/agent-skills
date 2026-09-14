@@ -252,6 +252,12 @@ function Get-SkillEvalClientIdentity {
         if ([string]::IsNullOrWhiteSpace($version) -or $hash -notmatch '^[0-9A-Fa-f]{64}$') {
             throw 'Matrix client identity is incomplete or invalid in a document summary.'
         }
+        try {
+            Get-SkillEvalValidatedCopilotVersion -Output $version | Out-Null
+        }
+        catch {
+            throw "Matrix document summary has an invalid client version: $($_.Exception.Message)"
+        }
         if (-not $verifiedProperty -or -not [bool]$verifiedProperty.Value) {
             throw 'Matrix client identity is unverified in a document summary.'
         }

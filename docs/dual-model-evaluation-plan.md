@@ -206,11 +206,11 @@ start E1.1.
 
 The final local deterministic run did not use `-PathPrefix`, install or resolve a
 Copilot client, expose CI-only environment flags, or invoke a model. All 16
-fresh-process shards completed in 80.354 seconds on Windows with PowerShell
+fresh-process shards completed in 80.365 seconds on Windows with PowerShell
 7.6.6 and Pester 5.7.1: 451 tests passed, 13 were intentionally skipped, and
 none failed, remained unexecuted, or reported infrastructure failure. The
 schema-version-2 receipt is under the OS temporary directory at
-`agent-skills-pr87-review5-35133af2a8f048aea02191dbd7820eda/pester/summary.json`.
+`agent-skills-pr87-review6-d932586fb3054ce3aee985389724af16/pester/summary.json`.
 
 The separate integration check installed fresh `@github/copilot` and native
 Windows x64 packages at 1.0.63 in an isolated temporary tree, passed the exact
@@ -218,10 +218,10 @@ native executable to the current smoke script, and used a fresh Copilot home.
 The executable reported 1.0.63 and retained SHA-256
 `29D3DA6864C5988EF4DC3C5B1F2622B1F67F8C94BB38CB93AFA4207F0C032C84` before
 and after the run. Plugin installation found 25 skills, two agents, and one MCP
-configuration; the fresh setup and check completed in 9.595 seconds. The
+configuration; the fresh setup and check completed in 9.113 seconds. The
 receipt, including current source hashes,
 is under the OS temporary directory at
-`agent-skills-plugin-smoke-f3807519f3d044be9b3af2ed035efdd9/integration-receipt.json`.
+`agent-skills-plugin-smoke-f63421e0a273481993007c20985a0a2f/integration-receipt.json`.
 
 Repository-wide validation also passed the agent-file mirror check, all 151
 local agent-file links, both validators for all 25 skills, the catalog drift
@@ -256,6 +256,9 @@ through startup, and the three public evaluation entry points inserted
 keeps invalid source versions unverified, rehashes the selected executable after
 all evaluation workers finish, and appends the new parameter to preserve existing
 positional calls.
+The next review found the same version-floor omission in matrix aggregation.
+Document summaries now pass the shared version validator before their client
+identity can be marked verified.
 
 Remaining host evidence is deliberately narrow. The deterministic suite and
 real plugin smoke ran on Windows with PowerShell 7.6.6, not the minimum 7.2

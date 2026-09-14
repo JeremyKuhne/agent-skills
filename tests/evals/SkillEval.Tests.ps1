@@ -848,6 +848,16 @@ Describe 'Skill evaluation scenario contract' {
         $identity.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
         $identity.CopilotExecutableEvidenceVerified | Should -BeTrue
 
+        foreach ($invalidVersion in @(
+                'GitHub Copilot CLI 1.0.62.',
+                'arbitrary-client')) {
+            $summaries[0].CopilotVersion = $invalidVersion
+            $summaries[1].CopilotVersion = $invalidVersion
+            { Get-SkillEvalClientIdentity -Summary $summaries } |
+                Should -Throw '*document summary has an invalid client version*'
+        }
+        $summaries[0].CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
+        $summaries[1].CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
         $summaries[1].CopilotVersion = 'GitHub Copilot CLI 1.0.64.'
         { Get-SkillEvalClientIdentity -Summary $summaries } |
             Should -Throw '*client identities differ*'
