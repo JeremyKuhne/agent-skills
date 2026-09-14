@@ -184,6 +184,32 @@ function Resolve-SkillEvalCopilotPath {
     return [string]$nativeCommands[0].Source
 }
 
+function ConvertFrom-SkillEvalCopilotVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Output
+    )
+
+    $version = $Output.Trim()
+    $bannerLine = ($version -split '\r?\n', 2)[0]
+    $prefix = 'GitHub Copilot CLI '
+    if (-not $bannerLine.StartsWith($prefix, [StringComparison]::Ordinal)) {
+        throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
+    }
+    $versionToken = $bannerLine.Substring($prefix.Length)
+    if ($versionToken.EndsWith('.', [StringComparison]::Ordinal)) {
+        $versionToken = $versionToken.Substring(0, $versionToken.Length - 1)
+    }
+    try {
+        return [System.Management.Automation.SemanticVersion]::Parse(
+            $versionToken)
+    }
+    catch {
+        throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
+    }
+}
+
 function Get-SkillEvalValidatedCopilotVersion {
     [CmdletBinding()]
     param(
@@ -192,21 +218,10 @@ function Get-SkillEvalValidatedCopilotVersion {
     )
 
     $version = $Output.Trim()
-    $versionMatch = [regex]::Match(
-        $version,
-        '^GitHub Copilot CLI (?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?<prerelease>-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:\.|\s|$)')
-    if (-not $versionMatch.Success) {
-        throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
-    }
-
-    $reportedVersion = [version]::new(
-        [int]$versionMatch.Groups['major'].Value,
-        [int]$versionMatch.Groups['minor'].Value,
-        [int]$versionMatch.Groups['patch'].Value)
-    $minimumVersion = [version]::new(1, 0, 63)
-    if ($reportedVersion -lt $minimumVersion -or
-        ($reportedVersion -eq $minimumVersion -and
-            $versionMatch.Groups['prerelease'].Success)) {
+    $reportedVersion = ConvertFrom-SkillEvalCopilotVersion -Output $version
+    $minimumVersion = [System.Management.Automation.SemanticVersion]::Parse(
+        '1.0.63')
+    if ($reportedVersion -lt $minimumVersion) {
         throw "Copilot CLI 1.0.63 or later is required; selected executable reported: $version"
     }
     return $version
@@ -258,7 +273,13 @@ function Get-SkillEvalClientIdentity {
         catch {
             throw "Matrix document summary has an invalid client version: $($_.Exception.Message)"
         }
-        if (-not $verifiedProperty -or -not [bool]$verifiedProperty.Value) {
+        if (-not $verifiedProperty) {
+            throw 'Matrix client identity is unverified in a document summary.'
+        }
+        if ($verifiedProperty.Value -isnot [bool]) {
+            throw 'Matrix client identity verification flag must be a Boolean.'
+        }
+        if (-not $verifiedProperty.Value) {
             throw 'Matrix client identity is unverified in a document summary.'
         }
         [pscustomobject]@{
@@ -1633,27 +1654,40 @@ function Invoke-SkillEvalRescore {
     $sourceCopilotVersionVerified = $isDeterministicExecutorEvidence
     $sourceCopilotVersionError = ''
     if (-not $isDeterministicExecutorEvidence) {
-        try {
-            Get-SkillEvalValidatedCopilotVersion -Output $sourceCopilotVersion |
-                Out-Null
-            $sourceCopilotVersionVerified = $true
+        $reportedSourceCopilotVersion = ConvertFrom-SkillEvalCopilotVersion `
+            -Output $sourceCopilotVersion
+        $minimumCopilotVersion = [System.Management.Automation.SemanticVersion]::Parse(
+            '1.0.63')
+        if ($reportedSourceCopilotVersion -lt $minimumCopilotVersion) {
+            $sourceCopilotVersionError =
+                "Copilot CLI 1.0.63 or later is required; selected executable reported: $sourceCopilotVersion"
         }
-        catch {
-            $sourceCopilotVersionError = $_.Exception.Message
+        else {
+            $sourceCopilotVersionVerified = $true
         }
     }
     $hasCopilotExecutableHash = $sourceCopilotExecutableSha256 -match '^[0-9A-Fa-f]{64}$'
     $sourceVerificationProperty = $sourceSummary.PSObject.Properties[
         'CopilotExecutableEvidenceVerified']
+    if ($sourceVerificationProperty -and
+        $sourceVerificationProperty.Value -isnot [bool]) {
+        throw 'Source summary Copilot executable verification flag must be a Boolean.'
+    }
+    $sourceVerificationMissing = -not $sourceVerificationProperty
     $sourceMarksCopilotEvidenceUnverified = $sourceVerificationProperty -and
-        -not [bool]$sourceVerificationProperty.Value
-    $copilotExecutableEvidenceVerified = -not $sourceMarksCopilotEvidenceUnverified -and
+        -not $sourceVerificationProperty.Value
+    $sourceMarksCopilotEvidenceVerified = $sourceVerificationProperty -and
+        $sourceVerificationProperty.Value
+    $copilotExecutableEvidenceVerified = $sourceMarksCopilotEvidenceVerified -and
         $sourceCopilotVersionVerified -and
         ($isDeterministicExecutorEvidence -or $hasCopilotExecutableHash)
     if (-not $copilotExecutableEvidenceVerified -and
         -not $AllowLegacyUnverifiedEvidence) {
         if ($sourceMarksCopilotEvidenceUnverified) {
             throw 'Source summary marks Copilot executable evidence unverified; use -AllowLegacyUnverifiedEvidence only to retain it as unverified evidence.'
+        }
+        if ($sourceVerificationMissing) {
+            throw 'Source summary lacks a Copilot executable verification flag; use -AllowLegacyUnverifiedEvidence only to accept legacy evidence without that flag.'
         }
         if (-not $sourceCopilotVersionVerified) {
             throw "$sourceCopilotVersionError Use -AllowLegacyUnverifiedEvidence only to retain an unverified source client version."

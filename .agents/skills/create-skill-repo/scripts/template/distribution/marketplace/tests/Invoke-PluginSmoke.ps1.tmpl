@@ -46,21 +46,25 @@ function Test-NativeExecutable ([string] $Path) {
 
 function Get-ValidatedCopilotVersion ([string] $Output) {
     $version = $Output.Trim()
-    $versionMatch = [regex]::Match(
-        $version,
-        '^GitHub Copilot CLI (?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?<prerelease>-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:\.|\s|$)')
-    if (-not $versionMatch.Success) {
+    $bannerLine = ($version -split '\r?\n', 2)[0]
+    $prefix = 'GitHub Copilot CLI '
+    if (-not $bannerLine.StartsWith($prefix, [StringComparison]::Ordinal)) {
         throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
     }
-
-    $reportedVersion = [version]::new(
-        [int]$versionMatch.Groups['major'].Value,
-        [int]$versionMatch.Groups['minor'].Value,
-        [int]$versionMatch.Groups['patch'].Value)
-    $minimumVersion = [version]::new(1, 0, 63)
-    if ($reportedVersion -lt $minimumVersion -or
-        ($reportedVersion -eq $minimumVersion -and
-            $versionMatch.Groups['prerelease'].Success)) {
+    $versionToken = $bannerLine.Substring($prefix.Length)
+    if ($versionToken.EndsWith('.', [StringComparison]::Ordinal)) {
+        $versionToken = $versionToken.Substring(0, $versionToken.Length - 1)
+    }
+    try {
+        $reportedVersion = [System.Management.Automation.SemanticVersion]::Parse(
+            $versionToken)
+    }
+    catch {
+        throw "Selected executable did not identify itself as GitHub Copilot CLI: $version"
+    }
+    $minimumVersion = [System.Management.Automation.SemanticVersion]::Parse(
+        '1.0.63')
+    if ($reportedVersion -lt $minimumVersion) {
         throw "Copilot CLI 1.0.63 or later is required; selected executable reported: $version"
     }
     return $version

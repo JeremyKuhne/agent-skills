@@ -1,0 +1,56 @@
+{
+  "accepted": [
+    {
+      "name": "minimum release",
+      "output": "GitHub Copilot CLI 1.0.63."
+    },
+    {
+      "name": "minimum release with status line",
+      "output": "GitHub Copilot CLI 1.0.63.\nRun 'copilot update' to check for updates."
+    },
+    {
+      "name": "minimum release with build metadata",
+      "output": "GitHub Copilot CLI 1.0.63+build.7."
+    },
+    {
+      "name": "newer prerelease",
+      "output": "GitHub Copilot CLI 1.0.64-preview.1"
+    },
+    {
+      "name": "newer release",
+      "output": "GitHub Copilot CLI 1.1.0."
+    }
+  ],
+  "rejected": [
+    {
+      "name": "below minimum",
+      "output": "GitHub Copilot CLI 1.0.62.",
+      "error": "*1.0.63 or later*"
+    },
+    {
+      "name": "minimum prerelease",
+      "output": "GitHub Copilot CLI 1.0.63-preview.1",
+      "error": "*1.0.63 or later*"
+    },
+    {
+      "name": "fourth numeric component",
+      "output": "GitHub Copilot CLI 1.0.63.999",
+      "error": "*did not identify itself*"
+    },
+    {
+      "name": "fourth numeric component with punctuation",
+      "output": "GitHub Copilot CLI 1.0.63.999.",
+      "error": "*did not identify itself*"
+    },
+    {
+      "name": "trailing same-line text",
+      "output": "GitHub Copilot CLI 1.0.63 release",
+      "error": "*did not identify itself*"
+    },
+    {
+      "name": "malformed product banner",
+      "output": "arbitrary-client",
+      "error": "*did not identify itself*"
+    }
+  ]
+}

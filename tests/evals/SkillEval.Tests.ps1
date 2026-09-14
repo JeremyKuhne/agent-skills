@@ -14,6 +14,9 @@ BeforeAll {
     $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
     $script:RoslynAnalyzersScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/roslyn-analyzers.json'
     $script:PwshPath = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
+    $script:CopilotClientVersionCases = Get-Content -LiteralPath (
+        Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
+        -Raw | ConvertFrom-Json
     Import-Module (Join-Path $script:RepoRoot 'evals/SkillEval.psm1') -Force
 }
 
@@ -735,26 +738,20 @@ Describe 'Skill evaluation scenario contract' {
     It 'requires Copilot CLI 1.0.63 or later' {
         $module = Get-Module SkillEval
 
-        & $module {
-            Get-SkillEvalValidatedCopilotVersion `
-                -Output "GitHub Copilot CLI 1.0.63.`nUpdate check disabled."
-        } | Should -Be "GitHub Copilot CLI 1.0.63.`nUpdate check disabled."
-        & $module {
-            Get-SkillEvalValidatedCopilotVersion `
-                -Output 'GitHub Copilot CLI 1.1.0.'
-        } | Should -Be 'GitHub Copilot CLI 1.1.0.'
-        {
+        foreach ($case in $script:CopilotClientVersionCases.accepted) {
             & $module {
-                Get-SkillEvalValidatedCopilotVersion `
-                    -Output 'GitHub Copilot CLI 1.0.62.'
-            }
-        } | Should -Throw '*1.0.63 or later*'
-        {
-            & $module {
-                Get-SkillEvalValidatedCopilotVersion `
-                    -Output 'GitHub Copilot CLI 1.0.63-preview.1'
-            }
-        } | Should -Throw '*1.0.63 or later*'
+                param($output)
+                Get-SkillEvalValidatedCopilotVersion -Output $output
+            } ([string]$case.output) | Should -BeExactly ([string]$case.output)
+        }
+        foreach ($case in $script:CopilotClientVersionCases.rejected) {
+            {
+                & $module {
+                    param($output)
+                    Get-SkillEvalValidatedCopilotVersion -Output $output
+                } ([string]$case.output)
+            } | Should -Throw ([string]$case.error) -Because ([string]$case.name)
+        }
     }
 
     It 'detects when the selected Copilot executable changes' {
@@ -869,6 +866,18 @@ Describe 'Skill evaluation scenario contract' {
         $summaries[1].CopilotExecutableEvidenceVerified = $false
         { Get-SkillEvalClientIdentity -Summary $summaries } |
             Should -Throw '*client identity is unverified*'
+        foreach ($invalidBoolean in @(
+                'false',
+                'true',
+                0,
+                1,
+                $null,
+                [object[]]@($false, $true),
+                [pscustomobject]@{ value = $false })) {
+            $summaries[1].CopilotExecutableEvidenceVerified = $invalidBoolean
+            { Get-SkillEvalClientIdentity -Summary $summaries } |
+                Should -Throw '*verification flag must be a Boolean*'
+        }
         $summaries[1].CopilotExecutableEvidenceVerified = $true
         $summaries[1].PSObject.Properties.Remove('CopilotExecutableSha256')
         { Get-SkillEvalClientIdentity -Summary $summaries } |
@@ -2113,19 +2122,87 @@ Describe 'Skill evaluation runner' {
         $unverifiedClientRescore.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
         $unverifiedClientRescore.CopilotExecutableEvidenceVerified | Should -BeFalse
 
-        $invalidClientVersions = @(
-            @{ Name = 'old'; Version = 'GitHub Copilot CLI 1.0.62.'; Error = '*1.0.63 or later*' }
-            @{ Name = 'malformed'; Version = 'arbitrary-client'; Error = '*did not identify itself*' }
+        $missingVerificationInput = Join-Path $TestDrive 'missing-verification-input'
+        Copy-Item -LiteralPath $outputDirectory -Destination $missingVerificationInput -Recurse
+        $missingVerificationSummaryPath = Join-Path $missingVerificationInput 'summary.json'
+        $missingVerificationSummary = Get-Content `
+            -LiteralPath $missingVerificationSummaryPath `
+            -Raw | ConvertFrom-Json
+        $missingVerificationSummary.CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
+        $missingVerificationSummary.CopilotExecutableSha256 = 'A' * 64
+        $missingVerificationSummary.PSObject.Properties.Remove(
+            'CopilotExecutableEvidenceVerified')
+        $missingVerificationSummary | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $missingVerificationSummaryPath
+        {
+            Invoke-SkillEvalRescore `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -InputDirectory $missingVerificationInput `
+                -OutputDirectory (Join-Path $TestDrive 'rejected-missing-verification')
+        } | Should -Throw '*lacks a Copilot executable verification flag*'
+        $missingVerificationRescore = Invoke-SkillEvalRescore `
+            -RepoRoot $script:RepoRoot `
+            -ScenarioPath $script:ScenarioPath `
+            -InputDirectory $missingVerificationInput `
+            -OutputDirectory (Join-Path $TestDrive 'accepted-missing-verification') `
+            -AllowLegacyUnverifiedEvidence
+        $missingVerificationRescore.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
+        $missingVerificationRescore.CopilotExecutableEvidenceVerified |
+            Should -BeFalse
+
+        $invalidVerificationValues = @(
+            @{ Name = 'string-false'; Value = 'false' }
+            @{ Name = 'string-true'; Value = 'true' }
+            @{ Name = 'zero'; Value = 0 }
+            @{ Name = 'one'; Value = 1 }
+            @{ Name = 'null'; Value = $null }
+            @{ Name = 'array'; Value = [object[]]@($false, $true) }
+            @{ Name = 'object'; Value = [pscustomobject]@{ value = $false } }
         )
-        foreach ($invalidClientVersion in $invalidClientVersions) {
+        foreach ($invalidVerificationValue in $invalidVerificationValues) {
+            $invalidVerificationInput = Join-Path $TestDrive (
+                "invalid-verification-$($invalidVerificationValue.Name)")
+            Copy-Item -LiteralPath $outputDirectory `
+                -Destination $invalidVerificationInput `
+                -Recurse
+            $invalidVerificationSummaryPath = Join-Path (
+                $invalidVerificationInput) 'summary.json'
+            $invalidVerificationSummary = Get-Content `
+                -LiteralPath $invalidVerificationSummaryPath `
+                -Raw | ConvertFrom-Json
+            $invalidVerificationSummary.CopilotVersion = 'GitHub Copilot CLI 1.0.63.'
+            $invalidVerificationSummary.CopilotExecutableSha256 = 'A' * 64
+            $invalidVerificationSummary.CopilotExecutableEvidenceVerified =
+                $invalidVerificationValue.Value
+            $invalidVerificationSummary | ConvertTo-Json -Depth 30 |
+                Set-Content -LiteralPath $invalidVerificationSummaryPath
+            foreach ($allowLegacy in @($false, $true)) {
+                {
+                    Invoke-SkillEvalRescore `
+                        -RepoRoot $script:RepoRoot `
+                        -ScenarioPath $script:ScenarioPath `
+                        -InputDirectory $invalidVerificationInput `
+                        -OutputDirectory (Join-Path $TestDrive (
+                                "rejected-$($invalidVerificationValue.Name)-$allowLegacy")) `
+                        -AllowLegacyUnverifiedEvidence:$allowLegacy
+                } | Should -Throw '*verification flag must be a Boolean*'
+            }
+        }
+
+        $unsupportedClientVersions = @(
+            $script:CopilotClientVersionCases.rejected |
+                Where-Object error -EQ '*1.0.63 or later*')
+        foreach ($invalidClientVersion in $unsupportedClientVersions) {
+            $caseName = ([string]$invalidClientVersion.name).Replace(' ', '-')
             $invalidClientInput = Join-Path $TestDrive (
-                "invalid-client-version-$($invalidClientVersion.Name)")
+                "unsupported-client-version-$caseName")
             Copy-Item -LiteralPath $outputDirectory -Destination $invalidClientInput -Recurse
             $invalidClientSummaryPath = Join-Path $invalidClientInput 'summary.json'
             $invalidClientSummary = Get-Content `
                 -LiteralPath $invalidClientSummaryPath `
                 -Raw | ConvertFrom-Json
-            $invalidClientSummary.CopilotVersion = $invalidClientVersion.Version
+            $invalidClientSummary.CopilotVersion = [string]$invalidClientVersion.output
             $invalidClientSummary.CopilotExecutableSha256 = 'A' * 64
             $invalidClientSummary.CopilotExecutableEvidenceVerified = $true
             $invalidClientSummary | ConvertTo-Json -Depth 30 |
@@ -2137,7 +2214,7 @@ Describe 'Skill evaluation runner' {
                     -InputDirectory $invalidClientInput `
                     -OutputDirectory (Join-Path $TestDrive (
                             "rejected-client-version-$($invalidClientVersion.Name)"))
-            } | Should -Throw $invalidClientVersion.Error
+            } | Should -Throw ([string]$invalidClientVersion.error)
             $invalidClientRescore = Invoke-SkillEvalRescore `
                 -RepoRoot $script:RepoRoot `
                 -ScenarioPath $script:ScenarioPath `
@@ -2147,6 +2224,36 @@ Describe 'Skill evaluation runner' {
                 -AllowLegacyUnverifiedEvidence
             $invalidClientRescore.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
             $invalidClientRescore.CopilotExecutableEvidenceVerified | Should -BeFalse
+        }
+
+        $malformedClientVersions = @(
+            $script:CopilotClientVersionCases.rejected |
+                Where-Object error -EQ '*did not identify itself*')
+        foreach ($invalidClientVersion in $malformedClientVersions) {
+            $caseName = ([string]$invalidClientVersion.name).Replace(' ', '-')
+            $invalidClientInput = Join-Path $TestDrive (
+                "malformed-client-version-$caseName")
+            Copy-Item -LiteralPath $outputDirectory -Destination $invalidClientInput -Recurse
+            $invalidClientSummaryPath = Join-Path $invalidClientInput 'summary.json'
+            $invalidClientSummary = Get-Content `
+                -LiteralPath $invalidClientSummaryPath `
+                -Raw | ConvertFrom-Json
+            $invalidClientSummary.CopilotVersion = [string]$invalidClientVersion.output
+            $invalidClientSummary.CopilotExecutableSha256 = 'A' * 64
+            $invalidClientSummary.CopilotExecutableEvidenceVerified = $true
+            $invalidClientSummary | ConvertTo-Json -Depth 30 |
+                Set-Content -LiteralPath $invalidClientSummaryPath
+            foreach ($allowLegacy in @($false, $true)) {
+                {
+                    Invoke-SkillEvalRescore `
+                        -RepoRoot $script:RepoRoot `
+                        -ScenarioPath $script:ScenarioPath `
+                        -InputDirectory $invalidClientInput `
+                        -OutputDirectory (Join-Path $TestDrive (
+                                "rejected-$caseName-$allowLegacy")) `
+                        -AllowLegacyUnverifiedEvidence:$allowLegacy
+                } | Should -Throw ([string]$invalidClientVersion.error)
+            }
         }
 
         $invalidRunNumbers = @('../outside', '0')

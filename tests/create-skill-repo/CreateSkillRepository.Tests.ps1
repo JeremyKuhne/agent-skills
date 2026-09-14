@@ -11,6 +11,9 @@ BeforeAll {
         '.agents/skills/create-skill-repo/SKILL.md')
     $script:Publishing = Join-Path $script:RepoRoot (
         '.agents/skills/create-skill-repo/publishing.md')
+    $script:CopilotClientVersionCases = Get-Content -LiteralPath (
+        Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
+        -Raw | ConvertFrom-Json
 
     function Get-ScaffoldScriptFunctionModule (
         [string] $Path,
@@ -198,16 +201,19 @@ Describe 'New-SkillRepository' {
         $versionModule = Get-ScaffoldScriptFunctionModule `
             -Path $pluginSmoke `
             -FunctionName 'Get-ValidatedCopilotVersion'
-        & $versionModule {
-            Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.63.'
-        } | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
-        { & $versionModule {
-                Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.62.'
-            } } | Should -Throw '*1.0.63 or later*'
-        { & $versionModule {
-                Get-ValidatedCopilotVersion `
-                    -Output 'GitHub Copilot CLI 1.0.63-preview.1'
-            } } | Should -Throw '*1.0.63 or later*'
+        foreach ($case in $script:CopilotClientVersionCases.accepted) {
+            & $versionModule {
+                param($output)
+                Get-ValidatedCopilotVersion -Output $output
+            } ([string]$case.output) | Should -BeExactly ([string]$case.output)
+        }
+        foreach ($case in $script:CopilotClientVersionCases.rejected) {
+            { & $versionModule {
+                    param($output)
+                    Get-ValidatedCopilotVersion -Output $output
+                } ([string]$case.output) } |
+                Should -Throw ([string]$case.error) -Because ([string]$case.name)
+        }
 
         $launcherPath = Join-Path $TestDrive $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
         [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')

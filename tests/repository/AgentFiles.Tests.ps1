@@ -7,6 +7,9 @@ BeforeAll {
     $script:LinkValidator = Join-Path $script:RepoRoot 'tools/Test-AgentFileLinks.ps1'
     $script:Pwsh = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
     $script:MirrorHeader = '<!-- DO NOT EDIT. Generated mirror of /AGENTS.md. Edit AGENTS.md and run: ./tools/Validate-AgentFiles.ps1 -Fix -->'
+    $script:CopilotClientVersionCases = Get-Content -LiteralPath (
+        Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
+        -Raw | ConvertFrom-Json
 
     function Write-FixtureFile (
         [string] $Root,
@@ -201,19 +204,19 @@ Describe 'Agent file CI contract' {
             -Path $pluginSmoke `
             -FunctionName 'Get-ValidatedCopilotVersion'
 
-        & $module {
-            Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.63.'
-        } | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
-        & $module {
-            Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.1.0.'
-        } | Should -BeExactly 'GitHub Copilot CLI 1.1.0.'
-        { & $module {
-                Get-ValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.62.'
-            } } | Should -Throw '*1.0.63 or later*'
-        { & $module {
-                Get-ValidatedCopilotVersion `
-                    -Output 'GitHub Copilot CLI 1.0.63-preview.1'
-            } } | Should -Throw '*1.0.63 or later*'
+        foreach ($case in $script:CopilotClientVersionCases.accepted) {
+            & $module {
+                param($output)
+                Get-ValidatedCopilotVersion -Output $output
+            } ([string]$case.output) | Should -BeExactly ([string]$case.output)
+        }
+        foreach ($case in $script:CopilotClientVersionCases.rejected) {
+            { & $module {
+                    param($output)
+                    Get-ValidatedCopilotVersion -Output $output
+                } ([string]$case.output) } |
+                Should -Throw ([string]$case.error) -Because ([string]$case.name)
+        }
     }
 
     It 'documents the explicit native client required by release plugin smoke' {
