@@ -152,6 +152,146 @@ else {
     }
 }
 
+function Get-WorkflowRunScope ([string] $Content, [int] $Position) {
+    $lines = @([regex]::Matches($Content, '(?m)^.*(?:\r?\n|$)'))
+    $targetLine = 0
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($Position -lt $lines[$index].Index + $lines[$index].Length) {
+            $targetLine = $index
+            break
+        }
+    }
+    for ($index = $targetLine; $index -ge 0; $index--) {
+        $line = $lines[$index].Value.TrimEnd("`r", "`n")
+        if ($line -notmatch '^(?<indent>\s*)run:\s*(?<value>.*)$') { continue }
+        $indent = $Matches.indent.Length
+        $value = $Matches.value
+        if ($index -eq $targetLine -and $value -notmatch '^[|>]') { return $value }
+        $endLine = $index + 1
+        while ($endLine -lt $lines.Count) {
+            $candidate = $lines[$endLine].Value.TrimEnd("`r", "`n")
+            if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                $candidateIndent = $candidate.Length - $candidate.TrimStart().Length
+                if ($candidateIndent -le $indent) { break }
+            }
+            $endLine++
+        }
+        if ($targetLine -lt $endLine) {
+            return ($lines[$index..($endLine - 1)].Value -join '')
+        }
+        break
+    }
+    return $null
+}
+
+function Get-ToolchainWorkflowJobBody ([string] $Content, [string] $JobName) {
+    $escapedJobName = [regex]::Escape($JobName)
+    $match = [regex]::Match(
+        $Content,
+        "(?ms)^  ${escapedJobName}:\r?\n(?<body>.*?)(?=^  [a-z0-9-]+:\r?$|\z)")
+    if (-not $match.Success) { return $null }
+    return $match.Groups['body'].Value
+}
+
+$globalJsonPath = Join-Path $resolvedRoot 'global.json'
+if (-not (Test-Path -LiteralPath $globalJsonPath -PathType Leaf)) {
+    $errors.Add("'global.json' must select the manifest .NET SDK.") | Out-Null
+}
+else {
+    try {
+        $globalJson = Get-Content -LiteralPath $globalJsonPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $globalSdkVersion = $null
+        if ($globalJson.sdk.version -isnot [string] -or
+            -not [version]::TryParse($globalJson.sdk.version, [ref]$globalSdkVersion)) {
+            $errors.Add("'global.json' sdk.version must be an exact numeric SDK version.") |
+                Out-Null
+        }
+        elseif ("$($globalSdkVersion.Major).$($globalSdkVersion.Minor).x" -cne
+            [string]$manifest.dotnet.sdkVersion) {
+            $errors.Add("'global.json' sdk.version must select manifest SDK '$($manifest.dotnet.sdkVersion)'.") |
+                Out-Null
+        }
+        if ($globalJson.sdk.rollForward -cne 'latestFeature') {
+            $errors.Add("'global.json' sdk.rollForward must be 'latestFeature'.") | Out-Null
+        }
+        if ($globalJson.sdk.allowPrerelease -isnot [bool] -or
+            $globalJson.sdk.allowPrerelease) {
+            $errors.Add("'global.json' sdk.allowPrerelease must be false.") | Out-Null
+        }
+    }
+    catch {
+        $errors.Add("'global.json' is invalid: $($_.Exception.Message)") | Out-Null
+    }
+}
+
+$buildPropsPath = Join-Path $resolvedRoot 'Directory.Build.props'
+if (-not (Test-Path -LiteralPath $buildPropsPath -PathType Leaf)) {
+    $errors.Add("'Directory.Build.props' must set the manifest C# language version.") |
+        Out-Null
+}
+else {
+    try {
+        [xml]$buildProps = Get-Content -LiteralPath $buildPropsPath -Raw
+        $languageVersions = @($buildProps.Project.PropertyGroup.LangVersion)
+        if ($languageVersions.Count -ne 1 -or
+            [string]$languageVersions[0] -cne [string]$manifest.dotnet.languageVersion) {
+            $errors.Add("'Directory.Build.props' must set LangVersion '$($manifest.dotnet.languageVersion)'.") |
+                Out-Null
+        }
+    }
+    catch {
+        $errors.Add("'Directory.Build.props' is invalid XML: $($_.Exception.Message)") |
+            Out-Null
+    }
+}
+
+$workflowContracts = @(
+    @{ Path = '.github/workflows/ci.yml'; Job = 'dotnet-pipes'; Host = $null; DotNet = $true }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = $true }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = $true }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = $true }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux-x64'; Host = 'scheduled'; DotNet = $true }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = $true }
+)
+$workflowContents = @{}
+foreach ($contract in $workflowContracts) {
+    if (-not $workflowContents.ContainsKey($contract.Path)) {
+        $workflowPath = Join-Path $resolvedRoot $contract.Path
+        $workflowContents[$contract.Path] = if (
+            Test-Path -LiteralPath $workflowPath -PathType Leaf) {
+            Get-Content -LiteralPath $workflowPath -Raw
+        }
+        else { $null }
+    }
+    $workflow = $workflowContents[$contract.Path]
+    if ($null -eq $workflow) {
+        $errors.Add("'$($contract.Path)' must exist.") | Out-Null
+        continue
+    }
+    $jobBody = Get-ToolchainWorkflowJobBody -Content $workflow -JobName $contract.Job
+    if ($null -eq $jobBody) {
+        $errors.Add("'$($contract.Path)' must define job '$($contract.Job)'.") | Out-Null
+        continue
+    }
+    if ($null -ne $contract.Host) {
+        $expectedHost = [string]$manifest.hosts[$contract.Host].operatingSystem
+        if ($jobBody -notmatch "(?m)^    runs-on: $([regex]::Escape($expectedHost))\r?$") {
+            $errors.Add("'$($contract.Path)' job '$($contract.Job)' must run on manifest host '$expectedHost'.") |
+                Out-Null
+        }
+    }
+    if ($contract.DotNet -and
+        $jobBody -notmatch "(?m)^\s+dotnet-version: $([regex]::Escape([string]$manifest.dotnet.sdkVersion))\r?$") {
+        $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use manifest .NET SDK '$($manifest.dotnet.sdkVersion)'.") |
+            Out-Null
+    }
+}
+if ($workflowContents['.github/workflows/full-ci.yml'] -notmatch '(?m)^  schedule:\s*$') {
+    $errors.Add("'.github/workflows/full-ci.yml' must define the scheduled host lane.") |
+        Out-Null
+}
+
 $activeRoots = @('.agents', '.github', 'docs', 'evals', 'skills', 'tests', 'tools')
 $historicalPesterEvidencePaths = @(
     'docs/dual-model-evaluation-plan.md',
@@ -166,10 +306,7 @@ $copiedVersionPatterns = @(
 $moduleRequirementPattern =
     '(?i)ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*(?<constraint>RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>[^''"]+)[''"]'
 $moduleCommandPattern =
-    '(?i)(?:Install-Module|Import-Module)\s+(?:-Name\s+)?Pester\b(?<arguments>(?:[^\r\n]|`\r?\n)*)'
-$requiredVersionSwitchPattern = '(?i)(?:^|\s)-RequiredVersion(?:\s+|$)'
-$requiredVersionValuePattern =
-    '(?i)(?:^|\s)-RequiredVersion\s+(?<value>''[^'']*''|"[^"]*"|[^\s`]+)'
+    '(?im)(?<command>(?:Install-Module|Import-Module)\b(?:[^\r\n]|`\r?\n)*)'
 $invokePesterName = 'Invoke' + '-Pester'
 $invokePesterPattern = "(?i)(?<![-\w])$invokePesterName(?![-\w])"
 $importPesterPattern = '(?i)Import-Module\s+(?:-Name\s+)?Pester\b'
@@ -188,24 +325,67 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     $normalizedPath = $relativePath.Replace('\', '/')
     if ($normalizedPath -cin $historicalPesterEvidencePaths) { continue }
     foreach ($commandMatch in [regex]::Matches($content, $moduleCommandPattern)) {
-        $arguments = $commandMatch.Groups['arguments'].Value
-        if ($arguments -notmatch $requiredVersionSwitchPattern) {
+        $commandText = $commandMatch.Groups['command'].Value.TrimEnd('`')
+        $markdownEnd = [regex]::Match($commandText, '`(?!\r?\n)')
+        if ($markdownEnd.Success) {
+            $commandText = $commandText.Substring(0, $markdownEnd.Index)
+        }
+        $tokens = $null
+        $parseErrors = $null
+        $commandAst = [Management.Automation.Language.Parser]::ParseInput(
+            $commandText, [ref]$tokens, [ref]$parseErrors).Find({
+                param($node)
+                $node -is [Management.Automation.Language.CommandAst] -and
+                    $node.GetCommandName() -in @('Install-Module', 'Import-Module')
+            }, $true)
+        if ($null -eq $commandAst) { continue }
+        $elements = @($commandAst.CommandElements)
+        $nameParameterIndex = -1
+        for ($index = 1; $index -lt $elements.Count; $index++) {
+            if ($elements[$index] -is [Management.Automation.Language.CommandParameterAst] -and
+                $elements[$index].ParameterName -ieq 'Name') {
+                $nameParameterIndex = $index
+                break
+            }
+        }
+        $targetsPester = if ($nameParameterIndex -ge 0 -and
+            $nameParameterIndex + 1 -lt $elements.Count) {
+            $elements[$nameParameterIndex + 1] -is
+                [Management.Automation.Language.StringConstantExpressionAst] -and
+                $elements[$nameParameterIndex + 1].Value -ceq 'Pester'
+        }
+        else {
+            @($elements | Select-Object -Skip 1 | Where-Object {
+                    $_ -is [Management.Automation.Language.StringConstantExpressionAst] -and
+                    $_.Value -ceq 'Pester'
+                }).Count -gt 0
+        }
+        if (-not $targetsPester) { continue }
+        $requiredVersionIndices = @(for ($index = 1; $index -lt $elements.Count; $index++) {
+                if ($elements[$index] -is [Management.Automation.Language.CommandParameterAst] -and
+                    $elements[$index].ParameterName -ieq 'RequiredVersion') {
+                    $index
+                }
+            })
+        if ($requiredVersionIndices.Count -ne 1) {
             $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
                 Out-Null
             continue
         }
-        $versionMatch = [regex]::Match($arguments, $requiredVersionValuePattern)
-        if (-not $versionMatch.Success) {
+        $versionIndex = $requiredVersionIndices[0] + 1
+        if ($versionIndex -ge $elements.Count -or
+            $elements[$versionIndex] -is [Management.Automation.Language.CommandParameterAst]) {
             $errors.Add("'$relativePath' has an invalid Pester -RequiredVersion value.") | Out-Null
             continue
         }
-        $requiredVersionValue = $versionMatch.Groups['value'].Value
-        if (($requiredVersionValue.StartsWith("'") -and $requiredVersionValue.EndsWith("'")) -or
-            ($requiredVersionValue.StartsWith('"') -and $requiredVersionValue.EndsWith('"'))) {
-            $requiredVersionValue = $requiredVersionValue.Substring(
-                1, $requiredVersionValue.Length - 2)
+        $versionElement = $elements[$versionIndex]
+        $requiredVersionValue = if ($versionElement -is
+            [Management.Automation.Language.StringConstantExpressionAst]) {
+            [string]$versionElement.Value
         }
+        else { [string]$versionElement.Extent.Text }
         $isRunnerParameter = $normalizedPath -ceq 'tests/Invoke-PesterShards.ps1' -and
+            $versionElement -is [Management.Automation.Language.VariableExpressionAst] -and
             $requiredVersionValue -ceq '$PesterVersion'
         if (-not $isRunnerParameter -and $requiredVersionValue -cne $pesterVersion) {
             $errors.Add("'$relativePath' copies Pester version '$requiredVersionValue' instead of '$pesterVersion'.") |
@@ -236,10 +416,16 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         }
     }
     $isPinnedTest = $normalizedPath -like 'tests/*.Tests.ps1'
+    $isWorkflow = $normalizedPath -like '.github/workflows/*' -or
+        $normalizedPath -like '*/.github/workflows/*'
     foreach ($invokeMatch in [regex]::Matches($content, $invokePesterPattern)) {
         if ($isPinnedTest) { continue }
-        $priorContent = $content.Substring(0, $invokeMatch.Index)
-        if ($priorContent -notmatch $importPesterPattern) {
+        $invocationScope = if ($isWorkflow) {
+            Get-WorkflowRunScope -Content $content -Position $invokeMatch.Index
+        }
+        else { $content.Substring(0, $invokeMatch.Index) }
+        if ([string]::IsNullOrWhiteSpace($invocationScope) -or
+            $invocationScope -notmatch $importPesterPattern) {
             $errors.Add("'$relativePath' invokes $invokePesterName without a preceding pinned Pester import.") |
                 Out-Null
         }

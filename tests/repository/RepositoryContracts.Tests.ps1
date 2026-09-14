@@ -61,6 +61,7 @@ Describe 'PowerShell toolchain contract' {
                     'tools',
                     'tests',
                     'docs',
+                    '.github/workflows',
                     '.agents/skills/create-skill-repo',
                     'skills/dotnet-file-creation',
                     'skills/windows-acls')) {
@@ -69,6 +70,67 @@ Describe 'PowerShell toolchain contract' {
             }
             Copy-Item -LiteralPath $script:ToolchainManifestPath `
                 -Destination (Join-Path $fixtureRoot 'tools/powershell-toolchain.json')
+            Set-Content -LiteralPath (Join-Path $fixtureRoot 'global.json') -Value @'
+{
+    "sdk": {
+        "version": "10.0.100",
+        "rollForward": "latestFeature",
+        "allowPrerelease": false
+    }
+}
+'@
+            Set-Content -LiteralPath (Join-Path $fixtureRoot 'Directory.Build.props') -Value @'
+<Project>
+    <PropertyGroup>
+        <LangVersion>14.0</LangVersion>
+    </PropertyGroup>
+</Project>
+'@
+            Set-Content -LiteralPath (Join-Path $fixtureRoot '.github/workflows/ci.yml') `
+                -Value @(
+                'jobs:',
+                '  dotnet-pipes:',
+                '    runs-on: matrix',
+                '    steps:',
+                '      - uses: actions/setup-dotnet',
+                '        with:',
+                '          dotnet-version: 10.0.x',
+                '  scaffold-linux:',
+                '    runs-on: ubuntu-24.04-arm',
+                '    steps:',
+                '      - uses: actions/setup-dotnet',
+                '        with:',
+                '          dotnet-version: 10.0.x',
+                '  scaffold-windows:',
+                '    runs-on: windows-latest',
+                '    steps:',
+                '      - uses: actions/setup-dotnet',
+                '        with:',
+                '          dotnet-version: 10.0.x')
+            Set-Content -LiteralPath (Join-Path $fixtureRoot '.github/workflows/full-ci.yml') `
+                -Value @(
+                'on:',
+                '  schedule:',
+                "    - cron: '0 0 * * 1'",
+                'jobs:',
+                '  scaffold-linux:',
+                '    runs-on: ubuntu-24.04-arm',
+                '    steps:',
+                '      - uses: actions/setup-dotnet',
+                '        with:',
+                '          dotnet-version: 10.0.x',
+                '  scaffold-linux-x64:',
+                '    runs-on: ubuntu-latest',
+                '    steps:',
+                '      - uses: actions/setup-dotnet',
+                '        with:',
+                '          dotnet-version: 10.0.x',
+                '  scaffold-windows:',
+                '    runs-on: windows-latest',
+                '    steps:',
+                '      - uses: actions/setup-dotnet',
+                '        with:',
+                '          dotnet-version: 10.0.x')
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') -Value @(
                 '#Requires -Version 7.4',
                 "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
@@ -135,6 +197,51 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw $Error
+    }
+
+    It 'rejects a workflow host that drifts from the manifest' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-host-drift'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            'runs-on: ubuntu-24.04-arm', 'runs-on: ubuntu-latest') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-linux' must run on manifest host 'ubuntu-24.04-arm'*"
+    }
+
+    It 'rejects a workflow SDK that drifts from the manifest' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-sdk-drift'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            'dotnet-version: 10.0.x', 'dotnet-version: 9.0.x') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'dotnet-pipes' must use manifest .NET SDK '10.0.x'*"
+    }
+
+    It 'rejects a global SDK that drifts from the manifest' {
+        $fixtureRoot = New-ToolchainFixture 'global-sdk-drift'
+        $globalJsonPath = Join-Path $fixtureRoot 'global.json'
+        $globalJson = Get-Content -LiteralPath $globalJsonPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $globalJson.sdk.version = '9.0.100'
+        $globalJson | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $globalJsonPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*sdk.version must select manifest SDK '10.0.x'*"
+    }
+
+    It 'rejects a C# language version that drifts from the manifest' {
+        $fixtureRoot = New-ToolchainFixture 'language-version-drift'
+        $propsPath = Join-Path $fixtureRoot 'Directory.Build.props'
+        (Get-Content -LiteralPath $propsPath -Raw).Replace(
+            '<LangVersion>14.0</LangVersion>', '<LangVersion>latest</LangVersion>') |
+            Set-Content -LiteralPath $propsPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*must set LangVersion '14.0'*"
     }
 
     It 'rejects a drifted Pester test requirement' {
@@ -251,6 +358,17 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '$Value'*"
     }
 
+    It 'rejects a reordered stale Pester module pin' {
+        $fixtureRoot = New-ToolchainFixture 'reordered-module-pin'
+        $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
+        Set-Content -LiteralPath $driftPath -Value (
+            'Install-' + 'Module -RequiredVersion ' + ('5.7' + '.1') + ' -Name Pester')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
     It 'rejects ModuleVersion as an exact Pester requirement' {
         $fixtureRoot = New-ToolchainFixture 'minimum-module-version'
         $driftPath = Join-Path $fixtureRoot '.agents/Drift.ps1.tmpl'
@@ -284,6 +402,23 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw ('*invokes Invoke-' +
                 'Pester without a preceding pinned Pester import*')
     }
+
+        It 'rejects a pinned import in a different workflow step' {
+                $fixtureRoot = New-ToolchainFixture 'workflow-step-scope'
+                $workflowPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+                [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+                Set-Content -LiteralPath $workflowPath -Value @'
+jobs:
+    test:
+        steps:
+            - run: Import-Module Pester -RequiredVersion 6.2.0
+            - run: Invoke-Pester ./tests
+'@
+
+                { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                        Should -Throw ('*invokes Invoke-' +
+                                'Pester without a preceding pinned Pester import*')
+        }
 
     It 'rejects stale Pester copies in current docs but permits named historical evidence' {
         $fixtureRoot = New-ToolchainFixture 'documentation-drift'
