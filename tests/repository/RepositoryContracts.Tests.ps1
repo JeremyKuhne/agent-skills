@@ -613,6 +613,26 @@ jobs:
                                 'Pester without a preceding pinned Pester import*')
         }
 
+    It 'rejects a non-executing <Kind> import before the workflow invocation' -ForEach @(
+        @{ Kind = 'commented'; Import = '# Import-Module Pester -RequiredVersion 6.2.0' }
+        @{ Kind = 'quoted'; Import = "Write-Output 'Import-Module Pester -RequiredVersion 6.2.0'" }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "workflow-$Kind-import"
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:',
+            '  test:',
+            '    steps:',
+            '      - run: |',
+            "          $Import",
+            '          Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
         It 'accepts an inline workflow step with a preceding pinned import' {
                 $fixtureRoot = New-ToolchainFixture 'inline-workflow-step'
                 $workflowPath = Join-Path $fixtureRoot '.github/workflows/inline.yml'
@@ -627,6 +647,45 @@ jobs:
                 { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
                         Should -Not -Throw
         }
+
+    It 'accepts the shard runner validated Pester version variable' {
+        $fixtureRoot = New-ToolchainFixture 'runner-version-variable'
+        $runnerPath = Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1'
+        Set-Content -LiteralPath $runnerPath -Value @(
+            '#Requires -Version 7.4',
+            '[CmdletBinding()]',
+            "param([version] `$PesterVersion = '6.2.0')",
+            ('Import-' + 'Module Pester -RequiredVersion $PesterVersion'),
+            ('Invoke-' + 'Pester'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'accepts a pinned generated command inside a here-string' {
+        $fixtureRoot = New-ToolchainFixture 'generated-here-string'
+        $generatorPath = Join-Path $fixtureRoot '.agents/Generator.ps1'
+        Set-Content -LiteralPath $generatorPath -Value @(
+            "`$text = @'",
+            ('Import-' + 'Module Pester -RequiredVersion 6.2.0'),
+            ('Invoke-' + 'Pester ./tests'),
+            "'@")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'ignores comment text resembling a here-string opener' {
+        $fixtureRoot = New-ToolchainFixture 'comment-here-string-opener'
+        $generatorPath = Join-Path $fixtureRoot '.agents/Generator.ps1'
+        Set-Content -LiteralPath $generatorPath -Value @(
+            ('Import-' + 'Module Pester -RequiredVersion 6.2.0'),
+            "# delimiter example: @'",
+            ('Invoke-' + 'Pester'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
 
     It 'rejects stale Pester copies in current docs but permits named historical evidence' {
         $fixtureRoot = New-ToolchainFixture 'documentation-drift'
