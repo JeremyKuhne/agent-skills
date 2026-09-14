@@ -235,7 +235,7 @@ function ConvertFrom-WorkflowRunScalar ([string] $Text) {
         try { return [Text.Json.JsonSerializer]::Deserialize[string]($jsonText) }
         catch { return $trimmed.Substring(1) }
     }
-    return $Text
+    return [regex]::Replace($Text.TrimEnd(), '\s+#.*$', '')
 }
 
 function ConvertFrom-WorkflowBlockScalar (
@@ -326,7 +326,8 @@ function Test-WorkflowPwshStepCommand (
             $endLine++
         }
         $stepText = @($lines[$index..($endLine - 1)].Value) -join ''
-        if ($stepText -notmatch '(?m)^\s+(?:-\s+)?shell:\s*pwsh\s*$') {
+        if ($stepText -notmatch
+            '(?m)^\s+(?:-\s+)?shell:\s*pwsh(?:\s+#.*)?\s*$') {
             continue
         }
         foreach ($commandMatch in [regex]::Matches(

@@ -131,6 +131,7 @@ For repository-wide validation:
 
 ```pwsh
 npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"
+./tools/Test-PowerShellToolchain.ps1
 ./tests/Invoke-PesterShards.ps1 -Path ./tests
 ```
 

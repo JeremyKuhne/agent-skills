@@ -181,6 +181,8 @@ Describe 'PowerShell toolchain contract' {
     It 'runs the toolchain validator before Pester in <Path>' -ForEach @(
         @{ Path = 'CONTRIBUTING.md' }
         @{ Path = 'RELEASING.md' }
+        @{ Path = 'AGENTS.md' }
+        @{ Path = '.github/copilot-instructions.md' }
     ) {
         $content = Get-Content -LiteralPath (Join-Path $script:RepoRoot $Path) -Raw
         $validatorIndex = $content.IndexOf('./tools/Test-PowerShellToolchain.ps1')
@@ -371,6 +373,29 @@ Describe 'PowerShell toolchain contract' {
                 '(?m)^\s{8}run: \./tools/Test-PowerShellToolchain\.ps1\r?$',
                 $replacement)
             $content | Should -Match "(?m)^\s{8}run: $([regex]::Escape($Indicator))"
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'accepts a host validation step with a comment on <Key>' -ForEach @(
+        @{
+            Key = 'run'
+            Pattern = 'run: ./tools/Test-PowerShellToolchain.ps1'
+        }
+        @{
+            Key = 'shell'
+            Pattern = 'shell: pwsh'
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "workflow-commented-$Key"
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $content = $content.Replace($Pattern, "$Pattern # exact host check")
+            $content | Should -Match "(?m)^\s+$([regex]::Escape($Pattern)) #"
             Set-Content -LiteralPath $workflowPath -Value $content
         }
 
@@ -609,6 +634,18 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
+    It 'rejects a stale generated runner version inside a here-string' {
+        $fixtureRoot = New-ToolchainFixture 'generated-runner-version'
+        $generatorPath = Join-Path $fixtureRoot '.agents/Generator.ps1'
+        Set-Content -LiteralPath $generatorPath -Value @(
+            "`$text = @'",
+            ('./tests/Invoke-PesterShards.ps1 -Pester' + 'Version 5.7.1'),
+            "'@")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
     It 'rejects nonliteral Pester module pin <Value>' -ForEach @(
         @{ Name = 'environment'; Value = '$env:PESTER_VERSION' }
         @{ Name = 'four-part'; Value = ('6.2.0' + '.1') }
@@ -813,6 +850,19 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
+    }
+
+    It 'rejects a stale generated module requirement inside a here-string' {
+        $fixtureRoot = New-ToolchainFixture 'generated-module-requirement'
+        $generatorPath = Join-Path $fixtureRoot '.agents/Generator.ps1'
+        Set-Content -LiteralPath $generatorPath -Value @(
+            "`$text = @'",
+            ('#Requires -Modules @{ ModuleName = ''Pester''; ' +
+                'RequiredVersion = ''5.7.1'' }'),
+            "'@")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
     }
 
     It 'rejects a reversed-order stale Pester module requirement' {
