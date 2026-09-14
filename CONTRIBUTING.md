@@ -61,7 +61,7 @@ npx --yes skills-ref@0.1.5 validate ./skills/<name>
 
 # Generated catalog and executable contracts.
 ./tools/Update-SkillCatalog.ps1
-Invoke-Pester ./tests
+./tests/Invoke-PesterShards.ps1 -Path ./tests
 ```
 
 All must pass. Because the link check runs `--offline`, every relative link must

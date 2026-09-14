@@ -94,6 +94,10 @@ Describe 'PowerShell toolchain contract' {
         $script:Toolchain.dotnet.languageVersion | Should -BeExactly '14.0'
         @($script:Toolchain.hosts.PSObject.Properties.Name | Sort-Object) |
             Should -Be @('primary', 'scheduled', 'windows')
+        $script:Toolchain.hosts.primary.powerShellVersion | Should -BeExactly '7.4'
+        $script:Toolchain.hosts.windows.powerShellVersion | Should -BeExactly '7.4'
+        $script:Toolchain.hosts.scheduled.powerShellVersion |
+            Should -BeExactly 'latest-stable'
     }
 
     It 'keeps checked toolchain copies aligned with the manifest' {
@@ -111,6 +115,23 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*schemaVersion must be the integer 1*'
+    }
+
+    It 'rejects invalid host PowerShell version <Value> for <Lane>' -ForEach @(
+        @{ Lane = 'primary'; Value = 'banana'; Error = '*must be numeric or*latest-stable*' }
+        @{ Lane = 'primary'; Value = '7.2'; Error = '*must be at least 7.4*' }
+        @{ Lane = 'primary'; Value = 'latest-stable'; Error = '*cannot use the*latest-stable*selector*' }
+        @{ Lane = 'scheduled'; Value = 'banana'; Error = '*must be numeric or*latest-stable*' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "host-$Lane-$($Value.Replace('.', '-'))"
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $manifest.hosts[$Lane].powerShellVersion = $Value
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw $Error
     }
 
     It 'rejects a drifted Pester test requirement' {
@@ -163,21 +184,43 @@ Describe 'PowerShell toolchain contract' {
             Kind = 'module command'
             Path = '.github/workflows/drift.yml'
             Content = ('Install-' + 'Module Pester -RequiredVersion ' + ('6.' + '1.0'))
+            Version = ('6.' + '1.0')
         }
         @{
             Kind = 'runner invocation'
             Path = 'evals/drift.md'
             Content = './tests/Invoke-PesterShards.ps1 -PesterVersion ' + ('6.' + '1.0')
+            Version = ('6.' + '1.0')
         }
         @{
             Kind = 'runner default'
             Path = 'tools/Drift.ps1'
-            Content = "[version] `$PesterVersion = '$('6.' + '1.0')'"
+            Content = "[version] `$Pester" + "Version = '$('6.' + '1.0')'"
+            Version = ('6.' + '1.0')
         }
         @{
             Kind = 'module requirement'
             Path = '.agents/Drift.ps1.tmpl'
-            Content = "#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '$('6.' + '1.0')' }"
+            Content = "#Requires -Modules @{ Module$('Name') = 'Pester'; RequiredVersion = '$('6.' + '1.0')' }"
+            Version = ('6.' + '1.0')
+        }
+        @{
+            Kind = 'module command suffix'
+            Path = '.github/workflows/suffix.yml'
+            Content = ('Import-' + 'Module Pester -RequiredVersion ' + ('6.2.0' + '.1'))
+            Version = ('6.2.0' + '.1')
+        }
+        @{
+            Kind = 'runner invocation suffix'
+            Path = 'evals/suffix.md'
+            Content = './tests/Invoke-PesterShards.ps1 -PesterVersion ' + ('6.2.0' + '.1')
+            Version = ('6.2.0' + '.1')
+        }
+        @{
+            Kind = 'runner default suffix'
+            Path = 'tools/Suffix.ps1'
+            Content = "[version] `$Pester" + "Version = '$('6.2.0' + '.1')'"
+            Version = ('6.2.0' + '.1')
         }
     ) {
         $fixtureRoot = New-ToolchainFixture "copied-$($Kind.Replace(' ', '-'))"
@@ -186,7 +229,32 @@ Describe 'PowerShell toolchain contract' {
         Set-Content -LiteralPath $driftPath -Value $Content
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw "*copies Pester version '6.1.0'*"
+            Should -Throw "*copies Pester version '$Version'*"
+    }
+
+    It 'rejects nonliteral Pester module pin <Value>' -ForEach @(
+        @{ Name = 'environment'; Value = '$env:PESTER_VERSION' }
+        @{ Name = 'four-part'; Value = ('6.2.0' + '.1') }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "module-value-$Name"
+        $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
+        Set-Content -LiteralPath $driftPath -Value (
+            'Import-' + "Module Pester -RequiredVersion $Value")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '$Value'*"
+    }
+
+    It 'rejects ModuleVersion as an exact Pester requirement' {
+        $fixtureRoot = New-ToolchainFixture 'minimum-module-version'
+        $driftPath = Join-Path $fixtureRoot '.agents/Drift.ps1.tmpl'
+        Set-Content -LiteralPath $driftPath -Value (
+            "#Requires -Modules @{ Module$('Name') = 'Pester'; Module" +
+            "Version = '6.2.0' }")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must use RequiredVersion for its Pester module requirement*'
     }
 
     It 'rejects an unpinned Pester <Action>' -ForEach @(
@@ -200,6 +268,16 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*invokes Pester without -RequiredVersion 6.2.0*'
+    }
+
+    It 'rejects floating Invoke-Pester guidance in a root file' {
+        $fixtureRoot = New-ToolchainFixture 'floating-invoke'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') -Value (
+            'Run Invoke-' + 'Pester ./tests.')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
     }
 
     It 'rejects drifted <Requirement> guidance in <Path>' -ForEach @(

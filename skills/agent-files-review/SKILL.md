@@ -161,5 +161,6 @@ For a commons portfolio, use strict mode and check generated collateral:
 ```pwsh
 ./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
 ./tools/Update-SkillCatalog.ps1
+Import-Module Pester -RequiredVersion 6.2.0
 Invoke-Pester ./tests
 ```

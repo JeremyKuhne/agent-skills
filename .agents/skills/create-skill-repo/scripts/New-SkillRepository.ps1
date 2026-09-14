@@ -339,6 +339,7 @@ $validationSection = if ($rank -ge 1) {
 
 ```pwsh
 ./tools/Validate-Repository.ps1
+Import-Module Pester -RequiredVersion 6.2.0
 Invoke-Pester ./tests
 ```
 '@

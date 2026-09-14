@@ -38,7 +38,7 @@ Get-ChildItem ./skills -Directory | ForEach-Object {
     npx --yes skills-ref@0.1.5 validate $_.FullName
 }
 ./tools/Update-SkillCatalog.ps1
-Invoke-Pester ./tests
+./tests/Invoke-PesterShards.ps1 -Path ./tests
 if ([string]::IsNullOrWhiteSpace($env:COPILOT_NATIVE_PATH)) {
   throw 'Set COPILOT_NATIVE_PATH to the pinned native Copilot CLI executable.'
 }

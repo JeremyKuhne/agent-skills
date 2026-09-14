@@ -57,6 +57,10 @@ if ($manifest.dotnet.sdkVersion -isnot [string] -or
     $errors.Add("Manifest 'dotnet.sdkVersion' must be a feature-band selector such as '10.0.x'.") | Out-Null
 }
 
+$minimumPowerShellVersion = [string]$manifest.powerShell.minimumVersion
+$minimumPowerShell = $null
+$minimumPowerShellIsValid = $manifest.powerShell.minimumVersion -is [string] -and
+    [version]::TryParse($minimumPowerShellVersion, [ref]$minimumPowerShell)
 foreach ($hostName in @('primary', 'windows', 'scheduled')) {
     if (-not $manifest.hosts.ContainsKey($hostName)) {
         $errors.Add("Manifest is missing the '$hostName' host lane.") | Out-Null
@@ -70,10 +74,27 @@ foreach ($hostName in @('primary', 'windows', 'scheduled')) {
     if ($hostLane.powerShellVersion -isnot [string] -or
         [string]::IsNullOrWhiteSpace($hostLane.powerShellVersion)) {
         $errors.Add("Manifest host '$hostName' must name a PowerShell version.") | Out-Null
+        continue
+    }
+    $hostVersionText = [string]$hostLane.powerShellVersion
+    if ($hostVersionText -ceq 'latest-stable') {
+        if ($hostName -cne 'scheduled') {
+            $errors.Add("Manifest host '$hostName' cannot use the 'latest-stable' selector.") |
+                Out-Null
+        }
+        continue
+    }
+    $hostVersion = $null
+    if (-not [version]::TryParse($hostVersionText, [ref]$hostVersion)) {
+        $errors.Add("Manifest host '$hostName' PowerShell version must be numeric or 'latest-stable'.") |
+            Out-Null
+    }
+    elseif ($minimumPowerShellIsValid -and $hostVersion -lt $minimumPowerShell) {
+        $errors.Add("Manifest host '$hostName' PowerShell version must be at least $minimumPowerShellVersion.") |
+            Out-Null
     }
 }
 
-$minimumPowerShellVersion = [string]$manifest.powerShell.minimumVersion
 $pesterVersion = [string]$manifest.modules.Pester
 $testRoot = Join-Path $resolvedRoot 'tests'
 $testFiles = if (Test-Path -LiteralPath $testRoot -PathType Container) {
@@ -133,42 +154,82 @@ else {
 
 $activeRoots = @('.agents', '.github', 'evals', 'skills', 'tests', 'tools')
 $versionPatterns = @(
-    '(?i)-PesterVersion\s+(?<version>\d+\.\d+\.\d+)',
-    '(?i)PesterVersion\s*=\s*[''"](?<version>\d+\.\d+\.\d+)',
-    '(?i)ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*(?:RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>\d+\.\d+\.\d+)'
+    '(?i)-PesterVersion\s+(?<version>[^\s`''"]+)',
+    '(?i)PesterVersion\s*=\s*[''"](?<version>[^''"]+)[''"]'
 )
+$moduleRequirementPattern =
+    '(?i)ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*(?<constraint>RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>[^''"]+)[''"]'
 $moduleCommandPattern =
     '(?i)(?:Install-Module|Import-Module)\s+(?:-Name\s+)?Pester\b(?<arguments>[^\r\n]*)'
 $requiredVersionSwitchPattern = '(?i)(?:^|\s)-RequiredVersion(?:\s+|$)'
-$literalRequiredVersionPattern =
-    '(?i)(?:^|\s)-RequiredVersion\s+[''"]?(?<version>\d+\.\d+\.\d+)[''"]?(?=\s|$)'
-foreach ($activeRoot in $activeRoots) {
-    $path = Join-Path $resolvedRoot $activeRoot
-    if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
-    foreach ($file in Get-ChildItem -LiteralPath $path -File -Recurse |
-        Where-Object Extension -In @('.md', '.ps1', '.psm1', '.psd1', '.yml', '.yaml', '.tmpl')) {
-        $content = Get-Content -LiteralPath $file.FullName -Raw
-        foreach ($commandMatch in [regex]::Matches($content, $moduleCommandPattern)) {
-            $arguments = $commandMatch.Groups['arguments'].Value
-            $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $file.FullName)
-            if ($arguments -notmatch $requiredVersionSwitchPattern) {
-                $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
-                    Out-Null
-            }
-            $versionMatch = [regex]::Match($arguments, $literalRequiredVersionPattern)
-            if ($versionMatch.Success -and
-                $versionMatch.Groups['version'].Value -cne $pesterVersion) {
-                $errors.Add("'$relativePath' copies Pester version '$($versionMatch.Groups['version'].Value)' instead of '$pesterVersion'.") |
+$requiredVersionValuePattern =
+    '(?i)(?:^|\s)-RequiredVersion\s+(?<value>''[^'']*''|"[^"]*"|[^\s`]+)'
+$invokePesterName = 'Invoke' + '-Pester'
+$invokePesterPattern = "(?i)\b$invokePesterName\b"
+$importPesterPattern = '(?i)Import-Module\s+(?:-Name\s+)?Pester\b'
+$scanFiles = @(
+    foreach ($activeRoot in $activeRoots) {
+        $path = Join-Path $resolvedRoot $activeRoot
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+        Get-ChildItem -LiteralPath $path -File -Recurse |
+            Where-Object Extension -In @('.md', '.ps1', '.psm1', '.psd1', '.yml', '.yaml', '.tmpl')
+    }
+    Get-ChildItem -LiteralPath $resolvedRoot -Filter '*.md' -File
+)
+foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
+    $content = Get-Content -LiteralPath $file.FullName -Raw
+    $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $file.FullName)
+    $normalizedPath = $relativePath.Replace('\', '/')
+    foreach ($commandMatch in [regex]::Matches($content, $moduleCommandPattern)) {
+        $arguments = $commandMatch.Groups['arguments'].Value
+        if ($arguments -notmatch $requiredVersionSwitchPattern) {
+            $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
+                Out-Null
+            continue
+        }
+        $versionMatch = [regex]::Match($arguments, $requiredVersionValuePattern)
+        if (-not $versionMatch.Success) {
+            $errors.Add("'$relativePath' has an invalid Pester -RequiredVersion value.") | Out-Null
+            continue
+        }
+        $requiredVersionValue = $versionMatch.Groups['value'].Value
+        if (($requiredVersionValue.StartsWith("'") -and $requiredVersionValue.EndsWith("'")) -or
+            ($requiredVersionValue.StartsWith('"') -and $requiredVersionValue.EndsWith('"'))) {
+            $requiredVersionValue = $requiredVersionValue.Substring(
+                1, $requiredVersionValue.Length - 2)
+        }
+        $isRunnerParameter = $normalizedPath -ceq 'tests/Invoke-PesterShards.ps1' -and
+            $requiredVersionValue -ceq '$PesterVersion'
+        if (-not $isRunnerParameter -and $requiredVersionValue -cne $pesterVersion) {
+            $errors.Add("'$relativePath' copies Pester version '$requiredVersionValue' instead of '$pesterVersion'.") |
+                Out-Null
+        }
+    }
+    foreach ($versionPattern in $versionPatterns) {
+        foreach ($match in [regex]::Matches($content, $versionPattern)) {
+            if ($match.Groups['version'].Value -cne $pesterVersion) {
+                $errors.Add("'$relativePath' copies Pester version '$($match.Groups['version'].Value)' instead of '$pesterVersion'.") |
                     Out-Null
             }
         }
-        foreach ($versionPattern in $versionPatterns) {
-            foreach ($match in [regex]::Matches($content, $versionPattern)) {
-                if ($match.Groups['version'].Value -cne $pesterVersion) {
-                    $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $file.FullName)
-                    $errors.Add("'$relativePath' copies Pester version '$($match.Groups['version'].Value)' instead of '$pesterVersion'.") | Out-Null
-                }
-            }
+    }
+    foreach ($match in [regex]::Matches($content, $moduleRequirementPattern)) {
+        if ($match.Groups['constraint'].Value -cne 'RequiredVersion') {
+            $errors.Add("'$relativePath' must use RequiredVersion for its Pester module requirement.") |
+                Out-Null
+        }
+        if ($match.Groups['version'].Value -cne $pesterVersion) {
+            $errors.Add("'$relativePath' copies Pester version '$($match.Groups['version'].Value)' instead of '$pesterVersion'.") |
+                Out-Null
+        }
+    }
+    $isPinnedTest = $normalizedPath -like 'tests/*.Tests.ps1'
+    foreach ($invokeMatch in [regex]::Matches($content, $invokePesterPattern)) {
+        if ($isPinnedTest) { continue }
+        $priorContent = $content.Substring(0, $invokeMatch.Index)
+        if ($priorContent -notmatch $importPesterPattern) {
+            $errors.Add("'$relativePath' invokes $invokePesterName without a preceding pinned Pester import.") |
+                Out-Null
         }
     }
 }
