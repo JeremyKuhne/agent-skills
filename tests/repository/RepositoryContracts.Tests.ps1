@@ -178,6 +178,18 @@ Describe 'PowerShell toolchain contract' {
         }
     }
 
+    It 'runs the toolchain validator before Pester in <Path>' -ForEach @(
+        @{ Path = 'CONTRIBUTING.md' }
+        @{ Path = 'RELEASING.md' }
+    ) {
+        $content = Get-Content -LiteralPath (Join-Path $script:RepoRoot $Path) -Raw
+        $validatorIndex = $content.IndexOf('./tools/Test-PowerShellToolchain.ps1')
+        $runnerIndex = $content.IndexOf('./tests/Invoke-PesterShards.ps1 -Path ./tests')
+
+        $validatorIndex | Should -BeGreaterOrEqual 0
+        $runnerIndex | Should -BeGreaterThan $validatorIndex
+    }
+
     It 'records the accepted versions and host lanes' {
         $script:Toolchain.schemaVersion | Should -Be 1
         $script:Toolchain.powerShell.minimumVersion | Should -BeExactly '7.4'
@@ -309,6 +321,61 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum in a pwsh step*"
+    }
+
+    It 'accepts a host validation step whose <Key> key starts the mapping' -ForEach @(
+        @{
+            Key = 'shell'
+            Replacement = @(
+                '      - shell: pwsh',
+                '        run: ./tools/Test-PowerShellToolchain.ps1') -join "`n"
+        }
+        @{
+            Key = 'run'
+            Replacement = @(
+                '      - run: ./tools/Test-PowerShellToolchain.ps1',
+                '        shell: pwsh') -join "`n"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "workflow-$Key-first-validation"
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $content = [regex]::Replace(
+                $content,
+                '(?m)^\s{6}- name: Validate PowerShell toolchain\r?\n' +
+                    '\s{8}shell: pwsh\r?\n' +
+                    '\s{8}run: \./tools/Test-PowerShellToolchain\.ps1\r?$',
+                $Replacement)
+            $content | Should -Match "(?m)^\s{6}- ${Key}:"
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'accepts a host validation step with a <Kind> run scalar' -ForEach @(
+        @{ Kind = 'literal'; Indicator = '|' }
+        @{ Kind = 'folded'; Indicator = '>-' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "workflow-$Kind-validation"
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $replacement = @(
+                "        run: $Indicator",
+                '          ./tools/Test-PowerShellToolchain.ps1') -join "`n"
+            $content = [regex]::Replace(
+                $content,
+                '(?m)^\s{8}run: \./tools/Test-PowerShellToolchain\.ps1\r?$',
+                $replacement)
+            $content | Should -Match "(?m)^\s{8}run: $([regex]::Escape($Indicator))"
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'rejects a workflow SDK that drifts from the manifest' {
@@ -885,6 +952,36 @@ jobs:
                 'Pester without a preceding pinned Pester import*')
     }
 
+    It 'accepts a pinned import with its nested invocation in <Kind>' -ForEach @(
+        @{
+            Kind = 'workflow'
+            Path = '.github/workflows/nested-pinned.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ('          1..1 | ForEach-Object { Import-' +
+                    'Module Pester -RequiredVersion 6.2.0; Invoke-' +
+                    'Pester ./tests }'))
+        }
+        @{
+            Kind = 'Markdown fence'
+            Path = 'docs/nested-pinned.md'
+            Content = @(
+                '```pwsh',
+                ('1..1 | ForEach-Object { Import-' +
+                    'Module Pester -RequiredVersion 6.2.0; Invoke-' +
+                    'Pester ./tests }'),
+                '```')
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "nested-pinned-$($Kind.Replace(' ', '-'))"
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects an unpinned nested Invoke-Pester command in <Kind>' -ForEach @(
         @{
             Kind = 'workflow'
@@ -990,6 +1087,23 @@ jobs:
                         Should -Not -Throw
         }
 
+            It 'accepts a folded workflow <Indicator> with a pinned import' -ForEach @(
+                @{ Indicator = '>'; Name = 'folded' }
+                @{ Indicator = '>-'; Name = 'folded-strip' }
+            ) {
+                $fixtureRoot = New-ToolchainFixture "workflow-$Name"
+                $workflowPath = Join-Path $fixtureRoot '.github/workflows/folded.yml'
+                [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+                Set-Content -LiteralPath $workflowPath -Value @(
+                    'jobs:', '  test:', '    steps:', "      - run: $Indicator",
+                    ('          Import-' + 'Module Pester'),
+                    '          -RequiredVersion 6.2.0;',
+                    ('          Invoke-' + 'Pester ./tests'))
+
+                { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                    Should -Not -Throw
+            }
+
     It 'accepts the shard runner validated Pester version variable' {
         $fixtureRoot = New-ToolchainFixture 'runner-version-variable'
         $runnerPath = Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1'
@@ -1014,6 +1128,17 @@ jobs:
         steps:
             - run: Import-Module "Pester" -RequiredVersion "6.2.0"; Invoke-Pester ./tests
 '@
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'accepts a pinned import and invocation in one inline Markdown span' {
+        $fixtureRoot = New-ToolchainFixture 'markdown-inline-pinned-invocation'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') `
+            -Value ('Run `Import-' +
+                'Module Pester -RequiredVersion 6.2.0; Invoke-' +
+                'Pester ./tests`.')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw

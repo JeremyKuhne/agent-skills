@@ -232,7 +232,17 @@ function ConvertFrom-WorkflowRunScalar ([string] $Text) {
     return $Text
 }
 
-function Get-WorkflowRunScope ([string] $Content, [int] $Position) {
+function ConvertFrom-WorkflowBlockScalar (
+    [string] $Text,
+    [switch] $Folded) {
+    if (-not $Folded) { return $Text }
+    return [regex]::Replace($Text, '\r?\n(?=[ \t]*\S)', ' ')
+}
+
+function Get-WorkflowRunScope (
+    [string] $Content,
+    [int] $Position,
+    [switch] $Complete) {
     $lines = @([regex]::Matches($Content, '(?m)^.*(?:\r?\n|$)'))
     $targetLine = 0
     for ($index = 0; $index -lt $lines.Count; $index++) {
@@ -250,8 +260,12 @@ function Get-WorkflowRunScope ([string] $Content, [int] $Position) {
         $value = $runMatch.Groups['value'].Value
         if ($index -eq $targetLine -and $value -notmatch '^[|>]') {
             $scopeStart = $lines[$index].Index + $runMatch.Groups['value'].Index
+            $scopeLength = if ($Complete) {
+                $runMatch.Groups['value'].Length
+            }
+            else { $Position - $scopeStart }
             return ConvertFrom-WorkflowRunScalar $Content.Substring(
-                $scopeStart, $Position - $scopeStart)
+                $scopeStart, $scopeLength)
         }
         $endLine = $index + 1
         while ($endLine -lt $lines.Count) {
@@ -264,8 +278,14 @@ function Get-WorkflowRunScope ([string] $Content, [int] $Position) {
         }
         if ($targetLine -lt $endLine) {
             $scopeStart = $lines[$index + 1].Index
-            return $Content.Substring(
-                $scopeStart, $Position - $scopeStart)
+            $scopeEnd = if ($Complete) {
+                if ($endLine -lt $lines.Count) { $lines[$endLine].Index }
+                else { $Content.Length }
+            }
+            else { $Position }
+            return ConvertFrom-WorkflowBlockScalar `
+                -Text $Content.Substring($scopeStart, $scopeEnd - $scopeStart) `
+                -Folded:$value.StartsWith('>')
         }
         break
     }
@@ -300,9 +320,17 @@ function Test-WorkflowPwshStepCommand (
             $endLine++
         }
         $stepText = @($lines[$index..($endLine - 1)].Value) -join ''
-        if ($stepText -match '(?m)^\s+shell:\s*pwsh\s*$' -and
-            $stepText -match "(?m)^\s+run:\s*$CommandPattern\s*$") {
-            return $true
+        if ($stepText -notmatch '(?m)^\s+(?:-\s+)?shell:\s*pwsh\s*$') {
+            continue
+        }
+        foreach ($commandMatch in [regex]::Matches(
+                $stepText, $CommandPattern)) {
+            $runScope = Get-WorkflowRunScope -Content $stepText `
+                -Position $commandMatch.Index -Complete
+            if ($null -ne $runScope -and
+                $runScope -match "(?s)^\s*$CommandPattern\s*$") {
+                return $true
+            }
         }
     }
     return $false
@@ -465,17 +493,6 @@ function Test-CommandTargetsPester (
     return $null -ne $nameText -and $nameText -ieq 'Pester'
 }
 
-function Test-CommandIsInRootScriptBlock (
-    [Management.Automation.Language.CommandAst] $CommandAst,
-    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
-    $ancestor = $CommandAst.Parent
-    while ($null -ne $ancestor -and
-        $ancestor -isnot [Management.Automation.Language.ScriptBlockAst]) {
-        $ancestor = $ancestor.Parent
-    }
-    return [object]::ReferenceEquals($ancestor, $RootAst)
-}
-
 function Test-CommandMayExecuteInScope (
     [Management.Automation.Language.CommandAst] $CommandAst,
     [Management.Automation.Language.ScriptBlockAst] $RootAst) {
@@ -528,13 +545,17 @@ function Test-PinnedPesterImport (
     [string] $Scope,
     [string] $ExpectedVersion,
     [switch] $AllowPesterVersionVariable,
-    [switch] $IncludeInlineCode) {
+    [switch] $IncludeInlineCode,
+    [string] $AdditionalScope) {
     if ([string]::IsNullOrWhiteSpace($Scope)) { return $false }
     $inlineCode = @()
     if ($IncludeInlineCode) {
         $inlineCode = @([regex]::Matches($Scope, '`(?<code>[^`\r\n]+)`'))
     }
     $scriptTexts = @($Scope)
+    if (-not [string]::IsNullOrWhiteSpace($AdditionalScope)) {
+        $scriptTexts += $AdditionalScope
+    }
     if ($inlineCode.Count -gt 0) {
         $scriptTexts += @($inlineCode | ForEach-Object {
                 $_.Groups['code'].Value
@@ -550,7 +571,7 @@ function Test-PinnedPesterImport (
                     $node -is [Management.Automation.Language.CommandAst] -and
                         $node.GetCommandName() -ieq 'Import-Module'
                 }, $true) | Where-Object {
-                Test-CommandIsInRootScriptBlock -CommandAst $_ -RootAst $ast
+                Test-CommandMayExecuteInScope -CommandAst $_ -RootAst $ast
             })
         foreach ($commandAst in $imports) {
             if (-not (Test-CommandTargetsPester -CommandAst $commandAst)) { continue }
@@ -778,7 +799,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         }
         elseif ($isWorkflow) {
             $workflowScope = Get-WorkflowRunScope -Content $content `
-                -Position $scopePosition
+                -Position $commandMatch.Index -Complete
             if ($null -ne $workflowScope) { $workflowScope }
             else {
                 $lineStart = $content.LastIndexOf(
@@ -926,6 +947,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         HereStringScope = $null
                         InvocationScope = $invocationScope
                         IncludeInlineCode = $false
+                        AdditionalScope = $null
                     }
                 }
             })
@@ -948,6 +970,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                                 -Content $content -Position $invokeMatch.Index `
                                 -FencedOnly
                             IncludeInlineCode = $false
+                            AdditionalScope = $null
                         }
                     }
                     continue
@@ -968,6 +991,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         InvocationScope = Get-MarkdownCommandScope `
                             -Content $content -Position $invokeMatch.Index
                         IncludeInlineCode = $true
+                        AdditionalScope = $scriptText.Substring(0, $offset)
                     }
                 }
             })
@@ -990,6 +1014,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         HereStringScope = $null
                         InvocationScope = $null
                         IncludeInlineCode = $false
+                        AdditionalScope = $null
                     }
                 }
             foreach ($invokeMatch in $rawInvokeMatches) {
@@ -1011,6 +1036,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         -Content $content -Position $invokeMatch.Index
                     InvocationScope = $null
                     IncludeInlineCode = $false
+                    AdditionalScope = $null
                 }
             }
         )
@@ -1027,7 +1053,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 -ExpectedVersion $pesterVersion `
                 -AllowPesterVersionVariable:($normalizedPath -ceq
                     'tests/Invoke-PesterShards.ps1') `
-                -IncludeInlineCode:$invocation.IncludeInlineCode)) {
+                -IncludeInlineCode:$invocation.IncludeInlineCode `
+                -AdditionalScope $invocation.AdditionalScope)) {
             $errors.Add("'$relativePath' invokes $invokePesterName without a preceding pinned Pester import.") |
                 Out-Null
         }

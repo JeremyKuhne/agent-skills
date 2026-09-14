@@ -61,6 +61,7 @@ npx --yes skills-ref@0.1.5 validate ./skills/<name>
 
 # Generated catalog and executable contracts.
 ./tools/Update-SkillCatalog.ps1
+./tools/Test-PowerShellToolchain.ps1
 ./tests/Invoke-PesterShards.ps1 -Path ./tests
 ```
 
