@@ -307,6 +307,21 @@ function Get-ToolchainWorkflowJobBody ([string] $Content, [string] $JobName) {
     return $match.Groups['body'].Value
 }
 
+function Remove-PowerShellComments ([string] $Text) {
+    $tokens = $null
+    $parseErrors = $null
+    [Management.Automation.Language.Parser]::ParseInput(
+        $Text, [ref]$tokens, [ref]$parseErrors) | Out-Null
+    $result = $Text
+    foreach ($token in @($tokens | Where-Object Kind -EQ Comment |
+            Sort-Object { $_.Extent.StartOffset } -Descending)) {
+        $result = $result.Remove(
+            $token.Extent.StartOffset,
+            $token.Extent.EndOffset - $token.Extent.StartOffset)
+    }
+    return $result
+}
+
 function Test-WorkflowPwshStepCommand (
     [string] $JobBody,
     [string] $CommandPattern) {
@@ -326,9 +341,12 @@ function Test-WorkflowPwshStepCommand (
             $endLine++
         }
         $stepText = @($lines[$index..($endLine - 1)].Value) -join ''
+        $sequenceIndent = [regex]::Escape(' ' * $stepIndent)
+        $mappingIndent = [regex]::Escape(' ' * ($stepIndent + 2))
         $shellValues = @([regex]::Matches(
             $stepText,
-            '(?m)^\s+(?:-\s+)?shell:\s*(?<value>.*)$'))
+            "(?m)^(?:${sequenceIndent}-\s+|${mappingIndent})" +
+            'shell:\s*(?<value>.*)$'))
         $hasPwshShell = @($shellValues | Where-Object {
             (ConvertFrom-WorkflowRunScalar `
                 $_.Groups['value'].Value) -ieq 'pwsh'
@@ -340,8 +358,11 @@ function Test-WorkflowPwshStepCommand (
                 $stepText, $CommandPattern)) {
             $runScope = Get-WorkflowRunScope -Content $stepText `
                 -Position $commandMatch.Index -Complete
-            if ($null -ne $runScope -and
-                $runScope -match "(?s)^\s*$CommandPattern\s*$") {
+            $normalizedRunScope = if ($null -ne $runScope) {
+                Remove-PowerShellComments -Text $runScope
+            }
+            if ($null -ne $normalizedRunScope -and
+                $normalizedRunScope -match "(?s)^\s*$CommandPattern\s*$") {
                 return $true
             }
         }
@@ -767,7 +788,13 @@ foreach ($contract in $workflowContracts) {
             }
     }
     $expectedSdk = [string]$manifest.dotnet[$contract.DotNet]
-    if ($jobBody -notmatch "(?m)^\s+dotnet-version: $([regex]::Escape($expectedSdk))\r?$") {
+    $sdkVersions = @([regex]::Matches(
+            $jobBody, '(?m)^\s+dotnet-version:\s*(?<value>.*?)\s*$') |
+        ForEach-Object {
+            ConvertFrom-WorkflowRunScalar $_.Groups['value'].Value
+        })
+    if ($sdkVersions.Count -eq 0 -or
+        @($sdkVersions | Where-Object { $_ -cne $expectedSdk }).Count -gt 0) {
         $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use manifest .NET SDK '$expectedSdk'.") |
             Out-Null
     }
@@ -845,6 +872,48 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 })) {
             $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
         }
+        foreach ($requirement in @($sourceAst.ScriptRequirements.RequiredModules |
+                Where-Object Name -IEQ 'Pester')) {
+            if ($null -eq $requirement.RequiredVersion) {
+                $errors.Add("'$relativePath' must use RequiredVersion for its Pester module requirement.") |
+                    Out-Null
+            }
+            elseif ([string]$requirement.RequiredVersion -cne $pesterVersion) {
+                $errors.Add("'$relativePath' copies Pester version '$($requirement.RequiredVersion)' instead of '$pesterVersion'.") |
+                    Out-Null
+            }
+        }
+        foreach ($hashtableAst in @($sourceAst.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.HashtableAst]
+                }, $true))) {
+            try { $table = $hashtableAst.SafeGetValue() }
+            catch { continue }
+            $moduleNameKey = @($table.Keys | Where-Object {
+                    [string]$_ -ieq 'ModuleName'
+                } | Select-Object -First 1)
+            if ($moduleNameKey.Count -ne 1 -or
+                [string]$table[$moduleNameKey[0]] -ine 'Pester') {
+                continue
+            }
+            $requiredVersionKey = @($table.Keys | Where-Object {
+                    [string]$_ -ieq 'RequiredVersion'
+                } | Select-Object -First 1)
+            $moduleVersionKey = @($table.Keys | Where-Object {
+                    [string]$_ -ieq 'ModuleVersion'
+                } | Select-Object -First 1)
+            if ($requiredVersionKey.Count -ne 1 -or
+                $moduleVersionKey.Count -gt 0) {
+                $errors.Add("'$relativePath' must use RequiredVersion for its Pester module requirement.") |
+                    Out-Null
+                continue
+            }
+            $requiredVersion = [string]$table[$requiredVersionKey[0]]
+            if ($requiredVersion -cne $pesterVersion) {
+                $errors.Add("'$relativePath' copies Pester version '$requiredVersion' instead of '$pesterVersion'.") |
+                    Out-Null
+            }
+        }
     }
     foreach ($commandMatch in [regex]::Matches(
             $content, $moduleCommandNamePattern)) {
@@ -914,6 +983,14 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             }, $true))
         foreach ($commandAst in $commandAsts) {
             $elements = @($commandAst.CommandElements)
+            if (@($elements | Where-Object {
+                        $_ -is [Management.Automation.Language.VariableExpressionAst] -and
+                            $_.Splatted
+                    }).Count -gt 0) {
+                $errors.Add("'$relativePath' must not use splatting for module validation.") |
+                    Out-Null
+                continue
+            }
             $requiredVersionIndices = @(for ($index = 1; $index -lt $elements.Count; $index++) {
                     if ($elements[$index] -is [Management.Automation.Language.CommandParameterAst] -and
                         $elements[$index].ParameterName -ieq 'RequiredVersion') {

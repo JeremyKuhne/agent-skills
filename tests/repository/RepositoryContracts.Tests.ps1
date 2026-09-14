@@ -420,12 +420,66 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
+    It 'rejects a nested shell value when the step shell is not pwsh' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-nested-shell-key'
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $content = $content.Replace(
+                '        shell: pwsh',
+                "        env:`n          shell: pwsh`n        shell: bash")
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*must validate the manifest PowerShell minimum in a pwsh step*"
+    }
+
+    It 'accepts a block validation command with a trailing comment' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-block-command-comment'
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $content = $content.Replace(
+                '        run: ./tools/Test-PowerShellToolchain.ps1',
+                "        run: |`n          ./tools/Test-PowerShellToolchain.ps1 # validate")
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects a workflow SDK that drifts from the manifest' {
         $fixtureRoot = New-ToolchainFixture 'workflow-sdk-drift'
         $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
         (Get-Content -LiteralPath $workflowPath -Raw).Replace(
             'dotnet-version: 10.0.x', 'dotnet-version: 9.0.x') |
             Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'dotnet-pipes' must use manifest .NET SDK '10.0.x'*"
+    }
+
+    It 'rejects a second setup-dotnet version that drifts from the manifest' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-second-sdk-drift'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        $content = Get-Content -LiteralPath $workflowPath -Raw
+        $replacement = @(
+            '      - uses: actions/setup-dotnet',
+            '        with:',
+            '          dotnet-version: 10.0.x',
+            '      - uses: actions/setup-dotnet',
+            '        with:',
+            '          dotnet-version: 9.0.x') -join "`n"
+        $content = [regex]::Replace(
+            $content,
+            '(?m)^\s{6}- uses: actions/setup-dotnet\r?\n' +
+                '\s{8}with:\r?\n' +
+                '\s{10}dotnet-version: 10\.0\.x\r?$',
+            $replacement,
+            1)
+        Set-Content -LiteralPath $workflowPath -Value $content
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*job 'dotnet-pipes' must use manifest .NET SDK '10.0.x'*"
@@ -710,6 +764,20 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*must use the exact module name 'Pester'*"
     }
 
+    It 'rejects a splatted <Command> module invocation' -ForEach @(
+        @{ Command = 'Import-Module' }
+        @{ Command = 'Install-Module' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "splatted-$Command"
+        $scriptPath = Join-Path $fixtureRoot '.agents/Drift.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$arguments = @{ Name = 'Pester'; RequiredVersion = '5.7.1' }",
+            "$Command @arguments")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must not use splatting for module validation*'
+    }
+
     It 'rejects a reordered stale Pester module pin' {
         $fixtureRoot = New-ToolchainFixture 'reordered-module-pin'
         $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
@@ -969,6 +1037,19 @@ Describe 'PowerShell toolchain contract' {
             ('#Requires -Modules @{ ModuleName = ''Pester''; ' +
                 'RequiredVersion = ''5.7.1'' }'),
             "'@")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'rejects a stale multiline Pester module requirement' {
+        $fixtureRoot = New-ToolchainFixture 'multiline-module-requirement'
+        $templatePath = Join-Path $fixtureRoot '.agents/Drift.ps1.tmpl'
+        Set-Content -LiteralPath $templatePath -Value @(
+            '$requirement = @{',
+            "    ModuleName = 'Pester'",
+            "    RequiredVersion = '5.7.1'",
+            '}')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*copies Pester version '5.7.1'*"
