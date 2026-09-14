@@ -36,6 +36,36 @@ else {
         }
     }
 }
+
+function Get-StaticModuleSpecification ([object] $ExpressionAst) {
+    while ($ExpressionAst -is
+        [Management.Automation.Language.CommandExpressionAst]) {
+        $ExpressionAst = $ExpressionAst.Expression
+    }
+    if ($ExpressionAst -isnot [Management.Automation.Language.HashtableAst]) {
+        return $null
+    }
+    try { $table = $ExpressionAst.SafeGetValue() }
+    catch { return $null }
+    $moduleNameKey = @($table.Keys | Where-Object {
+            [string]$_ -ieq 'ModuleName'
+        } | Select-Object -First 1)
+    if ($moduleNameKey.Count -ne 1) { return $null }
+    $requiredVersionKey = @($table.Keys | Where-Object {
+            [string]$_ -ieq 'RequiredVersion'
+        } | Select-Object -First 1)
+    $moduleVersionKey = @($table.Keys | Where-Object {
+            [string]$_ -ieq 'ModuleVersion'
+        } | Select-Object -First 1)
+        return [pscustomobject]@{
+            Name = [string]$table[$moduleNameKey[0]]
+            HasExactVersion = $requiredVersionKey.Count -eq 1
+            ExactVersion = if ($requiredVersionKey.Count -eq 1) {
+            [string]$table[$requiredVersionKey[0]]
+        }
+            HasMinimumVersion = $moduleVersionKey.Count -eq 1
+    }
+}
 if ($errors.Count -gt 0) {
     throw "PowerShell toolchain validation failed:`n- $($errors -join "`n- ")"
 }
@@ -238,6 +268,11 @@ function Add-PesterModuleRequirementErrors (
                 Out-Null
             continue
         }
+        if ($dynamicKeys.Contains('ModuleVersion')) {
+            $ErrorList.Add("'$RelativePath' must use RequiredVersion for its Pester module requirement.") |
+                Out-Null
+            continue
+        }
         $requiredVersionKey = @($table.Keys | Where-Object {
                 [string]$_ -ieq 'RequiredVersion'
             } | Select-Object -First 1)
@@ -377,7 +412,8 @@ function Test-WorkflowRunIsStepLevel (
             $line = $Lines[$index].Value.TrimEnd("`r", "`n")
             if ([string]::IsNullOrWhiteSpace($line)) { continue }
             $indent = $line.Length - $line.TrimStart().Length
-            $stepMatch = [regex]::Match($line, '^(?<indent>\s*)-\s+')
+            $stepMatch = [regex]::Match(
+                $line, '^(?<indent>\s*)-(?:\s+.*)?$')
             if ($stepMatch.Success -and $indent -lt $runIndent) {
                 $candidateSteps.Add([pscustomobject]@{
                         LineIndex = $index
@@ -531,7 +567,7 @@ function Test-WorkflowPwshStepCommand (
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index].Value.TrimEnd("`r", "`n")
         $stepMatch = [regex]::Match(
-            $line, '^(?<indent>\s*)(?<dash>-\s+)')
+            $line, '^(?<indent>\s*)(?<dash>-)(?:\s+.*)?$')
         if (-not $stepMatch.Success -or
             -not (Test-WorkflowRunIsStepLevel -Lines $lines `
                 -RunLineIndex $index -RunMatch $stepMatch)) { continue }
@@ -606,6 +642,119 @@ function Test-WorkflowPwshStepCommand (
         }
     }
     return $false
+}
+
+function Get-WorkflowActionInputRecords (
+    [string] $JobBody,
+    [string] $ActionPattern,
+    [string] $InputName) {
+    $lines = @([regex]::Matches($JobBody, '(?m)^.*(?:\r?\n|$)'))
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index].Value.TrimEnd("`r", "`n")
+        $stepMatch = [regex]::Match(
+            $line, '^(?<indent>\s*)(?<dash>-)(?:\s+.*)?$')
+        if (-not $stepMatch.Success -or
+            -not (Test-WorkflowRunIsStepLevel -Lines $lines `
+                -RunLineIndex $index -RunMatch $stepMatch)) { continue }
+        $stepIndent = $stepMatch.Groups['indent'].Length
+        $endLine = $index + 1
+        while ($endLine -lt $lines.Count) {
+            $candidate = $lines[$endLine].Value.TrimEnd("`r", "`n")
+            if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                $candidateIndent = $candidate.Length -
+                    $candidate.TrimStart().Length
+                if ($candidateIndent -le $stepIndent) { break }
+            }
+            $endLine++
+        }
+        $keyRecords = [Collections.Generic.List[object]]::new()
+        $inlineKey = [regex]::Match(
+            $line,
+            '^\s*-\s+(?<key>[\w.-]+):\s*(?<value>.*)$')
+        if ($inlineKey.Success) {
+            $keyRecords.Add([pscustomobject]@{
+                    LineIndex = $index
+                    Key = $inlineKey.Groups['key'].Value
+                    Value = $inlineKey.Groups['value'].Value
+                    Indent = $stepIndent
+                }) | Out-Null
+        }
+        $mappingRecords = @(for ($lineIndex = $index + 1;
+                $lineIndex -lt $endLine; $lineIndex++) {
+                $candidate = $lines[$lineIndex].Value.TrimEnd("`r", "`n")
+                $mappingMatch = [regex]::Match(
+                    $candidate,
+                    '^(?<indent>\s*)(?<key>[\w.-]+):\s*(?<value>.*)$')
+                if ($mappingMatch.Success -and
+                    $mappingMatch.Groups['indent'].Length -gt $stepIndent) {
+                    [pscustomobject]@{
+                        LineIndex = $lineIndex
+                        Key = $mappingMatch.Groups['key'].Value
+                        Value = $mappingMatch.Groups['value'].Value
+                        Indent = $mappingMatch.Groups['indent'].Length
+                    }
+                }
+            })
+        if ($mappingRecords.Count -gt 0) {
+            $directIndent = ($mappingRecords.Indent |
+                Measure-Object -Minimum).Minimum
+            foreach ($record in $mappingRecords | Where-Object {
+                    $_.Indent -eq $directIndent
+                }) {
+                $keyRecords.Add($record) | Out-Null
+            }
+        }
+        $uses = @($keyRecords | Where-Object Key -IEQ 'uses' |
+            Select-Object -First 1)
+        if ($uses.Count -ne 1 -or
+            (ConvertFrom-WorkflowRunScalar $uses[0].Value) -notmatch
+                $ActionPattern) {
+            continue
+        }
+        $with = @($keyRecords | Where-Object Key -IEQ 'with' |
+            Select-Object -First 1)
+        if ($with.Count -ne 1) {
+            [pscustomobject]@{ HasValue = $false; Value = $null }
+            continue
+        }
+        $withEndLine = $endLine
+        foreach ($record in $keyRecords | Where-Object {
+                $_.LineIndex -gt $with[0].LineIndex
+            } | Sort-Object LineIndex) {
+            $withEndLine = $record.LineIndex
+            break
+        }
+        $inputRecords = @(for ($lineIndex = $with[0].LineIndex + 1;
+                $lineIndex -lt $withEndLine; $lineIndex++) {
+                $candidate = $lines[$lineIndex].Value.TrimEnd("`r", "`n")
+                $inputMatch = [regex]::Match(
+                    $candidate,
+                    '^(?<indent>\s*)(?<key>[\w.-]+):\s*(?<value>.*)$')
+                if ($inputMatch.Success -and
+                    $inputMatch.Groups['indent'].Length -gt $with[0].Indent) {
+                    [pscustomobject]@{
+                        Key = $inputMatch.Groups['key'].Value
+                        Value = $inputMatch.Groups['value'].Value
+                        Indent = $inputMatch.Groups['indent'].Length
+                    }
+                }
+            })
+        if ($inputRecords.Count -gt 0) {
+            $inputIndent = ($inputRecords.Indent |
+                Measure-Object -Minimum).Minimum
+            $input = @($inputRecords | Where-Object {
+                    $_.Indent -eq $inputIndent -and $_.Key -ieq $InputName
+                } | Select-Object -First 1)
+        }
+        else { $input = @() }
+        [pscustomobject]@{
+            HasValue = $input.Count -eq 1
+            Value = if ($input.Count -eq 1) {
+                ConvertFrom-WorkflowRunScalar $input[0].Value
+            }
+            else { $null }
+        }
+    }
 }
 
 function Get-MarkdownCommandScope (
@@ -773,7 +922,8 @@ function Get-CommandModuleTargetAst (
     for ($index = 1; $index -lt $elements.Count; $index++) {
         if ($elements[$index] -is
             [Management.Automation.Language.CommandParameterAst] -and
-            $elements[$index].ParameterName -ieq 'Name') {
+            $elements[$index].ParameterName -in @(
+                'Name', 'FullyQualifiedName')) {
             return Get-CommandParameterValueAst -Elements $elements `
                 -ParameterIndex $index
         }
@@ -805,8 +955,73 @@ function Get-CommandModuleTargetAst (
 function Test-CommandTargetsPester (
     [Management.Automation.Language.CommandAst] $CommandAst) {
     $target = Get-CommandModuleTargetAst -CommandAst $CommandAst
+    $moduleSpecification = Get-StaticModuleSpecification `
+        -ExpressionAst $target
+    if ($null -ne $moduleSpecification) {
+        return $moduleSpecification.Name -ieq 'Pester'
+    }
     return @(Get-StaticStringAstValues -ExpressionAst $target |
         Where-Object { $_ -ieq 'Pester' }).Count -gt 0
+}
+
+function Get-NearestScriptBlockAst ([object] $Node) {
+    $ancestor = $Node
+    while ($null -ne $ancestor) {
+        if ($ancestor -is [Management.Automation.Language.ScriptBlockAst]) {
+            return $ancestor
+        }
+        $ancestor = $ancestor.Parent
+    }
+    return $null
+}
+
+function Test-AstIsWithinScope ([object] $Node, [object] $Scope) {
+    $ancestor = $Node
+    while ($null -ne $ancestor) {
+        if ([object]::ReferenceEquals($ancestor, $Scope)) { return $true }
+        $ancestor = $ancestor.Parent
+    }
+    return $false
+}
+
+function Test-CommandCreatesIsolatedContext (
+    [Management.Automation.Language.CommandAst] $CommandAst) {
+    $commandName = $CommandAst.GetCommandName()
+    if ($commandName -in @(
+            'Invoke-Command', 'icm', 'Start-Job', 'Start-ThreadJob')) {
+        return $true
+    }
+    if ($commandName -notin @('ForEach-Object', '%', 'ForEach')) {
+        return $false
+    }
+    return @($CommandAst.CommandElements | Where-Object {
+            $_ -is [Management.Automation.Language.CommandParameterAst] -and
+                $_.ParameterName -ieq 'Parallel'
+        }).Count -gt 0
+}
+
+function Get-AstExecutionContext (
+    [object] $Node,
+    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
+    $ancestor = $Node.Parent
+    while ($null -ne $ancestor -and
+        -not [object]::ReferenceEquals($ancestor, $RootAst)) {
+        if ($ancestor -is
+            [Management.Automation.Language.ScriptBlockExpressionAst]) {
+            $owner = $ancestor.Parent
+            while ($null -ne $owner -and
+                $owner -isnot [Management.Automation.Language.CommandAst] -and
+                -not [object]::ReferenceEquals($owner, $RootAst)) {
+                $owner = $owner.Parent
+            }
+            if ($owner -is [Management.Automation.Language.CommandAst] -and
+                (Test-CommandCreatesIsolatedContext -CommandAst $owner)) {
+                return $ancestor
+            }
+        }
+        $ancestor = $ancestor.Parent
+    }
+    return $RootAst
 }
 
 function Test-CommandTargetsAssignedPester (
@@ -818,6 +1033,8 @@ function Test-CommandTargetsAssignedPester (
         return $false
     }
     $variableName = $target.VariablePath.UserPath
+    $commandContext = Get-AstExecutionContext -Node $CommandAst `
+        -RootAst $RootAst
     $assignments = @($RootAst.FindAll({
                 param($node)
                 $node -is [Management.Automation.Language.AssignmentStatementAst]
@@ -825,7 +1042,12 @@ function Test-CommandTargetsAssignedPester (
             $_.Extent.StartOffset -lt $CommandAst.Extent.StartOffset -and
                 $_.Left -is
                     [Management.Automation.Language.VariableExpressionAst] -and
-                $_.Left.VariablePath.UserPath -ieq $variableName
+                $_.Left.VariablePath.UserPath -ieq $variableName -and
+                (Test-AstIsWithinScope -Node $CommandAst `
+                    -Scope (Get-NearestScriptBlockAst -Node $_)) -and
+                [object]::ReferenceEquals(
+                    (Get-AstExecutionContext -Node $_ -RootAst $RootAst),
+                    $commandContext)
         } | Sort-Object { $_.Extent.StartOffset } -Descending)
     foreach ($assignment in $assignments) {
         return @(Get-StaticStringAstValues -ExpressionAst $assignment.Right |
@@ -926,7 +1148,8 @@ function Test-PositionIsInIgnoredPowerShellText (
 function Test-PinnedPesterImport (
     [string] $Scope,
     [string] $ExpectedVersion,
-    [switch] $AllowPesterVersionVariable) {
+    [switch] $AllowPesterVersionVariable,
+    [int] $InvocationPosition = -1) {
     if ([string]::IsNullOrWhiteSpace($Scope)) { return $false }
     $scriptTexts = @($Scope)
     foreach ($scriptText in $scriptTexts) {
@@ -934,17 +1157,47 @@ function Test-PinnedPesterImport (
         $parseErrors = $null
         $ast = [Management.Automation.Language.Parser]::ParseInput(
             $scriptText, [ref]$tokens, [ref]$parseErrors)
+        $invocationContext = $null
+        if ($InvocationPosition -ge 0) {
+            $invocations = @($ast.FindAll({
+                        param($node)
+                        $node -is [Management.Automation.Language.CommandAst] -and
+                            $node.GetCommandName() -ieq 'Invoke-Pester'
+                    }, $true) | Where-Object {
+                    $_.Extent.StartOffset -eq $InvocationPosition
+                })
+            if ($invocations.Count -ne 1) { continue }
+            $invocationContext = Get-AstExecutionContext `
+                -Node $invocations[0] -RootAst $ast
+        }
         $imports = @($ast.FindAll({
                     param($node)
                     $node -is [Management.Automation.Language.CommandAst] -and
                         $node.GetCommandName() -in @('Import-Module', 'ipmo')
                 }, $true) | Where-Object {
-                Test-CommandMayExecuteInScope -CommandAst $_ -RootAst $ast
+                (Test-CommandMayExecuteInScope `
+                    -CommandAst $_ -RootAst $ast) -and
+                ($InvocationPosition -lt 0 -or
+                    ($_.Extent.StartOffset -lt $InvocationPosition -and
+                        [object]::ReferenceEquals(
+                            (Get-AstExecutionContext `
+                                -Node $_ -RootAst $ast),
+                            $invocationContext)))
             })
         foreach ($commandAst in $imports) {
             if (-not (Test-CommandTargetsPester -CommandAst $commandAst) -and
                 -not (Test-CommandTargetsAssignedPester `
                     -CommandAst $commandAst -RootAst $ast)) { continue }
+            $moduleSpecification = Get-StaticModuleSpecification `
+                -ExpressionAst (Get-CommandModuleTargetAst `
+                    -CommandAst $commandAst)
+            if ($null -ne $moduleSpecification -and
+                $moduleSpecification.Name -ieq 'Pester' -and
+                $moduleSpecification.HasExactVersion -and
+                -not $moduleSpecification.HasMinimumVersion -and
+                $moduleSpecification.ExactVersion -ceq $ExpectedVersion) {
+                return $true
+            }
             $elements = @($commandAst.CommandElements)
             $versionParameters = @(for ($index = 1; $index -lt $elements.Count; $index++) {
                     if ($elements[$index] -is
@@ -1072,20 +1325,28 @@ foreach ($contract in $workflowContracts) {
             }
     }
     $expectedSdk = [string]$manifest.dotnet[$contract.DotNet]
-    $sdkVersions = @([regex]::Matches(
-            $jobBody, '(?m)^\s+dotnet-version:\s*(?<value>.*?)\s*$') |
-        ForEach-Object {
-            ConvertFrom-WorkflowRunScalar $_.Groups['value'].Value
-        })
-    if ($sdkVersions.Count -eq 0 -or
-        @($sdkVersions | Where-Object { $_ -cne $expectedSdk }).Count -gt 0) {
+    $sdkInputs = @(Get-WorkflowActionInputRecords -JobBody $jobBody `
+        -ActionPattern '^actions/setup-dotnet(?:@|$)' `
+        -InputName 'dotnet-version')
+    if ($sdkInputs.Count -eq 0 -or
+        @($sdkInputs | Where-Object {
+                -not $_.HasValue -or $_.Value -cne $expectedSdk
+            }).Count -gt 0) {
         $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use manifest .NET SDK '$expectedSdk'.") |
             Out-Null
     }
-    if ($null -ne $contract.Quality -and
-        $jobBody -notmatch "(?m)^\s+dotnet-quality: $([regex]::Escape($contract.Quality))\r?$") {
-        $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use .NET quality '$($contract.Quality)'.") |
-            Out-Null
+    if ($null -ne $contract.Quality) {
+        $qualityInputs = @(Get-WorkflowActionInputRecords -JobBody $jobBody `
+            -ActionPattern '^actions/setup-dotnet(?:@|$)' `
+            -InputName 'dotnet-quality')
+        if ($qualityInputs.Count -eq 0 -or
+            @($qualityInputs | Where-Object {
+                    -not $_.HasValue -or
+                        $_.Value -cne [string]$contract.Quality
+                }).Count -gt 0) {
+            $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use .NET quality '$($contract.Quality)'.") |
+                Out-Null
+        }
     }
 }
 if ($workflowContents['.github/workflows/full-ci.yml'] -notmatch '(?m)^  schedule:\s*$') {
@@ -1307,6 +1568,11 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 })
             $moduleTarget = Get-CommandModuleTargetAst -CommandAst $commandAst
             $moduleNames = @(Get-StaticStringAstValues -ExpressionAst $moduleTarget)
+                $moduleSpecification = Get-StaticModuleSpecification `
+                    -ExpressionAst $moduleTarget
+                if ($null -ne $moduleSpecification) {
+                    $moduleNames = @($moduleSpecification.Name)
+                }
             if ($moduleNames.Count -eq 0 -and
                 $assignedPesterModuleCommandTexts.Contains($commandText)) {
                 $moduleNames = @('Pester')
@@ -1330,6 +1596,19 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 continue
             }
             if (@($moduleNames | Where-Object { $_ -ieq 'Pester' }).Count -eq 0) {
+                continue
+            }
+            if ($null -ne $moduleSpecification -and
+                $moduleSpecification.Name -ieq 'Pester') {
+                if (-not $moduleSpecification.HasExactVersion -or
+                    $moduleSpecification.HasMinimumVersion) {
+                    $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
+                        Out-Null
+                }
+                elseif ($moduleSpecification.ExactVersion -cne $pesterVersion) {
+                    $errors.Add("'$relativePath' copies Pester version '$($moduleSpecification.ExactVersion)' instead of '$pesterVersion'.") |
+                        Out-Null
+                }
                 continue
             }
             if ($requiredVersionIndices.Count -ne 1) {
@@ -1419,13 +1698,11 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     [StringComparison]::OrdinalIgnoreCase)
                 if (Test-ExecutableCommandAtOffset -ScriptText $candidateScope `
                         -CommandName $invokePesterName -Offset $offset) {
-                    $invocationScope = Get-WorkflowRunScope -Content $content `
-                        -Position $invokeMatch.Index
-                    if ($null -eq $invocationScope) { $invocationScope = '' }
                     [pscustomobject]@{
                         Position = $invokeMatch.Index
                         HereStringScope = $null
-                        InvocationScope = $invocationScope
+                        InvocationScope = $candidateScope
+                        InvocationPosition = $offset
                     }
                 }
             })
@@ -1446,9 +1723,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         [pscustomobject]@{
                             Position = $invokeMatch.Index
                             HereStringScope = $null
-                            InvocationScope = Get-MarkdownCommandScope `
-                                -Content $content -Position $invokeMatch.Index `
-                                -FencedOnly
+                            InvocationScope = $candidateScope
+                            InvocationPosition = $offset
                         }
                     }
                     continue
@@ -1466,7 +1742,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     [pscustomobject]@{
                         Position = $invokeMatch.Index
                         HereStringScope = $null
-                        InvocationScope = $scriptText.Substring(0, $offset)
+                        InvocationScope = $scriptText
+                        InvocationPosition = $offset
                     }
                 }
             })
@@ -1487,7 +1764,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     [pscustomobject]@{
                         Position = $_.Extent.StartOffset
                         HereStringScope = $null
-                        InvocationScope = $null
+                        InvocationScope = $content
+                        InvocationPosition = $_.Extent.StartOffset
                     }
                 }
             foreach ($invokeMatch in $rawInvokeMatches) {
@@ -1507,9 +1785,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 }
                 [pscustomobject]@{
                     Position = $invokeMatch.Index
-                    HereStringScope = Get-HereStringCommandScope `
-                        -Content $content -Position $invokeMatch.Index
-                    InvocationScope = $null
+                    HereStringScope = $null
+                    InvocationScope = $candidateScope
+                    InvocationPosition = $offset
                 }
             }
         )
@@ -1524,6 +1802,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         else { $content.Substring(0, $invocation.Position) }
         if (-not (Test-PinnedPesterImport -Scope $invocationScope `
                 -ExpectedVersion $pesterVersion `
+            -InvocationPosition $invocation.InvocationPosition `
                 -AllowPesterVersionVariable:($normalizedPath -ceq
                     'tests/Invoke-PesterShards.ps1'))) {
             $errors.Add("'$relativePath' invokes $invokePesterName without a preceding pinned Pester import.") |

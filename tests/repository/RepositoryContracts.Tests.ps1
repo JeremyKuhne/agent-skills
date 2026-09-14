@@ -552,6 +552,39 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum in a pwsh step*"
     }
 
+    It 'accepts a host validation step with a bare sequence marker' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-bare-step-marker'
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $content = [regex]::Replace(
+                $content,
+                '(?m)^      - name: Validate PowerShell toolchain\r?\n' +
+                    '        shell: pwsh\r?\n' +
+                    '        run: \./tools/Test-PowerShellToolchain\.ps1\r?$',
+                @(
+                    '      -',
+                    '        shell: pwsh',
+                    '        run: ./tools/Test-PowerShellToolchain.ps1') -join "`n")
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'rejects a stale command in a step with a bare sequence marker' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-bare-command-step-marker'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/bare-step.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:', '      -',
+            ('        run: Import-' +
+                'Module Pester -RequiredVersion 5.7.1'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
     It 'accepts a block validation command with a trailing comment' {
         $fixtureRoot = New-ToolchainFixture 'workflow-block-command-comment'
         foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
@@ -600,6 +633,42 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*job 'dotnet-pipes' must use manifest .NET SDK '10.0.x'*"
+    }
+
+    It 'rejects SDK metadata outside an actual setup-dotnet with mapping' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-sdk-nested-metadata'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        $content = Get-Content -LiteralPath $workflowPath -Raw
+        $content = [regex]::Replace(
+            $content,
+            '(?m)^      - uses: actions/setup-dotnet\r?\n' +
+                '        with:\r?\n' +
+                '          dotnet-version: 10\.0\.x\r?$',
+            @(
+                '      - uses: actions/setup-dotnet',
+                '        env:',
+                '          dotnet-version: 10.0.x') -join "`n",
+            1)
+        Set-Content -LiteralPath $workflowPath -Value $content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'dotnet-pipes' must use manifest .NET SDK '10.0.x'*"
+    }
+
+    It 'rejects preview quality metadata outside setup-dotnet with' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-quality-nested-metadata'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/full-ci.yml'
+        $content = Get-Content -LiteralPath $workflowPath -Raw
+        $content = $content.Replace(
+            "        with:`r`n          dotnet-version: 11.0.x`r`n          dotnet-quality: preview",
+            "        with:`r`n          dotnet-version: 11.0.x`r`n        env:`r`n          dotnet-quality: preview")
+        $content = $content.Replace(
+            "        with:`n          dotnet-version: 11.0.x`n          dotnet-quality: preview",
+            "        with:`n          dotnet-version: 11.0.x`n        env:`n          dotnet-quality: preview")
+        Set-Content -LiteralPath $workflowPath -Value $content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-preview' must use .NET quality 'preview'*"
     }
 
     It 'rejects a preview workflow SDK that drifts from the manifest' {
@@ -928,6 +997,30 @@ Describe 'PowerShell toolchain contract' {
             { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
                 Should -Throw $Error
         }
+    }
+
+    It 'rejects a Pester assignment from a deferred scriptblock' {
+        $fixtureRoot = New-ToolchainFixture 'deferred-module-name-assignment'
+        $scriptPath = Join-Path $fixtureRoot '.agents/DeferredAssignment.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$setup = { `$moduleName = 'Pester' }",
+            'Import-Module $moduleName -RequiredVersion 6.2.0',
+            'Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must use a static module name*'
+    }
+
+    It 'accepts a pinned FullyQualifiedName Pester import' {
+        $fixtureRoot = New-ToolchainFixture 'fully-qualified-pester-import'
+        $scriptPath = Join-Path $fixtureRoot '.agents/FullyQualified.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            ('Import-Module -FullyQualifiedName @{ ModuleName = ''Pester''; ' +
+                'RequiredVersion = ''6.2.0'' }'),
+            'Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'rejects a stale Pester import through the ipmo alias' {
@@ -1292,6 +1385,20 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*must use a static RequiredVersion for its Pester module requirement*'
     }
 
+    It 'rejects a dynamic ModuleVersion beside an exact RequiredVersion' {
+        $fixtureRoot = New-ToolchainFixture 'dynamic-module-version-requirement'
+        $scriptPath = Join-Path $fixtureRoot '.agents/DynamicModuleVersion.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            '$requirement = @{',
+            "    ModuleName = 'Pester'",
+            "    RequiredVersion = '6.2.0'",
+            '    ModuleVersion = $minimumVersion',
+            '}')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must use RequiredVersion for its Pester module requirement*'
+    }
+
     It 'rejects an unverifiable <Kind> module requirement name' -ForEach @(
         @{ Kind = 'dynamic'; Value = '$moduleName' }
         @{ Kind = 'wildcard'; Value = "'Pester*'" }
@@ -1574,6 +1681,42 @@ jobs:
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +
                 'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'does not share a Pester import from an isolated job with its parent' {
+        $fixtureRoot = New-ToolchainFixture 'job-import-parent-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/JobBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            ('Start-Job { Import-' +
+                'Module Pester -RequiredVersion 6.2.0 }'),
+            'Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'does not share a parent Pester import with an isolated job' {
+        $fixtureRoot = New-ToolchainFixture 'parent-import-job-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/JobBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            'Import-Module Pester -RequiredVersion 6.2.0',
+            'Start-Job { Invoke-Pester ./tests }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'accepts a pinned import and invocation inside one isolated job' {
+        $fixtureRoot = New-ToolchainFixture 'job-pinned-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/JobBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value (
+            'Start-Job { Import-Module Pester -RequiredVersion 6.2.0; ' +
+                'Invoke-Pester ./tests }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'accepts a pinned import with its nested invocation in <Kind>' -ForEach @(
