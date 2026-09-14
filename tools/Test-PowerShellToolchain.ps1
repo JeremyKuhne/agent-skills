@@ -29,7 +29,7 @@ if ($errors.Count -gt 0) {
     throw "PowerShell toolchain validation failed:`n- $($errors -join "`n- ")"
 }
 
-if ($manifest.schemaVersion -ne 1) {
+if ($manifest.schemaVersion -isnot [long] -or $manifest.schemaVersion -ne 1) {
     $errors.Add("Manifest schemaVersion must be the integer 1.") | Out-Null
 }
 
@@ -73,6 +73,7 @@ foreach ($hostName in @('primary', 'windows', 'scheduled')) {
     }
 }
 
+$minimumPowerShellVersion = [string]$manifest.powerShell.minimumVersion
 $pesterVersion = [string]$manifest.modules.Pester
 $testRoot = Join-Path $resolvedRoot 'tests'
 $testFiles = if (Test-Path -LiteralPath $testRoot -PathType Container) {
@@ -82,7 +83,12 @@ else { @() }
 if ($testFiles.Count -eq 0) {
     $errors.Add('No Pester test files were found.') | Out-Null
 }
-foreach ($testFile in $testFiles) {
+$templateRoot = Join-Path $resolvedRoot '.agents'
+$testTemplates = if (Test-Path -LiteralPath $templateRoot -PathType Container) {
+    @(Get-ChildItem -LiteralPath $templateRoot -Filter '*.Tests.ps1.tmpl' -File -Recurse)
+}
+else { @() }
+foreach ($testFile in @($testFiles) + @($testTemplates)) {
     $tokens = $null
     $parseErrors = $null
     $ast = [Management.Automation.Language.Parser]::ParseFile(
@@ -92,12 +98,36 @@ foreach ($testFile in $testFiles) {
         $errors.Add("'$relativePath' does not parse: $($parseErrors -join '; ')") | Out-Null
         continue
     }
+    if ([string]$ast.ScriptRequirements.RequiredPSVersion -cne $minimumPowerShellVersion) {
+        $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $testFile.FullName)
+        $errors.Add("'$relativePath' must require PowerShell $minimumPowerShellVersion exactly.") | Out-Null
+    }
     $requirements = @($ast.ScriptRequirements.RequiredModules |
         Where-Object Name -CEQ 'Pester')
     if ($requirements.Count -ne 1 -or
         [string]$requirements[0].RequiredVersion -cne $pesterVersion) {
         $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $testFile.FullName)
         $errors.Add("'$relativePath' must require Pester $pesterVersion exactly.") | Out-Null
+    }
+}
+
+$runnerPath = Join-Path $resolvedRoot 'tests/Invoke-PesterShards.ps1'
+if (-not (Test-Path -LiteralPath $runnerPath -PathType Leaf)) {
+    $errors.Add("'tests/Invoke-PesterShards.ps1' must exist.") | Out-Null
+}
+else {
+    $tokens = $null
+    $parseErrors = $null
+    $runnerAst = [Management.Automation.Language.Parser]::ParseFile(
+        $runnerPath, [ref]$tokens, [ref]$parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        $errors.Add("'tests/Invoke-PesterShards.ps1' does not parse: $($parseErrors -join '; ')") |
+            Out-Null
+    }
+    elseif ([string]$runnerAst.ScriptRequirements.RequiredPSVersion -cne
+        $minimumPowerShellVersion) {
+        $errors.Add("'tests/Invoke-PesterShards.ps1' must require PowerShell $minimumPowerShellVersion exactly.") |
+            Out-Null
     }
 }
 
@@ -132,8 +162,15 @@ $guidancePaths = @(
 )
 foreach ($relativePath in $guidancePaths) {
     $path = Join-Path $resolvedRoot $relativePath
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or
-        (Get-Content -LiteralPath $path -Raw) -notmatch "Pester $([regex]::Escape($pesterVersion))") {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion and Pester $pesterVersion.") | Out-Null
+        continue
+    }
+    $content = Get-Content -LiteralPath $path -Raw
+    if ($content -notmatch "PowerShell $([regex]::Escape($minimumPowerShellVersion))") {
+        $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion.") | Out-Null
+    }
+    if ($content -notmatch "Pester $([regex]::Escape($pesterVersion))") {
         $errors.Add("'$relativePath' must name Pester $pesterVersion.") | Out-Null
     }
 }

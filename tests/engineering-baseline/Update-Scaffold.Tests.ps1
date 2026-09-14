@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+#Requires -Version 7.4
 #Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
 
 BeforeAll {

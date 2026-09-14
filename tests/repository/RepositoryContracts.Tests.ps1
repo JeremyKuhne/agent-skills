@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+#Requires -Version 7.4
 #Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
 
 BeforeAll {
@@ -54,6 +54,35 @@ Describe 'PowerShell toolchain contract' {
         $script:ToolchainValidatorPath = Join-Path $script:RepoRoot 'tools/Test-PowerShellToolchain.ps1'
         $script:Toolchain = Get-Content -LiteralPath $script:ToolchainManifestPath -Raw |
             ConvertFrom-Json
+
+        function New-ToolchainFixture ([string] $Name) {
+            $fixtureRoot = Join-Path $TestDrive $Name
+            foreach ($relativePath in @(
+                    'tools',
+                    'tests',
+                    '.agents/skills/create-skill-repo',
+                    'skills/dotnet-file-creation',
+                    'skills/windows-acls')) {
+                [IO.Directory]::CreateDirectory((Join-Path $fixtureRoot $relativePath)) |
+                    Out-Null
+            }
+            Copy-Item -LiteralPath $script:ToolchainManifestPath `
+                -Destination (Join-Path $fixtureRoot 'tools/powershell-toolchain.json')
+            Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') -Value @(
+                '#Requires -Version 7.4',
+                "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
+                "Describe 'Valid' { It 'is never run' { `$true | Should -BeTrue } }")
+            Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1') `
+                -Value @('#Requires -Version 7.4', '[CmdletBinding()]', 'param()')
+            foreach ($relativePath in @(
+                    '.agents/skills/create-skill-repo/SKILL.md',
+                    'skills/dotnet-file-creation/SKILL.md',
+                    'skills/windows-acls/SKILL.md')) {
+                Set-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) `
+                    -Value 'Requires PowerShell 7.4 and Pester 6.2.0.'
+            }
+            return $fixtureRoot
+        }
     }
 
     It 'records the accepted versions and host lanes' {
@@ -72,19 +101,118 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
+    It 'rejects a quoted schema version' {
+        $fixtureRoot = New-ToolchainFixture 'quoted-schema'
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $manifest.schemaVersion = '1'
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*schemaVersion must be the integer 1*'
+    }
+
     It 'rejects a drifted Pester test requirement' {
-        $fixtureRoot = Join-Path $TestDrive 'toolchain-drift'
-        [IO.Directory]::CreateDirectory((Join-Path $fixtureRoot 'tools')) | Out-Null
-        [IO.Directory]::CreateDirectory((Join-Path $fixtureRoot 'tests')) | Out-Null
-        Copy-Item -LiteralPath $script:ToolchainManifestPath `
-            -Destination (Join-Path $fixtureRoot 'tools/powershell-toolchain.json')
-        $driftRequirement = "#Requires -Modules @{ ModuleName = 'Pester'; " +
-            "RequiredVersion = '6.1.0' }"
-        Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Drift.Tests.ps1') `
-            -Value @($driftRequirement, "Describe 'Drift' { It 'is never run' { `$true | Should -BeTrue } }")
+        $fixtureRoot = New-ToolchainFixture 'test-pester-drift'
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            "RequiredVersion = '6.2.0'", "RequiredVersion = '6.1.0'") |
+            Set-Content -LiteralPath $testPath
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*must require Pester 6.2.0 exactly*'
+    }
+
+    It 'rejects a drifted Pester test runtime requirement' {
+        $fixtureRoot = New-ToolchainFixture 'test-runtime-drift'
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            '#Requires -Version 7.4', '#Requires -Version 7.2') |
+            Set-Content -LiteralPath $testPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must require PowerShell 7.4 exactly*'
+    }
+
+    It 'rejects a drifted generated-test runtime requirement' {
+        $fixtureRoot = New-ToolchainFixture 'template-runtime-drift'
+        $templatePath = Join-Path $fixtureRoot '.agents/Generated.Tests.ps1.tmpl'
+        Set-Content -LiteralPath $templatePath -Value @(
+            '#Requires -Version 7.2',
+            "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
+            "Describe 'Generated' { It 'is never run' { `$true | Should -BeTrue } }")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must require PowerShell 7.4 exactly*'
+    }
+
+    It 'rejects a drifted shard-runner runtime requirement' {
+        $fixtureRoot = New-ToolchainFixture 'runner-runtime-drift'
+        $runnerPath = Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1'
+        (Get-Content -LiteralPath $runnerPath -Raw).Replace(
+            '#Requires -Version 7.4', '#Requires -Version 7.2') |
+            Set-Content -LiteralPath $runnerPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*'tests/Invoke-PesterShards.ps1' must require PowerShell 7.4 exactly*"
+    }
+
+    It 'rejects a drifted copied Pester version in <Kind>' -ForEach @(
+        @{
+            Kind = 'module command'
+            Path = '.github/workflows/drift.yml'
+            Content = 'Install-Module Pester -RequiredVersion ' + ('6.' + '1.0')
+        }
+        @{
+            Kind = 'runner invocation'
+            Path = 'evals/drift.md'
+            Content = './tests/Invoke-PesterShards.ps1 -PesterVersion ' + ('6.' + '1.0')
+        }
+        @{
+            Kind = 'runner default'
+            Path = 'tools/Drift.ps1'
+            Content = "[version] `$PesterVersion = '$('6.' + '1.0')'"
+        }
+        @{
+            Kind = 'module requirement'
+            Path = '.agents/Drift.ps1.tmpl'
+            Content = "#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '$('6.' + '1.0')' }"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "copied-$($Kind.Replace(' ', '-'))"
+        $driftPath = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
+        Set-Content -LiteralPath $driftPath -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '6.1.0'*"
+    }
+
+    It 'rejects drifted <Requirement> guidance in <Path>' -ForEach @(
+        foreach ($relativePath in @(
+                '.agents/skills/create-skill-repo/SKILL.md',
+                'skills/dotnet-file-creation/SKILL.md',
+                'skills/windows-acls/SKILL.md')) {
+            @{
+                Requirement = 'PowerShell'
+                Path = $relativePath
+                Content = 'Requires PowerShell 7.2 and Pester 6.2.0.'
+                Error = '*must name PowerShell 7.4*'
+            }
+            @{
+                Requirement = 'Pester'
+                Path = $relativePath
+                Content = 'Requires PowerShell 7.4 and Pester 6.1.0.'
+                Error = '*must name Pester 6.2.0*'
+            }
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "guidance-$Requirement-$([IO.Path]::GetFileName((Split-Path -Parent $Path)))"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot $Path) -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw $Error
     }
 }
 

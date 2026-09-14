@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+#Requires -Version 7.4
 [CmdletBinding()]
 param(
     [string[]] $Path = @($PSScriptRoot),

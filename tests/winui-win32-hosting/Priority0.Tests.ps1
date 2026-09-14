@@ -1,3 +1,4 @@
+#Requires -Version 7.4
 #Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
 
 Describe 'WinUI Win32 hosting Priority 0 assets' {
