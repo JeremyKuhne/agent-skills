@@ -585,22 +585,54 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     $isPinnedTest = $normalizedPath -like 'tests/*.Tests.ps1'
     $isWorkflow = $normalizedPath -like '.github/workflows/*' -or
         $normalizedPath -like '*/.github/workflows/*'
-    foreach ($invokeMatch in [regex]::Matches($content, $invokePesterPattern)) {
-        if ($isPinnedTest) { continue }
-        $invocationScope = if ($isWorkflow) {
-            Get-WorkflowRunScope -Content $content -Position $invokeMatch.Index
-        }
-        elseif ($normalizedPath -like '*.md' -or $normalizedPath -like '*.md.tmpl') {
-            Get-MarkdownCommandScope -Content $content -Position $invokeMatch.Index
-        }
-        else {
-            $hereStringScope = Get-HereStringCommandScope -Content $content `
-                -Position $invokeMatch.Index
-            if ($null -ne $hereStringScope) {
-                $hereStringScope
+    $isMarkdown = $normalizedPath -like '*.md' -or
+        $normalizedPath -like '*.md.tmpl'
+    $rawInvokeMatches = @([regex]::Matches($content, $invokePesterPattern))
+    $invocations = if ($isPinnedTest) { @() }
+    elseif ($isWorkflow -or $isMarkdown) {
+        @($rawInvokeMatches | ForEach-Object {
+                [pscustomobject]@{ Position = $_.Index; HereStringScope = $null }
+            })
+    }
+    else {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseInput(
+            $content, [ref]$tokens, [ref]$parseErrors)
+        @(
+            $ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and
+                        $node.GetCommandName() -ieq $invokePesterName
+                }, $true) | ForEach-Object {
+                    [pscustomobject]@{
+                        Position = $_.Extent.StartOffset
+                        HereStringScope = $null
+                    }
+                }
+            foreach ($invokeMatch in $rawInvokeMatches) {
+                $hereStringScope = Get-HereStringCommandScope -Content $content `
+                    -Position $invokeMatch.Index
+                if ($null -ne $hereStringScope) {
+                    [pscustomobject]@{
+                        Position = $invokeMatch.Index
+                        HereStringScope = $hereStringScope
+                    }
+                }
             }
-            else { $content.Substring(0, $invokeMatch.Index) }
+        )
+    }
+    foreach ($invocation in $invocations) {
+        $invocationScope = if ($isWorkflow) {
+            Get-WorkflowRunScope -Content $content -Position $invocation.Position
         }
+        elseif ($isMarkdown) {
+            Get-MarkdownCommandScope -Content $content -Position $invocation.Position
+        }
+        elseif ($null -ne $invocation.HereStringScope) {
+            $invocation.HereStringScope
+        }
+        else { $content.Substring(0, $invocation.Position) }
         if (-not (Test-PinnedPesterImport -Scope $invocationScope `
                 -ExpectedVersion $pesterVersion `
                 -AllowPesterVersionVariable:($normalizedPath -ceq

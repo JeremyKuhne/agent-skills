@@ -687,6 +687,41 @@ jobs:
             Should -Not -Throw
     }
 
+    It 'ignores non-executing <Kind> Invoke-Pester text in a script' -ForEach @(
+        @{ Kind = 'comment'; Content = '# Invoke-Pester is documented here' }
+        @{ Kind = 'string'; Content = "`$message = 'Invoke-Pester is documented here'" }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "script-$Kind-invoke"
+        $scriptPath = Join-Path $fixtureRoot '.agents/Example.ps1'
+        Set-Content -LiteralPath $scriptPath -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'rejects an unpinned executable Invoke-Pester in a script' {
+        $fixtureRoot = New-ToolchainFixture 'script-executable-invoke'
+        $scriptPath = Join-Path $fixtureRoot '.agents/Example.ps1'
+        Set-Content -LiteralPath $scriptPath -Value ('Invoke-' + 'Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects an unpinned generated command inside a here-string' {
+        $fixtureRoot = New-ToolchainFixture 'generated-here-string-unpinned'
+        $scriptPath = Join-Path $fixtureRoot '.agents/Generator.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$text = @'",
+            ('Invoke-' + 'Pester ./tests'),
+            "'@")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
     It 'rejects stale Pester copies in current docs but permits named historical evidence' {
         $fixtureRoot = New-ToolchainFixture 'documentation-drift'
         $currentDoc = Join-Path $fixtureRoot 'docs/current.md'
