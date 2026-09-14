@@ -845,6 +845,33 @@ jobs:
                 'Pester without a preceding pinned Pester import*')
     }
 
+    It 'rejects an unpinned assignment RHS Invoke-Pester command in <Kind>' -ForEach @(
+        @{
+            Kind = 'workflow'
+            Path = '.github/workflows/assignment.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ('          $result = Invoke-' + 'Pester ./tests'))
+        }
+        @{
+            Kind = 'Markdown fence'
+            Path = 'docs/assignment.md'
+            Content = @(
+                '```pwsh',
+                ('$result = Invoke-' + 'Pester ./tests'),
+                '```')
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "assignment-invoke-$($Kind.Replace(' ', '-'))"
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
     It 'rejects a stale Pester command in quoted workflow <Kind>' -ForEach @(
         @{
             Kind = 'module setup'
@@ -938,6 +965,24 @@ Invoke-Pester ./tests
             Should -Not -Throw
     }
 
+    It 'ignores non-executing <Kind> Invoke-Pester text inside a here-string' -ForEach @(
+        @{ Kind = 'comment'; Content = '# Invoke-' + 'Pester ./tests' }
+        @{
+            Kind = 'string'
+            Content = "Write-Output 'Invoke-" + "Pester ./tests'"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "generated-here-string-$Kind"
+        $generatorPath = Join-Path $fixtureRoot '.agents/Generator.ps1'
+        Set-Content -LiteralPath $generatorPath -Value @(
+            "`$text = @'",
+            $Content,
+            "'@")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'ignores comment text resembling a here-string opener' {
         $fixtureRoot = New-ToolchainFixture 'comment-here-string-opener'
         $generatorPath = Join-Path $fixtureRoot '.agents/Generator.ps1'
@@ -953,6 +998,14 @@ Invoke-Pester ./tests
     It 'ignores non-executing <Kind> Invoke-Pester text in a script' -ForEach @(
         @{ Kind = 'comment'; Content = '# Invoke-Pester is documented here' }
         @{ Kind = 'string'; Content = "`$message = 'Invoke-Pester is documented here'" }
+        @{
+            Kind = 'function'
+            Content = 'function Invoke-Tests { Invoke-' + 'Pester ./tests }'
+        }
+        @{
+            Kind = 'assigned scriptblock'
+            Content = '$tests = { Invoke-' + 'Pester ./tests }'
+        }
     ) {
         $fixtureRoot = New-ToolchainFixture "script-$Kind-invoke"
         $scriptPath = Join-Path $fixtureRoot '.agents/Example.ps1'

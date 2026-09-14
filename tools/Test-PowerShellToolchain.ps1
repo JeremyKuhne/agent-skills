@@ -215,11 +215,11 @@ else {
 function ConvertFrom-WorkflowRunScalar ([string] $Text) {
     $trimmed = $Text.Trim()
     if ($trimmed.StartsWith("'")) {
-        $end = if ($trimmed.Length -gt 1 -and $trimmed.EndsWith("'")) {
-            $trimmed.Length - 1
+        $innerText = $trimmed.Substring(1)
+        if ($trimmed.Length -gt 1 -and $trimmed.EndsWith("'")) {
+            $innerText = $innerText.Substring(0, $innerText.Length - 1)
         }
-        else { $trimmed.Length }
-        return $trimmed.Substring(1, $end - 1).Replace("''", "'")
+        return $innerText.Replace("''", "'")
     }
     if ($trimmed.StartsWith('"')) {
         $jsonText = if ($trimmed.Length -gt 1 -and $trimmed.EndsWith('"')) {
@@ -438,9 +438,21 @@ function Test-CommandMayExecuteInScope (
     [Management.Automation.Language.CommandAst] $CommandAst,
     [Management.Automation.Language.ScriptBlockAst] $RootAst) {
     $ancestor = $CommandAst.Parent
+    $insideDeferredScriptBlock = $false
     while ($null -ne $ancestor) {
         if ([object]::ReferenceEquals($ancestor, $RootAst)) { return $true }
-        if ($ancestor -is [Management.Automation.Language.FunctionDefinitionAst] -or
+        if ($ancestor -is [Management.Automation.Language.FunctionDefinitionAst]) {
+            return $false
+        }
+        if ($ancestor -is
+            [Management.Automation.Language.ScriptBlockExpressionAst]) {
+            $insideDeferredScriptBlock = $true
+        }
+        elseif ($insideDeferredScriptBlock -and
+            $ancestor -is [Management.Automation.Language.CommandAst]) {
+            $insideDeferredScriptBlock = $false
+        }
+        elseif ($insideDeferredScriptBlock -and
             $ancestor -is [Management.Automation.Language.AssignmentStatementAst]) {
             return $false
         }
@@ -911,7 +923,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     param($node)
                     $node -is [Management.Automation.Language.CommandAst] -and
                         $node.GetCommandName() -ieq $invokePesterName
-                }, $true) | ForEach-Object {
+                }, $true) | Where-Object {
+                    Test-CommandMayExecuteInScope -CommandAst $_ -RootAst $ast
+                } | ForEach-Object {
                     [pscustomobject]@{
                         Position = $_.Extent.StartOffset
                         HereStringScope = $null
@@ -919,14 +933,21 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     }
                 }
             foreach ($invokeMatch in $rawInvokeMatches) {
-                $hereStringScope = Get-HereStringCommandScope -Content $content `
-                    -Position $invokeMatch.Index
-                if ($null -ne $hereStringScope) {
-                    [pscustomobject]@{
-                        Position = $invokeMatch.Index
-                        HereStringScope = $hereStringScope
-                        InvocationScope = $null
-                    }
+                $candidateEnd = $invokeMatch.Index + $invokeMatch.Length
+                $candidateScope = Get-HereStringCommandScope -Content $content `
+                    -Position $candidateEnd
+                if ($null -eq $candidateScope) { continue }
+                $offset = $candidateScope.Length - $invokeMatch.Length
+                if (-not (Test-ExecutableCommandAtOffset `
+                        -ScriptText $candidateScope `
+                        -CommandName $invokePesterName -Offset $offset)) {
+                    continue
+                }
+                [pscustomobject]@{
+                    Position = $invokeMatch.Index
+                    HereStringScope = Get-HereStringCommandScope `
+                        -Content $content -Position $invokeMatch.Index
+                    InvocationScope = $null
                 }
             }
         )
