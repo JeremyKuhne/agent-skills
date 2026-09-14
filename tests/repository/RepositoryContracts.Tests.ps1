@@ -211,6 +211,18 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*Manifest 'hosts' must be an object*"
     }
 
+    It 'rejects a non-object host lane value' {
+        $fixtureRoot = New-ToolchainFixture 'null-host-lane'
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $manifest.hosts.primary = $null
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*Manifest host 'primary' must be an object*"
+    }
+
     It 'rejects invalid host PowerShell version <Value> for <Lane>' -ForEach @(
         @{ Lane = 'primary'; Value = 'banana'; Error = '*minimum PowerShell version must be numeric*' }
         @{ Lane = 'primary'; Value = '7.2'; Error = '*must be at least 7.4*' }
@@ -452,6 +464,17 @@ Describe 'PowerShell toolchain contract' {
         [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
         Set-Content -LiteralPath $driftPath -Value (
             'Install-' + 'Module -RequiredVersion ' + ('5.7' + '.1') + ' -Name Pester')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'rejects an attached-name stale Pester module pin' {
+        $fixtureRoot = New-ToolchainFixture 'attached-module-name'
+        $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
+        Set-Content -LiteralPath $driftPath -Value (
+            'Install-' + 'Module -Name:Pester -RequiredVersion ' + ('5.7' + '.1'))
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*copies Pester version '5.7.1'*"

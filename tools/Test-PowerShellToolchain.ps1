@@ -83,6 +83,10 @@ foreach ($hostName in @('primary', 'windows', 'scheduled')) {
         continue
     }
     $hostLane = $manifest.hosts[$hostName]
+    if ($hostLane -isnot [System.Collections.IDictionary]) {
+        $errors.Add("Manifest host '$hostName' must be an object.") | Out-Null
+        continue
+    }
     if ($hostLane.operatingSystem -isnot [string] -or
         [string]::IsNullOrWhiteSpace($hostLane.operatingSystem)) {
         $errors.Add("Manifest host '$hostName' must name an operating system.") | Out-Null
@@ -411,11 +415,19 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     break
                 }
             }
-            $targetsPester = if ($nameParameterIndex -ge 0 -and
-                $nameParameterIndex + 1 -lt $elements.Count) {
-                $elements[$nameParameterIndex + 1] -is
-                    [Management.Automation.Language.StringConstantExpressionAst] -and
-                    $elements[$nameParameterIndex + 1].Value -ieq 'Pester'
+            $targetsPester = if ($nameParameterIndex -ge 0) {
+                $nameParameter = $elements[$nameParameterIndex]
+                if ($null -ne $nameParameter.Argument) {
+                    $nameParameter.Argument -is
+                        [Management.Automation.Language.StringConstantExpressionAst] -and
+                        $nameParameter.Argument.Value -ieq 'Pester'
+                }
+                elseif ($nameParameterIndex + 1 -lt $elements.Count) {
+                    $elements[$nameParameterIndex + 1] -is
+                        [Management.Automation.Language.StringConstantExpressionAst] -and
+                        $elements[$nameParameterIndex + 1].Value -ieq 'Pester'
+                }
+                else { $false }
             }
             else {
                 @($elements | Select-Object -Skip 1 | Where-Object {
