@@ -163,4 +163,5 @@ For a commons portfolio, use strict mode and check generated collateral:
 ./tools/Update-SkillCatalog.ps1
 ```
 
-Then run the consuming repository's canonical Pester test command.
+Then run the canonical Pester test command for the repository under review; use
+the concrete command supplied by its overlay when present.

@@ -337,6 +337,8 @@ $validationSection = if ($rank -ge 1) {
     @'
 ## Validate
 
+Requires PowerShell 7.4 or later.
+
 ```pwsh
 ./tools/Validate-Repository.ps1
 Import-Module Pester -RequiredVersion 6.2.0

@@ -211,6 +211,23 @@ Describe 'PowerShell toolchain contract' {
         $script:Toolchain.hosts.scheduled.channel | Should -BeExactly 'latest-stable'
     }
 
+    It 'rejects a manifest minimum above the running PowerShell version' {
+        $fixtureRoot = New-ToolchainFixture 'runtime-below-manifest-minimum'
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $requiredVersion = '{0}.{1}' -f $PSVersionTable.PSVersion.Major,
+            ($PSVersionTable.PSVersion.Minor + 1)
+        $manifest.powerShell.minimumVersion = $requiredVersion
+        foreach ($lane in @('primary', 'windows', 'scheduled')) {
+            $manifest.hosts[$lane].minimumPowerShellVersion = $requiredVersion
+        }
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*requires PowerShell $requiredVersion or later*"
+    }
+
     It 'keeps checked toolchain copies aligned with the manifest' {
         { & $script:ToolchainValidatorPath -RepositoryRoot $script:RepoRoot } |
             Should -Not -Throw
@@ -448,6 +465,24 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*must validate the manifest PowerShell minimum in a pwsh step*"
+    }
+
+    It 'ignores Pester text in nested workflow values after an inline run' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-nested-command-values'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/nested-values.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:',
+            '  test:',
+            '    steps:',
+            '      - run: Write-Output ok',
+            '        env:',
+            '          run: Import-Module Pester -RequiredVersion 5.7.1',
+            '          TEST_COMMAND: Invoke-Pester ./tests',
+            ('          MODULE_SPEC: "@{ ModuleName = ''Pester''; ' +
+                'RequiredVersion = ''5.7.1'' }"'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'accepts a block validation command with a trailing comment' {

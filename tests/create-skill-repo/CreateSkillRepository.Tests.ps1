@@ -119,6 +119,10 @@ Describe 'New-SkillRepository' {
         Test-Path (Join-Path $root '.agents/skills/README.md') | Should -BeTrue
         { & (Join-Path $root 'tools/Validate-Repository.ps1') } |
             Should -Not -Throw
+        Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw |
+            Should -Match 'PowerShell 7\.4 or later'
+        Get-Content -LiteralPath (Join-Path $root 'FORMAT.md') -Raw |
+            Should -Match 'PowerShell 7\.4 or later'
     }
 
     It 'adds Team CI without unselected distribution manifests' {
@@ -136,6 +140,8 @@ Describe 'New-SkillRepository' {
         Test-Path (Join-Path $root '.mcp.json') | Should -BeFalse
         Get-Content (Join-Path $root 'README.md') -Raw |
             Should -Match 'github\.com/Example/private-skills.*private'
+        Get-Content (Join-Path $root 'CONTRIBUTING.md') -Raw |
+            Should -Match 'PowerShell 7\.4 or later'
     }
 
     It 'adds only selected distribution surfaces and evaluations' {

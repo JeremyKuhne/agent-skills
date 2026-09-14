@@ -53,7 +53,7 @@ Vendored runtime copies under `.agents/skills/` are immutable upstream mirrors.
 Record local bindings in overlays and preserve source repository, revision,
 pin, path, and tree-SHA provenance.
 
-Run `./tools/Validate-Repository.ps1`, then run
+With PowerShell 7.4 or later, run `./tools/Validate-Repository.ps1`, then run
 `Import-Module Pester -RequiredVersion 6.2.0; Invoke-Pester ./tests` when those
 tools are present. Regenerate a source catalog with
 `./tools/Update-SkillCatalog.ps1 -Apply`.

@@ -77,6 +77,11 @@ $minimumPowerShellVersion = [string]$manifest.powerShell.minimumVersion
 $minimumPowerShell = $null
 $minimumPowerShellIsValid = $manifest.powerShell.minimumVersion -is [string] -and
     [version]::TryParse($minimumPowerShellVersion, [ref]$minimumPowerShell)
+if ($minimumPowerShellIsValid -and
+    $PSVersionTable.PSVersion -lt $minimumPowerShell) {
+    $errors.Add("Toolchain validation requires PowerShell $minimumPowerShellVersion or later; current process is $($PSVersionTable.PSVersion).") |
+        Out-Null
+}
 foreach ($hostName in @('primary', 'windows', 'scheduled')) {
     if (-not $manifest.hosts.ContainsKey($hostName)) {
         $errors.Add("Manifest is missing the '$hostName' host lane.") | Out-Null
@@ -322,9 +327,9 @@ function Get-WorkflowRunScope (
     [int] $Position,
     [switch] $Complete) {
     $lines = @([regex]::Matches($Content, '(?m)^.*(?:\r?\n|$)'))
-    $targetLine = 0
+    $targetLine = $lines.Count - 1
     for ($index = 0; $index -lt $lines.Count; $index++) {
-        if ($Position -le $lines[$index].Index + $lines[$index].Length) {
+        if ($Position -lt $lines[$index].Index + $lines[$index].Length) {
             $targetLine = $index
             break
         }
@@ -332,16 +337,34 @@ function Get-WorkflowRunScope (
     for ($index = $targetLine; $index -ge 0; $index--) {
         $line = $lines[$index].Value.TrimEnd("`r", "`n")
         $runMatch = [regex]::Match(
-            $line, '^(?<indent>\s*)(?:-\s+)?run:\s*(?<value>.*)$')
+            $line,
+            '^(?<indent>\s*)(?<dash>-\s+)?run:\s*(?<value>.*)$')
         if (-not $runMatch.Success) { continue }
+        $isStepRun = $runMatch.Groups['dash'].Success
+        if (-not $isStepRun) {
+            for ($priorIndex = $index - 1; $priorIndex -ge 0; $priorIndex--) {
+                $priorLine = $lines[$priorIndex].Value.TrimEnd("`r", "`n")
+                $stepMatch = [regex]::Match(
+                    $priorLine, '^(?<indent>\s*)-\s+')
+                if (-not $stepMatch.Success) { continue }
+                $isStepRun = $runMatch.Groups['indent'].Length -eq
+                    $stepMatch.Groups['indent'].Length + 2
+                break
+            }
+        }
+        if (-not $isStepRun) { continue }
         $indent = $runMatch.Groups['indent'].Length
         $value = $runMatch.Groups['value'].Value
-        if ($index -eq $targetLine -and $value -notmatch '^[|>]') {
+        $isBlockScalar = $value -match '^[|>]'
+        if (-not $isBlockScalar) {
+            if ($index -ne $targetLine) { continue }
             $scopeStart = $lines[$index].Index + $runMatch.Groups['value'].Index
+            if (-not $Complete -and $Position -lt $scopeStart) { continue }
             $scopeLength = if ($Complete) {
                 $runMatch.Groups['value'].Length
             }
             else { $Position - $scopeStart }
+            if ($scopeLength -lt 0) { continue }
             return ConvertFrom-WorkflowRunScalar $Content.Substring(
                 $scopeStart, $scopeLength)
         }
@@ -354,7 +377,8 @@ function Get-WorkflowRunScope (
             }
             $endLine++
         }
-        if ($targetLine -lt $endLine) {
+        if ($targetLine -lt $endLine -and
+            ($targetLine -gt $index -or $Complete)) {
             $scopeStart = $lines[$index + 1].Index
             $scopeEnd = if ($Complete) {
                 if ($endLine -lt $lines.Count) { $lines[$endLine].Index }
@@ -975,7 +999,12 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 $lineStart = $content.LastIndexOf(
                     "`n", [Math]::Max(0, $commandMatch.Index - 1))
                 if ($lineStart -lt 0) { $lineStart = 0 } else { $lineStart++ }
-                $content.Substring($lineStart, $scopePosition - $lineStart)
+                $lineScope = $content.Substring(
+                    $lineStart, $scopePosition - $lineStart)
+                if ($lineScope -notmatch
+                    '^\s*(?:-\s+)?[A-Za-z_][\w.-]*:\s*') {
+                    $lineScope
+                }
             }
         }
         elseif ($isMarkdown) {
@@ -1133,29 +1162,33 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     elseif ($isWorkflow) {
         @(foreach ($invokeMatch in $rawInvokeMatches) {
                 $candidateEnd = $invokeMatch.Index + $invokeMatch.Length
-            $candidatePrefix = Get-WorkflowRunScope -Content $content `
+                $candidatePrefix = Get-WorkflowRunScope -Content $content `
                     -Position $candidateEnd
-            $candidateScope = Get-WorkflowRunScope -Content $content `
-                -Position $invokeMatch.Index -Complete
+                $candidateScope = Get-WorkflowRunScope -Content $content `
+                    -Position $invokeMatch.Index -Complete
                 $lineStart = $content.LastIndexOf(
                     "`n", [Math]::Max(0, $invokeMatch.Index - 1))
                 if ($lineStart -lt 0) { $lineStart = 0 } else { $lineStart++ }
-            if ($null -eq $candidatePrefix) {
-                $candidatePrefix = $content.Substring(
-                        $lineStart, $candidateEnd - $lineStart)
+                $lineScope = $content.Substring(
+                    $lineStart, $candidateEnd - $lineStart)
+                if ($null -eq $candidatePrefix -and
+                    $lineScope -notmatch
+                    '^\s*(?:-\s+)?[A-Za-z_][\w.-]*:\s*') {
+                    $candidatePrefix = $lineScope
+                    $candidateScope = $lineScope
                 }
-            if ($null -eq $candidateScope) { $candidateScope = $candidatePrefix }
-            $offset = $candidatePrefix.LastIndexOf(
+                if ($null -eq $candidatePrefix -or
+                    $null -eq $candidateScope) {
+                    continue
+                }
+                $offset = $candidatePrefix.LastIndexOf(
                     $invokePesterName,
                     [StringComparison]::OrdinalIgnoreCase)
                 if (Test-ExecutableCommandAtOffset -ScriptText $candidateScope `
                         -CommandName $invokePesterName -Offset $offset) {
                     $invocationScope = Get-WorkflowRunScope -Content $content `
                         -Position $invokeMatch.Index
-                    if ($null -eq $invocationScope) {
-                        $invocationScope = $content.Substring(
-                            $lineStart, $invokeMatch.Index - $lineStart)
-                    }
+                    if ($null -eq $invocationScope) { $invocationScope = '' }
                     [pscustomobject]@{
                         Position = $invokeMatch.Index
                         HereStringScope = $null
