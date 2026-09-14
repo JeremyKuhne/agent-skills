@@ -162,7 +162,7 @@ Describe 'PowerShell toolchain contract' {
         @{
             Kind = 'module command'
             Path = '.github/workflows/drift.yml'
-            Content = 'Install-Module Pester -RequiredVersion ' + ('6.' + '1.0')
+            Content = ('Install-' + 'Module Pester -RequiredVersion ' + ('6.' + '1.0'))
         }
         @{
             Kind = 'runner invocation'
@@ -189,6 +189,19 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '6.1.0'*"
     }
 
+    It 'rejects an unpinned Pester <Action>' -ForEach @(
+        @{ Action = 'installation'; Command = ('Install-' + 'Module Pester -Force') }
+        @{ Action = 'import'; Command = ('Import-' + 'Module Pester -Force') }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "unpinned-$Action"
+        $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
+        Set-Content -LiteralPath $driftPath -Value $Command
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*invokes Pester without -RequiredVersion 6.2.0*'
+    }
+
     It 'rejects drifted <Requirement> guidance in <Path>' -ForEach @(
         foreach ($relativePath in @(
                 '.agents/skills/create-skill-repo/SKILL.md',
@@ -204,6 +217,18 @@ Describe 'PowerShell toolchain contract' {
                 Requirement = 'Pester'
                 Path = $relativePath
                 Content = 'Requires PowerShell 7.4 and Pester 6.1.0.'
+                Error = '*must name Pester 6.2.0*'
+            }
+            @{
+                Requirement = 'PowerShell suffix'
+                Path = $relativePath
+                Content = 'Requires PowerShell 7.40 and Pester 6.2.0.'
+                Error = '*must name PowerShell 7.4*'
+            }
+            @{
+                Requirement = 'Pester suffix'
+                Path = $relativePath
+                Content = 'Requires PowerShell 7.4 and Pester 6.2.01.'
                 Error = '*must name Pester 6.2.0*'
             }
         }

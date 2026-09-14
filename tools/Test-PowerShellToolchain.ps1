@@ -133,17 +133,35 @@ else {
 
 $activeRoots = @('.agents', '.github', 'evals', 'skills', 'tests', 'tools')
 $versionPatterns = @(
-    '(?i)(?:Install-Module|Import-Module)\s+(?:-Name\s+)?Pester\b[^\r\n]*?-RequiredVersion\s+(?<version>\d+\.\d+\.\d+)',
     '(?i)-PesterVersion\s+(?<version>\d+\.\d+\.\d+)',
     '(?i)PesterVersion\s*=\s*[''"](?<version>\d+\.\d+\.\d+)',
     '(?i)ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*(?:RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>\d+\.\d+\.\d+)'
 )
+$moduleCommandPattern =
+    '(?i)(?:Install-Module|Import-Module)\s+(?:-Name\s+)?Pester\b(?<arguments>[^\r\n]*)'
+$requiredVersionSwitchPattern = '(?i)(?:^|\s)-RequiredVersion(?:\s+|$)'
+$literalRequiredVersionPattern =
+    '(?i)(?:^|\s)-RequiredVersion\s+[''"]?(?<version>\d+\.\d+\.\d+)[''"]?(?=\s|$)'
 foreach ($activeRoot in $activeRoots) {
     $path = Join-Path $resolvedRoot $activeRoot
     if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
     foreach ($file in Get-ChildItem -LiteralPath $path -File -Recurse |
         Where-Object Extension -In @('.md', '.ps1', '.psm1', '.psd1', '.yml', '.yaml', '.tmpl')) {
         $content = Get-Content -LiteralPath $file.FullName -Raw
+        foreach ($commandMatch in [regex]::Matches($content, $moduleCommandPattern)) {
+            $arguments = $commandMatch.Groups['arguments'].Value
+            $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $file.FullName)
+            if ($arguments -notmatch $requiredVersionSwitchPattern) {
+                $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
+                    Out-Null
+            }
+            $versionMatch = [regex]::Match($arguments, $literalRequiredVersionPattern)
+            if ($versionMatch.Success -and
+                $versionMatch.Groups['version'].Value -cne $pesterVersion) {
+                $errors.Add("'$relativePath' copies Pester version '$($versionMatch.Groups['version'].Value)' instead of '$pesterVersion'.") |
+                    Out-Null
+            }
+        }
         foreach ($versionPattern in $versionPatterns) {
             foreach ($match in [regex]::Matches($content, $versionPattern)) {
                 if ($match.Groups['version'].Value -cne $pesterVersion) {
@@ -167,10 +185,14 @@ foreach ($relativePath in $guidancePaths) {
         continue
     }
     $content = Get-Content -LiteralPath $path -Raw
-    if ($content -notmatch "PowerShell $([regex]::Escape($minimumPowerShellVersion))") {
+    $powerShellPattern =
+        "PowerShell $([regex]::Escape($minimumPowerShellVersion))(?![0-9A-Za-z-]|\.[0-9A-Za-z])"
+    $pesterPattern =
+        "Pester $([regex]::Escape($pesterVersion))(?![0-9A-Za-z-]|\.[0-9A-Za-z])"
+    if ($content -notmatch $powerShellPattern) {
         $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion.") | Out-Null
     }
-    if ($content -notmatch "Pester $([regex]::Escape($pesterVersion))") {
+    if ($content -notmatch $pesterPattern) {
         $errors.Add("'$relativePath' must name Pester $pesterVersion.") | Out-Null
     }
 }
