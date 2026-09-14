@@ -50,7 +50,7 @@ every Pester test requirement, active workflow and template copies, runner and
 documentation examples, and the three skill compatibility declarations.
 
 The isolated Pester 6.2.0 canary ran all 16 test files through the process-per-file
-runner on PowerShell 7.6.6. It completed in 82.670 seconds with 496 tests: 483
+runner on PowerShell 7.6.6. It completed in 81.728 seconds with 496 tests: 483
 passed, 13 were intentionally skipped, and none failed, were not run, were
 inconclusive, or reported block, container, or infrastructure failures. The 31
 toolchain contract tests and the empty `-ForEach` compatibility control explain

@@ -293,7 +293,7 @@ Describe 'PowerShell toolchain contract' {
             'Version ' + ('5.7' + '.1'))
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw "*'docs\current.md' copies Pester version '5.7.1'*"
+            Should -Throw "*current.md*copies Pester version '5.7.1'*"
 
         Remove-Item -LiteralPath $currentDoc
         Set-Content -LiteralPath (
