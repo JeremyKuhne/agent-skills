@@ -185,7 +185,7 @@ function Get-WorkflowRunScope ([string] $Content, [int] $Position) {
     $lines = @([regex]::Matches($Content, '(?m)^.*(?:\r?\n|$)'))
     $targetLine = 0
     for ($index = 0; $index -lt $lines.Count; $index++) {
-        if ($Position -lt $lines[$index].Index + $lines[$index].Length) {
+        if ($Position -le $lines[$index].Index + $lines[$index].Length) {
             $targetLine = $index
             break
         }
@@ -231,16 +231,44 @@ function Get-ToolchainWorkflowJobBody ([string] $Content, [string] $JobName) {
 }
 
 function Get-MarkdownCommandScope ([string] $Content, [int] $Position) {
-    $priorContent = $Content.Substring(0, $Position)
-    $fences = @([regex]::Matches($priorContent, '(?m)^```[^\r\n]*\r?$'))
-    if ($fences.Count % 2 -eq 1) {
-        $scopeStart = $fences[-1].Index + $fences[-1].Length
-        if ($scopeStart -lt $Content.Length -and $Content[$scopeStart] -eq "`n") {
-            $scopeStart++
+    $lines = @([regex]::Matches($Content, '(?m)^.*(?:\r?\n|$)'))
+    $targetLine = 0
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($Position -le $lines[$index].Index + $lines[$index].Length) {
+            $targetLine = $index
+            break
         }
-        return $Content.Substring(
-            $scopeStart, $Position - $scopeStart)
     }
+    $openFence = $null
+    for ($index = 0; $index -le $targetLine; $index++) {
+        $line = $lines[$index].Value.TrimEnd("`r", "`n")
+        $fenceMatch = [regex]::Match(
+            $line, '^\s*(?<delimiter>`{3,}|~{3,})(?<tail>.*)$')
+        if ($null -eq $openFence) {
+            if ($fenceMatch.Success) {
+                $delimiter = $fenceMatch.Groups['delimiter'].Value
+                $openFence = [pscustomobject]@{
+                    Character = $delimiter[0]
+                    Length = $delimiter.Length
+                    ContentStart = $lines[$index].Index + $lines[$index].Length
+                }
+            }
+            continue
+        }
+        if ($fenceMatch.Success) {
+            $delimiter = $fenceMatch.Groups['delimiter'].Value
+            if ($delimiter[0] -eq $openFence.Character -and
+                $delimiter.Length -ge $openFence.Length -and
+                [string]::IsNullOrWhiteSpace($fenceMatch.Groups['tail'].Value)) {
+                $openFence = $null
+            }
+        }
+    }
+    if ($null -ne $openFence) {
+        return $Content.Substring(
+            $openFence.ContentStart, $Position - $openFence.ContentStart)
+    }
+    $priorContent = $Content.Substring(0, $Position)
     $paragraphBreaks = @([regex]::Matches($priorContent, '\r?\n\s*\r?\n'))
     $scopeStart = if ($paragraphBreaks.Count -gt 0) {
         $paragraphBreaks[-1].Index + $paragraphBreaks[-1].Length
@@ -288,6 +316,20 @@ function Get-CommandParameterValueAst (
     return $null
 }
 
+function Get-StaticStringAstValue (
+    [object] $ExpressionAst) {
+    if ($ExpressionAst -is
+        [Management.Automation.Language.StringConstantExpressionAst]) {
+        return [string]$ExpressionAst.Value
+    }
+    if ($ExpressionAst -is
+        [Management.Automation.Language.ExpandableStringExpressionAst] -and
+        $ExpressionAst.NestedExpressions.Count -eq 0) {
+        return [string]$ExpressionAst.Value
+    }
+    return $null
+}
+
 function Test-CommandTargetsPester (
     [Management.Automation.Language.CommandAst] $CommandAst) {
     $elements = @($CommandAst.CommandElements)
@@ -297,14 +339,23 @@ function Test-CommandTargetsPester (
             $elements[$index].ParameterName -ine 'Name') { continue }
         $nameValue = Get-CommandParameterValueAst -Elements $elements `
             -ParameterIndex $index
-        return $nameValue -is
-            [Management.Automation.Language.StringConstantExpressionAst] -and
-            $nameValue.Value -ieq 'Pester'
+        $nameText = Get-StaticStringAstValue -ExpressionAst $nameValue
+        return $null -ne $nameText -and $nameText -ieq 'Pester'
     }
     return @($elements | Select-Object -Skip 1 | Where-Object {
-            $_ -is [Management.Automation.Language.StringConstantExpressionAst] -and
-            $_.Value -ieq 'Pester'
+            (Get-StaticStringAstValue -ExpressionAst $_) -ieq 'Pester'
         }).Count -gt 0
+}
+
+function Test-CommandIsInRootScriptBlock (
+    [Management.Automation.Language.CommandAst] $CommandAst,
+    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
+    $ancestor = $CommandAst.Parent
+    while ($null -ne $ancestor -and
+        $ancestor -isnot [Management.Automation.Language.ScriptBlockAst]) {
+        $ancestor = $ancestor.Parent
+    }
+    return [object]::ReferenceEquals($ancestor, $RootAst)
 }
 
 function Test-PinnedPesterImport (
@@ -313,41 +364,46 @@ function Test-PinnedPesterImport (
     [switch] $AllowPesterVersionVariable) {
     if ([string]::IsNullOrWhiteSpace($Scope)) { return $false }
     $inlineCode = @([regex]::Matches($Scope, '`(?<code>[^`\r\n]+)`'))
-    $scriptText = if ($inlineCode.Count -gt 0) {
-        @($inlineCode | ForEach-Object { $_.Groups['code'].Value }) -join '; '
+    $scriptTexts = @($Scope)
+    if ($inlineCode.Count -gt 0) {
+        $scriptTexts += @($inlineCode | ForEach-Object {
+                $_.Groups['code'].Value
+            }) -join '; '
     }
-    else { $Scope }
-    $tokens = $null
-    $parseErrors = $null
-    $ast = [Management.Automation.Language.Parser]::ParseInput(
-        $scriptText, [ref]$tokens, [ref]$parseErrors)
-    $imports = @($ast.FindAll({
-                param($node)
-                $node -is [Management.Automation.Language.CommandAst] -and
-                    $node.GetCommandName() -ieq 'Import-Module'
-            }, $true))
-    foreach ($commandAst in $imports) {
-        if (-not (Test-CommandTargetsPester -CommandAst $commandAst)) { continue }
-        $elements = @($commandAst.CommandElements)
-        $versionParameters = @(for ($index = 1; $index -lt $elements.Count; $index++) {
-                if ($elements[$index] -is
-                    [Management.Automation.Language.CommandParameterAst] -and
-                    $elements[$index].ParameterName -ieq 'RequiredVersion') {
-                    $index
-                }
+    foreach ($scriptText in $scriptTexts) {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseInput(
+            $scriptText, [ref]$tokens, [ref]$parseErrors)
+        $imports = @($ast.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and
+                        $node.GetCommandName() -ieq 'Import-Module'
+                }, $true) | Where-Object {
+                Test-CommandIsInRootScriptBlock -CommandAst $_ -RootAst $ast
             })
-        if ($versionParameters.Count -ne 1) { continue }
-        $versionValue = Get-CommandParameterValueAst -Elements $elements `
-            -ParameterIndex $versionParameters[0]
-        if ($versionValue -is
-            [Management.Automation.Language.StringConstantExpressionAst] -and
-            [string]$versionValue.Value -ceq $ExpectedVersion) {
-            return $true
-        }
-        if ($AllowPesterVersionVariable -and
-            $versionValue -is [Management.Automation.Language.VariableExpressionAst] -and
-            [string]$versionValue.Extent.Text -ceq '$PesterVersion') {
-            return $true
+        foreach ($commandAst in $imports) {
+            if (-not (Test-CommandTargetsPester -CommandAst $commandAst)) { continue }
+            $elements = @($commandAst.CommandElements)
+            $versionParameters = @(for ($index = 1; $index -lt $elements.Count; $index++) {
+                    if ($elements[$index] -is
+                        [Management.Automation.Language.CommandParameterAst] -and
+                        $elements[$index].ParameterName -ieq 'RequiredVersion') {
+                        $index
+                    }
+                })
+            if ($versionParameters.Count -ne 1) { continue }
+            $versionValue = Get-CommandParameterValueAst -Elements $elements `
+                -ParameterIndex $versionParameters[0]
+            if ((Get-StaticStringAstValue -ExpressionAst $versionValue) -ceq
+                $ExpectedVersion) {
+                return $true
+            }
+            if ($AllowPesterVersionVariable -and
+                $versionValue -is [Management.Automation.Language.VariableExpressionAst] -and
+                [string]$versionValue.Extent.Text -ceq '$PesterVersion') {
+                return $true
+            }
         }
     }
     return $false
@@ -484,8 +540,8 @@ $moduleSpecificationPattern =
     '(?i)@\{(?<body>[^}\r\n]*ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*)\}'
 $moduleConstraintPattern =
     '(?i)(?<constraint>RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>[^''"]+)[''"]'
-$moduleCommandPattern =
-    '(?im)(?:^\s*(?:(?:-\s+)?run:\s*)?|;\s*|`)(?<command>(?:Install-Module|Import-Module)\b(?:[^\r\n]|`\r?\n)*)'
+$moduleCommandNamePattern =
+    '(?i)(?<![-\w])(?:Install-Module|Import-Module)(?![-\w])'
 $invokePesterName = 'Invoke' + '-Pester'
 $invokePesterPattern = "(?i)(?<![-\w])$invokePesterName(?![-\w])"
 $scanFiles = @(
@@ -502,12 +558,79 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $file.FullName)
     $normalizedPath = $relativePath.Replace('\', '/')
     if ($normalizedPath -cin $historicalPesterEvidencePaths) { continue }
-    foreach ($commandMatch in [regex]::Matches($content, $moduleCommandPattern)) {
-        $commandText = $commandMatch.Groups['command'].Value.TrimEnd('`')
-        $markdownEnd = [regex]::Match($commandText, '`(?!\r?\n)')
-        if ($markdownEnd.Success) {
-            $commandText = $commandText.Substring(0, $markdownEnd.Index)
+    $isPinnedTest = $normalizedPath -like 'tests/*.Tests.ps1'
+    $isWorkflow = $normalizedPath -like '.github/workflows/*' -or
+        $normalizedPath -like '*/.github/workflows/*'
+    $isMarkdown = $normalizedPath -like '*.md' -or
+        $normalizedPath -like '*.md.tmpl'
+    $isPowerShellSource = $file.Extension -in @('.ps1', '.psm1', '.psd1') -or
+        $normalizedPath -like '*.ps1.tmpl'
+    $moduleCommandTexts = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal)
+    $inlineCodeMatches = if ($isMarkdown) {
+        @([regex]::Matches($content, '`(?<code>[^`\r\n]+)`'))
+    }
+    else { @() }
+    if ($isPowerShellSource) {
+        $tokens = $null
+        $parseErrors = $null
+        $sourceAst = [Management.Automation.Language.Parser]::ParseInput(
+            $content, [ref]$tokens, [ref]$parseErrors)
+        foreach ($commandAst in @($sourceAst.FindAll({
+                    param($node)
+                    $node -is [Management.Automation.Language.CommandAst] -and
+                        $node.GetCommandName() -in @('Install-Module', 'Import-Module')
+                }, $true))) {
+            $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
         }
+    }
+    foreach ($commandMatch in [regex]::Matches(
+            $content, $moduleCommandNamePattern)) {
+        $lineEnd = $content.IndexOf("`n", $commandMatch.Index)
+        $scopePosition = if ($lineEnd -ge 0) { $lineEnd } else { $content.Length }
+        $containingInlineCode = @($inlineCodeMatches | Where-Object {
+                $_.Index -lt $commandMatch.Index -and
+                $_.Index + $_.Length -gt $commandMatch.Index
+            } | Select-Object -First 1)
+        $commandScope = if ($containingInlineCode.Count -eq 1) {
+            $containingInlineCode[0].Groups['code'].Value
+        }
+        elseif ($isWorkflow) {
+            $workflowScope = Get-WorkflowRunScope -Content $content `
+                -Position $scopePosition
+            if ($null -ne $workflowScope) { $workflowScope }
+            else {
+                $lineStart = $content.LastIndexOf(
+                    "`n", [Math]::Max(0, $commandMatch.Index - 1))
+                if ($lineStart -lt 0) { $lineStart = 0 } else { $lineStart++ }
+                $content.Substring($lineStart, $scopePosition - $lineStart)
+            }
+        }
+        elseif ($isMarkdown) {
+            Get-MarkdownCommandScope -Content $content -Position $scopePosition
+        }
+        elseif ($isPowerShellSource) {
+            Get-HereStringCommandScope -Content $content -Position $scopePosition
+        }
+        else { $content.Substring(0, $scopePosition) }
+        if ([string]::IsNullOrWhiteSpace($commandScope)) { continue }
+        $commandScopes = @($commandScope)
+        foreach ($scriptText in $commandScopes) {
+            $tokens = $null
+            $parseErrors = $null
+            $scopeAst = [Management.Automation.Language.Parser]::ParseInput(
+                $scriptText, [ref]$tokens, [ref]$parseErrors)
+            foreach ($commandAst in @($scopeAst.FindAll({
+                        param($node)
+                        $node -is [Management.Automation.Language.CommandAst] -and
+                            $node.GetCommandName() -in @(
+                                'Install-Module', 'Import-Module')
+                    }, $true))) {
+                $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
+            }
+        }
+    }
+    foreach ($commandText in $moduleCommandTexts) {
         $tokens = $null
         $parseErrors = $null
         $commandAsts = @([Management.Automation.Language.Parser]::ParseInput(
@@ -537,9 +660,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     Out-Null
                 continue
             }
-            $requiredVersionValue = if ($versionElement -is
-                [Management.Automation.Language.StringConstantExpressionAst]) {
-                [string]$versionElement.Value
+            $staticVersion = Get-StaticStringAstValue -ExpressionAst $versionElement
+            $requiredVersionValue = if ($null -ne $staticVersion) {
+                $staticVersion
             }
             else { [string]$versionElement.Extent.Text }
             $isRunnerParameter = $normalizedPath -ceq 'tests/Invoke-PesterShards.ps1' -and
@@ -582,11 +705,6 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 Out-Null
         }
     }
-    $isPinnedTest = $normalizedPath -like 'tests/*.Tests.ps1'
-    $isWorkflow = $normalizedPath -like '.github/workflows/*' -or
-        $normalizedPath -like '*/.github/workflows/*'
-    $isMarkdown = $normalizedPath -like '*.md' -or
-        $normalizedPath -like '*.md.tmpl'
     $rawInvokeMatches = @([regex]::Matches($content, $invokePesterPattern))
     $invocations = if ($isPinnedTest) { @() }
     elseif ($isWorkflow -or $isMarkdown) {
