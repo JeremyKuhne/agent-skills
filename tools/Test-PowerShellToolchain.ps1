@@ -215,15 +215,21 @@ else {
 function ConvertFrom-WorkflowRunScalar ([string] $Text) {
     $trimmed = $Text.Trim()
     if ($trimmed.StartsWith("'")) {
-        $innerText = $trimmed.Substring(1)
-        if ($trimmed.Length -gt 1 -and $trimmed.EndsWith("'")) {
-            $innerText = $innerText.Substring(0, $innerText.Length - 1)
+        $scalarMatch = [regex]::Match(
+            $trimmed,
+            '^(?<scalar>\x27(?:[^\x27]|\x27\x27)*\x27)(?:\s+#.*)?$')
+        if ($scalarMatch.Success) {
+            $scalar = $scalarMatch.Groups['scalar'].Value
+            return $scalar.Substring(1, $scalar.Length - 2).Replace("''", "'")
         }
-        return $innerText.Replace("''", "'")
+        return $trimmed.Substring(1).Replace("''", "'")
     }
     if ($trimmed.StartsWith('"')) {
-        $jsonText = if ($trimmed.Length -gt 1 -and $trimmed.EndsWith('"')) {
-            $trimmed
+        $scalarMatch = [regex]::Match(
+            $trimmed,
+            '^(?<scalar>"(?:\\.|[^"\\])*")(?:\s+#.*)?$')
+        $jsonText = if ($scalarMatch.Success) {
+            $scalarMatch.Groups['scalar'].Value
         }
         else { $trimmed + '"' }
         try { return [Text.Json.JsonSerializer]::Deserialize[string]($jsonText) }
@@ -541,26 +547,34 @@ function Test-ExecutableCommandAtOffset (
         }).Count -gt 0
 }
 
+function Test-PositionIsInIgnoredPowerShellText (
+    [Management.Automation.Language.Token[]] $Tokens,
+    [int] $Position) {
+    foreach ($token in $Tokens) {
+        if ($token.Extent.StartOffset -gt $Position) { break }
+        if ($token.Extent.StartOffset -le $Position -and
+            $token.Extent.EndOffset -gt $Position) {
+            if ($token.Kind -eq
+                [Management.Automation.Language.TokenKind]::Comment -and
+                $token.Text.TrimStart().StartsWith(
+                    '#Requires', [StringComparison]::OrdinalIgnoreCase)) {
+                return $false
+            }
+            return $token.Kind -in @(
+                [Management.Automation.Language.TokenKind]::Comment,
+                [Management.Automation.Language.TokenKind]::StringExpandable,
+                [Management.Automation.Language.TokenKind]::StringLiteral)
+        }
+    }
+    return $false
+}
+
 function Test-PinnedPesterImport (
     [string] $Scope,
     [string] $ExpectedVersion,
-    [switch] $AllowPesterVersionVariable,
-    [switch] $IncludeInlineCode,
-    [string] $AdditionalScope) {
+    [switch] $AllowPesterVersionVariable) {
     if ([string]::IsNullOrWhiteSpace($Scope)) { return $false }
-    $inlineCode = @()
-    if ($IncludeInlineCode) {
-        $inlineCode = @([regex]::Matches($Scope, '`(?<code>[^`\r\n]+)`'))
-    }
     $scriptTexts = @($Scope)
-    if (-not [string]::IsNullOrWhiteSpace($AdditionalScope)) {
-        $scriptTexts += $AdditionalScope
-    }
-    if ($inlineCode.Count -gt 0) {
-        $scriptTexts += @($inlineCode | ForEach-Object {
-                $_.Groups['code'].Value
-            }) -join '; '
-    }
     foreach ($scriptText in $scriptTexts) {
         $tokens = $null
         $parseErrors = $null
@@ -759,6 +773,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         $normalizedPath -like '*.ps1.tmpl'
     $moduleCommandTexts = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::Ordinal)
+    $sourceTokens = @()
     $inlineCodeMatches = if ($isMarkdown) {
         @([regex]::Matches($content, '`(?<code>[^`\r\n]+)`'))
     }
@@ -768,6 +783,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         $parseErrors = $null
         $sourceAst = [Management.Automation.Language.Parser]::ParseInput(
             $content, [ref]$tokens, [ref]$parseErrors)
+        $sourceTokens = @($tokens)
         foreach ($commandAst in @($sourceAst.FindAll({
                     param($node)
                     $node -is [Management.Automation.Language.CommandAst] -and
@@ -809,7 +825,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             }
         }
         elseif ($isMarkdown) {
-            Get-MarkdownCommandScope -Content $content -Position $scopePosition
+            $null
         }
         elseif ($isPowerShellSource) {
             Get-HereStringCommandScope -Content $content -Position $scopePosition
@@ -888,6 +904,11 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     }
     foreach ($versionPattern in $copiedVersionPatterns) {
         foreach ($match in [regex]::Matches($content, $versionPattern)) {
+            if ($isPowerShellSource -and
+                (Test-PositionIsInIgnoredPowerShellText `
+                    -Tokens $sourceTokens -Position $match.Index)) {
+                continue
+            }
             $copiedVersion = $match.Groups['value'].Value
             if (($copiedVersion.StartsWith("'") -and $copiedVersion.EndsWith("'")) -or
                 ($copiedVersion.StartsWith('"') -and $copiedVersion.EndsWith('"'))) {
@@ -900,6 +921,11 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         }
     }
     foreach ($moduleMatch in [regex]::Matches($content, $moduleSpecificationPattern)) {
+        if ($isPowerShellSource -and
+            (Test-PositionIsInIgnoredPowerShellText `
+                -Tokens $sourceTokens -Position $moduleMatch.Index)) {
+            continue
+        }
         $constraintMatches = @([regex]::Matches(
                 $moduleMatch.Groups['body'].Value, $moduleConstraintPattern))
         if ($constraintMatches.Count -ne 1) {
@@ -946,8 +972,6 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         Position = $invokeMatch.Index
                         HereStringScope = $null
                         InvocationScope = $invocationScope
-                        IncludeInlineCode = $false
-                        AdditionalScope = $null
                     }
                 }
             })
@@ -969,8 +993,6 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                             InvocationScope = Get-MarkdownCommandScope `
                                 -Content $content -Position $invokeMatch.Index `
                                 -FencedOnly
-                            IncludeInlineCode = $false
-                            AdditionalScope = $null
                         }
                     }
                     continue
@@ -988,10 +1010,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     [pscustomobject]@{
                         Position = $invokeMatch.Index
                         HereStringScope = $null
-                        InvocationScope = Get-MarkdownCommandScope `
-                            -Content $content -Position $invokeMatch.Index
-                        IncludeInlineCode = $true
-                        AdditionalScope = $scriptText.Substring(0, $offset)
+                        InvocationScope = $scriptText.Substring(0, $offset)
                     }
                 }
             })
@@ -1013,8 +1032,6 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         Position = $_.Extent.StartOffset
                         HereStringScope = $null
                         InvocationScope = $null
-                        IncludeInlineCode = $false
-                        AdditionalScope = $null
                     }
                 }
             foreach ($invokeMatch in $rawInvokeMatches) {
@@ -1035,8 +1052,6 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     HereStringScope = Get-HereStringCommandScope `
                         -Content $content -Position $invokeMatch.Index
                     InvocationScope = $null
-                    IncludeInlineCode = $false
-                    AdditionalScope = $null
                 }
             }
         )
@@ -1052,9 +1067,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         if (-not (Test-PinnedPesterImport -Scope $invocationScope `
                 -ExpectedVersion $pesterVersion `
                 -AllowPesterVersionVariable:($normalizedPath -ceq
-                    'tests/Invoke-PesterShards.ps1') `
-                -IncludeInlineCode:$invocation.IncludeInlineCode `
-                -AdditionalScope $invocation.AdditionalScope)) {
+                    'tests/Invoke-PesterShards.ps1'))) {
             $errors.Add("'$relativePath' invokes $invokePesterName without a preceding pinned Pester import.") |
                 Out-Null
         }

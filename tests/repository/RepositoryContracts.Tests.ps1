@@ -589,6 +589,26 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '$Version'*"
     }
 
+    It 'ignores a copied Pester version inside a PowerShell <Kind>' -ForEach @(
+        @{
+            Kind = 'comment'
+            Content = '# ./tests/Invoke-PesterShards.ps1 -Pester' +
+                'Version 5.7.1'
+        }
+        @{
+            Kind = 'string'
+            Content = "`$text = './tests/Invoke-PesterShards.ps1 -Pester" +
+                "Version 5.7.1'"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "copied-version-$Kind"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Example.ps1') `
+            -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects nonliteral Pester module pin <Value>' -ForEach @(
         @{ Name = 'environment'; Value = '$env:PESTER_VERSION' }
         @{ Name = 'four-part'; Value = ('6.2.0' + '.1') }
@@ -776,6 +796,25 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*must use RequiredVersion for its Pester module requirement*'
     }
 
+    It 'ignores a Pester module requirement inside a PowerShell <Kind>' -ForEach @(
+        @{
+            Kind = 'comment'
+            Content = '# @{ ModuleName = ''Pester''; ModuleVersion = ''5.7.1'' }'
+        }
+        @{
+            Kind = 'string'
+            Content = '$text = "@{ ModuleName = ''Pester''; ' +
+                'ModuleVersion = ''5.7.1'' }"'
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "module-requirement-$Kind"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Example.ps1') `
+            -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects a reversed-order stale Pester module requirement' {
         $fixtureRoot = New-ToolchainFixture 'reversed-module-requirement'
         $driftPath = Join-Path $fixtureRoot '.agents/Drift.ps1.tmpl'
@@ -861,6 +900,16 @@ Describe 'PowerShell toolchain contract' {
         $path = Join-Path $fixtureRoot $Path
         [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
         Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'ignores a module command in ordinary Markdown prose' {
+        $fixtureRoot = New-ToolchainFixture 'markdown-module-prose'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') `
+            -Value ('Import-' +
+                'Module Pester -RequiredVersion 5.7.1 is legacy prose.')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
@@ -1058,6 +1107,22 @@ jobs:
             Should -Throw $Error
     }
 
+    It 'rejects a stale module command in a <Kind> run scalar with a comment' -ForEach @(
+        @{ Kind = 'single-quoted'; Quote = "'" }
+        @{ Kind = 'double-quoted'; Quote = '"' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "commented-$Kind-workflow"
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/quoted.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+        $command = 'Import-' + 'Module Pester -RequiredVersion 5.7.1'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:',
+            "      - run: $Quote$command$Quote # exact setup")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
     It 'rejects an unpinned invocation after escaped text in a quoted workflow scalar' {
         $fixtureRoot = New-ToolchainFixture 'quoted-workflow-escaped-prefix'
         $workflowPath = Join-Path $fixtureRoot '.github/workflows/quoted.yml'
@@ -1142,6 +1207,18 @@ jobs:
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
+    }
+
+    It 'rejects an import in a different inline Markdown span' {
+        $fixtureRoot = New-ToolchainFixture 'markdown-separate-inline-spans'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') `
+            -Value ('Run `Import-' +
+                'Module Pester -RequiredVersion 6.2.0` and then `Invoke-' +
+                'Pester ./tests`.')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
     }
 
     It 'keeps a fenced import when the block contains inline-code delimiters' {

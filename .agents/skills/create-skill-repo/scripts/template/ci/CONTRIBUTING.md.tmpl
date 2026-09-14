@@ -2,6 +2,6 @@
 
 Keep canonical skills portable and place repository-specific bindings in
 overlays. Run `./tools/Validate-Repository.ps1`, then
-`Import-Module Pester -RequiredVersion 6.2.0` and `Invoke-Pester ./tests` before
-proposing a change. Do not edit vendored runtime cores without recording whether
-the change is upstream, overlay-specific, or a pending divergence.
+`Import-Module Pester -RequiredVersion 6.2.0; Invoke-Pester ./tests` before
+proposing a change. Do not edit vendored runtime cores without recording
+whether the change is upstream, overlay-specific, or a pending divergence.
