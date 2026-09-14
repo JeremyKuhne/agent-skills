@@ -370,7 +370,7 @@ minute setting. The summary records the configured and effective timeout.
 The runner discovers a native `pwsh` executable by default. Supply
 `-PowerShellPath` to select an explicit compatible executable or to exercise
 process-start failure handling. The runner and its repository contract tests
-require PowerShell 7.2 or later. Worker startup failures are retained as
+require PowerShell 7.4 or later. Worker startup failures are retained as
 per-shard errors with diagnostic log paths rather than aborting summary creation.
 
 The schema-version-2 summary reports overall `Result`, `FailedShardCount`, and

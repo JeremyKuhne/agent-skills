@@ -60,6 +60,7 @@ Describe 'PowerShell toolchain contract' {
             foreach ($relativePath in @(
                     'tools',
                     'tests',
+                    'docs',
                     '.agents/skills/create-skill-repo',
                     'skills/dotnet-file-creation',
                     'skills/windows-acls')) {
@@ -74,12 +75,14 @@ Describe 'PowerShell toolchain contract' {
                 "Describe 'Valid' { It 'is never run' { `$true | Should -BeTrue } }")
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1') `
                 -Value @('#Requires -Version 7.4', '[CmdletBinding()]', 'param()')
+            Set-Content -LiteralPath (
+                Join-Path $fixtureRoot '.agents/skills/create-skill-repo/SKILL.md') `
+                -Value 'Requires PowerShell 7.4 and Pester 6.2.0.'
             foreach ($relativePath in @(
-                    '.agents/skills/create-skill-repo/SKILL.md',
                     'skills/dotnet-file-creation/SKILL.md',
                     'skills/windows-acls/SKILL.md')) {
                 Set-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) `
-                    -Value 'Requires PowerShell 7.4 and Pester 6.2.0.'
+                    -Value 'Requires PowerShell 7.4 and Pester 6.2 or later.'
             }
             return $fixtureRoot
         }
@@ -189,7 +192,8 @@ Describe 'PowerShell toolchain contract' {
         @{
             Kind = 'runner invocation'
             Path = 'evals/drift.md'
-            Content = './tests/Invoke-PesterShards.ps1 -PesterVersion ' + ('6.' + '1.0')
+            Content = './tests/Invoke-PesterShards.ps1 -Pester' +
+                'Version ' + ('6.' + '1.0')
             Version = ('6.' + '1.0')
         }
         @{
@@ -213,7 +217,8 @@ Describe 'PowerShell toolchain contract' {
         @{
             Kind = 'runner invocation suffix'
             Path = 'evals/suffix.md'
-            Content = './tests/Invoke-PesterShards.ps1 -PesterVersion ' + ('6.2.0' + '.1')
+            Content = './tests/Invoke-PesterShards.ps1 -Pester' +
+                'Version ' + ('6.2.0' + '.1')
             Version = ('6.2.0' + '.1')
         }
         @{
@@ -280,42 +285,67 @@ Describe 'PowerShell toolchain contract' {
                 'Pester without a preceding pinned Pester import*')
     }
 
-    It 'rejects drifted <Requirement> guidance in <Path>' -ForEach @(
-        foreach ($relativePath in @(
-                '.agents/skills/create-skill-repo/SKILL.md',
-                'skills/dotnet-file-creation/SKILL.md',
-                'skills/windows-acls/SKILL.md')) {
-            @{
-                Requirement = 'PowerShell'
-                Path = $relativePath
-                Content = 'Requires PowerShell 7.2 and Pester 6.2.0.'
-                Error = '*must name PowerShell 7.4*'
-            }
-            @{
-                Requirement = 'Pester'
-                Path = $relativePath
-                Content = 'Requires PowerShell 7.4 and Pester 6.1.0.'
-                Error = '*must name Pester 6.2.0*'
-            }
-            @{
-                Requirement = 'PowerShell suffix'
-                Path = $relativePath
-                Content = 'Requires PowerShell 7.40 and Pester 6.2.0.'
-                Error = '*must name PowerShell 7.4*'
-            }
-            @{
-                Requirement = 'Pester suffix'
-                Path = $relativePath
-                Content = 'Requires PowerShell 7.4 and Pester 6.2.01.'
-                Error = '*must name Pester 6.2.0*'
-            }
+    It 'rejects stale Pester copies in current docs but permits named historical evidence' {
+        $fixtureRoot = New-ToolchainFixture 'documentation-drift'
+        $currentDoc = Join-Path $fixtureRoot 'docs/current.md'
+        Set-Content -LiteralPath $currentDoc -Value (
+            './tests/Invoke-PesterShards.ps1 -Pester' +
+            'Version ' + ('5.7' + '.1'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*'docs\current.md' copies Pester version '5.7.1'*"
+
+        Remove-Item -LiteralPath $currentDoc
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot 'docs/pr-review-effectiveness-plan.md') -Value (
+            './tests/Invoke-PesterShards.ps1 -Pester' +
+            'Version ' + ('5.7' + '.1'))
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'rejects drifted repository guidance <Requirement>' -ForEach @(
+        @{
+            Requirement = 'PowerShell'
+            Content = 'Requires PowerShell 7.2 and Pester 6.2.0.'
+            Error = '*must name PowerShell 7.4*'
+        }
+        @{
+            Requirement = 'Pester'
+            Content = 'Requires PowerShell 7.4 and Pester 6.1.0.'
+            Error = '*must name Pester 6.2.0*'
+        }
+        @{
+            Requirement = 'PowerShell suffix'
+            Content = 'Requires PowerShell 7.40 and Pester 6.2.0.'
+            Error = '*must name PowerShell 7.4*'
+        }
+        @{
+            Requirement = 'Pester suffix'
+            Content = 'Requires PowerShell 7.4 and Pester 6.2.01.'
+            Error = '*must name Pester 6.2.0*'
         }
     ) {
-        $fixtureRoot = New-ToolchainFixture "guidance-$Requirement-$([IO.Path]::GetFileName((Split-Path -Parent $Path)))"
-        Set-Content -LiteralPath (Join-Path $fixtureRoot $Path) -Value $Content
+        $fixtureRoot = New-ToolchainFixture "repository-guidance-$Requirement"
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.agents/skills/create-skill-repo/SKILL.md') `
+            -Value $Content
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw $Error
+    }
+
+    It 'rejects repository-specific Pester pins in portable guidance <Path>' -ForEach @(
+        @{ Path = 'skills/dotnet-file-creation/SKILL.md' }
+        @{ Path = 'skills/windows-acls/SKILL.md' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture (
+            "portable-guidance-$([IO.Path]::GetFileName((Split-Path -Parent $Path)))")
+        Set-Content -LiteralPath (Join-Path $fixtureRoot $Path) `
+            -Value 'Requires PowerShell 7.4 and Pester 6.2.0.'
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must name Pester 6.2 or later*'
     }
 }
 

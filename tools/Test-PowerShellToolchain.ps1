@@ -152,20 +152,26 @@ else {
     }
 }
 
-$activeRoots = @('.agents', '.github', 'evals', 'skills', 'tests', 'tools')
-$versionPatterns = @(
-    '(?i)-PesterVersion\s+(?<version>[^\s`''"]+)',
-    '(?i)PesterVersion\s*=\s*[''"](?<version>[^''"]+)[''"]'
+$activeRoots = @('.agents', '.github', 'docs', 'evals', 'skills', 'tests', 'tools')
+$historicalPesterEvidencePaths = @(
+    'docs/dual-model-evaluation-plan.md',
+    'docs/improvement-strategy.md',
+    'docs/powershell-engineering-plan.md',
+    'docs/pr-review-effectiveness-plan.md'
+)
+$copiedVersionPatterns = @(
+    '(?i)-PesterVersion\s+(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
+    '(?i)PesterVersion\s*=\s*(?<value>''[^'']*''|"[^"]*")'
 )
 $moduleRequirementPattern =
     '(?i)ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*(?<constraint>RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>[^''"]+)[''"]'
 $moduleCommandPattern =
-    '(?i)(?:Install-Module|Import-Module)\s+(?:-Name\s+)?Pester\b(?<arguments>[^\r\n]*)'
+    '(?i)(?:Install-Module|Import-Module)\s+(?:-Name\s+)?Pester\b(?<arguments>(?:[^\r\n]|`\r?\n)*)'
 $requiredVersionSwitchPattern = '(?i)(?:^|\s)-RequiredVersion(?:\s+|$)'
 $requiredVersionValuePattern =
     '(?i)(?:^|\s)-RequiredVersion\s+(?<value>''[^'']*''|"[^"]*"|[^\s`]+)'
 $invokePesterName = 'Invoke' + '-Pester'
-$invokePesterPattern = "(?i)\b$invokePesterName\b"
+$invokePesterPattern = "(?i)(?<![-\w])$invokePesterName(?![-\w])"
 $importPesterPattern = '(?i)Import-Module\s+(?:-Name\s+)?Pester\b'
 $scanFiles = @(
     foreach ($activeRoot in $activeRoots) {
@@ -180,6 +186,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     $content = Get-Content -LiteralPath $file.FullName -Raw
     $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $file.FullName)
     $normalizedPath = $relativePath.Replace('\', '/')
+    if ($normalizedPath -cin $historicalPesterEvidencePaths) { continue }
     foreach ($commandMatch in [regex]::Matches($content, $moduleCommandPattern)) {
         $arguments = $commandMatch.Groups['arguments'].Value
         if ($arguments -notmatch $requiredVersionSwitchPattern) {
@@ -205,10 +212,15 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 Out-Null
         }
     }
-    foreach ($versionPattern in $versionPatterns) {
+    foreach ($versionPattern in $copiedVersionPatterns) {
         foreach ($match in [regex]::Matches($content, $versionPattern)) {
-            if ($match.Groups['version'].Value -cne $pesterVersion) {
-                $errors.Add("'$relativePath' copies Pester version '$($match.Groups['version'].Value)' instead of '$pesterVersion'.") |
+            $copiedVersion = $match.Groups['value'].Value
+            if (($copiedVersion.StartsWith("'") -and $copiedVersion.EndsWith("'")) -or
+                ($copiedVersion.StartsWith('"') -and $copiedVersion.EndsWith('"'))) {
+                $copiedVersion = $copiedVersion.Substring(1, $copiedVersion.Length - 2)
+            }
+            if ($copiedVersion -cne $pesterVersion) {
+                $errors.Add("'$relativePath' copies Pester version '$copiedVersion' instead of '$pesterVersion'.") |
                     Out-Null
             }
         }
@@ -234,12 +246,12 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     }
 }
 
-$guidancePaths = @(
-    '.agents/skills/create-skill-repo/SKILL.md',
+$exactGuidancePaths = @('.agents/skills/create-skill-repo/SKILL.md')
+$portableGuidancePaths = @(
     'skills/dotnet-file-creation/SKILL.md',
     'skills/windows-acls/SKILL.md'
 )
-foreach ($relativePath in $guidancePaths) {
+foreach ($relativePath in $exactGuidancePaths) {
     $path = Join-Path $resolvedRoot $relativePath
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion and Pester $pesterVersion.") | Out-Null
@@ -255,6 +267,23 @@ foreach ($relativePath in $guidancePaths) {
     }
     if ($content -notmatch $pesterPattern) {
         $errors.Add("'$relativePath' must name Pester $pesterVersion.") | Out-Null
+    }
+}
+foreach ($relativePath in $portableGuidancePaths) {
+    $path = Join-Path $resolvedRoot $relativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion and Pester 6.2 or later.") |
+            Out-Null
+        continue
+    }
+    $content = Get-Content -LiteralPath $path -Raw
+    $powerShellPattern =
+        "PowerShell $([regex]::Escape($minimumPowerShellVersion))(?![0-9A-Za-z-]|\.[0-9A-Za-z])"
+    if ($content -notmatch $powerShellPattern) {
+        $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion.") | Out-Null
+    }
+    if ($content -notmatch 'Pester 6\.2 or later(?![0-9A-Za-z-]|\.[0-9A-Za-z])') {
+        $errors.Add("'$relativePath' must name Pester 6.2 or later.") | Out-Null
     }
 }
 
