@@ -403,6 +403,23 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
+    It 'accepts a host validation step with a <Kind> shell scalar' -ForEach @(
+        @{ Kind = 'single-quoted'; Value = "'pwsh'" }
+        @{ Kind = 'double-quoted'; Value = '"pwsh"' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "workflow-$Kind-shell"
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $content = $content.Replace('shell: pwsh', "shell: $Value")
+            $content | Should -Match "(?m)^\s+shell: $([regex]::Escape($Value))"
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects a workflow SDK that drifts from the manifest' {
         $fixtureRoot = New-ToolchainFixture 'workflow-sdk-drift'
         $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
@@ -674,6 +691,25 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*must use a static module name*'
     }
 
+    It 'rejects a <Form> wildcard target that can resolve to Pester' -ForEach @(
+        @{
+            Form = 'floating'
+            Command = 'Import-' + 'Module Pester*'
+        }
+        @{
+            Form = 'versioned'
+            Command = 'Import-' +
+                'Module Pester* -RequiredVersion 5.7.1'
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "wildcard-module-$Form"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Drift.ps1') `
+            -Value $Command
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*must use the exact module name 'Pester'*"
+    }
+
     It 'rejects a reordered stale Pester module pin' {
         $fixtureRoot = New-ToolchainFixture 'reordered-module-pin'
         $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
@@ -820,6 +856,79 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It '<Expectation> a continued module command in <Kind>' -ForEach @(
+        @{
+            Kind = 'Markdown fence'
+            Path = 'docs/continued-pinned.md'
+            Version = '6.2.0'
+            Expectation = 'accepts'
+            Error = $null
+        }
+        @{
+            Kind = 'indented Markdown'
+            Path = 'docs/continued-indented-pinned.md'
+            Version = '6.2.0'
+            Expectation = 'accepts'
+            Error = $null
+        }
+        @{
+            Kind = 'generated here-string'
+            Path = '.agents/ContinuedPinned.ps1'
+            Version = '6.2.0'
+            Expectation = 'accepts'
+            Error = $null
+        }
+        @{
+            Kind = 'Markdown fence'
+            Path = 'docs/continued-stale.md'
+            Version = '5.7.1'
+            Expectation = 'rejects'
+            Error = "*copies Pester version '5.7.1'*"
+        }
+        @{
+            Kind = 'indented Markdown'
+            Path = 'docs/continued-indented-stale.md'
+            Version = '5.7.1'
+            Expectation = 'rejects'
+            Error = "*copies Pester version '5.7.1'*"
+        }
+        @{
+            Kind = 'generated here-string'
+            Path = '.agents/ContinuedStale.ps1'
+            Version = '5.7.1'
+            Expectation = 'rejects'
+            Error = "*copies Pester version '5.7.1'*"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture (
+            "continued-$($Kind.Replace(' ', '-'))-$Version")
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        $commandLine = 'Import-' + 'Module Pester ' + [char]96
+        $content = switch ($Kind) {
+            'Markdown fence' {
+                @('```pwsh', $commandLine, "    -RequiredVersion $Version", '```')
+            }
+            'indented Markdown' {
+                @("    $commandLine", "        -RequiredVersion $Version")
+            }
+            'generated here-string' {
+                @("`$text = @'", $commandLine,
+                    "    -RequiredVersion $Version", "'@")
+            }
+        }
+        Set-Content -LiteralPath $path -Value $content
+
+        if ($null -eq $Error) {
+            { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                Should -Not -Throw
+        }
+        else {
+            { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                Should -Throw $Error
+        }
     }
 
     It 'rejects ModuleVersion as an exact Pester requirement' {

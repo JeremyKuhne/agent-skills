@@ -326,8 +326,14 @@ function Test-WorkflowPwshStepCommand (
             $endLine++
         }
         $stepText = @($lines[$index..($endLine - 1)].Value) -join ''
-        if ($stepText -notmatch
-            '(?m)^\s+(?:-\s+)?shell:\s*pwsh(?:\s+#.*)?\s*$') {
+        $shellValues = @([regex]::Matches(
+            $stepText,
+            '(?m)^\s+(?:-\s+)?shell:\s*(?<value>.*)$'))
+        $hasPwshShell = @($shellValues | Where-Object {
+            (ConvertFrom-WorkflowRunScalar `
+                $_.Groups['value'].Value) -ieq 'pwsh'
+            }).Count -gt 0
+        if (-not $hasPwshShell) {
             continue
         }
         foreach ($commandMatch in [regex]::Matches(
@@ -346,7 +352,8 @@ function Test-WorkflowPwshStepCommand (
 function Get-MarkdownCommandScope (
     [string] $Content,
     [int] $Position,
-    [switch] $FencedOnly) {
+    [switch] $FencedOnly,
+    [switch] $Complete) {
     $lines = @([regex]::Matches($Content, '(?m)^.*(?:\r?\n|$)'))
     $targetLine = 0
     for ($index = 0; $index -lt $lines.Count; $index++) {
@@ -381,8 +388,26 @@ function Get-MarkdownCommandScope (
         }
     }
     if ($null -ne $openFence) {
+        $scopeEnd = $Position
+        if ($Complete) {
+            $scopeEnd = $Content.Length
+            for ($index = $targetLine + 1; $index -lt $lines.Count; $index++) {
+                $line = $lines[$index].Value.TrimEnd("`r", "`n")
+                $fenceMatch = [regex]::Match(
+                    $line, '^\s*(?<delimiter>`{3,}|~{3,})(?<tail>.*)$')
+                if (-not $fenceMatch.Success) { continue }
+                $delimiter = $fenceMatch.Groups['delimiter'].Value
+                if ($delimiter[0] -eq $openFence.Character -and
+                    $delimiter.Length -ge $openFence.Length -and
+                    [string]::IsNullOrWhiteSpace(
+                        $fenceMatch.Groups['tail'].Value)) {
+                    $scopeEnd = $lines[$index].Index
+                    break
+                }
+            }
+        }
         return $Content.Substring(
-            $openFence.ContentStart, $Position - $openFence.ContentStart)
+            $openFence.ContentStart, $scopeEnd - $openFence.ContentStart)
     }
     $targetText = $lines[$targetLine].Value.TrimEnd("`r", "`n")
     if ($targetText -match '^(?: {4}|\t)') {
@@ -396,10 +421,26 @@ function Get-MarkdownCommandScope (
             }
             $scopeStartLine--
         }
+        $scopeEndLine = $targetLine
+        if ($Complete) {
+            for ($index = $targetLine + 1; $index -lt $lines.Count; $index++) {
+                $candidate = $lines[$index].Value.TrimEnd("`r", "`n")
+                if (-not [string]::IsNullOrWhiteSpace($candidate) -and
+                    $candidate -notmatch '^(?: {4}|\t)') {
+                    break
+                }
+                $scopeEndLine = $index
+            }
+        }
         $codeLines = @(for ($index = $scopeStartLine;
-                $index -le $targetLine; $index++) {
-                $segmentEnd = [Math]::Min(
-                    $Position, $lines[$index].Index + $lines[$index].Length)
+                $index -le $scopeEndLine; $index++) {
+                $segmentEnd = if ($Complete) {
+                    $lines[$index].Index + $lines[$index].Length
+                }
+                else {
+                    [Math]::Min(
+                        $Position, $lines[$index].Index + $lines[$index].Length)
+                }
                 if ($segmentEnd -le $lines[$index].Index) { continue }
                 $segment = $Content.Substring(
                     $lines[$index].Index, $segmentEnd - $lines[$index].Index)
@@ -419,7 +460,10 @@ function Get-MarkdownCommandScope (
     return $Content.Substring($scopeStart, $Position - $scopeStart)
 }
 
-function Get-HereStringCommandScope ([string] $Content, [int] $Position) {
+function Get-HereStringCommandScope (
+    [string] $Content,
+    [int] $Position,
+    [switch] $Complete) {
     $tokens = $null
     $parseErrors = $null
     $ast = [Management.Automation.Language.Parser]::ParseInput(
@@ -442,7 +486,13 @@ function Get-HereStringCommandScope ([string] $Content, [int] $Position) {
     $openingLineEnd = $Content.IndexOf("`n", $hereString.Extent.StartOffset)
     if ($openingLineEnd -lt 0 -or $openingLineEnd -ge $Position) { return $null }
     $scopeStart = $openingLineEnd + 1
-    return $Content.Substring($scopeStart, $Position - $scopeStart)
+    $scopeEnd = $Position
+    if ($Complete) {
+        $scopeEnd = $Content.LastIndexOf(
+            "`n", $hereString.Extent.EndOffset - 1)
+        if ($scopeEnd -lt $scopeStart) { return $null }
+    }
+    return $Content.Substring($scopeStart, $scopeEnd - $scopeStart)
 }
 
 function Get-CommandParameterValueAst (
@@ -806,7 +856,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             } | Select-Object -First 1)
         $fencedCommandScope = if ($isMarkdown) {
             Get-MarkdownCommandScope -Content $content `
-                -Position $scopePosition -FencedOnly
+                -Position $commandMatch.Index -FencedOnly -Complete
         }
         $commandScope = if ($null -ne $fencedCommandScope) {
             $fencedCommandScope
@@ -829,7 +879,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             $null
         }
         elseif ($isPowerShellSource) {
-            Get-HereStringCommandScope -Content $content -Position $scopePosition
+            Get-HereStringCommandScope -Content $content `
+                -Position $commandMatch.Index -Complete
         }
         else { $content.Substring(0, $scopePosition) }
         if ([string]::IsNullOrWhiteSpace($commandScope)) { continue }
@@ -873,6 +924,17 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             $moduleName = Get-StaticStringAstValue -ExpressionAst $moduleTarget
             if ($requiredVersionIndices.Count -gt 0 -and $null -eq $moduleName) {
                 $errors.Add("'$relativePath' Pester module validation must use a static module name.") |
+                    Out-Null
+                continue
+            }
+            if ($null -ne $moduleName -and
+                [Management.Automation.WildcardPattern]::ContainsWildcardCharacters(
+                    $moduleName) -and
+                [Management.Automation.WildcardPattern]::new(
+                    $moduleName,
+                    [Management.Automation.WildcardOptions]::IgnoreCase).IsMatch(
+                    'Pester')) {
+                $errors.Add("'$relativePath' Pester module validation must use the exact module name 'Pester'.") |
                     Out-Null
                 continue
             }
