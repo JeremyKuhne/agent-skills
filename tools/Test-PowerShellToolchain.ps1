@@ -143,6 +143,78 @@ function Get-StaticStringAstValue ([object] $ExpressionAst) {
     return $null
 }
 
+function Get-StaticStringAstValues ([object] $ExpressionAst) {
+    if ($null -eq $ExpressionAst) { return }
+    try { $value = $ExpressionAst.SafeGetValue() }
+    catch {
+        $value = Get-StaticStringAstValue -ExpressionAst $ExpressionAst
+    }
+    if ($value -is [string]) {
+        $value
+        return
+    }
+    if ($value -is [Collections.IEnumerable]) {
+        $values = @($value)
+        if ($values.Count -gt 0 -and
+            @($values | Where-Object { $_ -isnot [string] }).Count -eq 0) {
+            $values
+        }
+    }
+}
+
+function Add-PesterModuleRequirementErrors (
+    [string] $ScriptText,
+    [string] $RelativePath,
+    [string] $ExpectedVersion,
+    [Collections.Generic.List[string]] $ErrorList) {
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseInput(
+        $ScriptText, [ref]$tokens, [ref]$parseErrors)
+    foreach ($requirement in @($ast.ScriptRequirements.RequiredModules |
+            Where-Object Name -IEQ 'Pester')) {
+        if ($null -eq $requirement.RequiredVersion) {
+            $ErrorList.Add("'$RelativePath' must use RequiredVersion for its Pester module requirement.") |
+                Out-Null
+        }
+        elseif ([string]$requirement.RequiredVersion -cne $ExpectedVersion) {
+            $ErrorList.Add("'$RelativePath' copies Pester version '$($requirement.RequiredVersion)' instead of '$ExpectedVersion'.") |
+                Out-Null
+        }
+    }
+    foreach ($hashtableAst in @($ast.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.HashtableAst]
+            }, $true))) {
+        try { $table = $hashtableAst.SafeGetValue() }
+        catch { continue }
+        $moduleNameKey = @($table.Keys | Where-Object {
+                [string]$_ -ieq 'ModuleName'
+            } | Select-Object -First 1)
+        if ($moduleNameKey.Count -ne 1 -or
+            [string]$table[$moduleNameKey[0]] -ine 'Pester') {
+            continue
+        }
+        $requiredVersionKey = @($table.Keys | Where-Object {
+                [string]$_ -ieq 'RequiredVersion'
+            } | Select-Object -First 1)
+        $moduleVersionKey = @($table.Keys | Where-Object {
+                [string]$_ -ieq 'ModuleVersion'
+            } | Select-Object -First 1)
+        if ($requiredVersionKey.Count -ne 1 -or
+            $moduleVersionKey.Count -gt 0) {
+            $ErrorList.Add("'$RelativePath' must use RequiredVersion for its Pester module requirement.") |
+                Out-Null
+            continue
+        }
+        $requiredVersion = [string]$table[$requiredVersionKey[0]]
+        if ($requiredVersion -cne $ExpectedVersion) {
+            $ErrorList.Add("'$RelativePath' copies Pester version '$requiredVersion' instead of '$ExpectedVersion'.") |
+                Out-Null
+        }
+    }
+}
+
 $testRoot = Join-Path $resolvedRoot 'tests'
 $testFiles = if (Test-Path -LiteralPath $testRoot -PathType Container) {
     @(Get-ChildItem -LiteralPath $testRoot -Filter '*.Tests.ps1' -File -Recurse)
@@ -354,10 +426,12 @@ function Test-WorkflowPwshStepCommand (
         if (-not $hasPwshShell) {
             continue
         }
-        foreach ($commandMatch in [regex]::Matches(
-                $stepText, $CommandPattern)) {
+        $runKeys = @([regex]::Matches(
+                $stepText,
+                "(?m)^(?:${sequenceIndent}-\s+|${mappingIndent})run:"))
+        foreach ($runKey in $runKeys) {
             $runScope = Get-WorkflowRunScope -Content $stepText `
-                -Position $commandMatch.Index -Complete
+            -Position ($runKey.Index + $runKey.Length) -Complete
             $normalizedRunScope = if ($null -ne $runScope) {
                 Remove-PowerShellComments -Text $runScope
             }
@@ -567,8 +641,8 @@ function Get-CommandModuleTargetAst (
 function Test-CommandTargetsPester (
     [Management.Automation.Language.CommandAst] $CommandAst) {
     $target = Get-CommandModuleTargetAst -CommandAst $CommandAst
-    $nameText = Get-StaticStringAstValue -ExpressionAst $target
-    return $null -ne $nameText -and $nameText -ieq 'Pester'
+    return @(Get-StaticStringAstValues -ExpressionAst $target |
+        Where-Object { $_ -ieq 'Pester' }).Count -gt 0
 }
 
 function Test-CommandMayExecuteInScope (
@@ -615,7 +689,9 @@ function Test-ExecutableCommandAtOffset (
                     $node.GetCommandName() -ieq $CommandName
             }, $true) | Where-Object {
             (Test-CommandMayExecuteInScope -CommandAst $_ -RootAst $ast) -and
-                $_.CommandElements[0].Extent.StartOffset -eq $Offset
+                $_.CommandElements[0].Extent.StartOffset -le $Offset -and
+                $_.CommandElements[0].Extent.EndOffset -ge
+                    $Offset + $CommandName.Length
         }).Count -gt 0
 }
 
@@ -820,10 +896,7 @@ $copiedVersionPatterns = @(
     '(?i)-PesterVersion(?::\s*|(?:\s|`\r?\n)+)(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
     '(?i)PesterVersion\s*=\s*(?<value>''[^'']*''|"[^"]*")'
 )
-$moduleSpecificationPattern =
-    '(?i)@\{(?<body>[^}\r\n]*ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*)\}'
-$moduleConstraintPattern =
-    '(?i)(?<constraint>RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>[^''"]+)[''"]'
+$moduleNamePropertyPattern = '(?i)\bModuleName\s*='
 $moduleCommandNamePattern =
     '(?i)(?<![-\w])(?:Install-Module|Import-Module)(?![-\w])'
 $invokePesterName = 'Invoke' + '-Pester'
@@ -851,6 +924,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         $normalizedPath -like '*.ps1.tmpl'
     $moduleCommandTexts = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::Ordinal)
+    $moduleRequirementScopes = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal)
     $sourceTokens = @()
     $inlineCodeMatches = if ($isMarkdown) {
         @([regex]::Matches($content, '`(?<code>[^`\r\n]+)`'))
@@ -872,48 +947,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 })) {
             $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
         }
-        foreach ($requirement in @($sourceAst.ScriptRequirements.RequiredModules |
-                Where-Object Name -IEQ 'Pester')) {
-            if ($null -eq $requirement.RequiredVersion) {
-                $errors.Add("'$relativePath' must use RequiredVersion for its Pester module requirement.") |
-                    Out-Null
-            }
-            elseif ([string]$requirement.RequiredVersion -cne $pesterVersion) {
-                $errors.Add("'$relativePath' copies Pester version '$($requirement.RequiredVersion)' instead of '$pesterVersion'.") |
-                    Out-Null
-            }
-        }
-        foreach ($hashtableAst in @($sourceAst.FindAll({
-                    param($node)
-                    $node -is [Management.Automation.Language.HashtableAst]
-                }, $true))) {
-            try { $table = $hashtableAst.SafeGetValue() }
-            catch { continue }
-            $moduleNameKey = @($table.Keys | Where-Object {
-                    [string]$_ -ieq 'ModuleName'
-                } | Select-Object -First 1)
-            if ($moduleNameKey.Count -ne 1 -or
-                [string]$table[$moduleNameKey[0]] -ine 'Pester') {
-                continue
-            }
-            $requiredVersionKey = @($table.Keys | Where-Object {
-                    [string]$_ -ieq 'RequiredVersion'
-                } | Select-Object -First 1)
-            $moduleVersionKey = @($table.Keys | Where-Object {
-                    [string]$_ -ieq 'ModuleVersion'
-                } | Select-Object -First 1)
-            if ($requiredVersionKey.Count -ne 1 -or
-                $moduleVersionKey.Count -gt 0) {
-                $errors.Add("'$relativePath' must use RequiredVersion for its Pester module requirement.") |
-                    Out-Null
-                continue
-            }
-            $requiredVersion = [string]$table[$requiredVersionKey[0]]
-            if ($requiredVersion -cne $pesterVersion) {
-                $errors.Add("'$relativePath' copies Pester version '$requiredVersion' instead of '$pesterVersion'.") |
-                    Out-Null
-            }
-        }
+        $moduleRequirementScopes.Add($content) | Out-Null
     }
     foreach ($commandMatch in [regex]::Matches(
             $content, $moduleCommandNamePattern)) {
@@ -972,6 +1006,36 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             }
         }
     }
+    foreach ($propertyMatch in [regex]::Matches(
+            $content, $moduleNamePropertyPattern)) {
+        $containingInlineCode = @($inlineCodeMatches | Where-Object {
+                $_.Index -lt $propertyMatch.Index -and
+                $_.Index + $_.Length -gt $propertyMatch.Index
+            } | Select-Object -First 1)
+        $requirementScope = if ($containingInlineCode.Count -eq 1) {
+            $containingInlineCode[0].Groups['code'].Value
+        }
+        elseif ($isWorkflow) {
+            Get-WorkflowRunScope -Content $content `
+                -Position $propertyMatch.Index -Complete
+        }
+        elseif ($isMarkdown) {
+            Get-MarkdownCommandScope -Content $content `
+                -Position $propertyMatch.Index -FencedOnly -Complete
+        }
+        elseif ($isPowerShellSource) {
+            Get-HereStringCommandScope -Content $content `
+                -Position $propertyMatch.Index -Complete
+        }
+        if (-not [string]::IsNullOrWhiteSpace($requirementScope)) {
+            $moduleRequirementScopes.Add($requirementScope) | Out-Null
+        }
+    }
+    foreach ($requirementScope in $moduleRequirementScopes) {
+        Add-PesterModuleRequirementErrors -ScriptText $requirementScope `
+            -RelativePath $relativePath -ExpectedVersion $pesterVersion `
+            -ErrorList $errors
+    }
     foreach ($commandText in $moduleCommandTexts) {
         $tokens = $null
         $parseErrors = $null
@@ -998,24 +1062,28 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     }
                 })
             $moduleTarget = Get-CommandModuleTargetAst -CommandAst $commandAst
-            $moduleName = Get-StaticStringAstValue -ExpressionAst $moduleTarget
-            if ($requiredVersionIndices.Count -gt 0 -and $null -eq $moduleName) {
+            $moduleNames = @(Get-StaticStringAstValues -ExpressionAst $moduleTarget)
+            if ($requiredVersionIndices.Count -gt 0 -and $moduleNames.Count -eq 0) {
                 $errors.Add("'$relativePath' Pester module validation must use a static module name.") |
                     Out-Null
                 continue
             }
-            if ($null -ne $moduleName -and
+            $wildcardNames = @($moduleNames | Where-Object {
                 [Management.Automation.WildcardPattern]::ContainsWildcardCharacters(
-                    $moduleName) -and
-                [Management.Automation.WildcardPattern]::new(
-                    $moduleName,
-                    [Management.Automation.WildcardOptions]::IgnoreCase).IsMatch(
-                    'Pester')) {
+                    $_) -and
+                    [Management.Automation.WildcardPattern]::new(
+                        $_,
+                        [Management.Automation.WildcardOptions]::IgnoreCase).IsMatch(
+                        'Pester')
+                })
+            if ($wildcardNames.Count -gt 0) {
                 $errors.Add("'$relativePath' Pester module validation must use the exact module name 'Pester'.") |
                     Out-Null
                 continue
             }
-            if ($moduleName -ine 'Pester') { continue }
+            if (@($moduleNames | Where-Object { $_ -ieq 'Pester' }).Count -eq 0) {
+                continue
+            }
             if ($requiredVersionIndices.Count -ne 1) {
                 $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
                     Out-Null
@@ -1060,44 +1128,24 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             }
         }
     }
-    foreach ($moduleMatch in [regex]::Matches($content, $moduleSpecificationPattern)) {
-        if ($isPowerShellSource -and
-            (Test-PositionIsInIgnoredPowerShellText `
-                -Tokens $sourceTokens -Position $moduleMatch.Index)) {
-            continue
-        }
-        $constraintMatches = @([regex]::Matches(
-                $moduleMatch.Groups['body'].Value, $moduleConstraintPattern))
-        if ($constraintMatches.Count -ne 1) {
-            $errors.Add("'$relativePath' must define one RequiredVersion for its Pester module requirement.") |
-                Out-Null
-            continue
-        }
-        $match = $constraintMatches[0]
-        if ($match.Groups['constraint'].Value -ine 'RequiredVersion') {
-            $errors.Add("'$relativePath' must use RequiredVersion for its Pester module requirement.") |
-                Out-Null
-        }
-        if ($match.Groups['version'].Value -cne $pesterVersion) {
-            $errors.Add("'$relativePath' copies Pester version '$($match.Groups['version'].Value)' instead of '$pesterVersion'.") |
-                Out-Null
-        }
-    }
     $rawInvokeMatches = @([regex]::Matches($content, $invokePesterPattern))
     $invocations = if ($isPinnedTest) { @() }
     elseif ($isWorkflow) {
         @(foreach ($invokeMatch in $rawInvokeMatches) {
                 $candidateEnd = $invokeMatch.Index + $invokeMatch.Length
-                $candidateScope = Get-WorkflowRunScope -Content $content `
+            $candidatePrefix = Get-WorkflowRunScope -Content $content `
                     -Position $candidateEnd
+            $candidateScope = Get-WorkflowRunScope -Content $content `
+                -Position $invokeMatch.Index -Complete
                 $lineStart = $content.LastIndexOf(
                     "`n", [Math]::Max(0, $invokeMatch.Index - 1))
                 if ($lineStart -lt 0) { $lineStart = 0 } else { $lineStart++ }
-                if ($null -eq $candidateScope) {
-                    $candidateScope = $content.Substring(
+            if ($null -eq $candidatePrefix) {
+                $candidatePrefix = $content.Substring(
                         $lineStart, $candidateEnd - $lineStart)
                 }
-                $offset = $candidateScope.LastIndexOf(
+            if ($null -eq $candidateScope) { $candidateScope = $candidatePrefix }
+            $offset = $candidatePrefix.LastIndexOf(
                     $invokePesterName,
                     [StringComparison]::OrdinalIgnoreCase)
                 if (Test-ExecutableCommandAtOffset -ScriptText $candidateScope `
@@ -1119,10 +1167,12 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     elseif ($isMarkdown) {
         @(foreach ($invokeMatch in $rawInvokeMatches) {
                 $candidateEnd = $invokeMatch.Index + $invokeMatch.Length
-                $candidateScope = Get-MarkdownCommandScope -Content $content `
+            $candidatePrefix = Get-MarkdownCommandScope -Content $content `
                     -Position $candidateEnd -FencedOnly
-                if ($null -ne $candidateScope) {
-                    $offset = $candidateScope.LastIndexOf(
+            if ($null -ne $candidatePrefix) {
+                $candidateScope = Get-MarkdownCommandScope -Content $content `
+                    -Position $invokeMatch.Index -FencedOnly -Complete
+                $offset = $candidatePrefix.LastIndexOf(
                         $invokePesterName,
                         [StringComparison]::OrdinalIgnoreCase)
                     if (Test-ExecutableCommandAtOffset -ScriptText $candidateScope `
@@ -1176,10 +1226,12 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 }
             foreach ($invokeMatch in $rawInvokeMatches) {
                 $candidateEnd = $invokeMatch.Index + $invokeMatch.Length
-                $candidateScope = Get-HereStringCommandScope -Content $content `
+                $candidatePrefix = Get-HereStringCommandScope -Content $content `
                     -Position $candidateEnd
-                if ($null -eq $candidateScope) { continue }
-                $offset = $candidateScope.LastIndexOf(
+                if ($null -eq $candidatePrefix) { continue }
+                $candidateScope = Get-HereStringCommandScope -Content $content `
+                    -Position $invokeMatch.Index -Complete
+                $offset = $candidatePrefix.LastIndexOf(
                     $invokePesterName,
                     [StringComparison]::OrdinalIgnoreCase)
                 if (-not (Test-ExecutableCommandAtOffset `

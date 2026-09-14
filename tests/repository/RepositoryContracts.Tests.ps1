@@ -435,6 +435,21 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*must validate the manifest PowerShell minimum in a pwsh step*"
     }
 
+    It 'rejects a nested run value when the step has no validation command' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-nested-run-key'
+        foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
+            $workflowPath = Join-Path $fixtureRoot ".github/workflows/$workflowName"
+            $content = Get-Content -LiteralPath $workflowPath -Raw
+            $content = $content.Replace(
+                '        run: ./tools/Test-PowerShellToolchain.ps1',
+                "        env:`n          run: ./tools/Test-PowerShellToolchain.ps1`n        run: Write-Output skipped")
+            Set-Content -LiteralPath $workflowPath -Value $content
+        }
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*must validate the manifest PowerShell minimum in a pwsh step*"
+    }
+
     It 'accepts a block validation command with a trailing comment' {
         $fixtureRoot = New-ToolchainFixture 'workflow-block-command-comment'
         foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
@@ -764,6 +779,24 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*must use the exact module name 'Pester'*"
     }
 
+    It 'rejects an unpinned Pester target in a static <Form>' -ForEach @(
+        @{
+            Form = 'comma array'
+            Command = 'Import-Module Pester,Other'
+        }
+        @{
+            Form = 'array expression'
+            Command = "Import-Module @('Other','Pester')"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "static-array-$($Form.Replace(' ', '-'))"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Drift.ps1') `
+            -Value $Command
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*invokes Pester without -RequiredVersion 6.2.0*'
+    }
+
     It 'rejects a splatted <Command> module invocation' -ForEach @(
         @{ Command = 'Import-Module' }
         @{ Command = 'Install-Module' }
@@ -1050,6 +1083,37 @@ Describe 'PowerShell toolchain contract' {
             "    ModuleName = 'Pester'",
             "    RequiredVersion = '5.7.1'",
             '}')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'rejects a stale Pester module requirement in <Kind>' -ForEach @(
+        @{
+            Kind = 'Markdown fence'
+            Path = 'docs/module-requirement.md'
+            Content = @(
+                '```pwsh',
+                '$requirement = @{',
+                "    RequiredVersion = '5.7.1'",
+                "    ModuleName = 'Pester'",
+                '}',
+                '```')
+        }
+        @{
+            Kind = 'workflow block'
+            Path = '.github/workflows/module-requirement.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ('          #Requires -Modules @{ RequiredVersion = ' +
+                    "'5.7.1'; ModuleName = 'Pester' }"))
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture (
+            "scoped-requirement-$($Kind.Replace(' ', '-'))")
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        Set-Content -LiteralPath $path -Value $Content
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*copies Pester version '5.7.1'*"
@@ -1371,6 +1435,19 @@ jobs:
             'jobs:', '  test:', '    steps:',
             ('      - run: "Write-Output \"x\"; Invoke-' +
                 'Pester ./tests"'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects an unpinned call-operator Invoke-Pester command' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-call-operator-invocation'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/call-operator.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:',
+            ('      - run: & ''Invoke-' + 'Pester'' ./tests'))
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +
