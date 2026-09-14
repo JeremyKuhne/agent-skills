@@ -101,12 +101,14 @@ Describe 'PowerShell toolchain contract' {
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
+                '      - run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-windows:',
                 '    runs-on: windows-latest',
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
-                '          dotnet-version: 10.0.x')
+                '          dotnet-version: 10.0.x',
+                '      - run: ./tools/Test-PowerShellToolchain.ps1')
             Set-Content -LiteralPath (Join-Path $fixtureRoot '.github/workflows/full-ci.yml') `
                 -Value @(
                 'on:',
@@ -119,25 +121,29 @@ Describe 'PowerShell toolchain contract' {
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
+                '      - run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-linux-x64:',
                 '    runs-on: ubuntu-latest',
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
+                '      - run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-windows:',
                 '    runs-on: windows-latest',
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 10.0.x',
+                '      - run: ./tools/Test-PowerShellToolchain.ps1',
                 '  scaffold-preview:',
                 '    runs-on: windows-latest',
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
                 '          dotnet-version: 11.0.x',
-                '          dotnet-quality: preview')
+                '          dotnet-quality: preview',
+                '      - run: ./tools/Test-PowerShellToolchain.ps1')
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') -Value @(
                 '#Requires -Version 7.4',
                 "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
@@ -151,7 +157,8 @@ Describe 'PowerShell toolchain contract' {
                     'skills/dotnet-file-creation/SKILL.md',
                     'skills/windows-acls/SKILL.md')) {
                 Set-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) `
-                    -Value 'Requires PowerShell 7.4 and Pester 6.2 or later.'
+                    -Value ('Requires PowerShell 7.4 and Pester 6.2 or later; this ' +
+                        'source repository pins its test entry points to Pester 6.2.0.')
             }
             return $fixtureRoot
         }
@@ -167,10 +174,13 @@ Describe 'PowerShell toolchain contract' {
         $script:Toolchain.dotnet.languageVersion | Should -BeExactly '14.0'
         @($script:Toolchain.hosts.PSObject.Properties.Name | Sort-Object) |
             Should -Be @('primary', 'scheduled', 'windows')
-        $script:Toolchain.hosts.primary.powerShellVersion | Should -BeExactly '7.4'
-        $script:Toolchain.hosts.windows.powerShellVersion | Should -BeExactly '7.4'
-        $script:Toolchain.hosts.scheduled.powerShellVersion |
-            Should -BeExactly 'latest-stable'
+        $script:Toolchain.hosts.primary.minimumPowerShellVersion |
+            Should -BeExactly '7.4'
+        $script:Toolchain.hosts.windows.minimumPowerShellVersion |
+            Should -BeExactly '7.4'
+        $script:Toolchain.hosts.scheduled.minimumPowerShellVersion |
+            Should -BeExactly '7.4'
+        $script:Toolchain.hosts.scheduled.channel | Should -BeExactly 'latest-stable'
     }
 
     It 'keeps checked toolchain copies aligned with the manifest' {
@@ -203,20 +213,31 @@ Describe 'PowerShell toolchain contract' {
     }
 
     It 'rejects invalid host PowerShell version <Value> for <Lane>' -ForEach @(
-        @{ Lane = 'primary'; Value = 'banana'; Error = '*must be numeric or*latest-stable*' }
+        @{ Lane = 'primary'; Value = 'banana'; Error = '*minimum PowerShell version must be numeric*' }
         @{ Lane = 'primary'; Value = '7.2'; Error = '*must be at least 7.4*' }
-        @{ Lane = 'primary'; Value = 'latest-stable'; Error = '*cannot use the*latest-stable*selector*' }
-        @{ Lane = 'scheduled'; Value = 'banana'; Error = '*must be numeric or*latest-stable*' }
+        @{ Lane = 'scheduled'; Value = 'banana'; Error = '*minimum PowerShell version must be numeric*' }
     ) {
         $fixtureRoot = New-ToolchainFixture "host-$Lane-$($Value.Replace('.', '-'))"
         $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
         $manifest = Get-Content -LiteralPath $manifestPath -Raw |
             ConvertFrom-Json -AsHashtable
-        $manifest.hosts[$Lane].powerShellVersion = $Value
+        $manifest.hosts[$Lane].minimumPowerShellVersion = $Value
         $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw $Error
+    }
+
+    It 'rejects a scheduled host without the latest-stable channel' {
+        $fixtureRoot = New-ToolchainFixture 'scheduled-channel-drift'
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $manifest.hosts.scheduled.channel = 'pinned'
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*scheduled host channel must be 'latest-stable'*"
     }
 
     It 'rejects a workflow host that drifts from the manifest' {
@@ -228,6 +249,17 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*job 'scaffold-linux' must run on manifest host 'ubuntu-24.04-arm'*"
+    }
+
+    It 'rejects a host job that omits the PowerShell minimum validation' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-powershell-validation'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            '      - run: ./tools/Test-PowerShellToolchain.ps1', '') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum*"
     }
 
     It 'rejects a workflow SDK that drifts from the manifest' {
@@ -462,6 +494,28 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*must use RequiredVersion for its Pester module requirement*'
     }
 
+    It 'rejects a reversed-order stale Pester module requirement' {
+        $fixtureRoot = New-ToolchainFixture 'reversed-module-requirement'
+        $driftPath = Join-Path $fixtureRoot '.agents/Drift.ps1.tmpl'
+        Set-Content -LiteralPath $driftPath -Value (
+            "#Requires -Modules @{ RequiredVersion = '$('5.7' + '.1')'; " +
+            "Module$('Name') = 'Pester' }")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'accepts lowercase RequiredVersion in a Pester module requirement' {
+        $fixtureRoot = New-ToolchainFixture 'lowercase-required-version'
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            'RequiredVersion', 'requiredversion') |
+            Set-Content -LiteralPath $testPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects an unpinned Pester <Action>' -ForEach @(
         @{ Action = 'installation'; Command = ('Install-' + 'Module Pester -Force') }
         @{ Action = 'import'; Command = ('Import-' + 'Module Pester -Force') }
@@ -479,6 +533,23 @@ Describe 'PowerShell toolchain contract' {
         $fixtureRoot = New-ToolchainFixture 'floating-invoke'
         Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') -Value (
             'Run Invoke-' + 'Pester ./tests.')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects an import in a different Markdown code block' {
+        $fixtureRoot = New-ToolchainFixture 'markdown-block-scope'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') -Value @'
+```pwsh
+Import-Module Pester -RequiredVersion 6.2.0
+```
+
+```pwsh
+Invoke-Pester ./tests
+```
+'@
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +
@@ -615,6 +686,30 @@ jobs:
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*must name Pester 6.3 or later*'
+    }
+
+    It 'uses the derived Pester floor when portable guidance is missing' {
+        $fixtureRoot = New-ToolchainFixture 'missing-portable-guidance'
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $manifest.modules.Pester = '6.3.0'
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            "RequiredVersion = '6.2.0'", "RequiredVersion = '6.3.0'") |
+            Set-Content -LiteralPath $testPath
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.agents/skills/create-skill-repo/SKILL.md') `
+            -Value 'Requires PowerShell 7.4 and Pester 6.3.0.'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot 'skills/windows-acls/SKILL.md') `
+            -Value 'Requires PowerShell 7.4 and Pester 6.3 or later.'
+        Remove-Item -LiteralPath (
+            Join-Path $fixtureRoot 'skills/dotnet-file-creation/SKILL.md')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must name PowerShell 7.4 and Pester 6.3 or later*'
     }
 }
 

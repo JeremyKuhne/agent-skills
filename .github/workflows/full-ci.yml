@@ -25,6 +25,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Validate PowerShell toolchain
+        shell: pwsh
+        run: ./tools/Test-PowerShellToolchain.ps1
+
       - name: Scaffold, build, test, and pack
         shell: pwsh
         run: |
@@ -49,6 +53,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Validate PowerShell toolchain
+        shell: pwsh
+        run: ./tools/Test-PowerShellToolchain.ps1
+
       - name: Scaffold, build, test, and pack
         shell: pwsh
         run: |
@@ -72,6 +80,10 @@ jobs:
         id: dotnet
         with:
           dotnet-version: 10.0.x
+
+      - name: Validate PowerShell toolchain
+        shell: pwsh
+        run: ./tools/Test-PowerShellToolchain.ps1
 
       - name: Install Pester
         shell: pwsh
@@ -111,6 +123,10 @@ jobs:
         with:
           dotnet-version: 11.0.x
           dotnet-quality: preview
+
+      - name: Validate PowerShell toolchain
+        shell: pwsh
+        run: ./tools/Test-PowerShellToolchain.ps1
 
       - name: Exercise next SDK
         shell: pwsh

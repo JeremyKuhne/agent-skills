@@ -163,6 +163,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Validate PowerShell toolchain
+        shell: pwsh
+        run: ./tools/Test-PowerShellToolchain.ps1
+
       - name: Install Pester
         shell: pwsh
         run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
@@ -204,6 +208,10 @@ jobs:
         id: dotnet
         with:
           dotnet-version: 10.0.x
+
+      - name: Validate PowerShell toolchain
+        shell: pwsh
+        run: ./tools/Test-PowerShellToolchain.ps1
 
       - name: Detect Windows filesystem skill changes
         id: windows-filesystem

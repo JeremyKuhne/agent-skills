@@ -10,15 +10,16 @@
   "hosts": {
     "primary": {
       "operatingSystem": "ubuntu-24.04-arm",
-      "powerShellVersion": "7.4"
+      "minimumPowerShellVersion": "7.4"
     },
     "windows": {
       "operatingSystem": "windows-latest",
-      "powerShellVersion": "7.4"
+      "minimumPowerShellVersion": "7.4"
     },
     "scheduled": {
       "operatingSystem": "ubuntu-latest",
-      "powerShellVersion": "latest-stable"
+      "minimumPowerShellVersion": "7.4",
+      "channel": "latest-stable"
     }
   },
   "dotnet": {

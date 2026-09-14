@@ -87,27 +87,29 @@ foreach ($hostName in @('primary', 'windows', 'scheduled')) {
         [string]::IsNullOrWhiteSpace($hostLane.operatingSystem)) {
         $errors.Add("Manifest host '$hostName' must name an operating system.") | Out-Null
     }
-    if ($hostLane.powerShellVersion -isnot [string] -or
-        [string]::IsNullOrWhiteSpace($hostLane.powerShellVersion)) {
-        $errors.Add("Manifest host '$hostName' must name a PowerShell version.") | Out-Null
+    if ($hostLane.minimumPowerShellVersion -isnot [string] -or
+        [string]::IsNullOrWhiteSpace($hostLane.minimumPowerShellVersion)) {
+        $errors.Add("Manifest host '$hostName' must name a minimum PowerShell version.") |
+            Out-Null
         continue
     }
-    $hostVersionText = [string]$hostLane.powerShellVersion
-    if ($hostVersionText -ceq 'latest-stable') {
-        if ($hostName -cne 'scheduled') {
-            $errors.Add("Manifest host '$hostName' cannot use the 'latest-stable' selector.") |
-                Out-Null
-        }
-        continue
-    }
+    $hostVersionText = [string]$hostLane.minimumPowerShellVersion
     $hostVersion = $null
     if (-not [version]::TryParse($hostVersionText, [ref]$hostVersion)) {
-        $errors.Add("Manifest host '$hostName' PowerShell version must be numeric or 'latest-stable'.") |
+        $errors.Add("Manifest host '$hostName' minimum PowerShell version must be numeric.") |
             Out-Null
     }
     elseif ($minimumPowerShellIsValid -and $hostVersion -lt $minimumPowerShell) {
         $errors.Add("Manifest host '$hostName' PowerShell version must be at least $minimumPowerShellVersion.") |
             Out-Null
+    }
+    if ($hostName -ceq 'scheduled') {
+        if ($hostLane.channel -cne 'latest-stable') {
+            $errors.Add("Manifest scheduled host channel must be 'latest-stable'.") | Out-Null
+        }
+    }
+    elseif ($hostLane.ContainsKey('channel')) {
+        $errors.Add("Manifest host '$hostName' cannot define a PowerShell channel.") | Out-Null
     }
 }
 
@@ -220,6 +222,21 @@ function Get-ToolchainWorkflowJobBody ([string] $Content, [string] $JobName) {
     return $match.Groups['body'].Value
 }
 
+function Get-MarkdownCommandScope ([string] $Content, [int] $Position) {
+    $priorContent = $Content.Substring(0, $Position)
+    $fences = @([regex]::Matches($priorContent, '(?m)^```[^\r\n]*\r?$'))
+    if ($fences.Count % 2 -eq 1) {
+        return $Content.Substring(
+            $fences[-1].Index, $Position - $fences[-1].Index)
+    }
+    $paragraphBreaks = @([regex]::Matches($priorContent, '\r?\n\s*\r?\n'))
+    $scopeStart = if ($paragraphBreaks.Count -gt 0) {
+        $paragraphBreaks[-1].Index + $paragraphBreaks[-1].Length
+    }
+    else { 0 }
+    return $Content.Substring($scopeStart, $Position - $scopeStart)
+}
+
 $globalJsonPath = Join-Path $resolvedRoot 'global.json'
 if (-not (Test-Path -LiteralPath $globalJsonPath -PathType Leaf)) {
     $errors.Add("'global.json' must select the manifest .NET SDK.") | Out-Null
@@ -315,6 +332,10 @@ foreach ($contract in $workflowContracts) {
             $errors.Add("'$($contract.Path)' job '$($contract.Job)' must run on manifest host '$expectedHost'.") |
                 Out-Null
         }
+            if ($jobBody -notmatch '(?m)^\s+(?:(?:-\s+)?run:\s+)?\./tools/Test-PowerShellToolchain\.ps1\s*$') {
+                $errors.Add("'$($contract.Path)' job '$($contract.Job)' must validate the manifest PowerShell minimum.") |
+                Out-Null
+            }
     }
     $expectedSdk = [string]$manifest.dotnet[$contract.DotNet]
     if ($jobBody -notmatch "(?m)^\s+dotnet-version: $([regex]::Escape($expectedSdk))\r?$") {
@@ -343,8 +364,10 @@ $copiedVersionPatterns = @(
     '(?i)-PesterVersion\s+(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
     '(?i)PesterVersion\s*=\s*(?<value>''[^'']*''|"[^"]*")'
 )
-$moduleRequirementPattern =
-    '(?i)ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*(?<constraint>RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>[^''"]+)[''"]'
+$moduleSpecificationPattern =
+    '(?i)@\{(?<body>[^}\r\n]*ModuleName\s*=\s*[''"]Pester[''"][^}\r\n]*)\}'
+$moduleConstraintPattern =
+    '(?i)(?<constraint>RequiredVersion|ModuleVersion)\s*=\s*[''"](?<version>[^''"]+)[''"]'
 $moduleCommandPattern =
     '(?im)(?<command>(?:Install-Module|Import-Module)\b(?:[^\r\n]|`\r?\n)*)'
 $invokePesterName = 'Invoke' + '-Pester'
@@ -447,8 +470,16 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             }
         }
     }
-    foreach ($match in [regex]::Matches($content, $moduleRequirementPattern)) {
-        if ($match.Groups['constraint'].Value -cne 'RequiredVersion') {
+    foreach ($moduleMatch in [regex]::Matches($content, $moduleSpecificationPattern)) {
+        $constraintMatches = @([regex]::Matches(
+                $moduleMatch.Groups['body'].Value, $moduleConstraintPattern))
+        if ($constraintMatches.Count -ne 1) {
+            $errors.Add("'$relativePath' must define one RequiredVersion for its Pester module requirement.") |
+                Out-Null
+            continue
+        }
+        $match = $constraintMatches[0]
+        if ($match.Groups['constraint'].Value -ine 'RequiredVersion') {
             $errors.Add("'$relativePath' must use RequiredVersion for its Pester module requirement.") |
                 Out-Null
         }
@@ -464,6 +495,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         if ($isPinnedTest) { continue }
         $invocationScope = if ($isWorkflow) {
             Get-WorkflowRunScope -Content $content -Position $invokeMatch.Index
+        }
+        elseif ($normalizedPath -like '*.md' -or $normalizedPath -like '*.md.tmpl') {
+            Get-MarkdownCommandScope -Content $content -Position $invokeMatch.Index
         }
         else { $content.Substring(0, $invokeMatch.Index) }
         if ([string]::IsNullOrWhiteSpace($invocationScope) -or
@@ -500,7 +534,7 @@ foreach ($relativePath in $exactGuidancePaths) {
 foreach ($relativePath in $portableGuidancePaths) {
     $path = Join-Path $resolvedRoot $relativePath
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion and Pester 6.2 or later.") |
+        $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion and Pester $portablePesterFloor or later.") |
             Out-Null
         continue
     }
@@ -514,6 +548,12 @@ foreach ($relativePath in $portableGuidancePaths) {
         "Pester $([regex]::Escape($portablePesterFloor)) or later(?![0-9A-Za-z-]|\.[0-9A-Za-z])"
     if ($content -notmatch $portablePesterPattern) {
         $errors.Add("'$relativePath' must name Pester $portablePesterFloor or later.") |
+            Out-Null
+    }
+    $sourcePinPattern =
+        "source repository pins its test entry points to Pester $([regex]::Escape($pesterVersion))(?![0-9A-Za-z-]|\.[0-9A-Za-z])"
+    if ($content -notmatch $sourcePinPattern) {
+        $errors.Add("'$relativePath' must name the source repository Pester $pesterVersion test pin.") |
             Out-Null
     }
 }
