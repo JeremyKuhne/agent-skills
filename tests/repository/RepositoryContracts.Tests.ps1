@@ -1,5 +1,5 @@
 #Requires -Version 7.2
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
 
 BeforeAll {
     . (Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1')
@@ -48,6 +48,46 @@ BeforeAll {
     $script:SkillNames = @($script:SkillRecords.Name)
 }
 
+Describe 'PowerShell toolchain contract' {
+    BeforeAll {
+        $script:ToolchainManifestPath = Join-Path $script:RepoRoot 'tools/powershell-toolchain.json'
+        $script:ToolchainValidatorPath = Join-Path $script:RepoRoot 'tools/Test-PowerShellToolchain.ps1'
+        $script:Toolchain = Get-Content -LiteralPath $script:ToolchainManifestPath -Raw |
+            ConvertFrom-Json
+    }
+
+    It 'records the accepted versions and host lanes' {
+        $script:Toolchain.schemaVersion | Should -Be 1
+        $script:Toolchain.powerShell.minimumVersion | Should -BeExactly '7.4'
+        $script:Toolchain.modules.Pester | Should -BeExactly '6.2.0'
+        $script:Toolchain.modules.PSScriptAnalyzer | Should -BeExactly '1.25.0'
+        $script:Toolchain.dotnet.sdkVersion | Should -BeExactly '10.0.x'
+        $script:Toolchain.dotnet.languageVersion | Should -BeExactly '14.0'
+        @($script:Toolchain.hosts.PSObject.Properties.Name | Sort-Object) |
+            Should -Be @('primary', 'scheduled', 'windows')
+    }
+
+    It 'keeps checked toolchain copies aligned with the manifest' {
+        { & $script:ToolchainValidatorPath -RepositoryRoot $script:RepoRoot } |
+            Should -Not -Throw
+    }
+
+    It 'rejects a drifted Pester test requirement' {
+        $fixtureRoot = Join-Path $TestDrive 'toolchain-drift'
+        [IO.Directory]::CreateDirectory((Join-Path $fixtureRoot 'tools')) | Out-Null
+        [IO.Directory]::CreateDirectory((Join-Path $fixtureRoot 'tests')) | Out-Null
+        Copy-Item -LiteralPath $script:ToolchainManifestPath `
+            -Destination (Join-Path $fixtureRoot 'tools/powershell-toolchain.json')
+        $driftRequirement = "#Requires -Modules @{ ModuleName = 'Pester'; " +
+            "RequiredVersion = '6.1.0' }"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Drift.Tests.ps1') `
+            -Value @($driftRequirement, "Describe 'Drift' { It 'is never run' { `$true | Should -BeTrue } }")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must require Pester 6.2.0 exactly*'
+    }
+}
+
 Describe 'Pester shard runner' {
     BeforeAll {
         $script:ShardRunner = Join-Path $script:RepoRoot 'tests/Invoke-PesterShards.ps1'
@@ -79,7 +119,7 @@ Describe 'Healthy fixture' {
             $reportDirectory = Join-Path $root 'reports'
             $output = @(& $script:ShardPwsh -NoProfile -File $script:ShardRunner `
                     -Path $testPath -OutputDirectory $reportDirectory `
-                    -MaxConcurrency 2 -PesterVersion 5.7.1 @RunnerArguments 2>&1)
+                    -MaxConcurrency 2 -PesterVersion 6.2.0 @RunnerArguments 2>&1)
             $exitCode = $LASTEXITCODE
             $summary = Get-Content -LiteralPath (Join-Path $reportDirectory 'summary.json') -Raw |
                 ConvertFrom-Json
@@ -179,6 +219,22 @@ Describe 'Teardown fixture' {
         $run.Summary.FailedCount | Should -BeNullOrEmpty
         $run.Summary.CountsComplete | Should -BeFalse
         $run.Summary.Shards[0].Error | Should -Match 'No Pester tests were discovered'
+    }
+
+    It 'rejects empty ForEach data as empty discovery' {
+        $run = Invoke-ShardFixture 'empty-foreach' @'
+Describe 'Empty data fixture' {
+    It 'has case <Name>' -ForEach @() { $true | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.TotalCount | Should -Be 0
+        $run.Summary.FailedContainersCount | Should -Be 1
+        $run.Summary.InfrastructureFailureCount | Should -Be 0
+        $run.Summary.CountsComplete | Should -BeTrue
+        $run.Summary.Shards[0].Result | Should -Be 'Failed'
+        $run.Log | Should -Match 'AllowNullOrEmptyForEach'
     }
 
     It 'keeps intentional skips distinct from empty discovery' {

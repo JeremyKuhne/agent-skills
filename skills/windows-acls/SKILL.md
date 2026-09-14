@@ -2,7 +2,7 @@
 name: windows-acls
 description: Decide where Windows application state belongs and how to secure it with ACLs. Use when choosing a location for per-user or machine-wide state, creating a directory or registry key that elevated code will later trust, validating that a shared path has not been hijacked, reviewing code that calls DirectorySecurity/FileSecurity/SetAccessControl/SetOwner/SetAccessRuleProtection, diagnosing "access is denied" or descriptor mismatches that only reproduce off CI, or writing tests for ACL behavior. Also use when asked "where should this config/cache/state file go", "is ProgramData safe", "how do I ACL this folder", "can a standard user tamper with this", "what are this user's effective permissions", or when a security review flags a path an elevated process reads, writes, or deletes.
 license: MIT
-compatibility: Guidance and bundled tests target Windows. The behavioral tests require PowerShell 7 and Pester 5.7 or later on Windows; they skip elsewhere.
+compatibility: Guidance and bundled tests target Windows. The behavioral tests require PowerShell 7 and Pester 6.2.0 on Windows; they skip elsewhere.
 metadata:
   portability: portable
   applicability: dotnet

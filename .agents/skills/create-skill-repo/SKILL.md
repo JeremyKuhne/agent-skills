@@ -2,7 +2,7 @@
 name: create-skill-repo
 description: Create or scaffold a new repository for authoring, vendoring, validating, and distributing Agent Skills. Use when asked to "create a skill repo", "create a skills repository", "set up a team skill commons", explain or choose an upstream search order for skills, or initialize a local, private, or public repository whose primary product is Agent Skills. Guides repository identity, location, role, clients, starter skill sets, upstream sources, infrastructure, distribution, and publication decisions. For creating one skill inside an existing repository, use the skill-lifecycle workflow instead.
 license: MIT
-compatibility: Local scaffolding requires PowerShell 7.2 and git. Validated tiers use Node.js with npx for pinned Markdown lint and Pester 5 or later. Vendoring uses GitHub CLI 2.90 or later; remote publication requires authenticated gh.
+compatibility: Local scaffolding requires PowerShell 7.2 and git. Validated tiers use Node.js with npx for pinned Markdown lint and Pester 6.2.0. Vendoring uses GitHub CLI 2.90 or later; remote publication requires authenticated gh.
 metadata:
   portability: repo-specific
   applicability: repo-local

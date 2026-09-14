@@ -9,7 +9,7 @@ param(
     [int] $ShardTimeoutMinutes = 30,
     [ValidateRange(0, 3600)]
     [int] $ShardTimeoutSeconds = 0,
-    [version] $PesterVersion = '5.7.1',
+    [version] $PesterVersion = '6.2.0',
     [string] $PowerShellPath,
     [string] $PathPrefix,
     [string] $BaselineSummaryPath,

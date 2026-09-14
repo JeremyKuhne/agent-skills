@@ -259,7 +259,7 @@ code works, that an answer is proportionate, or that a novice understands it.
 Run the suite-specific deterministic checks without a model or Copilot CLI:
 
 ```pwsh
-Import-Module Pester -RequiredVersion 5.7.1
+Import-Module Pester -RequiredVersion 6.2.0
 $configuration = New-PesterConfiguration
 $configuration.Run.Path = './tests/evals/SkillEval.Tests.ps1'
 $configuration.Run.Throw = $true
@@ -356,7 +356,7 @@ Run independent Pester files in isolated PowerShell processes:
 ./tests/Invoke-PesterShards.ps1 `
   -Path ./tests `
   -MaxConcurrency 4 `
-  -PesterVersion 5.7.1
+  -PesterVersion 6.2.0
 ```
 
 Use `-PathPrefix` for local tool directories needed only by child processes.

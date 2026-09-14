@@ -165,12 +165,12 @@ jobs:
 
       - name: Install Pester
         shell: pwsh
-        run: Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
+        run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
 
       - name: Run Pester tests
         shell: pwsh
         run: |
-          Import-Module Pester -RequiredVersion 5.7.1
+          Import-Module Pester -RequiredVersion 6.2.0
           $config = New-PesterConfiguration
           $config.Run.Path = 'tests'
           $config.Run.Throw = $true
@@ -239,13 +239,13 @@ jobs:
       - name: Install Pester for Windows filesystem facts
         if: steps.windows-filesystem.outputs.affected == 'true'
         shell: pwsh
-        run: Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
+        run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
 
       - name: Run Windows filesystem fact tests
         if: steps.windows-filesystem.outputs.affected == 'true'
         shell: pwsh
         run: |
-          Import-Module Pester -RequiredVersion 5.7.1
+          Import-Module Pester -RequiredVersion 6.2.0
           $config = New-PesterConfiguration
           $config.Run.Path = @('tests/windows-acls', 'tests/dotnet-file-creation')
           $config.Run.Throw = $true

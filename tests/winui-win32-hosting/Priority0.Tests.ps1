@@ -1,3 +1,5 @@
+#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
+
 Describe 'WinUI Win32 hosting Priority 0 assets' {
     It 'ships the complete minimal-host source set' {
         $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
