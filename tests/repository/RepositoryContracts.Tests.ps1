@@ -498,6 +498,15 @@ Describe 'PowerShell toolchain contract' {
             Version = ('5.7' + '.1')
         }
         @{
+            Kind = 'continued runner invocation'
+            Path = 'evals/continued.md'
+            Content = @(
+                ('./tests/Invoke-PesterShards.ps1 -Pester' +
+                    'Version ' + [char]96)
+                ('    ' + ('5.7' + '.1')))
+            Version = ('5.7' + '.1')
+        }
+        @{
             Kind = 'runner default suffix'
             Path = 'tools/Suffix.ps1'
             Content = "[version] `$Pester" + "Version = '$('6.2.0' + '.1')'"
@@ -630,10 +639,48 @@ Describe 'PowerShell toolchain contract' {
     It 'ignores non-executing <Kind> module command text in a script' -ForEach @(
         @{ Kind = 'comment'; Content = '# Import-Module Pester -RequiredVersion 5.7.1' }
         @{ Kind = 'string'; Content = "`$text = 'Import-Module Pester -RequiredVersion 5.7.1'" }
+        @{
+            Kind = 'function'
+            Content = 'function Import-Tests { Import-' +
+                'Module Pester -RequiredVersion 5.7.1 }'
+        }
+        @{
+            Kind = 'assigned scriptblock'
+            Content = '$importTests = { Import-' +
+                'Module Pester -RequiredVersion 5.7.1 }'
+        }
     ) {
         $fixtureRoot = New-ToolchainFixture "script-$Kind-module-command"
         Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Example.ps1') `
             -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'ignores a deferred Pester module command in <Kind>' -ForEach @(
+        @{
+            Kind = 'workflow function'
+            Path = '.github/workflows/deferred.yml'
+            Content = @(
+                'jobs:', '  test:', '    steps:', '      - run: |',
+                ('          function Import-Tests { Import-' +
+                    'Module Pester -RequiredVersion 5.7.1 }'))
+        }
+        @{
+            Kind = 'Markdown assigned scriptblock'
+            Path = 'docs/deferred.md'
+            Content = @(
+                '```pwsh',
+                ('$importTests = { Import-' +
+                    'Module Pester -RequiredVersion 5.7.1 }'),
+                '```')
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "deferred-$($Kind.Replace(' ', '-'))"
+        $path = Join-Path $fixtureRoot $Path
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+        Set-Content -LiteralPath $path -Value $Content
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
@@ -679,6 +726,16 @@ Describe 'PowerShell toolchain contract' {
         (Get-Content -LiteralPath $testPath -Raw).Replace(
             'RequiredVersion', 'requiredversion') |
             Set-Content -LiteralPath $testPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'accepts a positional Pester module name after parameter arguments' {
+        $fixtureRoot = New-ToolchainFixture 'reordered-positional-module-name'
+        $scriptPath = Join-Path $fixtureRoot '.agents/Example.ps1'
+        Set-Content -LiteralPath $scriptPath -Value (
+            'Import-' + 'Module -RequiredVersion 6.2.0 Pester')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
@@ -756,6 +813,16 @@ Describe 'PowerShell toolchain contract' {
             "$Indent$Open",
             "$Indent Invoke-Pester ./tests",
             "$Indent$Close")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects an unpinned Invoke-Pester command in an indented Markdown block' {
+        $fixtureRoot = New-ToolchainFixture 'markdown-indented-code'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') `
+            -Value ('    Invoke-' + 'Pester ./tests')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +
@@ -894,6 +961,20 @@ jobs:
             Should -Throw $Error
     }
 
+    It 'rejects an unpinned invocation after escaped text in a quoted workflow scalar' {
+        $fixtureRoot = New-ToolchainFixture 'quoted-workflow-escaped-prefix'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/quoted.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:',
+            ('      - run: "Write-Output \"x\"; Invoke-' +
+                'Pester ./tests"'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
         It 'accepts an inline workflow step with a preceding pinned import' {
                 $fixtureRoot = New-ToolchainFixture 'inline-workflow-step'
                 $workflowPath = Join-Path $fixtureRoot '.github/workflows/inline.yml'
@@ -950,6 +1031,20 @@ Invoke-Pester ./tests
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
+    }
+
+    It 'rejects a fenced comment whose inline text resembles a pinned import' {
+        $fixtureRoot = New-ToolchainFixture 'markdown-fenced-inline-comment'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') -Value @'
+```pwsh
+# `Import-Module Pester -RequiredVersion 6.2.0`
+Invoke-Pester ./tests
+```
+'@
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
     }
 
     It 'accepts a pinned generated command inside a here-string' {

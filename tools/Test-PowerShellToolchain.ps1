@@ -349,6 +349,31 @@ function Get-MarkdownCommandScope (
         return $Content.Substring(
             $openFence.ContentStart, $Position - $openFence.ContentStart)
     }
+    $targetText = $lines[$targetLine].Value.TrimEnd("`r", "`n")
+    if ($targetText -match '^(?: {4}|\t)') {
+        $scopeStartLine = $targetLine
+        while ($scopeStartLine -gt 0) {
+            $previousText = $lines[$scopeStartLine - 1].Value.TrimEnd(
+                "`r", "`n")
+            if (-not [string]::IsNullOrWhiteSpace($previousText) -and
+                $previousText -notmatch '^(?: {4}|\t)') {
+                break
+            }
+            $scopeStartLine--
+        }
+        $codeLines = @(for ($index = $scopeStartLine;
+                $index -le $targetLine; $index++) {
+                $segmentEnd = [Math]::Min(
+                    $Position, $lines[$index].Index + $lines[$index].Length)
+                if ($segmentEnd -le $lines[$index].Index) { continue }
+                $segment = $Content.Substring(
+                    $lines[$index].Index, $segmentEnd - $lines[$index].Index)
+                if ($segment.StartsWith('    ')) { $segment.Substring(4) }
+                elseif ($segment.StartsWith("`t")) { $segment.Substring(1) }
+                else { $segment }
+            })
+        return $codeLines -join ''
+    }
     if ($FencedOnly) { return $null }
     $priorContent = $Content.Substring(0, $Position)
     $paragraphBreaks = @([regex]::Matches($priorContent, '\r?\n\s*\r?\n'))
@@ -409,9 +434,26 @@ function Get-CommandModuleTargetAst (
                 -ParameterIndex $index
         }
     }
-    if ($elements.Count -gt 1 -and $elements[1] -isnot
-        [Management.Automation.Language.CommandParameterAst]) {
-        return $elements[1]
+    $switchParameters = @(
+        'AcceptLicense', 'AllowClobber', 'AllowPrerelease', 'AsCustomObject',
+        'Confirm', 'Debug', 'DisableNameChecking', 'Force', 'Global',
+        'NoClobber', 'PassThru', 'SkipEditionCheck', 'SkipPublisherCheck',
+        'UseWindowsPowerShell', 'Verbose', 'WhatIf')
+    $skipParameterArgument = $false
+    for ($index = 1; $index -lt $elements.Count; $index++) {
+        if ($skipParameterArgument) {
+            $skipParameterArgument = $false
+            continue
+        }
+        if ($elements[$index] -is
+            [Management.Automation.Language.CommandParameterAst]) {
+            if ($null -eq $elements[$index].Argument -and
+                $elements[$index].ParameterName -notin $switchParameters) {
+                $skipParameterArgument = $true
+            }
+            continue
+        }
+        return $elements[$index]
     }
     return $null
 }
@@ -485,9 +527,13 @@ function Test-ExecutableCommandAtOffset (
 function Test-PinnedPesterImport (
     [string] $Scope,
     [string] $ExpectedVersion,
-    [switch] $AllowPesterVersionVariable) {
+    [switch] $AllowPesterVersionVariable,
+    [switch] $IncludeInlineCode) {
     if ([string]::IsNullOrWhiteSpace($Scope)) { return $false }
-    $inlineCode = @([regex]::Matches($Scope, '`(?<code>[^`\r\n]+)`'))
+    $inlineCode = @()
+    if ($IncludeInlineCode) {
+        $inlineCode = @([regex]::Matches($Scope, '`(?<code>[^`\r\n]+)`'))
+    }
     $scriptTexts = @($Scope)
     if ($inlineCode.Count -gt 0) {
         $scriptTexts += @($inlineCode | ForEach-Object {
@@ -658,7 +704,7 @@ $historicalPesterEvidencePaths = @(
     'docs/pr-review-effectiveness-plan.md'
 )
 $copiedVersionPatterns = @(
-    '(?i)-PesterVersion(?::\s*|\s+)(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
+    '(?i)-PesterVersion(?::\s*|(?:\s|`\r?\n)+)(?<value>''[^'']*''|"[^"]*"|[^\s`]+)',
     '(?i)PesterVersion\s*=\s*(?<value>''[^'']*''|"[^"]*")'
 )
 $moduleSpecificationPattern =
@@ -705,7 +751,10 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     param($node)
                     $node -is [Management.Automation.Language.CommandAst] -and
                         $node.GetCommandName() -in @('Install-Module', 'Import-Module')
-                }, $true))) {
+                }, $true) | Where-Object {
+                    Test-CommandMayExecuteInScope -CommandAst $_ `
+                        -RootAst $sourceAst
+                })) {
             $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
         }
     }
@@ -757,7 +806,10 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         $node -is [Management.Automation.Language.CommandAst] -and
                             $node.GetCommandName() -in @(
                                 'Install-Module', 'Import-Module')
-                    }, $true))) {
+                    }, $true) | Where-Object {
+                        Test-CommandMayExecuteInScope -CommandAst $_ `
+                            -RootAst $scopeAst
+                    })) {
                 $moduleCommandTexts.Add($commandAst.Extent.Text) | Out-Null
             }
         }
@@ -858,7 +910,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     $candidateScope = $content.Substring(
                         $lineStart, $candidateEnd - $lineStart)
                 }
-                $offset = $candidateScope.Length - $invokeMatch.Length
+                $offset = $candidateScope.LastIndexOf(
+                    $invokePesterName,
+                    [StringComparison]::OrdinalIgnoreCase)
                 if (Test-ExecutableCommandAtOffset -ScriptText $candidateScope `
                         -CommandName $invokePesterName -Offset $offset) {
                     $invocationScope = Get-WorkflowRunScope -Content $content `
@@ -871,6 +925,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         Position = $invokeMatch.Index
                         HereStringScope = $null
                         InvocationScope = $invocationScope
+                        IncludeInlineCode = $false
                     }
                 }
             })
@@ -881,7 +936,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 $candidateScope = Get-MarkdownCommandScope -Content $content `
                     -Position $candidateEnd -FencedOnly
                 if ($null -ne $candidateScope) {
-                    $offset = $candidateScope.Length - $invokeMatch.Length
+                    $offset = $candidateScope.LastIndexOf(
+                        $invokePesterName,
+                        [StringComparison]::OrdinalIgnoreCase)
                     if (Test-ExecutableCommandAtOffset -ScriptText $candidateScope `
                             -CommandName $invokePesterName -Offset $offset) {
                         [pscustomobject]@{
@@ -890,6 +947,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                             InvocationScope = Get-MarkdownCommandScope `
                                 -Content $content -Position $invokeMatch.Index `
                                 -FencedOnly
+                            IncludeInlineCode = $false
                         }
                     }
                     continue
@@ -909,6 +967,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         HereStringScope = $null
                         InvocationScope = Get-MarkdownCommandScope `
                             -Content $content -Position $invokeMatch.Index
+                        IncludeInlineCode = $true
                     }
                 }
             })
@@ -930,6 +989,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         Position = $_.Extent.StartOffset
                         HereStringScope = $null
                         InvocationScope = $null
+                        IncludeInlineCode = $false
                     }
                 }
             foreach ($invokeMatch in $rawInvokeMatches) {
@@ -937,7 +997,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 $candidateScope = Get-HereStringCommandScope -Content $content `
                     -Position $candidateEnd
                 if ($null -eq $candidateScope) { continue }
-                $offset = $candidateScope.Length - $invokeMatch.Length
+                $offset = $candidateScope.LastIndexOf(
+                    $invokePesterName,
+                    [StringComparison]::OrdinalIgnoreCase)
                 if (-not (Test-ExecutableCommandAtOffset `
                         -ScriptText $candidateScope `
                         -CommandName $invokePesterName -Offset $offset)) {
@@ -948,6 +1010,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     HereStringScope = Get-HereStringCommandScope `
                         -Content $content -Position $invokeMatch.Index
                     InvocationScope = $null
+                    IncludeInlineCode = $false
                 }
             }
         )
@@ -963,7 +1026,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         if (-not (Test-PinnedPesterImport -Scope $invocationScope `
                 -ExpectedVersion $pesterVersion `
                 -AllowPesterVersionVariable:($normalizedPath -ceq
-                    'tests/Invoke-PesterShards.ps1'))) {
+                    'tests/Invoke-PesterShards.ps1') `
+                -IncludeInlineCode:$invocation.IncludeInlineCode)) {
             $errors.Add("'$relativePath' invokes $invokePesterName without a preceding pinned Pester import.") |
                 Out-Null
         }
