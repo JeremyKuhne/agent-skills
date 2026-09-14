@@ -130,7 +130,14 @@ Describe 'PowerShell toolchain contract' {
                 '    steps:',
                 '      - uses: actions/setup-dotnet',
                 '        with:',
-                '          dotnet-version: 10.0.x')
+                '          dotnet-version: 10.0.x',
+                '  scaffold-preview:',
+                '    runs-on: windows-latest',
+                '    steps:',
+                '      - uses: actions/setup-dotnet',
+                '        with:',
+                '          dotnet-version: 11.0.x',
+                '          dotnet-quality: preview')
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') -Value @(
                 '#Requires -Version 7.4',
                 "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
@@ -156,6 +163,7 @@ Describe 'PowerShell toolchain contract' {
         $script:Toolchain.modules.Pester | Should -BeExactly '6.2.0'
         $script:Toolchain.modules.PSScriptAnalyzer | Should -BeExactly '1.25.0'
         $script:Toolchain.dotnet.sdkVersion | Should -BeExactly '10.0.x'
+        $script:Toolchain.dotnet.previewSdkVersion | Should -BeExactly '11.0.x'
         $script:Toolchain.dotnet.languageVersion | Should -BeExactly '14.0'
         @($script:Toolchain.hosts.PSObject.Properties.Name | Sort-Object) |
             Should -Be @('primary', 'scheduled', 'windows')
@@ -233,6 +241,17 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*job 'dotnet-pipes' must use manifest .NET SDK '10.0.x'*"
     }
 
+    It 'rejects a preview workflow SDK that drifts from the manifest' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-preview-sdk-drift'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/full-ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            'dotnet-version: 11.0.x', 'dotnet-version: 12.0.x') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-preview' must use manifest .NET SDK '11.0.x'*"
+    }
+
     It 'rejects a global SDK that drifts from the manifest' {
         $fixtureRoot = New-ToolchainFixture 'global-sdk-drift'
         $globalJsonPath = Join-Path $fixtureRoot 'global.json'
@@ -280,6 +299,17 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*must require Pester 6.2.0 exactly*'
+    }
+
+    It 'accepts a lowercase Pester test requirement' {
+        $fixtureRoot = New-ToolchainFixture 'lowercase-test-requirement'
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            "ModuleName = 'Pester'", "ModuleName = 'pester'") |
+            Set-Content -LiteralPath $testPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'rejects a drifted Pester test runtime requirement' {
@@ -391,6 +421,19 @@ Describe 'PowerShell toolchain contract' {
         [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
         Set-Content -LiteralPath $driftPath -Value (
             'Install-' + 'Module -RequiredVersion ' + ('5.7' + '.1') + ' -Name Pester')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'rejects a stale lowercase Pester module pin in <Form>' -ForEach @(
+        @{ Form = 'positional'; Command = 'Import-' + 'Module pester -RequiredVersion ' + ('5.7' + '.1') }
+        @{ Form = 'named'; Command = 'Install-' + 'Module -Name pester -RequiredVersion ' + ('5.7' + '.1') }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "lowercase-pester-$Form"
+        $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
+        Set-Content -LiteralPath $driftPath -Value $Command
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*copies Pester version '5.7.1'*"
@@ -553,6 +596,25 @@ jobs:
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*must name Pester 6.2 or later*'
+    }
+
+    It 'derives the portable Pester floor from the manifest' {
+        $fixtureRoot = New-ToolchainFixture 'portable-pester-floor'
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $manifest.modules.Pester = '6.3.0'
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            "RequiredVersion = '6.2.0'", "RequiredVersion = '6.3.0'") |
+            Set-Content -LiteralPath $testPath
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.agents/skills/create-skill-repo/SKILL.md') `
+            -Value 'Requires PowerShell 7.4 and Pester 6.3.0.'
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must name Pester 6.3 or later*'
     }
 }
 

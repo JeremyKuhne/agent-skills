@@ -23,6 +23,7 @@
   },
   "dotnet": {
     "sdkVersion": "10.0.x",
+    "previewSdkVersion": "11.0.x",
     "languageVersion": "14.0"
   }
 }

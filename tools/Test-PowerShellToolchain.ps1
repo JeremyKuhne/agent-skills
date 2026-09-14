@@ -67,6 +67,11 @@ if ($manifest.dotnet.sdkVersion -isnot [string] -or
     $manifest.dotnet.sdkVersion -notmatch '^\d+\.\d+\.x$') {
     $errors.Add("Manifest 'dotnet.sdkVersion' must be a feature-band selector such as '10.0.x'.") | Out-Null
 }
+if ($manifest.dotnet.previewSdkVersion -isnot [string] -or
+    $manifest.dotnet.previewSdkVersion -notmatch '^\d+\.\d+\.x$') {
+    $errors.Add("Manifest 'dotnet.previewSdkVersion' must be a feature-band selector such as '11.0.x'.") |
+        Out-Null
+}
 
 $minimumPowerShellVersion = [string]$manifest.powerShell.minimumVersion
 $minimumPowerShell = $null
@@ -107,6 +112,13 @@ foreach ($hostName in @('primary', 'windows', 'scheduled')) {
 }
 
 $pesterVersion = [string]$manifest.modules.Pester
+$pesterSemanticVersion = $null
+$pesterVersionIsValid = $manifest.modules.Pester -is [string] -and
+    [version]::TryParse($pesterVersion, [ref]$pesterSemanticVersion)
+$portablePesterFloor = if ($pesterVersionIsValid) {
+    "$($pesterSemanticVersion.Major).$($pesterSemanticVersion.Minor)"
+}
+else { $pesterVersion }
 $testRoot = Join-Path $resolvedRoot 'tests'
 $testFiles = if (Test-Path -LiteralPath $testRoot -PathType Container) {
     @(Get-ChildItem -LiteralPath $testRoot -Filter '*.Tests.ps1' -File -Recurse)
@@ -135,7 +147,7 @@ foreach ($testFile in @($testFiles) + @($testTemplates)) {
         $errors.Add("'$relativePath' must require PowerShell $minimumPowerShellVersion exactly.") | Out-Null
     }
     $requirements = @($ast.ScriptRequirements.RequiredModules |
-        Where-Object Name -CEQ 'Pester')
+        Where-Object Name -IEQ 'Pester')
     if ($requirements.Count -ne 1 -or
         [string]$requirements[0].RequiredVersion -cne $pesterVersion) {
         $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $testFile.FullName)
@@ -269,12 +281,13 @@ else {
 }
 
 $workflowContracts = @(
-    @{ Path = '.github/workflows/ci.yml'; Job = 'dotnet-pipes'; Host = $null; DotNet = $true }
-    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = $true }
-    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = $true }
-    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = $true }
-    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux-x64'; Host = 'scheduled'; DotNet = $true }
-    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = $true }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'dotnet-pipes'; Host = $null; DotNet = 'sdkVersion'; Quality = $null }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = 'sdkVersion'; Quality = $null }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = 'sdkVersion'; Quality = $null }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = 'sdkVersion'; Quality = $null }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux-x64'; Host = 'scheduled'; DotNet = 'sdkVersion'; Quality = $null }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = 'sdkVersion'; Quality = $null }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-preview'; Host = 'windows'; DotNet = 'previewSdkVersion'; Quality = 'preview' }
 )
 $workflowContents = @{}
 foreach ($contract in $workflowContracts) {
@@ -303,9 +316,14 @@ foreach ($contract in $workflowContracts) {
                 Out-Null
         }
     }
-    if ($contract.DotNet -and
-        $jobBody -notmatch "(?m)^\s+dotnet-version: $([regex]::Escape([string]$manifest.dotnet.sdkVersion))\r?$") {
-        $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use manifest .NET SDK '$($manifest.dotnet.sdkVersion)'.") |
+    $expectedSdk = [string]$manifest.dotnet[$contract.DotNet]
+    if ($jobBody -notmatch "(?m)^\s+dotnet-version: $([regex]::Escape($expectedSdk))\r?$") {
+        $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use manifest .NET SDK '$expectedSdk'.") |
+            Out-Null
+    }
+    if ($null -ne $contract.Quality -and
+        $jobBody -notmatch "(?m)^\s+dotnet-quality: $([regex]::Escape($contract.Quality))\r?$") {
+        $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use .NET quality '$($contract.Quality)'.") |
             Out-Null
     }
 }
@@ -374,12 +392,12 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 $nameParameterIndex + 1 -lt $elements.Count) {
                 $elements[$nameParameterIndex + 1] -is
                     [Management.Automation.Language.StringConstantExpressionAst] -and
-                    $elements[$nameParameterIndex + 1].Value -ceq 'Pester'
+                    $elements[$nameParameterIndex + 1].Value -ieq 'Pester'
             }
             else {
                 @($elements | Select-Object -Skip 1 | Where-Object {
                         $_ -is [Management.Automation.Language.StringConstantExpressionAst] -and
-                        $_.Value -ceq 'Pester'
+                        $_.Value -ieq 'Pester'
                     }).Count -gt 0
             }
             if (-not $targetsPester) { continue }
@@ -492,8 +510,11 @@ foreach ($relativePath in $portableGuidancePaths) {
     if ($content -notmatch $powerShellPattern) {
         $errors.Add("'$relativePath' must name PowerShell $minimumPowerShellVersion.") | Out-Null
     }
-    if ($content -notmatch 'Pester 6\.2 or later(?![0-9A-Za-z-]|\.[0-9A-Za-z])') {
-        $errors.Add("'$relativePath' must name Pester 6.2 or later.") | Out-Null
+    $portablePesterPattern =
+        "Pester $([regex]::Escape($portablePesterFloor)) or later(?![0-9A-Za-z-]|\.[0-9A-Za-z])"
+    if ($content -notmatch $portablePesterPattern) {
+        $errors.Add("'$relativePath' must name Pester $portablePesterFloor or later.") |
+            Out-Null
     }
 }
 
