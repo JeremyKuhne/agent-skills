@@ -98,12 +98,21 @@ jobs:
             npx --yes skills-ref@0.1.5 validate "$dir"
           done
 
-      - name: Install Copilot CLI 1.0.63
-        run: npm install --global @github/copilot@1.0.63
+      - name: Install native Copilot CLI 1.0.63
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP 'copilot-cli'
+          npm install --prefix $installRoot --no-audit --no-fund --ignore-scripts `
+            @github/copilot-linux-x64@1.0.63
+          if ($LASTEXITCODE -ne 0) { throw 'Copilot CLI installation failed.' }
 
       - name: Install and inspect plugin
         shell: pwsh
-        run: ./tests/plugin/Invoke-PluginSmoke.ps1
+        run: |
+          $copilotPath = (Resolve-Path -LiteralPath (
+            Join-Path $env:RUNNER_TEMP `
+              'copilot-cli/node_modules/@github/copilot-linux-x64/copilot')).Path
+          ./tests/plugin/Invoke-PluginSmoke.ps1 -CopilotPath $copilotPath
 
       - name: Exercise synthetic consumer
         shell: pwsh

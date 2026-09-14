@@ -20,7 +20,8 @@ param(
     [int] $MaxConcurrency = 8,
     [ValidateRange(1, 240)]
     [int] $MatrixTimeoutMinutes = 60,
-    [switch] $ReportOnly
+    [switch] $ReportOnly,
+    [string] $CopilotPath
 )
 
 Set-StrictMode -Version Latest
@@ -28,6 +29,7 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 Import-Module (Join-Path $PSScriptRoot 'SkillEval.psm1') -Force
+$resolvedCopilotPath = Resolve-SkillEvalCopilotPath -CopilotPath $CopilotPath
 $resolvedScenarioPaths = @($ScenarioPath | ForEach-Object {
         $path = if ([System.IO.Path]::IsPathRooted($_)) {
             $_
@@ -107,6 +109,7 @@ $processResults = @($workItems | ForEach-Object -Parallel {
                 '-ScenarioPath', $_.ScenarioPath,
                 '-OutputDirectory', $_.OutputDirectory,
                 '-Model', $using:Model,
+                '-CopilotPath', $using:resolvedCopilotPath,
                 '-TimeoutMinutes', [string]$using:TimeoutMinutes,
                 '-MaxConcurrency', [string]$_.Workers,
                 '-ReportOnly')) {
@@ -174,10 +177,14 @@ $scorerRevisions = @($documents.Summary.ScorerRevision | Sort-Object -Unique)
 if ($candidateRevisions.Count -ne 1 -or $scorerRevisions.Count -ne 1) {
     throw "Matrix revisions differ: candidate=$($candidateRevisions.Count), scorer=$($scorerRevisions.Count)."
 }
+$clientIdentity = Get-SkillEvalClientIdentity -Summary $documents.Summary
 $summary = [pscustomobject]@{
     SchemaVersion = 1
     GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
     Model = $Model
+    CopilotVersion = $clientIdentity.CopilotVersion
+    CopilotExecutableSha256 = $clientIdentity.CopilotExecutableSha256
+    CopilotExecutableEvidenceVerified = $clientIdentity.CopilotExecutableEvidenceVerified
     MaxConcurrency = $MaxConcurrency
     MatrixTimeoutMinutes = $MatrixTimeoutMinutes
     WallTimeMilliseconds = $stopwatch.ElapsedMilliseconds

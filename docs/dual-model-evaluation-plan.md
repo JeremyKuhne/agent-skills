@@ -1,9 +1,9 @@
 # Sol and Luna skill evaluation plan
 
-- Status: E1.1 implementation is under review in PR #86; the PR owns live head,
-  check, and review state. Merge, subsequent implementation, and paid execution
-  require separate decisions.
-- Assessment date: 2026-09-12
+- Status: E1.1 is merged; E1.2 deterministic client prerequisites are locally
+   validated. Milestone acceptance, integration, and paid execution remain
+   separate decisions.
+- Assessment date: 2026-09-13
 - Repository baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`
 - Target models: GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`)
 - Reasoning effort: `medium` for both models
@@ -13,20 +13,21 @@
 
 ## Milestones and current status
 
-Start with **E1.1: make test-runner failure reporting trustworthy**, not with a
-full model campaign or a PowerShell migration. E1.1 was validated locally on
-2026-09-12; E1 remains incomplete. Model IDs and the scenario inventory have been checked; those findings
-are planning evidence, not completion of the harness or qualification work.
+E1.1 made test-runner failure reporting trustworthy and merged through PR #86.
+E1.2 now separates deterministic client prerequisites from real plugin and model
+integration. E1 remains incomplete pending maintainer acceptance and integration.
+Model IDs and the scenario inventory have been checked; those findings are
+planning evidence, not harness qualification.
 
 This table is the execution tracker. The implementation agent owns local work
 and evidence; the repository maintainer accepts milestones and owns budget,
 policy, and rollout decisions. Record the assigned implementer when work starts.
 `Ready` means dependencies are satisfied, not that execution or publication has
-been authorized. Status last reviewed: 2026-09-12.
+been authorized. Status last reviewed: 2026-09-13.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
-| E1 | Trustworthy runner and client prerequisites | In progress | E1.1 is under review in PR #86; remaining slices await approval | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
+| E1 | Trustworthy runner and client prerequisites | Awaiting decision | E1.1 merged; E1.2 locally validated | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
 | E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
@@ -39,14 +40,12 @@ E7, and the PR-effectiveness workstream need not wait for each other unless a
 specific safety or evidence dependency requires it. Ongoing cost tracking starts
 with E1's first recorded checks; it does not wait for E6 or a metrics service.
 
-### First work item: E1.1
+### Completed work item: E1.1
 
-- State: in progress; implementation and review fixes are under review in
-   [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86). The PR timeline
-   is authoritative for its current head, checks, requests, and unresolved threads.
+- State: done; merged in
+   [PR #86](https://github.com/JeremyKuhne/agent-skills/pull/86) on 2026-09-12.
 - Implementer: GitHub Copilot; milestone acceptance: repository maintainer.
-- Next action: complete PR #86 review and obtain the maintainer's milestone
-   decision, then select the next E1 slice. Merge and model runs remain separate.
+- Next action: E1.2 below. Model runs remain separate.
 - First weekly cost checkpoint: 2026-09-19.
 - Owning entry point: [tests/Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1).
 - [x] Add a focused negative control reproducing discovery failure with zero
@@ -184,6 +183,97 @@ separation of real plugin integration from hermetic tests. Do not combine E1.1
 with that slice until its focused checks pass. No model prompt, global tool
 installation, broad script rewrite, or host-baseline migration is needed to
 start E1.1.
+
+### Current work item: E1.2
+
+- State: awaiting decision; local implementation and validation completed on
+   2026-09-13.
+- Implementer: GitHub Copilot; milestone acceptance: repository maintainer.
+- Next action: repository maintainer reviews the integration evidence and accepts
+   or reworks E1.2. Model runs remain separate.
+- [x] Replace ambient resolver tests with controlled absent, launcher-only, and
+   native executable fixtures.
+- [x] Resolve one native client per suite/matrix, pass it to every worker, and
+   derive version/hash evidence from that exact executable.
+- [x] Remove real plugin installation from the hermetic scaffold Pester test.
+- [x] Pass the explicitly resolved pinned integration client in repository and
+   generated CI workflows; disable client auto-update during probes and smoke.
+- [x] Run the complete deterministic suite without adding a client to `PATH`.
+- [x] Run the real plugin smoke separately with a fresh pinned client and retain
+   version/hash evidence.
+- [x] Run repository-wide static gates, review the diff, and record remaining
+   platform or minimum-host limits.
+
+The final local deterministic run did not use `-PathPrefix`, install or resolve a
+Copilot client, expose CI-only environment flags, or invoke a model. All 16
+fresh-process shards completed in 80.444 seconds on Windows with PowerShell
+7.6.6 and Pester 5.7.1: 451 tests passed, 13 were intentionally skipped, and
+none failed, remained unexecuted, or reported infrastructure failure. The
+schema-version-2 receipt is under the OS temporary directory at
+`agent-skills-pr87-review8-b7980d5583e14e29bd6fb22782bb2fe3/pester/summary.json`.
+
+The separate integration check installed fresh `@github/copilot` and native
+Windows x64 packages at 1.0.63 in an isolated temporary tree, passed the exact
+native executable to the current smoke script, and used a fresh Copilot home.
+The executable reported 1.0.63 and retained SHA-256
+`29D3DA6864C5988EF4DC3C5B1F2622B1F67F8C94BB38CB93AFA4207F0C032C84` before
+and after the run. Plugin installation found 25 skills, two agents, and one MCP
+configuration; the fresh setup and check completed in 9.537 seconds. The
+receipt, including current source hashes,
+is under the OS temporary directory at
+`agent-skills-plugin-smoke-60c003ca026841409c006209240853ca/integration-receipt.json`.
+
+Repository-wide validation also passed the agent-file mirror check, all 151
+local agent-file links, both validators for all 25 skills, the catalog drift
+check, and Markdown lint across 176 files. A bounded review found that the
+plugin workflows still selected an npm launcher despite receiving an explicit
+path. The repair now installs and verifies the native binary directly in both
+the repository and generated workflows; launcher rejection is covered by
+focused tests. PowerShell argument binding already preserves a path containing
+spaces as one native argument, so no quoting workaround was added.
+
+A subsequent suppressed-comment review identified six additional E1.2 contract
+gaps. The local follow-up now checks Unix execute bits, enforces CLI 1.0.63 or
+later, carries one consistent client identity into matrix summaries, marks
+legacy rescoring without a client hash as unverified, fixes environment-neutral
+contract assertions, and passes the required native path in the release runbook.
+
+The next current-head review found five valid gaps and one false positive. The
+follow-up enforces the same client version floor in repository and generated
+smoke scripts, aligns their Unix-mode callers with PowerShell 7.2, and carries
+verified client-evidence state into matrix summaries. The reported sequential
+path defect was not present: both sequential and parallel execution receive the
+already resolved Copilot path.
+
+A following current-head review found that rescoring recomputed trust from a
+present version and hash even when the source explicitly marked that evidence
+unverified. The local repair now rejects that source by default and preserves
+the false verification state only under `-AllowLegacyUnverifiedEvidence`.
+A later five-finding suppressed review also showed that rescoring did not
+validate retained source versions, suite evidence covered the executable only
+through startup, and the three public evaluation entry points inserted
+`CopilotPath` into their existing positional parameter order. The final repair
+keeps invalid source versions unverified, rehashes the selected executable after
+all evaluation workers finish, and appends the new parameter to preserve existing
+positional calls.
+The next review found the same version-floor omission in matrix aggregation.
+Document summaries now pass the shared version validator before their client
+identity can be marked verified.
+
+The latest suppressed review found three further validation roots: a permissive
+version-token boundary in core and standalone scripts, PowerShell truthiness for
+deserialized Boolean evidence, and stale plan dates. All version validators now
+use strict semantic-version parsing driven by one shared fixture. Matrix and
+rescore paths reject present non-Boolean verification values, while only a
+missing legacy flag can use the compatibility switch. The plan as-of date now
+matches the E1.2 evidence date.
+
+Remaining host evidence is deliberately narrow. The deterministic suite and
+real plugin smoke ran on Windows with PowerShell 7.6.6, not the minimum 7.2
+host. Native resolver fixtures cover Windows, Linux, and macOS signatures, and
+generated Ubuntu workflow structure is scaffold-tested, but the current Linux
+workflow and PowerShell 7.2 runtime still await hosted validation after any
+authorized publication. No Sol or Luna model ran.
 
 ### Tracking rules
 

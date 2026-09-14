@@ -14,7 +14,8 @@ param(
     [ValidateRange(1, 32)]
     [int] $MaxConcurrency = 8,
     [switch] $IsolateCopilotHome = $true,
-    [switch] $ReportOnly
+    [switch] $ReportOnly,
+    [string] $CopilotPath
 )
 
 Set-StrictMode -Version Latest
@@ -48,6 +49,7 @@ $parameters = @{
     ScenarioPath = $ScenarioPath
     OutputDirectory = $OutputDirectory
     Model = $Model
+    CopilotPath = $CopilotPath
     ScenarioId = $ScenarioId
     RunCount = $RunCount
     TimeoutMinutes = $TimeoutMinutes

@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+#Requires -Version 7.2
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 BeforeAll {
@@ -7,6 +7,9 @@ BeforeAll {
     $script:LinkValidator = Join-Path $script:RepoRoot 'tools/Test-AgentFileLinks.ps1'
     $script:Pwsh = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
     $script:MirrorHeader = '<!-- DO NOT EDIT. Generated mirror of /AGENTS.md. Edit AGENTS.md and run: ./tools/Validate-AgentFiles.ps1 -Fix -->'
+    $script:CopilotClientVersionCases = Get-Content -LiteralPath (
+        Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
+        -Raw | ConvertFrom-Json
 
     function Write-FixtureFile (
         [string] $Root,
@@ -33,6 +36,30 @@ BeforeAll {
             ExitCode = $LASTEXITCODE
             Output = $output -join [Environment]::NewLine
         }
+    }
+
+    function Get-AgentFileScriptFunctionModule (
+        [string] $Path,
+        [string] $FunctionName) {
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $Path,
+            [ref]$null,
+            [ref]$parseErrors)
+        if ($parseErrors.Count -gt 0) {
+            throw "Could not parse '$Path': $($parseErrors -join '; ')"
+        }
+        $functions = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -ceq $FunctionName
+                }, $true))
+        if ($functions.Count -ne 1) {
+            throw "Expected one '$FunctionName' function in '$Path'; found $($functions.Count)."
+        }
+        $moduleScript = [scriptblock]::Create(
+            "$($functions[0].Extent.Text)`nExport-ModuleMember -Function $FunctionName")
+        return New-Module -ScriptBlock $moduleScript
     }
 }
 
@@ -149,5 +176,80 @@ Describe 'Agent file CI contract' {
         $linkStep.Value | Should -Match 'lycheeverse/lychee-action@'
         $linkStep.Value | Should -Match '--offline'
         $linkStep.Value | Should -Match '"\*\*/\*\.md"'
+    }
+
+    It 'passes the explicitly resolved pinned Copilot client to plugin smoke' {
+        $workflow = Get-Content -LiteralPath (
+            Join-Path $script:RepoRoot '.github/workflows/ci.yml') -Raw
+        $pluginSmoke = Get-Content -LiteralPath (
+            Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1') -Raw
+
+        $pluginSmoke | Should -Match '(?m)^#Requires -Version 7\.2\r?$'
+        $workflow | Should -Match '@github/copilot-linux-x64@1\.0\.63'
+        $workflow | Should -Match '(?m)^          \$copilotPath = \(Resolve-Path -LiteralPath \('
+        $workflow | Should -Not -Match 'Get-Command copilot'
+        $workflow | Should -Match '(?m)^          \./tests/plugin/Invoke-PluginSmoke\.ps1 -CopilotPath \$copilotPath\r?$'
+        $pluginSmoke | Should -Match '(?ms)\[Parameter\(Mandatory\)\]\r?\n\s*\[string\] \$CopilotPath'
+        $pluginSmoke | Should -Match 'not a native executable for this host'
+        $pluginSmoke | Should -Match 'GetUnixFileMode'
+        $pluginSmoke | Should -Match "'COPILOT_AUTO_UPDATE'"
+        $pluginSmoke | Should -Match (
+            [regex]::Escape('$env:COPILOT_AUTO_UPDATE = ''false'''))
+        $pluginSmoke | Should -Match 'Copilot executable SHA-256:'
+    }
+
+    It 'rejects unsupported Copilot versions in repository plugin smoke' {
+        $pluginSmoke = Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1'
+        $module = Get-AgentFileScriptFunctionModule `
+            -Path $pluginSmoke `
+            -FunctionName 'Get-ValidatedCopilotVersion'
+
+        foreach ($case in $script:CopilotClientVersionCases.accepted) {
+            & $module {
+                param($output)
+                Get-ValidatedCopilotVersion -Output $output
+            } ([string]$case.output) | Should -BeExactly ([string]$case.output)
+        }
+        foreach ($case in $script:CopilotClientVersionCases.rejected) {
+            { & $module {
+                    param($output)
+                    Get-ValidatedCopilotVersion -Output $output
+                } ([string]$case.output) } |
+                Should -Throw ([string]$case.error) -Because ([string]$case.name)
+        }
+    }
+
+    It 'documents the explicit native client required by release plugin smoke' {
+        $release = Get-Content -LiteralPath (
+            Join-Path $script:RepoRoot 'RELEASING.md') -Raw
+
+        $release | Should -Match 'COPILOT_NATIVE_PATH'
+        $release | Should -Match '(?m)^\./tests/plugin/Invoke-PluginSmoke\.ps1 -CopilotPath \$copilotPath\r?$'
+        $release | Should -Not -Match '(?m)^\./tests/plugin/Invoke-PluginSmoke\.ps1\s*$'
+    }
+
+    It 'rejects a launcher passed to the repository plugin smoke script' {
+        $pluginSmoke = Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1'
+        $launcherPath = Join-Path $TestDrive $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
+        [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')
+
+        { & $pluginSmoke -CopilotPath $launcherPath } |
+            Should -Throw '*not a native executable for this host*'
+    }
+
+    It 'rejects a non-executable native file in repository plugin smoke on Unix' -Skip:$IsWindows {
+        $pluginSmoke = Join-Path $script:RepoRoot 'tests/plugin/Invoke-PluginSmoke.ps1'
+        $nativePath = Join-Path $TestDrive 'copilot'
+        $signature = if ($IsLinux) {
+            [byte[]](0x7F, 0x45, 0x4C, 0x46)
+        }
+        else { [byte[]](0xFE, 0xED, 0xFA, 0xCF) }
+        [System.IO.File]::WriteAllBytes($nativePath, $signature)
+        [System.IO.File]::SetUnixFileMode(
+            $nativePath,
+            [System.IO.UnixFileMode]'UserRead, UserWrite')
+
+        { & $pluginSmoke -CopilotPath $nativePath } |
+            Should -Throw '*not a native executable for this host*'
     }
 }

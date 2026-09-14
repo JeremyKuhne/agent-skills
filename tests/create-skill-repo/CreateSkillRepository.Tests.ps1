@@ -11,6 +11,33 @@ BeforeAll {
         '.agents/skills/create-skill-repo/SKILL.md')
     $script:Publishing = Join-Path $script:RepoRoot (
         '.agents/skills/create-skill-repo/publishing.md')
+    $script:CopilotClientVersionCases = Get-Content -LiteralPath (
+        Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
+        -Raw | ConvertFrom-Json
+
+    function Get-ScaffoldScriptFunctionModule (
+        [string] $Path,
+        [string] $FunctionName) {
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $Path,
+            [ref]$null,
+            [ref]$parseErrors)
+        if ($parseErrors.Count -gt 0) {
+            throw "Could not parse '$Path': $($parseErrors -join '; ')"
+        }
+        $functions = @($ast.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -ceq $FunctionName
+                }, $true))
+        if ($functions.Count -ne 1) {
+            throw "Expected one '$FunctionName' function in '$Path'; found $($functions.Count)."
+        }
+        $moduleScript = [scriptblock]::Create(
+            "$($functions[0].Extent.Text)`nExport-ModuleMember -Function $FunctionName")
+        return New-Module -ScriptBlock $moduleScript
+    }
 }
 
 Describe 'Decision interview' {
@@ -131,10 +158,12 @@ Describe 'New-SkillRepository' {
 
         $releaseWorkflow = Get-Content (
             Join-Path $root '.github/workflows/release.yml') -Raw
-        $releaseWorkflow | Should -Match '(?m)^ {6}- name: Install Copilot CLI$'
+        $releaseWorkflow | Should -Match '(?m)^ {6}- name: Install native Copilot CLI$'
         $releaseWorkflow | Should -Match '(?m)^ {6}- name: Smoke-test plugin installation$'
-        $releaseWorkflow | Should -Match '(?m)^ {8}run: npm install --global @github/copilot@1\.0\.63$'
-        $releaseWorkflow | Should -Match '(?m)^ {8}run: \./tests/Invoke-PluginSmoke\.ps1$'
+        $releaseWorkflow | Should -Match '@github/copilot-linux-x64@1\.0\.63'
+        $releaseWorkflow | Should -Match '(?m)^ {10}\$copilotPath = \(Resolve-Path -LiteralPath \('
+        $releaseWorkflow | Should -Not -Match 'Get-Command copilot'
+        $releaseWorkflow | Should -Match '(?m)^ {10}\./tests/Invoke-PluginSmoke\.ps1 -CopilotPath \$copilotPath\r?$'
 
         $plugin = Get-Content (Join-Path $root 'plugin.json') -Raw | ConvertFrom-Json
         $marketplace = Get-Content (
@@ -158,10 +187,49 @@ Describe 'New-SkillRepository' {
         $generatedTests = Invoke-Pester (Join-Path $root 'tests') -PassThru
         $generatedTests.FailedCount | Should -Be 0
         $pluginSmoke = Join-Path $root 'tests/Invoke-PluginSmoke.ps1'
-        if (Get-Command copilot -ErrorAction SilentlyContinue) {
-            { & $pluginSmoke } | Should -Not -Throw
-        } else {
-            { & $pluginSmoke } | Should -Throw '*Copilot CLI is required*'
+        $pluginSmokeContent = Get-Content -LiteralPath $pluginSmoke -Raw
+        $pluginSmokeContent | Should -Match '(?ms)\[Parameter\(Mandatory\)\]\r?\n\s*\[string\] \$CopilotPath'
+        $pluginSmokeContent | Should -Not -Match 'Get-Command copilot'
+        $pluginSmokeContent | Should -Match 'not a native executable for this host'
+        $pluginSmokeContent | Should -Match 'GetUnixFileMode'
+        $pluginSmokeContent | Should -Match '& \$resolvedCopilotPath plugin marketplace add'
+        $pluginSmokeContent | Should -Match "'COPILOT_AUTO_UPDATE'"
+        $pluginSmokeContent | Should -Match (
+            [regex]::Escape('$env:COPILOT_AUTO_UPDATE = ''false'''))
+        $pluginSmokeContent | Should -Match 'Copilot executable SHA-256:'
+
+        $versionModule = Get-ScaffoldScriptFunctionModule `
+            -Path $pluginSmoke `
+            -FunctionName 'Get-ValidatedCopilotVersion'
+        foreach ($case in $script:CopilotClientVersionCases.accepted) {
+            & $versionModule {
+                param($output)
+                Get-ValidatedCopilotVersion -Output $output
+            } ([string]$case.output) | Should -BeExactly ([string]$case.output)
+        }
+        foreach ($case in $script:CopilotClientVersionCases.rejected) {
+            { & $versionModule {
+                    param($output)
+                    Get-ValidatedCopilotVersion -Output $output
+                } ([string]$case.output) } |
+                Should -Throw ([string]$case.error) -Because ([string]$case.name)
+        }
+
+        $launcherPath = Join-Path $TestDrive $(if ($IsWindows) { 'copilot.exe' } else { 'copilot' })
+        [System.IO.File]::WriteAllText($launcherPath, 'not a native executable')
+        { & $pluginSmoke -CopilotPath $launcherPath } |
+            Should -Throw '*not a native executable for this host*'
+        if (-not $IsWindows) {
+            $signature = if ($IsLinux) {
+                [byte[]](0x7F, 0x45, 0x4C, 0x46)
+            }
+            else { [byte[]](0xFE, 0xED, 0xFA, 0xCF) }
+            [System.IO.File]::WriteAllBytes($launcherPath, $signature)
+            [System.IO.File]::SetUnixFileMode(
+                $launcherPath,
+                [System.IO.UnixFileMode]'UserRead, UserWrite')
+            { & $pluginSmoke -CopilotPath $launcherPath } |
+                Should -Throw '*not a native executable for this host*'
         }
     }
 

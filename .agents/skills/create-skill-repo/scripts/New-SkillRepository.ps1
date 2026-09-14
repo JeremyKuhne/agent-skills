@@ -367,7 +367,7 @@ $distributionSection = if ($rank -eq 3) {
             'After deterministic validation, test the local plugin package in an isolated Copilot home:'
             ''
             '```pwsh'
-            './tests/Invoke-PluginSmoke.ps1'
+            './tests/Invoke-PluginSmoke.ps1 -CopilotPath <native-copilot-path>'
             '```')
     }
     $lines -join "`n"
@@ -401,11 +401,20 @@ $pluginMcp = if ($DistributionSurfaces -contains 'mcp') {
 } else { '' }
 $pluginSmokeSteps = if ($DistributionSurfaces -contains 'marketplace') {
     @(
-        '      - name: Install Copilot CLI'
-        '        run: npm install --global @github/copilot@1.0.63'
+        '      - name: Install native Copilot CLI'
+        '        shell: pwsh'
+        '        run: |'
+        "          `$installRoot = Join-Path `$env:RUNNER_TEMP 'copilot-cli'"
+        '          npm install --prefix $installRoot --no-audit --no-fund --ignore-scripts `'
+        '            @github/copilot-linux-x64@1.0.63'
+        "          if (`$LASTEXITCODE -ne 0) { throw 'Copilot CLI installation failed.' }"
         '      - name: Smoke-test plugin installation'
         '        shell: pwsh'
-        '        run: ./tests/Invoke-PluginSmoke.ps1'
+        '        run: |'
+        '          $copilotPath = (Resolve-Path -LiteralPath ('
+        '            Join-Path $env:RUNNER_TEMP `'
+        "              'copilot-cli/node_modules/@github/copilot-linux-x64/copilot')).Path"
+        '          ./tests/Invoke-PluginSmoke.ps1 -CopilotPath $copilotPath'
     ) -join "`n"
 } else { '' }
 $validateRuntimeCommands = @($runtimeTargets | ForEach-Object {
