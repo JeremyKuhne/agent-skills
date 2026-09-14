@@ -182,6 +182,18 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*schemaVersion must be the integer 1*'
     }
 
+    It 'rejects a non-object hosts manifest value' {
+        $fixtureRoot = New-ToolchainFixture 'null-hosts'
+        $manifestPath = Join-Path $fixtureRoot 'tools/powershell-toolchain.json'
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $manifest.hosts = $null
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*Manifest 'hosts' must be an object*"
+    }
+
     It 'rejects invalid host PowerShell version <Value> for <Lane>' -ForEach @(
         @{ Lane = 'primary'; Value = 'banana'; Error = '*must be numeric or*latest-stable*' }
         @{ Lane = 'primary'; Value = '7.2'; Error = '*must be at least 7.4*' }
@@ -231,6 +243,21 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw "*sdk.version must select manifest SDK '10.0.x'*"
+    }
+
+    It 'rejects malformed global SDK version <Value>' -ForEach @(
+        @{ Value = '10.0' }
+        @{ Value = '10.0.100.1' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "global-sdk-$($Value.Replace('.', '-'))"
+        $globalJsonPath = Join-Path $fixtureRoot 'global.json'
+        $globalJson = Get-Content -LiteralPath $globalJsonPath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $globalJson.sdk.version = $Value
+        $globalJson | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $globalJsonPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*sdk.version must be an exact three-part numeric SDK version*'
     }
 
     It 'rejects a C# language version that drifts from the manifest' {
@@ -369,6 +396,18 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '5.7.1'*"
     }
 
+    It 'rejects a stale second module command on one line' {
+        $fixtureRoot = New-ToolchainFixture 'multiple-module-commands'
+        $driftPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $driftPath)) | Out-Null
+        Set-Content -LiteralPath $driftPath -Value (
+            'Install-Module Other; Install-' +
+            'Module Pester -RequiredVersion ' + ('5.7' + '.1'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
     It 'rejects ModuleVersion as an exact Pester requirement' {
         $fixtureRoot = New-ToolchainFixture 'minimum-module-version'
         $driftPath = Join-Path $fixtureRoot '.agents/Drift.ps1.tmpl'
@@ -418,6 +457,39 @@ jobs:
                 { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
                         Should -Throw ('*invokes Invoke-' +
                                 'Pester without a preceding pinned Pester import*')
+        }
+
+        It 'rejects a pinned import after the workflow invocation' {
+                $fixtureRoot = New-ToolchainFixture 'workflow-import-order'
+                $workflowPath = Join-Path $fixtureRoot '.github/workflows/drift.yml'
+                [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+                Set-Content -LiteralPath $workflowPath -Value @'
+jobs:
+    test:
+        steps:
+            - run: |
+                    Invoke-Pester ./tests
+                    Import-Module Pester -RequiredVersion 6.2.0
+'@
+
+                { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                        Should -Throw ('*invokes Invoke-' +
+                                'Pester without a preceding pinned Pester import*')
+        }
+
+        It 'accepts an inline workflow step with a preceding pinned import' {
+                $fixtureRoot = New-ToolchainFixture 'inline-workflow-step'
+                $workflowPath = Join-Path $fixtureRoot '.github/workflows/inline.yml'
+                [IO.Directory]::CreateDirectory((Split-Path -Parent $workflowPath)) | Out-Null
+                Set-Content -LiteralPath $workflowPath -Value @'
+jobs:
+    test:
+        steps:
+            - run: Import-Module Pester -RequiredVersion 6.2.0; Invoke-Pester ./tests
+'@
+
+                { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                        Should -Not -Throw
         }
 
     It 'rejects stale Pester copies in current docs but permits named historical evidence' {

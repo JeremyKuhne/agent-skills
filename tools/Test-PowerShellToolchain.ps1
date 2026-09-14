@@ -20,9 +20,20 @@ catch {
 }
 
 $errors = [System.Collections.Generic.List[string]]::new()
-foreach ($key in @('schemaVersion', 'powerShell', 'modules', 'hosts', 'dotnet')) {
-    if (-not $manifest.ContainsKey($key)) {
-        $errors.Add("Manifest is missing '$key'.") | Out-Null
+if ($manifest -isnot [System.Collections.IDictionary]) {
+    $errors.Add('Manifest root must be an object.') | Out-Null
+}
+else {
+    foreach ($key in @('schemaVersion', 'powerShell', 'modules', 'hosts', 'dotnet')) {
+        if (-not $manifest.ContainsKey($key)) {
+            $errors.Add("Manifest is missing '$key'.") | Out-Null
+        }
+    }
+    foreach ($key in @('powerShell', 'modules', 'hosts', 'dotnet')) {
+        if ($manifest.ContainsKey($key) -and
+            $manifest[$key] -isnot [System.Collections.IDictionary]) {
+            $errors.Add("Manifest '$key' must be an object.") | Out-Null
+        }
     }
 }
 if ($errors.Count -gt 0) {
@@ -163,10 +174,13 @@ function Get-WorkflowRunScope ([string] $Content, [int] $Position) {
     }
     for ($index = $targetLine; $index -ge 0; $index--) {
         $line = $lines[$index].Value.TrimEnd("`r", "`n")
-        if ($line -notmatch '^(?<indent>\s*)run:\s*(?<value>.*)$') { continue }
+        if ($line -notmatch '^(?<indent>\s*)(?:-\s+)?run:\s*(?<value>.*)$') { continue }
         $indent = $Matches.indent.Length
         $value = $Matches.value
-        if ($index -eq $targetLine -and $value -notmatch '^[|>]') { return $value }
+        if ($index -eq $targetLine -and $value -notmatch '^[|>]') {
+            return $Content.Substring(
+                $lines[$index].Index, $Position - $lines[$index].Index)
+        }
         $endLine = $index + 1
         while ($endLine -lt $lines.Count) {
             $candidate = $lines[$endLine].Value.TrimEnd("`r", "`n")
@@ -177,7 +191,8 @@ function Get-WorkflowRunScope ([string] $Content, [int] $Position) {
             $endLine++
         }
         if ($targetLine -lt $endLine) {
-            return ($lines[$index..($endLine - 1)].Value -join '')
+            return $Content.Substring(
+                $lines[$index].Index, $Position - $lines[$index].Index)
         }
         break
     }
@@ -202,9 +217,14 @@ else {
         $globalJson = Get-Content -LiteralPath $globalJsonPath -Raw |
             ConvertFrom-Json -AsHashtable
         $globalSdkVersion = $null
-        if ($globalJson.sdk.version -isnot [string] -or
+        if ($globalJson -isnot [System.Collections.IDictionary] -or
+            $globalJson.sdk -isnot [System.Collections.IDictionary]) {
+            $errors.Add("'global.json' sdk must be an object.") | Out-Null
+        }
+        elseif ($globalJson.sdk.version -isnot [string] -or
+            $globalJson.sdk.version -notmatch '^\d+\.\d+\.\d+$' -or
             -not [version]::TryParse($globalJson.sdk.version, [ref]$globalSdkVersion)) {
-            $errors.Add("'global.json' sdk.version must be an exact numeric SDK version.") |
+            $errors.Add("'global.json' sdk.version must be an exact three-part numeric SDK version.") |
                 Out-Null
         }
         elseif ("$($globalSdkVersion.Major).$($globalSdkVersion.Minor).x" -cne
@@ -212,11 +232,13 @@ else {
             $errors.Add("'global.json' sdk.version must select manifest SDK '$($manifest.dotnet.sdkVersion)'.") |
                 Out-Null
         }
-        if ($globalJson.sdk.rollForward -cne 'latestFeature') {
+        if ($globalJson.sdk -is [System.Collections.IDictionary] -and
+            $globalJson.sdk.rollForward -cne 'latestFeature') {
             $errors.Add("'global.json' sdk.rollForward must be 'latestFeature'.") | Out-Null
         }
-        if ($globalJson.sdk.allowPrerelease -isnot [bool] -or
-            $globalJson.sdk.allowPrerelease) {
+        if ($globalJson.sdk -is [System.Collections.IDictionary] -and
+            ($globalJson.sdk.allowPrerelease -isnot [bool] -or
+                $globalJson.sdk.allowPrerelease)) {
             $errors.Add("'global.json' sdk.allowPrerelease must be false.") | Out-Null
         }
     }
@@ -332,64 +354,66 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         }
         $tokens = $null
         $parseErrors = $null
-        $commandAst = [Management.Automation.Language.Parser]::ParseInput(
-            $commandText, [ref]$tokens, [ref]$parseErrors).Find({
+        $commandAsts = @([Management.Automation.Language.Parser]::ParseInput(
+                $commandText, [ref]$tokens, [ref]$parseErrors).FindAll({
                 param($node)
                 $node -is [Management.Automation.Language.CommandAst] -and
                     $node.GetCommandName() -in @('Install-Module', 'Import-Module')
-            }, $true)
-        if ($null -eq $commandAst) { continue }
-        $elements = @($commandAst.CommandElements)
-        $nameParameterIndex = -1
-        for ($index = 1; $index -lt $elements.Count; $index++) {
-            if ($elements[$index] -is [Management.Automation.Language.CommandParameterAst] -and
-                $elements[$index].ParameterName -ieq 'Name') {
-                $nameParameterIndex = $index
-                break
-            }
-        }
-        $targetsPester = if ($nameParameterIndex -ge 0 -and
-            $nameParameterIndex + 1 -lt $elements.Count) {
-            $elements[$nameParameterIndex + 1] -is
-                [Management.Automation.Language.StringConstantExpressionAst] -and
-                $elements[$nameParameterIndex + 1].Value -ceq 'Pester'
-        }
-        else {
-            @($elements | Select-Object -Skip 1 | Where-Object {
-                    $_ -is [Management.Automation.Language.StringConstantExpressionAst] -and
-                    $_.Value -ceq 'Pester'
-                }).Count -gt 0
-        }
-        if (-not $targetsPester) { continue }
-        $requiredVersionIndices = @(for ($index = 1; $index -lt $elements.Count; $index++) {
+            }, $true))
+        foreach ($commandAst in $commandAsts) {
+            $elements = @($commandAst.CommandElements)
+            $nameParameterIndex = -1
+            for ($index = 1; $index -lt $elements.Count; $index++) {
                 if ($elements[$index] -is [Management.Automation.Language.CommandParameterAst] -and
-                    $elements[$index].ParameterName -ieq 'RequiredVersion') {
-                    $index
+                    $elements[$index].ParameterName -ieq 'Name') {
+                    $nameParameterIndex = $index
+                    break
                 }
-            })
-        if ($requiredVersionIndices.Count -ne 1) {
-            $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
-                Out-Null
-            continue
-        }
-        $versionIndex = $requiredVersionIndices[0] + 1
-        if ($versionIndex -ge $elements.Count -or
-            $elements[$versionIndex] -is [Management.Automation.Language.CommandParameterAst]) {
-            $errors.Add("'$relativePath' has an invalid Pester -RequiredVersion value.") | Out-Null
-            continue
-        }
-        $versionElement = $elements[$versionIndex]
-        $requiredVersionValue = if ($versionElement -is
-            [Management.Automation.Language.StringConstantExpressionAst]) {
-            [string]$versionElement.Value
-        }
-        else { [string]$versionElement.Extent.Text }
-        $isRunnerParameter = $normalizedPath -ceq 'tests/Invoke-PesterShards.ps1' -and
-            $versionElement -is [Management.Automation.Language.VariableExpressionAst] -and
-            $requiredVersionValue -ceq '$PesterVersion'
-        if (-not $isRunnerParameter -and $requiredVersionValue -cne $pesterVersion) {
-            $errors.Add("'$relativePath' copies Pester version '$requiredVersionValue' instead of '$pesterVersion'.") |
-                Out-Null
+            }
+            $targetsPester = if ($nameParameterIndex -ge 0 -and
+                $nameParameterIndex + 1 -lt $elements.Count) {
+                $elements[$nameParameterIndex + 1] -is
+                    [Management.Automation.Language.StringConstantExpressionAst] -and
+                    $elements[$nameParameterIndex + 1].Value -ceq 'Pester'
+            }
+            else {
+                @($elements | Select-Object -Skip 1 | Where-Object {
+                        $_ -is [Management.Automation.Language.StringConstantExpressionAst] -and
+                        $_.Value -ceq 'Pester'
+                    }).Count -gt 0
+            }
+            if (-not $targetsPester) { continue }
+            $requiredVersionIndices = @(for ($index = 1; $index -lt $elements.Count; $index++) {
+                    if ($elements[$index] -is [Management.Automation.Language.CommandParameterAst] -and
+                        $elements[$index].ParameterName -ieq 'RequiredVersion') {
+                        $index
+                    }
+                })
+            if ($requiredVersionIndices.Count -ne 1) {
+                $errors.Add("'$relativePath' invokes Pester without -RequiredVersion $pesterVersion.") |
+                    Out-Null
+                continue
+            }
+            $versionIndex = $requiredVersionIndices[0] + 1
+            if ($versionIndex -ge $elements.Count -or
+                $elements[$versionIndex] -is [Management.Automation.Language.CommandParameterAst]) {
+                $errors.Add("'$relativePath' has an invalid Pester -RequiredVersion value.") |
+                    Out-Null
+                continue
+            }
+            $versionElement = $elements[$versionIndex]
+            $requiredVersionValue = if ($versionElement -is
+                [Management.Automation.Language.StringConstantExpressionAst]) {
+                [string]$versionElement.Value
+            }
+            else { [string]$versionElement.Extent.Text }
+            $isRunnerParameter = $normalizedPath -ceq 'tests/Invoke-PesterShards.ps1' -and
+                $versionElement -is [Management.Automation.Language.VariableExpressionAst] -and
+                $requiredVersionValue -ceq '$PesterVersion'
+            if (-not $isRunnerParameter -and $requiredVersionValue -cne $pesterVersion) {
+                $errors.Add("'$relativePath' copies Pester version '$requiredVersionValue' instead of '$pesterVersion'.") |
+                    Out-Null
+            }
         }
     }
     foreach ($versionPattern in $copiedVersionPatterns) {

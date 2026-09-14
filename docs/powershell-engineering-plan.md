@@ -50,9 +50,9 @@ every Pester test requirement, active workflow and template copies, runner and
 documentation examples, and the three skill compatibility declarations.
 
 The isolated Pester 6.2.0 canary ran all 16 test files through the process-per-file
-runner on PowerShell 7.6.6. It completed in 82.027 seconds with 502 tests: 489
+runner on PowerShell 7.6.6. It completed in 81.518 seconds with 508 tests: 495
 passed, 13 were intentionally skipped, and none failed, were not run, were
-inconclusive, or reported block, container, or infrastructure failures. The 37
+inconclusive, or reported block, container, or infrastructure failures. The 43
 toolchain contract tests and the empty `-ForEach` compatibility control explain
 the increase from the 464-test assessment baseline. An independent search found
 no active Pester 5.7.1 or minimum-version Pester 5 test requirement; historical
@@ -384,8 +384,9 @@ break, and run the correct focused and full gates.
 Use separate pull requests for these changes while holding the breaking release
 until all required compatibility migrations are complete:
 
-1. Add the toolchain manifest and validation; canary Pester 6.2.0 beside 5.7.1,
-   prove parity, then remove 5.7.1 and update generated workflows and guidance.
+1. P1 completed: added the toolchain manifest and validation, proved Pester 6.2.0
+  parity, removed 5.7.1 from active surfaces, and updated generated workflows
+  and guidance.
 2. Route every CI Pester invocation through the isolated runner; establish the
    PowerShell 7.4 Linux full lane, focused Windows lanes, and scheduled current
    stable lane.
