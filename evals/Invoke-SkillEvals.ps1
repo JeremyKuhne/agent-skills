@@ -5,7 +5,6 @@ param(
     [string] $ScenarioPath = (Join-Path $PSScriptRoot 'scenarios/create-pr.json'),
     [string] $OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "agent-skills-evals-$([guid]::NewGuid().ToString('N'))"),
     [string] $Model = 'gpt-5.4',
-    [string] $CopilotPath,
     [string[]] $ScenarioId,
     [string] $BaselineSummaryPath,
     [ValidateRange(0, 100)]
@@ -15,7 +14,8 @@ param(
     [ValidateRange(1, 32)]
     [int] $MaxConcurrency = 8,
     [switch] $IsolateCopilotHome = $true,
-    [switch] $ReportOnly
+    [switch] $ReportOnly,
+    [string] $CopilotPath
 )
 
 Set-StrictMode -Version Latest

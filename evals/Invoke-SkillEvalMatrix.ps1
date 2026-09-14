@@ -12,7 +12,6 @@ param(
     ),
     [string] $OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "agent-skills-matrix-$([guid]::NewGuid().ToString('N'))"),
     [string] $Model = 'gpt-5.4',
-    [string] $CopilotPath,
     [ValidateRange(0, 100)]
     [int] $RunCount = 0,
     [ValidateRange(1, 60)]
@@ -21,7 +20,8 @@ param(
     [int] $MaxConcurrency = 8,
     [ValidateRange(1, 240)]
     [int] $MatrixTimeoutMinutes = 60,
-    [switch] $ReportOnly
+    [switch] $ReportOnly,
+    [string] $CopilotPath
 )
 
 Set-StrictMode -Version Latest

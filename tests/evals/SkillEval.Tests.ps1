@@ -757,6 +757,31 @@ Describe 'Skill evaluation scenario contract' {
         } | Should -Throw '*1.0.63 or later*'
     }
 
+    It 'detects when the selected Copilot executable changes' {
+        $clientPath = Join-Path $TestDrive 'copilot-client'
+        [System.IO.File]::WriteAllText($clientPath, 'initial client')
+        $expectedHash = (Get-FileHash -LiteralPath $clientPath -Algorithm SHA256).Hash
+        $module = Get-Module SkillEval
+
+        { & $module {
+                param($path, $hash)
+                Assert-SkillEvalCopilotExecutableHash `
+                    -CopilotPath $path `
+                    -ExpectedSha256 $hash `
+                    -Operation 'during the test'
+            } $clientPath $expectedHash } | Should -Not -Throw
+
+        [System.IO.File]::WriteAllText($clientPath, 'changed client')
+        { & $module {
+                param($path, $hash)
+                Assert-SkillEvalCopilotExecutableHash `
+                    -CopilotPath $path `
+                    -ExpectedSha256 $hash `
+                    -Operation 'during the test'
+            } $clientPath $expectedHash } |
+            Should -Throw '*changed during the test*'
+    }
+
     It 'exposes explicit native client selection through both evaluation entry points' {
         $singleRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvals.ps1'
         $matrixRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvalMatrix.ps1'
@@ -769,10 +794,32 @@ Describe 'Skill evaluation scenario contract' {
             $matrixRunner, [ref]$null, [ref]$parseErrors)
         $parseErrors.Count | Should -Be 0
         $matrixParameters = @($matrixAst.ParamBlock.Parameters.Name.VariablePath.UserPath)
+        $moduleAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $script:RepoRoot 'evals/SkillEval.psm1'),
+            [ref]$null,
+            [ref]$parseErrors)
+        $parseErrors.Count | Should -Be 0
+        $suiteFunction = @($moduleAst.FindAll({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -ceq 'Invoke-SkillEvalSuite'
+                }, $true))[0]
+        $suiteParameters = @(
+            $suiteFunction.Body.ParamBlock.Parameters.Name.VariablePath.UserPath)
         $matrixContent = Get-Content -LiteralPath $matrixRunner -Raw
 
-        $singleParameters | Should -Contain 'CopilotPath'
-        $matrixParameters | Should -Contain 'CopilotPath'
+        $singleParameters | Should -Be @(
+            'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'ScenarioId',
+            'BaselineSummaryPath', 'RunCount', 'TimeoutMinutes', 'MaxConcurrency',
+            'IsolateCopilotHome', 'ReportOnly', 'CopilotPath')
+        $matrixParameters | Should -Be @(
+            'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'RunCount',
+            'TimeoutMinutes', 'MaxConcurrency', 'MatrixTimeoutMinutes',
+            'ReportOnly', 'CopilotPath')
+        $suiteParameters | Should -Be @(
+            'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'ScenarioId',
+            'RunCount', 'TimeoutMinutes', 'MaxConcurrency', 'Executor',
+            'IsolateCopilotHome', 'CopilotPath')
         $matrixContent | Should -Match 'Resolve-SkillEvalCopilotPath -CopilotPath \$CopilotPath'
         $forwardingText = "'-CopilotPath', " + '$using:resolvedCopilotPath'
         $matrixContent | Should -Match ([regex]::Escape($forwardingText))
@@ -2055,6 +2102,42 @@ Describe 'Skill evaluation runner' {
             -AllowLegacyUnverifiedEvidence
         $unverifiedClientRescore.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
         $unverifiedClientRescore.CopilotExecutableEvidenceVerified | Should -BeFalse
+
+        $invalidClientVersions = @(
+            @{ Name = 'old'; Version = 'GitHub Copilot CLI 1.0.62.'; Error = '*1.0.63 or later*' }
+            @{ Name = 'malformed'; Version = 'arbitrary-client'; Error = '*did not identify itself*' }
+        )
+        foreach ($invalidClientVersion in $invalidClientVersions) {
+            $invalidClientInput = Join-Path $TestDrive (
+                "invalid-client-version-$($invalidClientVersion.Name)")
+            Copy-Item -LiteralPath $outputDirectory -Destination $invalidClientInput -Recurse
+            $invalidClientSummaryPath = Join-Path $invalidClientInput 'summary.json'
+            $invalidClientSummary = Get-Content `
+                -LiteralPath $invalidClientSummaryPath `
+                -Raw | ConvertFrom-Json
+            $invalidClientSummary.CopilotVersion = $invalidClientVersion.Version
+            $invalidClientSummary.CopilotExecutableSha256 = 'A' * 64
+            $invalidClientSummary.CopilotExecutableEvidenceVerified = $true
+            $invalidClientSummary | ConvertTo-Json -Depth 30 |
+                Set-Content -LiteralPath $invalidClientSummaryPath
+            {
+                Invoke-SkillEvalRescore `
+                    -RepoRoot $script:RepoRoot `
+                    -ScenarioPath $script:ScenarioPath `
+                    -InputDirectory $invalidClientInput `
+                    -OutputDirectory (Join-Path $TestDrive (
+                            "rejected-client-version-$($invalidClientVersion.Name)"))
+            } | Should -Throw $invalidClientVersion.Error
+            $invalidClientRescore = Invoke-SkillEvalRescore `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -InputDirectory $invalidClientInput `
+                -OutputDirectory (Join-Path $TestDrive (
+                        "accepted-client-version-$($invalidClientVersion.Name)")) `
+                -AllowLegacyUnverifiedEvidence
+            $invalidClientRescore.CopilotExecutableSha256 | Should -BeExactly ('A' * 64)
+            $invalidClientRescore.CopilotExecutableEvidenceVerified | Should -BeFalse
+        }
 
         $invalidRunNumbers = @('../outside', '0')
         for ($invalidIndex = 0; $invalidIndex -lt $invalidRunNumbers.Count; $invalidIndex++) {

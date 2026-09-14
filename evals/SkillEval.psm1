@@ -212,6 +212,25 @@ function Get-SkillEvalValidatedCopilotVersion {
     return $version
 }
 
+function Assert-SkillEvalCopilotExecutableHash {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $CopilotPath,
+
+        [Parameter(Mandatory)]
+        [string] $ExpectedSha256,
+
+        [Parameter(Mandatory)]
+        [string] $Operation
+    )
+
+    $actualSha256 = (Get-FileHash -LiteralPath $CopilotPath -Algorithm SHA256).Hash
+    if ($actualSha256 -cne $ExpectedSha256) {
+        throw "The selected Copilot CLI executable changed $Operation."
+    }
+}
+
 function Get-SkillEvalClientIdentity {
     [CmdletBinding()]
     param(
@@ -1379,11 +1398,11 @@ function Invoke-SkillEvalSuite {
         [ValidateRange(1, 32)]
         [int] $MaxConcurrency = 8,
 
-        [string] $CopilotPath,
-
         [scriptblock] $Executor,
 
-        [switch] $IsolateCopilotHome = $true
+        [switch] $IsolateCopilotHome = $true,
+
+        [string] $CopilotPath
     )
 
     $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
@@ -1401,10 +1420,11 @@ function Invoke-SkillEvalSuite {
         'fake-executor'
     }
     else { Get-SkillEvalCopilotVersion -CopilotPath $resolvedCopilotPath }
-    if (-not $Executor -and
-        (Get-FileHash -LiteralPath $resolvedCopilotPath -Algorithm SHA256).Hash -cne
-        $copilotExecutableSha256) {
-        throw 'The selected Copilot CLI executable changed during version verification.'
+    if (-not $Executor) {
+        Assert-SkillEvalCopilotExecutableHash `
+            -CopilotPath $resolvedCopilotPath `
+            -ExpectedSha256 $copilotExecutableSha256 `
+            -Operation 'during version verification'
     }
     $candidateRevision = Get-SkillEvalCandidateRevision -RepoRoot $resolvedRepoRoot
     New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
@@ -1493,6 +1513,12 @@ function Invoke-SkillEvalSuite {
             } -ThrottleLimit $effectiveMaxConcurrency)
     }
     $suiteStopwatch.Stop()
+    if (-not $Executor) {
+        Assert-SkillEvalCopilotExecutableHash `
+            -CopilotPath $resolvedCopilotPath `
+            -ExpectedSha256 $copilotExecutableSha256 `
+            -Operation 'during evaluation execution'
+    }
     $resultArray = @($resultArray | Sort-Object ScenarioIndex, RunNumber)
     if ($resultArray.Count -ne $workItems.Count) {
         throw "Expected $($workItems.Count) evaluation results but received $($resultArray.Count)."
@@ -1598,19 +1624,33 @@ function Invoke-SkillEvalRescore {
     }
     else { '' }
     $isDeterministicExecutorEvidence = $sourceCopilotVersion -ceq 'fake-executor'
+    $sourceCopilotVersionVerified = $isDeterministicExecutorEvidence
+    $sourceCopilotVersionError = ''
+    if (-not $isDeterministicExecutorEvidence) {
+        try {
+            Get-SkillEvalValidatedCopilotVersion -Output $sourceCopilotVersion |
+                Out-Null
+            $sourceCopilotVersionVerified = $true
+        }
+        catch {
+            $sourceCopilotVersionError = $_.Exception.Message
+        }
+    }
     $hasCopilotExecutableHash = $sourceCopilotExecutableSha256 -match '^[0-9A-Fa-f]{64}$'
     $sourceVerificationProperty = $sourceSummary.PSObject.Properties[
         'CopilotExecutableEvidenceVerified']
     $sourceMarksCopilotEvidenceUnverified = $sourceVerificationProperty -and
         -not [bool]$sourceVerificationProperty.Value
     $copilotExecutableEvidenceVerified = -not $sourceMarksCopilotEvidenceUnverified -and
-        ($isDeterministicExecutorEvidence -or
-            (-not [string]::IsNullOrWhiteSpace($sourceCopilotVersion) -and
-                $hasCopilotExecutableHash))
+        $sourceCopilotVersionVerified -and
+        ($isDeterministicExecutorEvidence -or $hasCopilotExecutableHash)
     if (-not $copilotExecutableEvidenceVerified -and
         -not $AllowLegacyUnverifiedEvidence) {
         if ($sourceMarksCopilotEvidenceUnverified) {
             throw 'Source summary marks Copilot executable evidence unverified; use -AllowLegacyUnverifiedEvidence only to retain it as unverified evidence.'
+        }
+        if (-not $sourceCopilotVersionVerified) {
+            throw "$sourceCopilotVersionError Use -AllowLegacyUnverifiedEvidence only to retain an unverified source client version."
         }
         throw 'Source summary lacks a Copilot executable SHA-256; use -AllowLegacyUnverifiedEvidence only to accept legacy real-client evidence without executable hashing.'
     }
