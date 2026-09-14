@@ -360,6 +360,85 @@ function ConvertFrom-WorkflowBlockScalar (
     return [regex]::Replace($Text, '\r?\n(?=[ \t]*\S)', ' ')
 }
 
+function Test-WorkflowRunIsStepLevel (
+    [object[]] $Lines,
+    [int] $RunLineIndex,
+    [Text.RegularExpressions.Match] $RunMatch) {
+    $runIndent = $RunMatch.Groups['indent'].Length
+    $stepLineIndex = -1
+    $stepIndent = -1
+    if ($RunMatch.Groups['dash'].Success) {
+        $stepLineIndex = $RunLineIndex
+        $stepIndent = $runIndent
+    }
+    else {
+        $candidateSteps = [Collections.Generic.List[object]]::new()
+        for ($index = $RunLineIndex - 1; $index -ge 0; $index--) {
+            $line = $Lines[$index].Value.TrimEnd("`r", "`n")
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            $indent = $line.Length - $line.TrimStart().Length
+            $stepMatch = [regex]::Match($line, '^(?<indent>\s*)-\s+')
+            if ($stepMatch.Success -and $indent -lt $runIndent) {
+                $candidateSteps.Add([pscustomobject]@{
+                        LineIndex = $index
+                        Indent = $indent
+                    }) | Out-Null
+            }
+        }
+        foreach ($candidateStep in $candidateSteps) {
+            for ($index = $candidateStep.LineIndex - 1;
+                    $index -ge 0; $index--) {
+                $line = $Lines[$index].Value.TrimEnd("`r", "`n")
+                if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                $indent = $line.Length - $line.TrimStart().Length
+                if ($indent -lt $candidateStep.Indent) {
+                    if ($line.Trim() -match '^steps:\s*(?:#.*)?$') {
+                        $stepLineIndex = $candidateStep.LineIndex
+                        $stepIndent = $candidateStep.Indent
+                    }
+                    break
+                }
+            }
+            if ($stepLineIndex -ge 0) { break }
+        }
+    }
+    if ($stepLineIndex -lt 0) { return $false }
+    $underSteps = $false
+    for ($index = $stepLineIndex - 1; $index -ge 0; $index--) {
+        $line = $Lines[$index].Value.TrimEnd("`r", "`n")
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $indent = $line.Length - $line.TrimStart().Length
+        if ($indent -lt $stepIndent) {
+            $underSteps = $line.Trim() -match '^steps:\s*(?:#.*)?$'
+            break
+        }
+    }
+    if (-not $underSteps) { return $false }
+    if ($RunMatch.Groups['dash'].Success) { return $true }
+    $stepEndLine = $Lines.Count
+    for ($index = $stepLineIndex + 1; $index -lt $Lines.Count; $index++) {
+        $line = $Lines[$index].Value.TrimEnd("`r", "`n")
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $indent = $line.Length - $line.TrimStart().Length
+        if ($indent -le $stepIndent) {
+            $stepEndLine = $index
+            break
+        }
+    }
+    $mappingIndents = @(for ($index = $stepLineIndex + 1;
+            $index -lt $stepEndLine; $index++) {
+            $line = $Lines[$index].Value.TrimEnd("`r", "`n")
+            $mappingMatch = [regex]::Match(
+                $line, '^(?<indent>\s*)(?:[''"][^''"]+[''"]|[\w.-]+):')
+            if ($mappingMatch.Success -and
+                $mappingMatch.Groups['indent'].Length -gt $stepIndent) {
+                $mappingMatch.Groups['indent'].Length
+            }
+        })
+    return $mappingIndents.Count -gt 0 -and
+        $runIndent -eq ($mappingIndents | Measure-Object -Minimum).Minimum
+}
+
 function Get-WorkflowRunScope (
     [string] $Content,
     [int] $Position,
@@ -378,19 +457,8 @@ function Get-WorkflowRunScope (
             $line,
             '^(?<indent>\s*)(?<dash>-\s+)?run:\s*(?<value>.*)$')
         if (-not $runMatch.Success) { continue }
-        $isStepRun = $runMatch.Groups['dash'].Success
-        if (-not $isStepRun) {
-            for ($priorIndex = $index - 1; $priorIndex -ge 0; $priorIndex--) {
-                $priorLine = $lines[$priorIndex].Value.TrimEnd("`r", "`n")
-                $stepMatch = [regex]::Match(
-                    $priorLine, '^(?<indent>\s*)-\s+')
-                if (-not $stepMatch.Success) { continue }
-                $isStepRun = $runMatch.Groups['indent'].Length -eq
-                    $stepMatch.Groups['indent'].Length + 2
-                break
-            }
-        }
-        if (-not $isStepRun) { continue }
+        if (-not (Test-WorkflowRunIsStepLevel -Lines $lines `
+            -RunLineIndex $index -RunMatch $runMatch)) { continue }
         $indent = $runMatch.Groups['indent'].Length
         $value = $runMatch.Groups['value'].Value
         $isBlockScalar = $value -match '^[|>]'
@@ -462,8 +530,11 @@ function Test-WorkflowPwshStepCommand (
     $lines = @([regex]::Matches($JobBody, '(?m)^.*(?:\r?\n|$)'))
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index].Value.TrimEnd("`r", "`n")
-        $stepMatch = [regex]::Match($line, '^(?<indent>\s*)-\s+')
-        if (-not $stepMatch.Success) { continue }
+        $stepMatch = [regex]::Match(
+            $line, '^(?<indent>\s*)(?<dash>-\s+)')
+        if (-not $stepMatch.Success -or
+            -not (Test-WorkflowRunIsStepLevel -Lines $lines `
+                -RunLineIndex $index -RunMatch $stepMatch)) { continue }
         $stepIndent = $stepMatch.Groups['indent'].Length
         $endLine = $index + 1
         while ($endLine -lt $lines.Count) {
@@ -474,13 +545,29 @@ function Test-WorkflowPwshStepCommand (
             }
             $endLine++
         }
-        $stepText = @($lines[$index..($endLine - 1)].Value) -join ''
-        $sequenceIndent = [regex]::Escape(' ' * $stepIndent)
-        $mappingIndent = [regex]::Escape(' ' * ($stepIndent + 2))
+        $stepStart = $lines[$index].Index
+        $stepEnd = if ($endLine -lt $lines.Count) {
+            $lines[$endLine].Index
+        }
+        else { $JobBody.Length }
         $shellValues = @([regex]::Matches(
-            $stepText,
-            "(?m)^(?:${sequenceIndent}-\s+|${mappingIndent})" +
-            'shell:\s*(?<value>.*)$'))
+                $JobBody,
+                '(?m)^(?<indent>\s*)(?<dash>-\s+)?shell:\s*(?<value>.*)$') |
+            Where-Object {
+                $_.Index -ge $stepStart -and $_.Index -lt $stepEnd
+            } | Where-Object {
+                $shellLineIndex = -1
+                for ($lineIndex = $index; $lineIndex -lt $endLine;
+                        $lineIndex++) {
+                    if ($lines[$lineIndex].Index -eq $_.Index) {
+                        $shellLineIndex = $lineIndex
+                        break
+                    }
+                }
+                $shellLineIndex -ge 0 -and
+                    (Test-WorkflowRunIsStepLevel -Lines $lines `
+                        -RunLineIndex $shellLineIndex -RunMatch $_)
+            })
         $hasPwshShell = @($shellValues | Where-Object {
             (ConvertFrom-WorkflowRunScalar `
                 $_.Groups['value'].Value) -ieq 'pwsh'
@@ -489,11 +576,26 @@ function Test-WorkflowPwshStepCommand (
             continue
         }
         $runKeys = @([regex]::Matches(
-                $stepText,
-                "(?m)^(?:${sequenceIndent}-\s+|${mappingIndent})run:"))
+                $JobBody,
+                '(?m)^(?<indent>\s*)(?<dash>-\s+)?run:') |
+            Where-Object {
+                $_.Index -ge $stepStart -and $_.Index -lt $stepEnd
+            } | Where-Object {
+                $runLineIndex = -1
+                for ($lineIndex = $index; $lineIndex -lt $endLine;
+                        $lineIndex++) {
+                    if ($lines[$lineIndex].Index -eq $_.Index) {
+                        $runLineIndex = $lineIndex
+                        break
+                    }
+                }
+                $runLineIndex -ge 0 -and
+                    (Test-WorkflowRunIsStepLevel -Lines $lines `
+                        -RunLineIndex $runLineIndex -RunMatch $_)
+            })
         foreach ($runKey in $runKeys) {
-            $runScope = Get-WorkflowRunScope -Content $stepText `
-            -Position ($runKey.Index + $runKey.Length) -Complete
+            $runScope = Get-WorkflowRunScope -Content $JobBody `
+                -Position ($runKey.Index + $runKey.Length) -Complete
             $normalizedRunScope = if ($null -ne $runScope) {
                 Remove-PowerShellComments -Text $runScope
             }
@@ -740,8 +842,9 @@ function Test-CommandInvokesScriptBlockArguments (
         return $true
     }
     return $CommandAst.GetCommandName() -in @(
-        'ForEach-Object', 'Where-Object', 'Invoke-Command', 'Measure-Command',
-        'Trace-Command', 'Start-Job', 'Start-ThreadJob')
+        'ForEach-Object', '%', 'ForEach', 'Where-Object', '?', 'where',
+        'Invoke-Command', 'Measure-Command', 'Trace-Command', 'Start-Job',
+        'Start-ThreadJob')
 }
 
 function Test-CommandMayExecuteInScope (
@@ -834,12 +937,14 @@ function Test-PinnedPesterImport (
         $imports = @($ast.FindAll({
                     param($node)
                     $node -is [Management.Automation.Language.CommandAst] -and
-                        $node.GetCommandName() -ieq 'Import-Module'
+                        $node.GetCommandName() -in @('Import-Module', 'ipmo')
                 }, $true) | Where-Object {
                 Test-CommandMayExecuteInScope -CommandAst $_ -RootAst $ast
             })
         foreach ($commandAst in $imports) {
-            if (-not (Test-CommandTargetsPester -CommandAst $commandAst)) { continue }
+            if (-not (Test-CommandTargetsPester -CommandAst $commandAst) -and
+                -not (Test-CommandTargetsAssignedPester `
+                    -CommandAst $commandAst -RootAst $ast)) { continue }
             $elements = @($commandAst.CommandElements)
             $versionParameters = @(for ($index = 1; $index -lt $elements.Count; $index++) {
                     if ($elements[$index] -is
@@ -1002,7 +1107,7 @@ $copiedVersionPatterns = @(
 $moduleNamePropertyPattern =
     '(?i)(?:\bModuleName\b|[''"]ModuleName[''"])\s*='
 $moduleCommandNamePattern =
-    '(?i)(?<![-\w])(?:Install-Module|Import-Module)(?![-\w])'
+    '(?i)(?<![-\w])(?:Install-Module|Import-Module|ipmo)(?![-\w])'
 $invokePesterName = 'Invoke' + '-Pester'
 $invokePesterPattern = "(?i)(?<![-\w])$invokePesterName(?![-\w])"
 $scanFiles = @(
@@ -1062,7 +1167,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
         foreach ($commandAst in @($sourceAst.FindAll({
                     param($node)
                     $node -is [Management.Automation.Language.CommandAst] -and
-                        $node.GetCommandName() -in @('Install-Module', 'Import-Module')
+                        $node.GetCommandName() -in @(
+                            'Install-Module', 'Import-Module', 'ipmo')
                 }, $true) | Where-Object {
                     Test-CommandMayExecuteInScope -CommandAst $_ `
                         -RootAst $sourceAst
@@ -1129,7 +1235,7 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                         param($node)
                         $node -is [Management.Automation.Language.CommandAst] -and
                             $node.GetCommandName() -in @(
-                                'Install-Module', 'Import-Module')
+                                'Install-Module', 'Import-Module', 'ipmo')
                     }, $true) | Where-Object {
                         Test-CommandMayExecuteInScope -CommandAst $_ `
                             -RootAst $scopeAst
@@ -1180,7 +1286,8 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                 $commandText, [ref]$tokens, [ref]$parseErrors).FindAll({
                 param($node)
                 $node -is [Management.Automation.Language.CommandAst] -and
-                    $node.GetCommandName() -in @('Install-Module', 'Import-Module')
+                    $node.GetCommandName() -in @(
+                        'Install-Module', 'Import-Module', 'ipmo')
             }, $true))
         foreach ($commandAst in $commandAsts) {
             $elements = @($commandAst.CommandElements)
@@ -1201,7 +1308,6 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             $moduleTarget = Get-CommandModuleTargetAst -CommandAst $commandAst
             $moduleNames = @(Get-StaticStringAstValues -ExpressionAst $moduleTarget)
             if ($moduleNames.Count -eq 0 -and
-                $requiredVersionIndices.Count -eq 0 -and
                 $assignedPesterModuleCommandTexts.Contains($commandText)) {
                 $moduleNames = @('Pester')
             }

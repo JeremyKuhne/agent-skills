@@ -485,6 +485,73 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
+    It 'ignores Pester commands in a nested workflow sequence outside steps' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-nested-run-sequence'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/nested-sequence.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:',
+            '  test:',
+            '    strategy:',
+            '      matrix:',
+            '        include:',
+            ('          - run: Import-' +
+                'Module Pester -RequiredVersion 5.7.1; Invoke-Pester ./tests'),
+            '    steps:',
+            '      - run: Write-Output ok')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'validates a step run after a nested sequence' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-run-after-nested-sequence'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/nested-before-run.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:',
+            '  test:',
+            '    steps:',
+            '      - env:',
+            '          VALUES:',
+            '            - one',
+            ('        run: Import-' +
+                'Module Pester -RequiredVersion 5.7.1'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'rejects a host job whose validation command is only in nested metadata' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-nested-validation-metadata'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        $content = Get-Content -LiteralPath $workflowPath -Raw
+        $content = [regex]::Replace(
+            $content,
+            '(?m)^  scaffold-linux:\r?\n' +
+                '    runs-on: ubuntu-24\.04-arm\r?\n' +
+                '    steps:\r?$',
+            @(
+                '  scaffold-linux:',
+                '    runs-on: ubuntu-24.04-arm',
+                '    strategy:',
+                '      matrix:',
+                '        include:',
+                '          - shell: pwsh',
+                '            run: ./tools/Test-PowerShellToolchain.ps1',
+                '    steps:') -join "`n",
+            1)
+        $content = [regex]::Replace(
+            $content,
+            '(?m)^      - name: Validate PowerShell toolchain\r?\n' +
+                '        shell: pwsh\r?\n' +
+                '        run: \./tools/Test-PowerShellToolchain\.ps1\r?$',
+            '      - run: Write-Output skipped',
+            1)
+        Set-Content -LiteralPath $workflowPath -Value $content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-linux' must validate the manifest PowerShell minimum in a pwsh step*"
+    }
+
     It 'accepts a block validation command with a trailing comment' {
         $fixtureRoot = New-ToolchainFixture 'workflow-block-command-comment'
         foreach ($workflowName in @('ci.yml', 'full-ci.yml')) {
@@ -820,7 +887,7 @@ Describe 'PowerShell toolchain contract' {
         $fixtureRoot = New-ToolchainFixture "dynamic-module-name-$Form"
         $driftPath = Join-Path $fixtureRoot '.agents/Drift.ps1'
         Set-Content -LiteralPath $driftPath -Value @(
-            "`$moduleName = 'Pester'",
+            '$moduleName = $env:PESTER_MODULE',
             ($Command.Replace('Import-Module', ('Import-' + 'Module'))))
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
@@ -836,6 +903,51 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*invokes Pester without -RequiredVersion 6.2.0*'
+    }
+
+    It '<Expectation> a statically assigned Pester module with version <Version>' -ForEach @(
+        @{ Expectation = 'accepts'; Version = '6.2.0'; Error = $null }
+        @{
+            Expectation = 'rejects'
+            Version = '5.7.1'
+            Error = "*copies Pester version '5.7.1'*"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "assigned-pester-version-$Version"
+        $scriptPath = Join-Path $fixtureRoot '.agents/AssignedModule.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$moduleName = 'Pester'",
+            "Import-Module `$moduleName -RequiredVersion $Version",
+            'Invoke-Pester ./tests')
+
+        if ($null -eq $Error) {
+            { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                Should -Not -Throw
+        }
+        else {
+            { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+                Should -Throw $Error
+        }
+    }
+
+    It 'rejects a stale Pester import through the ipmo alias' {
+        $fixtureRoot = New-ToolchainFixture 'stale-ipmo-alias'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Alias.ps1') `
+            -Value 'ipmo Pester -RequiredVersion 5.7.1'
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'accepts a pinned Pester import through the ipmo alias' {
+        $fixtureRoot = New-ToolchainFixture 'pinned-ipmo-alias'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Alias.ps1') `
+            -Value @(
+                'ipmo Pester -RequiredVersion 6.2.0',
+                'Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'rejects a <Form> wildcard target that can resolve to Pester' -ForEach @(
@@ -1215,6 +1327,15 @@ Describe 'PowerShell toolchain contract' {
                 ('          #Requires -Modules @{ RequiredVersion = ' +
                     "'5.7.1'; ModuleName = 'Pester' }"))
         }
+        @{
+            Kind = 'indented Markdown'
+            Path = 'docs/indented-module-requirement.md'
+            Content = @(
+                '    $requirement = @{',
+                "        RequiredVersion = '5.7.1'",
+                "        ModuleName = 'Pester'",
+                '    }')
+        }
     ) {
         $fixtureRoot = New-ToolchainFixture (
             "scoped-requirement-$($Kind.Replace(' ', '-'))")
@@ -1506,6 +1627,23 @@ jobs:
         $path = Join-Path $fixtureRoot $Path
         [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
         Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'rejects an unpinned nested Invoke-Pester through <Alias>' -ForEach @(
+        @{ Alias = '%' }
+        @{ Alias = 'ForEach' }
+        @{ Alias = '?' }
+        @{ Alias = 'where' }
+    ) {
+        $fixtureRoot = New-ToolchainFixture (
+            "nested-alias-$($Alias.Replace('%', 'percent').Replace('?', 'question'))")
+        $scriptPath = Join-Path $fixtureRoot '.agents/AliasBlock.ps1'
+        Set-Content -LiteralPath $scriptPath -Value (
+            '1..1 | ' + $Alias + ' { Invoke-Pester ./tests }')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw ('*invokes Invoke-' +
