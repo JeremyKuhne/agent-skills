@@ -157,8 +157,7 @@ Describe 'PowerShell toolchain contract' {
                     'skills/dotnet-file-creation/SKILL.md',
                     'skills/windows-acls/SKILL.md')) {
                 Set-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) `
-                    -Value ('Requires PowerShell 7.4 and Pester 6.2 or later; this ' +
-                        'source repository pins its test entry points to Pester 6.2.0.')
+                    -Value 'Requires PowerShell 7.4 and Pester 6.2 or later.'
             }
             return $fixtureRoot
         }
@@ -663,10 +662,11 @@ jobs:
         $fixtureRoot = New-ToolchainFixture (
             "portable-guidance-$([IO.Path]::GetFileName((Split-Path -Parent $Path)))")
         Set-Content -LiteralPath (Join-Path $fixtureRoot $Path) `
-            -Value 'Requires PowerShell 7.4 and Pester 6.2.0.'
+            -Value ('Requires PowerShell 7.4 and Pester 6.2 or later; this ' +
+                'source repository pins its test entry points to Pester 6.2.0.')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw '*must name Pester 6.2 or later*'
+            Should -Throw '*must keep repository-specific Pester pins out of the portable core*'
     }
 
     It 'derives the portable Pester floor from the manifest' {

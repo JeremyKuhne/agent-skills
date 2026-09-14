@@ -2,7 +2,7 @@
 name: dotnet-file-creation
 description: Create and audit .NET 10+ filesystem I/O on Windows, Linux, and macOS. Use for "where do I save this", "am I saving this right", global/user app settings, roaming/non-roaming preferences, machine-wide defaults or policy, caches, temporary files, safe overwrite/deletion, and write-then-rename publishing. Also use for "check my code to make sure I'm following best practices for IO", file I/O audits, "where should this temp file go", "make this file user-only", "why does this work on Windows but not Linux", Path.Join vs Path.Combine, rooted vs fully qualified paths, Path.GetFullPath, File.Open/File.Create/FileStreamOptions, Directory.CreateDirectory/CreateTempSubdirectory, GetTempFileName, UnixFileMode/umask/UnixCreateMode, CA1416 or PlatformNotSupportedException on file APIs, FileShare, casing, and hidden files. Audits cover filesystem correctness and security; route pipes, networking, and deep performance elsewhere.
 license: MIT
-compatibility: Guidance assumes .NET 10 or later; Unix mode APIs require .NET 7 or later. Behavioral validation requires PowerShell 7.4 and Pester 6.2 or later; this source repository pins its test entry points to Pester 6.2.0. Platform execution coverage and limits are recorded in references/research.md.
+compatibility: Guidance assumes .NET 10 or later; Unix mode APIs require .NET 7 or later. Behavioral validation requires PowerShell 7.4 and Pester 6.2 or later. Platform execution coverage and limits are recorded in references/research.md.
 metadata:
   portability: portable
   applicability: dotnet

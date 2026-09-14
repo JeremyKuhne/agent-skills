@@ -550,10 +550,8 @@ foreach ($relativePath in $portableGuidancePaths) {
         $errors.Add("'$relativePath' must name Pester $portablePesterFloor or later.") |
             Out-Null
     }
-    $sourcePinPattern =
-        "source repository pins its test entry points to Pester $([regex]::Escape($pesterVersion))(?![0-9A-Za-z-]|\.[0-9A-Za-z])"
-    if ($content -notmatch $sourcePinPattern) {
-        $errors.Add("'$relativePath' must name the source repository Pester $pesterVersion test pin.") |
+    if ($content -match 'source repository|Pester \d+\.\d+\.\d+') {
+        $errors.Add("'$relativePath' must keep repository-specific Pester pins out of the portable core.") |
             Out-Null
     }
 }
