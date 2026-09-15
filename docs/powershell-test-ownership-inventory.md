@@ -1,7 +1,6 @@
 # PowerShell test ownership inventory
 
-- Status: ownership dispositions and bounded canary accepted on 2026-09-15;
-  awaiting merge
+- Status: accepted and merged through PR #92 on 2026-09-15
 - Inventory baseline: `main` at
   `021330653daea94fae0c5b9389e9e9c7cb1218ea`
 - Scope: repository Pester and MSTest suites, deterministic validators,
@@ -20,9 +19,8 @@ those points; the different SHAs represent chronology, not conflicting trees.
 
 1. Use the ownership dispositions below as the P0r direction.
 2. Use the exact six-test `TrustedFileWrites` contract as the managed canary.
-3. Complete P0r when this record merges, then begin P0c, the portable
-  engineering course-correction skill. Do not implement the canary until P0c
-  lands.
+3. Track the portable engineering course-correction skill as non-blocking
+  backlog work and proceed to the approved managed canary.
 
 The maintainer accepted these decisions on 2026-09-15. The inventory records
 that decision; it does not implement a migration.
@@ -340,6 +338,6 @@ The maintainer accepted the following on 2026-09-15:
 
 1. the dispositions in this inventory;
 2. the bounded `TrustedFileWrites` core-behavior canary; and
-3. P0c landing before P1a or P1c implementation resumes.
+3. the course-correction skill remaining a separately scheduled backlog item.
 
-P0r completes when this accepted decision record merges.
+P0r completed when this accepted decision record merged through PR #92.
