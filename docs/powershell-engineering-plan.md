@@ -216,12 +216,14 @@ correction keeps the 20 behavior cases on both required hosts and collects the
 source-filtered coverage report only on `windows-latest`; it adds no host,
 package, or generalized coverage infrastructure.
 
-The final exact head, `4b946a3d34ad15c988fbfe3791f02e7473043091`, passed
-all CI jobs. Ubuntu ARM64 passed 20 of 20 behavior cases with no failures or
-skips in 544 milliseconds. Windows passed 20 of 20 with no failures or skips in
-1.529 seconds and reported 43 of 66 lines, or 65.15%, with 82.14% branch
-coverage. The maintainer accepted the ownership boundary with coverage on one
-supported architecture. P1c completes when PR #93 merges.
+The behavior-equivalent evidence head
+`4b946a3d34ad15c988fbfe3791f02e7473043091` passed all CI jobs. Ubuntu
+ARM64 passed 20 of 20 behavior cases with no failures or skips in 544
+milliseconds. Windows passed 20 of 20 with no failures or skips in 1.529 seconds
+and reported 43 of 66 lines, or 65.15%, with 82.14% branch coverage. The
+maintainer accepted the ownership boundary with coverage on one supported
+architecture. P1c completes when PR #93 merges and its then-current head passes
+the unchanged CI contract.
 
 #### P1a mechanical cutover
 
