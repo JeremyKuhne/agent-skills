@@ -6,12 +6,14 @@ characters, or elements. Read the native contract before choosing a wrapper.
 
 ## Record the ownership contract before calling
 
-For every pointer or handle output, identify all four facts:
+For every pointer, handle, or native registration, identify all six facts:
 
 1. who allocates or increments the reference;
 2. whether the result is owned or borrowed;
-3. which operation releases it;
-4. whether failure guarantees the output is initialized.
+3. whether the callee borrows, retains, or conditionally takes ownership;
+4. the exact success result and flag that transfer ownership, when applicable;
+5. which operation releases each outcome and what activates that cleanup; and
+6. whether failure guarantees the output is initialized.
 
 Common pairs include:
 
@@ -26,6 +28,18 @@ Common pairs include:
 
 Do not infer the deallocator from the projected pointer type. Two `PWSTR` values
 can have different allocators depending on the API that returned them.
+
+For a long-lived owner, trace the code that actually establishes and tears down
+the native edge. Allocating or storing an observer is not equivalent to
+registering it. Cleanup required by the owner must not depend on an optional
+application handler or explicit user cleanup call that ordinary use can omit.
+
+For a transfer-capable call, branch cleanup on the documented transfer
+predicate. Once ownership moves, do not read, copy back, or release a value the
+callee may already have destroyed. Conversion can acquire its own temporary
+reference; record whether that reference is released on failure or moves with
+the transferred value. The paired cswin32-com skill gives the detailed
+`IDataObject::SetData` and `STGMEDIUM` rules.
 
 ## Cleanup must cover failure paths
 
@@ -124,10 +138,12 @@ When adding or migrating an interop call, cover the branches that expose the
 contract:
 
 - success and native failure, including cleanup after each;
+- every ownership-transfer flag and success-result combination, including a callee that releases the transferred value before returning;
 - null/default output and double-dispose or repeated cleanup when supported;
 - a result large enough to force buffer growth;
 - a malformed or odd-sized payload when the input is not trusted;
-- a retaining COM call followed by explicit disconnect and owner disposal.
+- a retaining COM call followed by explicit disconnect and owner disposal; and
+- the ordinary lifecycle path without optional application behavior that could accidentally activate cleanup.
 
 A happy-path build cannot detect a leaked reference, the wrong allocator, or a
 byte/element mismatch that only appears beyond the initial buffer.

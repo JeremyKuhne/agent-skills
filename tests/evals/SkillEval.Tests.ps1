@@ -13,6 +13,7 @@ BeforeAll {
     $script:PerformanceTestingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/performance-testing.json'
     $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
     $script:RoslynAnalyzersScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/roslyn-analyzers.json'
+    $script:CsWin32ComScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/cswin32-com.json'
     $script:PwshPath = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
     $script:CopilotClientVersionCases = Get-Content -LiteralPath (
         Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
@@ -32,6 +33,7 @@ Describe 'Skill evaluation scenario contract' {
         $performanceTestingScenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
         $dotNetFileCreationScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetFileCreationScenarioPath)
         $roslynAnalyzersScenarios = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath)
+        $csWin32ComScenarios = @(Get-SkillEvalScenarios -Path $script:CsWin32ComScenarioPath)
         $scenarios = @(
             $createPrScenarios
             $technicalWritingScenarios
@@ -42,7 +44,8 @@ Describe 'Skill evaluation scenario contract' {
             $dotNetPipesScenarios
             $performanceTestingScenarios
             $dotNetFileCreationScenarios
-            $roslynAnalyzersScenarios)
+            $roslynAnalyzersScenarios
+            $csWin32ComScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -135,7 +138,18 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 84
+        $csWin32ComScenarios.Count | Should -Be 4
+        @($csWin32ComScenarios | Where-Object skill -ne 'cswin32-com').Count |
+            Should -Be 0
+        $csWin32ComScenarios.id |
+            Should -Contain 'cswin32-com-audit-manager-observation-activation'
+        $csWin32ComScenarios.id |
+            Should -Contain 'cswin32-com-audit-stgmedium-transfer'
+        $csWin32ComScenarios.id |
+            Should -Contain 'cswin32-com-audit-registration-multiplicity'
+        $csWin32ComScenarios.id |
+            Should -Contain 'cswin32-com-routing-ordinary-rcw-near-miss'
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 88
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -162,6 +176,22 @@ Describe 'Skill evaluation scenario contract' {
 
     It 'compiles every roslyn-analyzers scenario pattern' {
         $scenarios = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath)
+        foreach ($scenario in $scenarios) {
+            foreach ($field in @(
+                    'requiredResponsePatterns',
+                    'forbiddenResponsePatterns',
+                    'requiredCommandPatterns',
+                    'forbiddenCommandPatterns')) {
+                foreach ($pattern in @($scenario.$field)) {
+                    { [regex]::new([string] $pattern) } |
+                        Should -Not -Throw -Because "$($scenario.id).$field must contain valid regular expressions"
+                }
+            }
+        }
+    }
+
+    It 'compiles every cswin32-com scenario pattern' {
+        $scenarios = @(Get-SkillEvalScenarios -Path $script:CsWin32ComScenarioPath)
         foreach ($scenario in $scenarios) {
             foreach ($field in @(
                     'requiredResponsePatterns',

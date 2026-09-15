@@ -27,6 +27,22 @@ operation documents an expected "absent" result, an exception-free
 catches `COMException`. Change a shared helper only after auditing every caller
 and preserving its public failure contract.
 
+## Test the controlling lifecycle path
+
+Reference-count tests prove little when the cleanup path was never activated.
+For a lifetime fix, first exercise the ordinary public workflow without an
+optional application event, explicit cleanup call, or helper that incidentally
+establishes the missing native connection. Assert that the native observation
+or registration is active, trigger the real lifecycle transition, and verify
+release plus continued usability of unaffected owners.
+
+Build multiplicity, transfer, failure, and reentrancy matrices from the native
+contract rather than the proposed fields or containers. A test and
+implementation designed from the same representation can share one blind spot.
+Use the ownership ledger and adversarial cases in
+[lifecycle-audit.md](lifecycle-audit.md), and cross-apply tests from alternative
+fixes when available.
+
 ## Mocking struct-based COM in tests
 
 Struct-based calls go through raw vtable pointers, so a managed mock cannot be

@@ -1,6 +1,6 @@
 ---
 name: cswin32-interop
-description: 'Guides CsWin32 P/Invoke interop in a multi-targeted .NET 10 and .NET Framework library. Consult when replacing [DllImport] with source-generated PInvoke.* calls, working with generated Windows.Win32 projections (HANDLE / HMODULE / HRESULT / BOOL and typed enum/constant types), configuring NativeMethods.txt / NativeMethods.json, composing a public PInvoke across foundation/owner/extender packages with extensionReceiver, deciding which support library owns a helper, auditing native allocation and byte/element lengths, selecting compile-time / runtime / analyzer guards for Windows-only code, or choosing between CsWin32 and [LibraryImport]. Not for managed-only changes with no native boundary. Paired with the cswin32-com skill for the struct-based COM layer.'
+description: 'Guides CsWin32 P/Invoke interop in a multi-targeted .NET 10 and .NET Framework library. Consult when replacing [DllImport] with source-generated PInvoke.* calls, working with generated Windows.Win32 projections (HANDLE / HMODULE / HRESULT / BOOL and typed enum/constant types), configuring NativeMethods.txt / NativeMethods.json, composing a public PInvoke across foundation/owner/extender packages with extensionReceiver, deciding which support library owns a helper, auditing native allocation, ownership-transfer predicates, cleanup triggers, and byte/element lengths, selecting compile-time / runtime / analyzer guards for Windows-only code, or choosing between CsWin32 and [LibraryImport]. Not for managed-only changes with no native boundary. Paired with the cswin32-com skill for the struct-based COM layer.'
 license: MIT
 compatibility: Requires the .NET SDK and the Microsoft.Windows.CsWin32 source generator; projects Windows APIs across .NET 10 and .NET Framework. Owner/extender composition requires C# 14.
 metadata:
@@ -57,10 +57,7 @@ it - see the paired **cswin32-com** skill, whose vtable methods follow the same
 6. **Keep signatures blittable.** CsWin32 is configured `allowMarshaling: false`,
    so every `[DllImport]` and every COM vtable method must be blittable. The
    full rule set is in [blittable-signatures.md](blittable-signatures.md).
-7. **Audit ownership and size units.** Generated wrappers do not decide which
-   allocator frees an output, whether a COM reference remains caller-owned, or
-   whether a length is bytes or elements. Record and test those contracts using
-   [ownership-and-units.md](ownership-and-units.md).
+7. **Audit ownership, lifecycle, and size units.** Generated wrappers do not decide which allocator frees an output, whether ownership transfers on a particular result, what action activates cleanup, or whether a length is bytes or elements. Record and test those contracts using [ownership-and-units.md](ownership-and-units.md).
 
 ## Platform and target-framework guards
 

@@ -83,6 +83,12 @@ routing application runtime performance to `performance-testing`. Both cases use
 labeled outputs so affirmative plans and explicit refusals cannot satisfy the same
 keyword patterns. It is not part of the default release matrix.
 
+`scenarios/cswin32-com.json` is an opt-in four-case ownership and lifecycle
+suite. It covers manager-owned observation that must not depend on optional
+application handlers, successful `STGMEDIUM` transfer to a recipient that may
+release during the call, native event-registration identity and multiplicity,
+and an ordinary-RCW near miss. It is not part of the default release matrix.
+
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
 public versus credential caches, privileged consumption of user AppData, mixed

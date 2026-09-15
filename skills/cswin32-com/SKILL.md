@@ -1,6 +1,6 @@
 ---
 name: cswin32-com
-description: 'Guides struct-based COM interop using CsWin32 - AOT-compatible raw pointer calls without [ComImport] or built-in CLR marshalling; managed [ComImport] mirrors are limited to CCW bridges. Consult when working with ComScope, IID.Get, delegate* unmanaged vtables, CoCreateInstance or a class factory, IComIID across .NET 10 and .NET Framework, connection-point Advise/Unadvise ownership, caller-owned CCW references, manually defining COM interfaces absent from Win32 metadata, COM pointer lifetime in fields, cross-assembly CCWs, or mocking struct-based COM in tests. Not for ordinary RCW-based COM consumption with no raw struct pointers or CCW bridge. Paired with the cswin32-interop skill for the general P/Invoke layer and blittable-signature rules.'
+description: 'Guides struct-based COM interop using CsWin32 - AOT-compatible raw pointer calls without [ComImport] or built-in CLR marshalling; managed [ComImport] mirrors are limited to CCW bridges. Consult when working with ComScope, IID.Get, delegate* unmanaged vtables, CoCreateInstance or a class factory, IComIID across .NET 10 and .NET Framework, connection-point Advise/Unadvise ownership, lifecycle observers, caller-owned CCW references, STGMEDIUM/SetData ownership transfer, manually defining COM interfaces absent from Win32 metadata, COM pointer lifetime in fields, cross-assembly CCWs, or mocking struct-based COM in tests. Not for ordinary RCW-based COM consumption with no raw struct pointers or CCW bridge. Paired with the cswin32-interop skill for the general P/Invoke layer and blittable-signature rules.'
 license: MIT
 compatibility: Requires the .NET SDK and Microsoft.Windows.CsWin32 0.3.296 or later; Windows COM APIs across .NET 10 and .NET Framework. Cross-assembly extension-block examples require C# 14.
 metadata:
@@ -58,27 +58,28 @@ NativeAOT path, while a `ComWrappers` implementation can be AOT-compatible.
    and CsWin32 generates it. If not (for example, Setup Configuration or a
    private / third-party interface), define a manual struct in its own file - see
    [manual-structs.md](manual-structs.md).
-2. **Lifetime:** `using ComScope<T> scope = new();` for every transient **owned**
+2. **Audit ownership and lifecycle before fixing a leak.** Record every touched reference and native registration, including its activation and teardown triggers, retain or transfer predicate, identity, failure path, and reentrant callbacks. Trace the code that establishes required internal observation; comments and tests that activate it through optional application behavior are not proof. See [lifecycle-audit.md](lifecycle-audit.md).
+3. **Lifetime:** `using ComScope<T> scope = new();` for every transient **owned**
    COM reference, and free every owned COM `BSTR` out-param (`SysFreeString` /
    `FreeBSTR`, or a repo-provided scoped `BSTR` wrapper). A correct
    `try` / `finally` also releases on early return, but an owned-pointer scope
    centralizes initialization, release, and ownership transfer. Never release a
    borrowed pointer unless the caller first acquires a reference. See
    [lifetime.md](lifetime.md).
-3. **Activate** via a class-factory helper or `CoCreateInstance` with
+4. **Activate** via a class-factory helper or `CoCreateInstance` with
    the exact interface IID; prefer `IID.Get<T>()` when the support helper is
    available. See [Activation](#activation).
-4. **Call** via `scope.Pointer->Method(...)`. Pass `ComScope<T>` directly where
+5. **Call** via `scope.Pointer->Method(...)`. Pass `ComScope<T>` directly where
    the API expects `T**` / `void**` when the concrete scope provides those
    conversions.
-5. **Match the caller's error contract.** If the top-level consumer treats COM
+6. **Match the caller's error contract.** If the top-level consumer treats COM
    failure as a documented "absent" result, helpers may return `default` /
    `false`; otherwise call `.ThrowOnFailure()`. Do not change a shared helper's
    contract merely because one caller catches `COMException`. See the parity
    table in
    [migration-and-testing.md](migration-and-testing.md).
-6. **Gate .NET 10-only COM features with `#if NET`.** `ComWrappers`-based CCW support is unavailable on .NET Framework. Generated `IComIID` works on both supported runtime families; see [comiid-and-cls.md](comiid-and-cls.md).
-7. **Compose across packages** at the owner boundary. The owner implements
+7. **Gate .NET 10-only COM features with `#if NET`.** `ComWrappers`-based CCW support is unavailable on .NET Framework. Generated `IComIID` works on both supported runtime families; see [comiid-and-cls.md](comiid-and-cls.md).
+8. **Compose across packages** at the owner boundary. The owner implements
    generated partial hooks and publishes shared COM structs; extenders add
    behavior with extension blocks or uniquely named CCW providers. See
    [ccw-composition.md](ccw-composition.md).
@@ -110,6 +111,9 @@ instance.Pointer->DoThing(...);
 
 ## Sibling pages
 
+- [lifecycle-audit.md](lifecycle-audit.md) - ownership and registration ledgers,
+  transfer-capable values, lifecycle activation, reentrant teardown, and
+  adversarial tests.
 - [lifetime.md](lifetime.md) - `ComScope<T>`, `BSTR`, owned and borrowed
   references, field-lifetime strategies, and ownership transfer out of a helper.
 - [manual-structs.md](manual-structs.md) - defining an interface not in Win32

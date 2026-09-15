@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "cswin32-com-audit-manager-observation-activation",
+      "skill": "cswin32-com",
+      "category": "audit",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use cswin32-com to review this proposed COM lifetime fix without editing files or running commands. A manager creates and stores a WindowObserver whenever the first child event sink is added. Only WindowObserver.AddApplicationHandler calls source.Advise. The new navigation tests always add an application window handler before navigating, and then verify that the manager releases the child sink. Customers can subscribe only to child events and never add a window handler. State whether the fix is complete, trace the controlling activation path, give one cheap discriminating check, and describe the smallest product correction and regression test.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)(?:manager[- ]owned|internal)[^\r\n]{0,100}(?:observation|observer|subscription)", "(?i)(?:(?:Advise|connect(?:ion)?)[^\r\n]{0,100}(?:missing|never|not (?:called|reached|established)|inactive)|(?:missing|never|not (?:called|reached|established)|inactive)[^\r\n]{0,100}(?:Advise|connect(?:ion)?))", "(?i)(?:without|no)[^\r\n]{0,60}(?:application|optional|window)[^\r\n]{0,50}(?:handler|subscription)", "(?i)(?:ordinary|customer|public)[^\r\n]{0,50}(?:path|workflow)", "(?i)(?:assert|verify|check)[^\r\n]{0,100}(?:active|connected|Advise|registration)"],
+      "forbiddenResponsePatterns": ["(?i)(?:no (?:issue|finding)|fix is complete|implementation is correct)", "(?i)adding the application handler is sufficient"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "cswin32-com-audit-stgmedium-transfer",
+      "skill": "cswin32-com",
+      "category": "ownership",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use cswin32-com to review this adapter without editing files or running commands. Converting a managed STGMEDIUM to native acquires one temporary pUnkForRelease reference. The adapter calls native IDataObject::SetData, copies the native structure back to managed state, and releases pUnkForRelease in all outcomes. With fRelease=true, a successful recipient may call ReleaseStgMedium before returning. State the ownership rule, identify the defect, prescribe success/failure cleanup, and give the discriminating test matrix.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)(?:(?:success(?:ful)?|S_OK)[^\r\n]{0,80}fRelease[^\r\n]{0,30}true|fRelease[^\r\n]{0,30}true[^\r\n]{0,80}(?:success(?:ful)?|S_OK))", "(?i)(?:whole|entire)[^\r\n]{0,40}STGMEDIUM", "(?i)(?:must not|do not|cannot)[^\r\n]{0,100}(?:read|copy|release|inspect)[^\r\n]{0,100}(?:after|post|transferred)", "(?i)(?:failure|fRelease[^\r\n]{0,20}false)[^\r\n]{0,140}(?:release|dispose)[^\r\n]{0,80}(?:conversion|temporary)[- ]?(?:acquired )?reference", "(?i)(?:before returning|during the call|inside the call)[^\r\n]{0,80}(?:ReleaseStgMedium|release|destroy)|(?:ReleaseStgMedium|release|destroy)[^\r\n]{0,80}(?:before returning|during the call|inside the call)"],
+      "forbiddenResponsePatterns": ["(?i)always[^\r\n]{0,60}release[^\r\n]{0,40}pUnkForRelease[^\r\n]{0,40}after[^\r\n]{0,40}SetData", "(?i)copy[^\r\n]{0,60}(?:structure|medium)[^\r\n]{0,60}back[^\r\n]{0,60}(?:after )?success"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "cswin32-com-audit-registration-multiplicity",
+      "skill": "cswin32-com",
+      "category": "lifetime",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Use cswin32-com to review this event bridge without editing files or running commands. Every native attach receives a new dispatch proxy. Managed bookkeeping is Dictionary<EventHandler, Proxy>; adding the same delegate again or under another event name overwrites the prior entry. A separate integer is incremented for every add and decremented for every remove, including unmatched removal. Removing the last standard handler also detaches all individually attached proxies. State the product invariants, required representation, detach-failure behavior, and an adversarial test matrix.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?i)native registration identity", "(?i)(?:same|duplicate)[^\r\n]{0,50}delegate[^\r\n]{0,100}(?:distinct|separate|multiple)[^\r\n]{0,50}(?:proxy|registration|attach)", "(?i)(?:different|multiple)[^\r\n]{0,50}event names?", "(?i)unmatched[^\r\n]{0,50}(?:remove|detach)[^\r\n]{0,50}no-op", "(?i)detach[^\r\n]{0,40}fail[^\r\n]{0,100}(?:retain|restore|preserve)[^\r\n]{0,80}(?:metadata|registration|ownership)", "(?i)(?:standard|connection-point)[^\r\n]{0,100}(?:separate|independent)[^\r\n]{0,100}(?:attached|dispatch|proxy)"],
+      "forbiddenResponsePatterns": ["(?i)Dictionary<EventHandler,\\s*Proxy>[^\r\n]{0,80}(?:is sufficient|correctly represents)", "(?i)unmatched[^\r\n]{0,50}(?:remove|detach)[^\r\n]{0,50}(?:decrement|disconnect)"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "cswin32-com-routing-ordinary-rcw-near-miss",
+      "skill": "cswin32-com",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review the API design of a small C# desktop automation helper that uses an ordinary dynamic Office RCW. It has no raw COM struct pointers, manual vtables, CCW bridge, explicit AddRef or Release, connection points, or native ownership transfer. Focus on the managed API shape and do not introduce low-level COM machinery.",
+      "runCount": 3,
+      "expectSkillInvocation": false,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": [],
+      "forbiddenResponsePatterns": ["ComScope", "IID\\.Get", "delegate\\* unmanaged", "STGMEDIUM"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    }
+  ]
+}
