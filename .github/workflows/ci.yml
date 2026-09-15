@@ -84,6 +84,7 @@ jobs:
           args: >-
             --no-progress
             --offline
+            --exclude-path "tools/powershell-toolchain-validator/node_modules"
             "**/*.md"
           fail: true
 
