@@ -137,6 +137,14 @@ Describe 'PowerShell toolchain contract' {
                 '      - name: Validate PowerShell toolchain',
                 '        shell: pwsh',
                 '        run: ./tools/Test-PowerShellToolchain.ps1',
+                '      - name: Install Pester',
+                '        shell: pwsh',
+                '        run: Install-Module Pester -RequiredVersion 6.2.0',
+                '      - name: Run Pester tests',
+                '        shell: pwsh',
+                '        run: |',
+                '          Import-Module Pester -RequiredVersion 6.2.0',
+                '          Invoke-Pester ./tests',
                 '  scaffold-windows:',
                 '    runs-on: windows-latest',
                 '    steps:',
@@ -655,6 +663,38 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*job 'dotnet-pipes' must use manifest .NET SDK '10.0.x'*"
     }
 
+    It 'rejects an inline setup-dotnet with mapping' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-sdk-flow-mapping'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        $content = Get-Content -LiteralPath $workflowPath -Raw
+        $content = [regex]::Replace(
+            $content,
+            '(?m)^        with:\r?\n' +
+                '          dotnet-version: 10\.0\.x\r?$',
+            '        with: { dotnet-version: 10.0.x }',
+            1)
+        Set-Content -LiteralPath $workflowPath -Value $content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*setup-dotnet with must use a block mapping*'
+    }
+
+    It 'requires the scheduled host lane to run Pester' {
+        $fixtureRoot = New-ToolchainFixture 'scheduled-lane-without-pester'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/full-ci.yml'
+        $content = Get-Content -LiteralPath $workflowPath -Raw
+        $content = [regex]::Replace(
+            $content,
+            '(?ms)^      - name: Install Pester\r?\n' +
+                '.*?^          Invoke-Pester ./tests\r?\n',
+            '',
+            1)
+        Set-Content -LiteralPath $workflowPath -Value $content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'scaffold-linux-x64' must run Pester*"
+    }
+
     It 'rejects preview quality metadata outside setup-dotnet with' {
         $fixtureRoot = New-ToolchainFixture 'workflow-quality-nested-metadata'
         $workflowPath = Join-Path $fixtureRoot '.github/workflows/full-ci.yml'
@@ -1017,6 +1057,39 @@ Describe 'PowerShell toolchain contract' {
         Set-Content -LiteralPath $scriptPath -Value @(
             ('Import-Module -FullyQualifiedName @{ ModuleName = ''Pester''; ' +
                 'RequiredVersion = ''6.2.0'' }'),
+            'Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'rejects ModuleVersion in a FullyQualifiedName Pester import' {
+        $fixtureRoot = New-ToolchainFixture 'fully-qualified-module-version'
+        $scriptPath = Join-Path $fixtureRoot '.agents/FullyQualified.ps1'
+        Set-Content -LiteralPath $scriptPath -Value (
+            'Import-Module -FullyQualifiedName @{ ModuleName = ''Pester''; ' +
+                'ModuleVersion = ''6.2.0'' }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*invokes Pester without -RequiredVersion 6.2.0*'
+    }
+
+    It 'accepts an assigned pinned FullyQualifiedName Pester <Form>' -ForEach @(
+        @{
+            Form = 'hashtable'
+            Value = "@{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }"
+        }
+        @{
+            Form = 'array'
+            Value = "@(@{ ModuleName = 'Other'; RequiredVersion = '1.0.0' }, " +
+                "@{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' })"
+        }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "assigned-fully-qualified-$Form"
+        $scriptPath = Join-Path $fixtureRoot '.agents/FullyQualified.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            "`$spec = $Value",
+            'Import-Module -FullyQualifiedName $spec',
             'Invoke-Pester ./tests')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
@@ -1756,6 +1829,29 @@ jobs:
             Should -Not -Throw
     }
 
+    It 'does not share a parent import with a thread job' {
+        $fixtureRoot = New-ToolchainFixture 'parent-import-thread-job-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/ThreadJobBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            'Import-Module Pester -RequiredVersion 6.2.0',
+            'Start-ThreadJob { Invoke-Pester ./tests }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'accepts a pinned import and invocation inside one thread job' {
+        $fixtureRoot = New-ToolchainFixture 'thread-job-pinned-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/ThreadJobBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value (
+            'Start-ThreadJob { Import-Module Pester ' +
+                '-RequiredVersion 6.2.0; Invoke-Pester ./tests }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'checks an unpinned invocation inside the icm alias' {
         $fixtureRoot = New-ToolchainFixture 'invoke-command-alias-invocation'
         $scriptPath = Join-Path $fixtureRoot '.agents/RemoteBoundary.ps1'
@@ -2001,6 +2097,18 @@ jobs:
                 { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
                     Should -Not -Throw
             }
+
+    It 'rejects more-indented content in a folded workflow run' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-folded-more-indented'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/folded.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:', '      - run: >-',
+            '          Import-Module Pester -RequiredVersion 6.2.0',
+            '            Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*folded run scalar must use one content indentation*'
+    }
 
     It 'accepts the shard runner validated Pester version variable' {
         $fixtureRoot = New-ToolchainFixture 'runner-version-variable'

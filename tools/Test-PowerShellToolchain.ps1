@@ -418,6 +418,17 @@ function ConvertFrom-WorkflowBlockScalar (
     [string] $Text,
     [switch] $Folded) {
     if (-not $Folded) { return $Text }
+    $contentIndents = @([regex]::Matches(
+            $Text, '(?m)^(?<indent>[ \t]*)\S') | ForEach-Object {
+            $_.Groups['indent'].Length
+        })
+    if ($contentIndents.Count -gt 0) {
+        $contentIndent = ($contentIndents | Measure-Object -Minimum).Minimum
+        if (@($contentIndents | Where-Object { $_ -ne $contentIndent }).Count `
+            -gt 0) {
+            throw 'A folded run scalar must use one content indentation.'
+        }
+    }
     return [regex]::Replace($Text, '\r?\n(?=[ \t]*\S)', ' ')
 }
 
@@ -740,7 +751,19 @@ function Get-WorkflowActionInputRecords (
         $with = @($keyRecords | Where-Object Key -IEQ 'with' |
             Select-Object -First 1)
         if ($with.Count -ne 1) {
-            [pscustomobject]@{ HasValue = $false; Value = $null }
+            [pscustomobject]@{
+                HasValue = $false
+                UsesFlowMapping = $false
+                Value = $null
+            }
+            continue
+        }
+        if (-not [string]::IsNullOrWhiteSpace($with[0].Value)) {
+            [pscustomobject]@{
+                HasValue = $false
+                UsesFlowMapping = $true
+                Value = $null
+            }
             continue
         }
         $withEndLine = $endLine
@@ -775,6 +798,7 @@ function Get-WorkflowActionInputRecords (
         else { $input = @() }
         [pscustomobject]@{
             HasValue = $input.Count -eq 1
+            UsesFlowMapping = $false
             Value = if ($input.Count -eq 1) {
                 ConvertFrom-WorkflowRunScalar $input[0].Value
             }
@@ -1055,7 +1079,7 @@ function Get-AstExecutionContext (
     return $RootAst
 }
 
-function Test-CommandTargetsAssignedPester (
+function Get-CommandAssignedTargetAst (
     [Management.Automation.Language.CommandAst] $CommandAst,
     [Management.Automation.Language.ScriptBlockAst] $RootAst) {
     $target = Get-CommandModuleTargetAst -CommandAst $CommandAst
@@ -1081,10 +1105,35 @@ function Test-CommandTargetsAssignedPester (
                     $commandContext)
         } | Sort-Object { $_.Extent.StartOffset } -Descending)
     foreach ($assignment in $assignments) {
-        return @(Get-StaticStringAstValues -ExpressionAst $assignment.Right |
-            Where-Object { $_ -ieq 'Pester' }).Count -gt 0
+        return $assignment.Right
     }
-    return $false
+    return $null
+}
+
+function Get-CommandAssignedModuleSpecifications (
+    [Management.Automation.Language.CommandAst] $CommandAst,
+    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
+    $assignedTarget = Get-CommandAssignedTargetAst `
+        -CommandAst $CommandAst -RootAst $RootAst
+    if ($null -ne $assignedTarget) {
+        Get-StaticModuleSpecifications -ExpressionAst $assignedTarget
+    }
+}
+
+function Test-CommandTargetsAssignedPester (
+    [Management.Automation.Language.CommandAst] $CommandAst,
+    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
+    $assignedTarget = Get-CommandAssignedTargetAst `
+        -CommandAst $CommandAst -RootAst $RootAst
+    if ($null -eq $assignedTarget) { return $false }
+    $moduleSpecifications = @(Get-StaticModuleSpecifications `
+            -ExpressionAst $assignedTarget)
+    if (@($moduleSpecifications | Where-Object Name -IEQ 'Pester').Count -gt
+        0) {
+        return $true
+    }
+    return @(Get-StaticStringAstValues -ExpressionAst $assignedTarget |
+        Where-Object { $_ -ieq 'Pester' }).Count -gt 0
 }
 
 function Test-CommandInvokesScriptBlockArguments (
@@ -1224,6 +1273,11 @@ function Test-PinnedPesterImport (
             $moduleSpecifications = @(Get-StaticModuleSpecifications `
                     -ExpressionAst (Get-CommandModuleTargetAst `
                         -CommandAst $commandAst))
+            if ($moduleSpecifications.Count -eq 0) {
+                $moduleSpecifications = @(
+                    Get-CommandAssignedModuleSpecifications `
+                        -CommandAst $commandAst -RootAst $ast)
+            }
             foreach ($moduleSpecification in $moduleSpecifications |
                     Where-Object Name -IEQ 'Pester') {
                 if ($moduleSpecification.HasExactVersion -and
@@ -1318,13 +1372,13 @@ else {
 }
 
 $workflowContracts = @(
-    @{ Path = '.github/workflows/ci.yml'; Job = 'dotnet-pipes'; Host = $null; DotNet = 'sdkVersion'; Quality = $null }
-    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = 'sdkVersion'; Quality = $null }
-    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = 'sdkVersion'; Quality = $null }
-    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = 'sdkVersion'; Quality = $null }
-    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux-x64'; Host = 'scheduled'; DotNet = 'sdkVersion'; Quality = $null }
-    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = 'sdkVersion'; Quality = $null }
-    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-preview'; Host = 'windows'; DotNet = 'previewSdkVersion'; Quality = 'preview' }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'dotnet-pipes'; Host = $null; DotNet = 'sdkVersion'; Quality = $null; RunsPester = $false }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = 'sdkVersion'; Quality = $null; RunsPester = $false }
+    @{ Path = '.github/workflows/ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = 'sdkVersion'; Quality = $null; RunsPester = $false }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux'; Host = 'primary'; DotNet = 'sdkVersion'; Quality = $null; RunsPester = $false }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-linux-x64'; Host = 'scheduled'; DotNet = 'sdkVersion'; Quality = $null; RunsPester = $true }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-windows'; Host = 'windows'; DotNet = 'sdkVersion'; Quality = $null; RunsPester = $false }
+    @{ Path = '.github/workflows/full-ci.yml'; Job = 'scaffold-preview'; Host = 'windows'; DotNet = 'previewSdkVersion'; Quality = 'preview'; RunsPester = $false }
 )
 $workflowContents = @{}
 foreach ($contract in $workflowContracts) {
@@ -1362,6 +1416,11 @@ foreach ($contract in $workflowContracts) {
     $sdkInputs = @(Get-WorkflowActionInputRecords -JobBody $jobBody `
         -ActionPattern '^actions/setup-dotnet(?:@|$)' `
         -InputName 'dotnet-version')
+    if (@($sdkInputs | Where-Object UsesFlowMapping).Count -gt 0) {
+        $errors.Add("'$($contract.Path)' job '$($contract.Job)' setup-dotnet with must use a block mapping.") |
+            Out-Null
+        continue
+    }
     if ($sdkInputs.Count -eq 0 -or
         @($sdkInputs | Where-Object {
                 -not $_.HasValue -or $_.Value -cne $expectedSdk
@@ -1381,6 +1440,12 @@ foreach ($contract in $workflowContracts) {
             $errors.Add("'$($contract.Path)' job '$($contract.Job)' must use .NET quality '$($contract.Quality)'.") |
                 Out-Null
         }
+    }
+    if ($contract.RunsPester -and
+        -not (Test-WorkflowPwshStepCommand -JobBody $jobBody `
+            -CommandPattern '[\s\S]*Invoke-Pester[\s\S]*')) {
+        $errors.Add("'$($contract.Path)' job '$($contract.Job)' must run Pester in a pwsh step.") |
+            Out-Null
     }
 }
 if ($workflowContents['.github/workflows/full-ci.yml'] -notmatch '(?m)^  schedule:\s*$') {
@@ -1444,6 +1509,9 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
     $assignedPesterModuleCommandTexts =
         [System.Collections.Generic.HashSet[string]]::new(
             [System.StringComparer]::Ordinal)
+    $assignedPesterModuleSpecifications =
+        [System.Collections.Generic.Dictionary[string, object]]::new(
+            [System.StringComparer]::Ordinal)
     $copiedVersionScopes = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::Ordinal)
     $sourceTokens = @()
@@ -1484,6 +1552,13 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     -RootAst $sourceAst) {
                 $assignedPesterModuleCommandTexts.Add(
                     $commandAst.Extent.Text) | Out-Null
+            }
+            $assignedSpecifications = @(
+                Get-CommandAssignedModuleSpecifications `
+                    -CommandAst $commandAst -RootAst $sourceAst)
+            if ($assignedSpecifications.Count -gt 0) {
+                $assignedPesterModuleSpecifications[$commandAst.Extent.Text] =
+                    $assignedSpecifications
             }
         }
         $moduleRequirementScopes.Add($content) | Out-Null
@@ -1552,6 +1627,13 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
                     $assignedPesterModuleCommandTexts.Add(
                         $commandAst.Extent.Text) | Out-Null
                 }
+                $assignedSpecifications = @(
+                    Get-CommandAssignedModuleSpecifications `
+                        -CommandAst $commandAst -RootAst $scopeAst)
+                if ($assignedSpecifications.Count -gt 0) {
+                    $assignedPesterModuleSpecifications[
+                        $commandAst.Extent.Text] = $assignedSpecifications
+                }
             }
         }
     }
@@ -1615,6 +1697,10 @@ foreach ($file in @($scanFiles | Sort-Object FullName -Unique)) {
             $moduleNames = @(Get-StaticStringAstValues -ExpressionAst $moduleTarget)
             $moduleSpecifications = @(Get-StaticModuleSpecifications `
                     -ExpressionAst $moduleTarget)
+            if ($assignedPesterModuleSpecifications.ContainsKey($commandText)) {
+                $moduleSpecifications = @(
+                    $assignedPesterModuleSpecifications[$commandText])
+            }
             if ($moduleSpecifications.Count -gt 0) {
                 $moduleNames = @($moduleSpecifications.Name)
             }

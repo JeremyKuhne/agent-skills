@@ -57,6 +57,20 @@ jobs:
         shell: pwsh
         run: ./tools/Test-PowerShellToolchain.ps1
 
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          Import-Module Pester -RequiredVersion 6.2.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests'
+          $config.Run.Throw = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
       - name: Scaffold, build, test, and pack
         shell: pwsh
         run: |
