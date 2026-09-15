@@ -1023,6 +1023,31 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
+    It 'rejects a stale Pester specification in a FullyQualifiedName array' {
+        $fixtureRoot = New-ToolchainFixture 'fully-qualified-pester-array'
+        $scriptPath = Join-Path $fixtureRoot '.agents/FullyQualified.ps1'
+        Set-Content -LiteralPath $scriptPath -Value (
+            'Import-Module -FullyQualifiedName @(' +
+                '@{ ModuleName = ''Other''; RequiredVersion = ''1.0.0'' }, ' +
+                '@{ ModuleName = ''Pester''; RequiredVersion = ''5.7.1'' })')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '5.7.1'*"
+    }
+
+    It 'accepts a pinned Pester specification in a FullyQualifiedName array' {
+        $fixtureRoot = New-ToolchainFixture 'pinned-fully-qualified-pester-array'
+        $scriptPath = Join-Path $fixtureRoot '.agents/FullyQualified.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            ('Import-Module -FullyQualifiedName @(' +
+                '@{ ModuleName = ''Other''; RequiredVersion = ''1.0.0'' }, ' +
+                '@{ ModuleName = ''Pester''; RequiredVersion = ''6.2.0'' })'),
+            'Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'rejects a stale Pester import through the ipmo alias' {
         $fixtureRoot = New-ToolchainFixture 'stale-ipmo-alias'
         Set-Content -LiteralPath (Join-Path $fixtureRoot '.agents/Alias.ps1') `
@@ -1399,6 +1424,18 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*must use RequiredVersion for its Pester module requirement*'
     }
 
+    It 'rejects an unresolved key in a potential Pester module specification' {
+        $fixtureRoot = New-ToolchainFixture 'dynamic-module-name-key'
+        $scriptPath = Join-Path $fixtureRoot '.agents/DynamicKey.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            '$key = ''ModuleName''',
+            ('Import-Module -FullyQualifiedName @{ $key = ''Pester''; ' +
+                'RequiredVersion = ''5.7.1'' }'))
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must use the exact static ModuleName*'
+    }
+
     It 'rejects an unverifiable <Kind> module requirement name' -ForEach @(
         @{ Kind = 'dynamic'; Value = '$moduleName' }
         @{ Kind = 'wildcard'; Value = "'Pester*'" }
@@ -1719,6 +1756,41 @@ jobs:
             Should -Not -Throw
     }
 
+    It 'checks an unpinned invocation inside the icm alias' {
+        $fixtureRoot = New-ToolchainFixture 'invoke-command-alias-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/RemoteBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value `
+            'icm { Invoke-Pester ./tests }'
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'does not share a parent import with the sajb alias' {
+        $fixtureRoot = New-ToolchainFixture 'start-job-alias-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/JobAliasBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            'Import-Module Pester -RequiredVersion 6.2.0',
+            'sajb { Invoke-Pester ./tests }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
+    It 'does not share a parent import with abbreviated Parallel' {
+        $fixtureRoot = New-ToolchainFixture 'parallel-abbreviation-invocation'
+        $scriptPath = Join-Path $fixtureRoot '.agents/ParallelBoundary.ps1'
+        Set-Content -LiteralPath $scriptPath -Value @(
+            'Import-Module Pester -RequiredVersion 6.2.0',
+            '1..1 | ForEach-Object -Par { Invoke-Pester ./tests }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw ('*invokes Invoke-' +
+                'Pester without a preceding pinned Pester import*')
+    }
+
     It 'accepts a pinned import with its nested invocation in <Kind>' -ForEach @(
         @{
             Kind = 'workflow'
@@ -1744,6 +1816,19 @@ jobs:
         $path = Join-Path $fixtureRoot $Path
         [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
         Set-Content -LiteralPath $path -Value $Content
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'ignores Invoke-Pester text in multiline workflow metadata' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-multiline-metadata'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/metadata.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    steps:',
+            '      - run: Write-Output ok',
+            '        env:', '          NOTE: |',
+            '            Invoke-Pester ./tests')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
@@ -2098,6 +2183,35 @@ Invoke-Pester ./tests
             Join-Path $fixtureRoot 'docs/pr-review-effectiveness-plan.md') -Value (
             './tests/Invoke-PesterShards.ps1 -Pester' +
             'Version ' + ('5.7' + '.1'))
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'scans current engineering-plan evidence but permits its baseline section' {
+        $fixtureRoot = New-ToolchainFixture 'engineering-plan-sections'
+        $planPath = Join-Path $fixtureRoot 'docs/powershell-engineering-plan.md'
+        Set-Content -LiteralPath $planPath -Value @(
+            '# PowerShell engineering plan',
+            '## Milestones and current status',
+            './tests/Invoke-PesterShards.ps1 -PesterVersion 5.7.1',
+            '## Why the current suite missed real defects',
+            './tests/Invoke-PesterShards.ps1 -PesterVersion 5.7.1',
+            '## Target engineering contract',
+            'Use the current manifest.')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*powershell-engineering-plan.md*copies Pester version '5.7.1'*"
+
+        $content = Get-Content -LiteralPath $planPath -Raw
+        $currentEvidence = '## Milestones and current status' +
+            [Environment]::NewLine +
+            './tests/Invoke-PesterShards.ps1 -PesterVersion 5.7.1'
+        $currentPin = '## Milestones and current status' +
+            [Environment]::NewLine +
+            './tests/Invoke-PesterShards.ps1 -PesterVersion 6.2.0'
+        $content.Replace($currentEvidence, $currentPin) |
+            Set-Content -LiteralPath $planPath
+
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
     }

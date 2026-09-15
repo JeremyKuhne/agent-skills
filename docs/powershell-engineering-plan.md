@@ -50,13 +50,31 @@ every Pester test requirement, active workflow and template copies, runner and
 documentation examples, and the three skill compatibility declarations.
 
 The isolated Pester 6.2.0 canary ran all 16 test files through the process-per-file
-runner on PowerShell 7.6.6. It completed in 84.018 seconds with 653 tests: 640
+runner on PowerShell 7.6.6. It completed in 85.624 seconds with 661 tests: 648
 passed, 13 were intentionally skipped, and none failed, were not run, were
-inconclusive, or reported block, container, or infrastructure failures. The 188
+inconclusive, or reported block, container, or infrastructure failures. The 196
 toolchain contract tests and the empty `-ForEach` compatibility control explain
 the increase from the 464-test assessment baseline. An independent search found
 no active Pester 5.7.1 or minimum-version Pester 5 test requirement; historical
 baseline documents retain their observed versions.
+
+### P1 review-loop lesson
+
+The P1 pull request reached 30 published commits because review findings were
+reproduced, fixed, and republished serially while the validator accumulated
+partial parsers for YAML, Markdown, and PowerShell. Green deterministic gates
+proved the covered contracts, but they did not prove that each partial grammar
+had a closed boundary. Repeated review then exposed a new syntax or scope case
+in nearly every round.
+
+For the remaining milestones, collect the complete exact-head review body,
+inline threads, and suppressed findings before editing. Reproduce all valid
+findings with independent controls, repair them as one cohesive local batch,
+and publish one follow-up only after the focused and full deterministic gates
+pass. If that follow-up review identifies a new grammar class rather than a
+defect in the documented subset, stop extending the partial parser in the same
+pull request. Narrow the contract or replace the parser with a structured or
+typed implementation in a focused change before continuing.
 
 ## Executive decision
 
