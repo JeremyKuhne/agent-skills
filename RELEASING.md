@@ -40,7 +40,7 @@ Get-ChildItem ./skills -Directory | ForEach-Object {
 ./tools/Update-SkillCatalog.ps1
 npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts
 ./tools/Test-PowerShellToolchain.ps1
-Invoke-Pester ./tests
+./tests/Invoke-PesterShards.ps1 -Path ./tests
 if ([string]::IsNullOrWhiteSpace($env:COPILOT_NATIVE_PATH)) {
   throw 'Set COPILOT_NATIVE_PATH to the pinned native Copilot CLI executable.'
 }

@@ -99,7 +99,7 @@ Describe 'PowerShell toolchain contract' {
         }
     }
 
-    It 'records the accepted versions and host lanes' {
+    It 'records the enforced P1 versions' {
         $script:Toolchain.schemaVersion | Should -Be 1
         $script:Toolchain.powerShell.minimumVersion | Should -BeExactly '7.4'
         $script:Toolchain.modules.Pester | Should -BeExactly '6.2.0'
@@ -231,17 +231,30 @@ Describe 'PowerShell toolchain contract' {
             Should -Not -Throw
     }
 
-    It 'rejects a stale Pester pin through a static workflow variable' {
-        $fixtureRoot = New-ToolchainFixture 'workflow-static-pester-variable'
+    It 'rejects a variable workflow module target as unverifiable' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-variable-module-target'
         Set-Content -LiteralPath (
             Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
             'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
             '      - shell: pwsh', '        run: |',
             "          `$moduleName = 'Pester'",
+            '          if ($env:USE_OTHER) { $moduleName = ''Other'' }',
             '          Install-Module $moduleName -RequiredVersion 6.1.0')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw "*copies Pester version '6.1.0' instead of '6.2.0'*"
+            Should -Throw '*module command whose target cannot be verified statically*'
+    }
+
+    It 'rejects a constructed workflow module target as unverifiable' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-constructed-module-target'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh',
+            "        run: Import-Module ('P' + 'ester') -RequiredVersion 6.1.0")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*module command whose target cannot be verified statically*'
     }
 
     It 'rejects a stale Pester pin inside a nested PowerShell scope' {

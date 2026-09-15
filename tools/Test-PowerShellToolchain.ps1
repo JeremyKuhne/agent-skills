@@ -94,17 +94,6 @@ function Get-CommandParameterValueAst (
     return $null
 }
 
-function Get-NearestScriptBlockAst ([object] $Node) {
-    $ancestor = $Node
-    while ($null -ne $ancestor) {
-        if ($ancestor -is [Management.Automation.Language.ScriptBlockAst]) {
-            return $ancestor
-        }
-        $ancestor = $ancestor.Parent
-    }
-    return $null
-}
-
 function Get-CommandModuleTargetAst (
     [Management.Automation.Language.CommandAst] $CommandAst) {
     $elements = @($CommandAst.CommandElements)
@@ -140,31 +129,6 @@ function Get-CommandModuleTargetAst (
     return $null
 }
 
-function Get-StaticModuleName (
-    [Management.Automation.Language.CommandAst] $CommandAst,
-    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
-    $targetAst = Get-CommandModuleTargetAst -CommandAst $CommandAst
-    $moduleName = Get-StaticStringAstValue -ExpressionAst $targetAst
-    if ($null -ne $moduleName -or
-        $targetAst -isnot [Management.Automation.Language.VariableExpressionAst]) {
-        return $moduleName
-    }
-    $variableName = $targetAst.VariablePath.UserPath
-    $assignments = @($RootAst.FindAll({
-                param($node)
-                $node -is [Management.Automation.Language.AssignmentStatementAst]
-            }, $true) | Where-Object {
-            $_.Extent.StartOffset -lt $CommandAst.Extent.StartOffset -and
-                $_.Left -is
-                    [Management.Automation.Language.VariableExpressionAst] -and
-                $_.Left.VariablePath.UserPath -ieq $variableName -and
-                [object]::ReferenceEquals(
-                    (Get-NearestScriptBlockAst -Node $_), $RootAst)
-        } | Sort-Object { $_.Extent.StartOffset } -Descending)
-    if ($assignments.Count -eq 0) { return $null }
-    return Get-StaticStringAstValue -ExpressionAst $assignments[0].Right
-}
-
 function Get-PesterCommandRecords (
     [Management.Automation.Language.ScriptBlockAst] $Ast,
     [string] $RelativePath,
@@ -178,15 +142,11 @@ function Get-PesterCommandRecords (
         if ($commandAst.GetCommandName() -notin @(
                 'Install-Module', 'Import-Module', 'ipmo')) { continue }
         $elements = @($commandAst.CommandElements)
-        $commandScope = Get-NearestScriptBlockAst -Node $commandAst
-        $moduleName = Get-StaticModuleName -CommandAst $commandAst `
-            -RootAst $commandScope
+        $moduleTarget = Get-CommandModuleTargetAst -CommandAst $commandAst
+        $moduleName = Get-StaticStringAstValue -ExpressionAst $moduleTarget
         if ($null -eq $moduleName) {
-            if ($Ast.Extent.Text.IndexOf(
-                    'Pester', [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-                $ErrorList.Add("'$RelativePath' contains a module command whose target cannot be verified statically.") |
-                    Out-Null
-            }
+            $ErrorList.Add("'$RelativePath' contains a module command whose target cannot be verified statically.") |
+                Out-Null
             continue
         }
         if ($moduleName -ine 'Pester') { continue }
@@ -359,7 +319,14 @@ if ($parserMetadataReady -and $node.Count -eq 1 -and
             continue
         }
         foreach ($runRecord in $runRecords | Sort-Object job, step) {
-            if ([string]$runRecord.run -notmatch '(?i)Pester') { continue }
+            $shellParts = @([string]$runRecord.shell -split '\s+', 2)
+            if ($shellParts.Count -eq 0 -or $shellParts[0] -ine 'pwsh') {
+                if ([string]$runRecord.run -match '(?i)Pester') {
+                    $errors.Add("'$relativePath' job '$($runRecord.job)' step $($runRecord.step) contains a Pester command outside a pwsh shell.") |
+                        Out-Null
+                }
+                continue
+            }
             $tokens = $null
             $parseErrors = $null
             $runAst = [Management.Automation.Language.Parser]::ParseInput(
@@ -373,12 +340,6 @@ if ($parserMetadataReady -and $node.Count -eq 1 -and
                 -RelativePath $relativePath -ExpectedVersion $pesterVersion `
                 -ErrorList $errors)
             if ($pesterCommands.Count -eq 0) { continue }
-            $shellParts = @([string]$runRecord.shell -split '\s+', 2)
-            if ($shellParts.Count -eq 0 -or $shellParts[0] -ine 'pwsh') {
-                $errors.Add("'$relativePath' job '$($runRecord.job)' step $($runRecord.step) contains a Pester command outside a pwsh shell.") |
-                    Out-Null
-                continue
-            }
         }
     }
 }

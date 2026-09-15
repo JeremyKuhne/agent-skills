@@ -54,10 +54,10 @@ workflow-to-policy mapping contract. PSScriptAnalyzer ownership remains P5,
 where the pinned version will be exercised by the analyzer gate.
 
 The replacement Pester 6.2.0 canary ran all 16 test files through the
-process-per-file runner on PowerShell 7.6.6. It completed in 87.379 seconds
-with 484 tests: 471 passed, 13 were intentionally skipped, and none failed,
+process-per-file runner on PowerShell 7.6.6. It completed in 85.558 seconds
+with 485 tests: 472 passed, 13 were intentionally skipped, and none failed,
 were not run, were inconclusive, or reported block, container, or
-infrastructure failures. Nineteen focused toolchain contracts and the empty
+infrastructure failures. Twenty focused toolchain contracts and the empty
 `-ForEach` compatibility control explain the increase from the 464-test
 assessment baseline.
 
@@ -84,7 +84,10 @@ PR #88 is therefore replaced rather than extended or merged. The replacement
 keeps P1 to the manifest, the Pester 6.2.0 and PowerShell 7.4 cutover, parsed
 test and workflow version contracts, runner defaults, generated test templates,
 and named guidance. Canonical isolated CI execution remains P2 and must land in
-a separate pull request.
+a separate pull request. P2 also owns the execution contract that links each
+`Invoke-Pester` call to an installed and imported pinned module in the correct
+process; P1 validates static Pester module version copies without modeling that
+runtime state.
 
 ### Parser policy
 

@@ -19,7 +19,7 @@
       names, or links into a particular repository's tree) - see
       [FORMAT.md](../FORMAT.md).
 - [ ] Strict portfolio and reference validation pass for every source skill.
-- [ ] Repository Pester tests pass (`Invoke-Pester ./tests`).
+- [ ] Repository Pester tests pass (`./tests/Invoke-PesterShards.ps1 -Path ./tests`).
 - [ ] Portfolio metadata, overlay binding, compatibility, and relationships are
       accurate; the generated catalog is current.
 - [ ] Executable helpers/templates have focused tests or a documented reason the
