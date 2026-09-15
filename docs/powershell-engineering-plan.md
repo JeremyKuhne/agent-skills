@@ -1,0 +1,824 @@
+# PowerShell engineering plan
+
+- Status: architecture reset approved for plan-only publication; P0r ownership
+  inventory is next; PR #90 will close unmerged
+- Assessment date: 2026-09-13 local time; architecture review extends through
+  2026-09-15 UTC
+- Planning baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`
+- Scope: test ownership, PowerShell runtime and API contracts, Pester, MSTest,
+  static analysis, separate managed and PowerShell coverage, process isolation,
+  generated scripts, typed infrastructure, and reusable agent guidance
+- Related work: [Sol and Luna evaluation plan](dual-model-evaluation-plan.md)
+  and [PR review effectiveness plan](pr-review-effectiveness-plan.md)
+- Release boundary: one documented breaking pre-1.0 minor release, delivered
+  through multiple focused pull requests
+
+## Milestones and current status
+
+This plan starts after the deterministic-client work merged through PR #87. The
+baseline measurements remain valid, but the architectural decision to treat
+Pester as the repository-wide test harness is reopened. PR #90 demonstrates
+that Pester 6.2.0 can execute the current suite; it does not establish that the
+current suite has the right ownership boundaries.
+
+The implementation agent owns local work and evidence. The repository
+maintainer accepts milestone exits and separately authorizes commits, pushes,
+pull request writes, releases, and model runs. Use `Not started`, `Ready`, `In
+progress`, `Paused`, `Awaiting decision`, `Blocked`, and `Done`. Status last
+reviewed: 2026-09-15. `Ready` means the entry conditions are satisfied and the
+milestone is next to execute; it does not claim that exit evidence exists.
+
+| ID | Milestone | State | Depends on | Exit evidence and decision |
+| --- | --- | --- | --- | --- |
+| P0 | Baseline evidence | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence is recorded. Test-harness ownership decisions previously attributed to P0 are superseded by P0r. |
+| P0r | Test-ownership and premise reset | Ready | P0 | Every current check is classified by subject, implementation owner, independent oracle, best harness, parser or standard tool, coverage domain, and migration disposition; the maintainer approves the inventory. PR #90 is retained as compatibility evidence and closed unmerged. |
+| P0c | Engineering course-correction skill | Blocked | P0r | A portable skill detects ineffective implementation and review loops, challenges inherited premises, runs a bounded disconfirming check, and returns an explicit continue, narrow, replace, or stop decision; synthetic scenarios prove the behavior. |
+| P1a | Mechanical PowerShell and Pester cutover | Paused | P0r, P0c | Only tests retained in Pester require PowerShell 7.4 and Pester 6.2 or later; repository Pester execution locks 6.2.0 exactly; the accepted changes are rebuilt from current `main` rather than inherited from PR #90. |
+| P1c | Managed repository-contract canary | Blocked | P0r, P0c | One representative non-PowerShell or mixed Pester suite is split or migrated into a dedicated MSTest project using the owning parser or API; duplicate assertions are removed; focused and CI evidence establish whether the boundary improves clarity and defect detection. |
+| P1b | Parser-backed toolchain policy | Blocked | P0r, P1c | An approved contract table names every accepted, rejected, and deferred form before implementation; repository policy is implemented in managed code or an established validator; only fields with executable enforcement enter a manifest. |
+| P2 | Canonical isolated PowerShell execution | Blocked | P1a, P1c | Every remaining CI Pester invocation goes through one process-isolated runner; MSTest runs independently through `dotnet test`; Linux and Windows lanes reflect component ownership rather than a universal Pester suite. |
+| P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
+| P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
+| P5 | Static-analysis gate | Not started | P1a, P4 | A curated correctness profile is globally clean; other PSScriptAnalyzer diagnostics cannot be added on changed lines; suppressions are narrow, justified, and tested where behavioral risk remains. |
+| P6 | Typed test infrastructure and dual coverage gates | Not started | P1c, P2 | Managed repository contracts and process supervision live in C#; MSTest and Pester coverage are collected and gated separately; no aggregate percentage lets one domain hide another; reviewed exceptions map to behavioral evidence. |
+| P7 | Evaluation infrastructure extraction | Not started | P6 | Shared process, timeout, hash, result-schema, and aggregation logic moves from `SkillEval.psm1` into the typed core without changing the PowerShell entry-point contracts; focused and full parity suites pass. |
+| P8 | Breaking release and effectiveness decision | Not started | P0c, P1b, P3a, P4-P7 | Migration guidance and release notes are complete; all seeded defects fail before their fixes and pass after; two consecutive substantive PowerShell pull requests have zero valid post-publication reviewer findings; course-correction scenarios pass; the maintainer records release and follow-up decisions. |
+
+Close PR #90 unmerged and retain its parity receipt as compatibility evidence;
+do not inherit its universal-Pester premise. Do not start P1b until P0r is
+accepted and P1c establishes the managed boundary. Do not resume P1a or start
+P1c until P0c lands. P1c is the smallest executable architecture test, not
+permission for wholesale migration. PR #88, PR #89, and PR #90 are evidence,
+not implementation bases; do not cherry-pick their implementation commits into
+a replacement. Do not combine the ownership inventory, managed canary,
+PowerShell cutover, parser policy, or either skill into one pull request.
+
+### P1 recovery decision
+
+PR #88 and its replacement PR #89 were both closed unmerged. PR #88 reached 32
+published commits while an initially small version check grew into partial
+parsers for YAML scalar folding and mappings, Markdown code scopes, generated
+here-strings, and PowerShell execution contexts. PR #89 was intended to be the
+narrow replacement, but it was published before its accepted contract was
+closed and reached seven commits while review continued to discover dynamic
+command, wildcard target, shell-default, bootstrap, compatibility, and workflow
+dependency requirements.
+
+The failure was procedural and architectural, not a lack of test execution.
+Both branches repeatedly had green deterministic gates, but their tests were
+derived from the current implementation and covered accumulated examples rather
+than an independently accepted contract. Local self-review was not independent:
+it sometimes inspected the wrong worktree, relied on implementation-shaped
+fixtures, and returned `READY` without challenging whether the pull request was
+still the promised narrow change. Copilot review became the first adversarial
+test designer after publication.
+
+The implementation also collapsed two distinct version contracts. Repository
+execution needs an exact Pester 6.2.0 lock for reproducible evidence. Test
+requirements and portable skill compatibility need a Pester 6.2 minimum floor
+unless a narrower compatibility promise is intentionally approved. Copying the
+execution lock into portable compatibility prose was a contract error.
+
+The first recovery plan still preserved a deeper inherited premise: because the
+repository already used Pester, every `*.Tests.ps1` file was treated as a
+PowerShell test. That confuses the language of the harness with the subject
+under test. Direct inspection shows mixed ownership:
+
+- `Update-Scaffold.Tests.ps1` dot-sources PowerShell scripts and tests their
+  functions, which is a natural Pester unit-test boundary;
+- `AgentFiles.Tests.ps1` combines child-process behavior for PowerShell tools,
+  workflow text checks, release-document checks, and plugin-smoke policy;
+- `RepositoryContracts.Tests.ps1` combines the Pester runner state machine with
+  catalog, metadata, file-layout, and structured-data contracts;
+- `WorkflowTemplates.Tests.ps1` infers YAML workflow semantics with regular
+  expressions; and
+- the repository already uses MSTest SDK 4.2.3 for managed tests.
+
+This evidence does not predetermine that every non-PowerShell assertion moves to
+MSTest. It proves that file extension and existing placement are insufficient
+ownership rules. No implementation from either failed branch is accepted as
+milestone evidence. PR #90's clean parity receipt remains useful evidence about
+Pester 6 compatibility, but it is not approval of the universal-harness premise.
+
+### P0r test-ownership reset
+
+Classify each check before choosing or preserving its harness. The inventory
+must record:
+
+| Field | Question |
+| --- | --- |
+| Subject | What production behavior, artifact, or policy is actually under test? |
+| Implementation owner | Which component computes or enforces that behavior? |
+| Independent oracle | Where does the expected result come from if not the current implementation? |
+| Natural harness | Does the test need PowerShell binding, streams, mocks, or AST behavior; managed APIs and parsers; a dedicated validator; or a real external integration? |
+| Coverage domain | Is executable PowerShell, managed code, or no repository code being measured? |
+| Existing evidence | Which positive, negative, platform, mutation, or prior-behavior checks already establish the contract, and which are only implementation-shaped? |
+| Disposition | Keep, split, migrate, replace with a standard tool, or delete as duplicate policy? |
+
+Apply these defaults, then record exceptions with evidence:
+
+- Pester owns PowerShell script and module behavior, including parameter
+  binding, PowerShell streams, errors, mocks, AST-facing contracts, and
+  PowerShell-specific platform behavior.
+- MSTest owns managed validators, repository policy implemented in C#, typed
+  state machines, parser-backed structured-format contracts, and managed
+  process supervision.
+- A maintained format validator, schema tool, compiler, linter, or package
+  validator owns a contract before either custom test harness does when it can
+  express the repository's requirement.
+- A black-box PowerShell CLI may be launched by MSTest when the contract is a
+  cross-process protocol, or by Pester when the contract is specifically about
+  PowerShell semantics. The choice must name the distinguishing behavior.
+- Mixed files are split by subject. Migration removes the old assertion after
+  parity; it does not leave two harnesses enforcing the same contract.
+- Prose is not tested by copying sentences into regular expressions unless the
+  exact text is itself a versioned interface. Use link, Markdown, schema, and
+  artifact validators for their own domains.
+
+Pester and MSTest are harnesses, not oracles. Expected results must come from an
+accepted contract table, language or format specification, schema, maintained
+parser or validator, deliberately constructed fixture, or verified prior
+behavior. When none exists, record the behavior as a decision instead of
+laundering the current implementation into an expected value.
+
+Record the inventory by independently meaningful contract group, not merely by
+file; mixed files need more than one row. Until P0c packages the recovery
+workflow, P0r applies the questions embedded in this plan directly and performs
+no implementation work.
+
+P1c selects one canary only after this inventory is approved. A good canary has
+a clear non-PowerShell owner, currently relies on text heuristics, and can use a
+real parser or typed API. The canary must compare implementation size, test
+clarity, defect classes, diagnostics, runtime, and maintenance cost before the
+plan authorizes a broader migration. Its contract records the selected suite,
+why it is the cheapest discriminating check, and why the strongest alternatives
+were rejected. Do not select a nearby file merely because it is easy to port.
+This focused canary contract is approved during P0r and governs only the chosen
+migration experiment; it is distinct from P1b's later toolchain-policy contract.
+
+#### P1a mechanical cutover
+
+P1a was deliberately mechanical:
+
+- raise Pester test and generated-test PowerShell requirements to 7.4;
+- declare Pester 6.2 as the test and portable compatibility floor;
+- keep runner and CI installation/import commands locked to Pester 6.2.0;
+- update known workflow, template, and guidance copies;
+- run the existing process-per-file parity suite;
+- add no manifest validator, YAML dependency, Markdown interpretation, command
+  tracing, bootstrap-state model, or new policy abstraction.
+
+That contract was locally satisfied and published as PR #90, but its scope is
+now provisional because it applied the Pester requirement to every current test
+file before P0r classified ownership. The following table records what PR #90
+implemented; it is historical evidence, not a current merge instruction:
+
+| Surface | Accepted in P1a | Rejected in P1a | Deferred | Evidence |
+| --- | --- | --- | --- | --- |
+| Test host | Every repository and generated Pester test declares `#Requires -Version 7.4`. | Missing or lower test-file requirements. | Runtime migration for non-test operational scripts is P4. | PowerShell AST inventory plus full Pester run. |
+| Test compatibility | Test files and generated test templates declare `ModuleVersion = '6.2.0'`, meaning Pester 6.2 or later. | `RequiredVersion` in test-file requirements and Pester 5 requirements. | Compatibility with a future Pester major version requires a separate decision. | PowerShell AST inventory and a negative exact-pin fixture. |
+| Repository execution | The shard runner defaults to Pester 6.2.0 and each CI bootstrap installs or imports Pester 6.2.0 with `RequiredVersion`. | Floating or stale Pester bootstrap literals. | Mapping every invocation to its bootstrap process is P2. | Existing runner behavior, parity canary, and review of known workflow copies. |
+| Workflows and templates | Known Pester install/import literals are changed mechanically to 6.2.0. | Active 5.7.1 copies in the fixed path list. | YAML semantic policy and workflow-to-manifest mapping are P1b. | Exact changed-path review; no new YAML validator. |
+| Portable guidance | Portable skills state PowerShell 7.4 and Pester 6.2 or later. Repository-local scaffolding guidance distinguishes its own runtime from generated validation requirements. | Repository-specific exact Pester locks presented as portable compatibility. | A portable PowerShell engineering skill is now P3a. | Focused prose review against test and runner contracts. |
+
+The implementation path whitelist is also fixed:
+
+| Path | Allowed P1a change |
+| --- | --- |
+| `tests/Invoke-PesterShards.ps1` | Raise its PowerShell floor and change only the default Pester version. |
+| `tests/**/*.Tests.ps1` | Raise test PowerShell requirements and change Pester requirements to the 6.2 minimum. |
+| `.agents/skills/create-skill-repo/scripts/template/**/tests/*.Tests.ps1.tmpl` | Apply the same generated-test requirement changes. |
+| `.github/workflows/ci.yml` and `.github/workflows/full-ci.yml` | Change existing Pester installation and import versions only. |
+| `.agents/skills/create-skill-repo/scripts/template/**/.github/workflows/*.yml.tmpl` | Change existing generated Pester installation and invocation versions only. |
+| `.agents/skills/create-skill-repo/SKILL.md`, `evals/README.md`, `skills/dotnet-file-creation/SKILL.md`, and `skills/windows-acls/SKILL.md` | Align runtime and compatibility prose with the lock-versus-floor contract. |
+| `docs/powershell-engineering-plan.md` | Record the approved contract and measured parity receipt. |
+
+Any path or behavior outside this table stops implementation until the
+maintainer explicitly revises the contract. P1a adds no package, manifest,
+validator, generated catalog, agent instruction, or pull-request workflow
+change.
+
+#### P1a implementation evidence
+
+The PR #90 branch changes only the approved test, generated-test, workflow,
+runner, guidance, and plan paths. All 16 repository tests and six generated
+test templates parse with PowerShell 7.4 and `ModuleVersion = '6.2.0'`; none
+uses `RequiredVersion` in its compatibility declaration. The shard runner and
+CI bootstrap commands install and import Pester 6.2.0 exactly on that branch.
+
+The focused repository-contract shard completed with 51 passed, zero failed,
+and zero skipped tests. The full Pester 6.2.0 parity run completed on PowerShell
+7.6.6 in 81.273 seconds with 16 shards and 464 tests: 451 passed, 13 were
+intentionally skipped, and none failed, were not run, were inconclusive, or
+reported block, container, or infrastructure failures. This exactly preserves
+the assessment baseline's discovery and result counts. The receipt establishes
+compatibility of the mechanical PR #90 branch; it is not evidence that those
+changes are present on `main` or that every retained check belongs in Pester.
+
+#### P1b policy enforcement
+
+P1b begins after the managed canary with a reviewed contract table, not code.
+For each surface it must state the accepted forms, rejected forms, deferred
+forms, source of truth, and independent oracle. Semantic checks use maintained
+parsers with exact dependency locks and live with the component that owns
+repository policy. If a parser is unavailable, the check is narrowed or
+deferred rather than approximated. Host, SDK, analyzer, bootstrap, and
+execution-context fields must not enter a manifest until an executable gate
+consumes them.
+
+#### Publication and correction controls
+
+Recovery uses controls that test both the implementation and its premise:
+
+- start from a clean branch at current `main`; do not salvage failed validator
+  commits;
+- before approving a path and behavior whitelist, ask whether the existing
+  language, harness, abstraction, and repository pattern are appropriate;
+- approve a fixed path and behavior whitelist only after naming the subject,
+  owner, oracle, standard-tool alternatives, and cheapest disconfirming check;
+- complete the contract table and independent local review before publication;
+- present the complete diff, validation receipt, and review findings to the
+  maintainer before the first commit and pull request;
+- treat a premise, ownership, or contract finding as a stop-and-redesign event;
+- permit at most one bounded correction for a contained implementation defect
+  already inside the approved contract, followed by fresh independent review;
+- defer a genuinely new requirement or reopen the contract explicitly instead
+  of silently absorbing it into the pull request;
+- treat automated review as a release gate, never as the first requirements
+  discovery mechanism; and
+- track publication as a state machine through exact-head CI, exact-head review,
+  full discussion audit, disposition, and merge verification. A running watcher
+  or successful command is not completion of the owned task.
+
+### Parser and validator policy
+
+Repository-wide semantic policy should default to a managed validator or an
+established external tool, not a new PowerShell parser. Every semantic check of
+a structured format must use a maintained parser with an exact version and lock
+or integrity record when the parser is an added dependency:
+
+- JSON policy uses `System.Text.Json` and explicit DTO or schema checks.
+- YAML policy uses a maintained managed parser selected and pinned during P1c;
+  repository template placeholders are rendered explicitly before parsing.
+- PowerShell syntax and metadata use
+  `System.Management.Automation.Language.Parser` and AST nodes. Pester may own
+  PowerShell-specific behavior around those nodes; repository policy may call
+  the same API from managed tests.
+- XML uses `System.Xml.Linq` or another platform XML parser.
+- Markdown semantics use a maintained Markdown parser. Existing markdownlint
+  and link checks remain the first choice for contracts they already express.
+
+Regular expressions and line scanning may enforce an explicitly documented
+literal-text contract only. They must not infer mappings, sequences, quoting,
+folding, comments, code blocks, command binding, or execution scope. If a
+supported parser is unavailable, narrow or defer the check rather than emulate
+the grammar. A review finding that introduces a new grammar class stops the
+current pull request for redesign; it does not start another serial patch round.
+
+## Executive decision
+
+Raise PowerShell engineering to the same standard used for typed production
+code. The solution is not just more Pester tests or a higher coverage number. It
+combines explicit test ownership, supported runtimes, domain-appropriate test
+entry points, strict public and structured contracts, adversarial fixtures,
+static analysis, separate measurable coverage, process isolation, and typed
+infrastructure for the parts PowerShell makes hardest to reason about.
+
+Adopt these decisions:
+
+| Area | Decision |
+| --- | --- |
+| Runtime | Require PowerShell 7.4 or later for every operational and shipped script and generated template. Permit a different version only in an explicitly labeled compatibility-test fixture. |
+| Test ownership | Choose Pester, MSTest, or an established validator from the subject and oracle, not the current file extension or neighboring pattern. Split mixed suites and remove duplicate migrated assertions. |
+| Pester | Use Pester 6.2 or later as the compatibility floor only for retained PowerShell tests. Lock repository Pester execution to 6.2.0. Do not make Pester a dependency of managed repository-contract tests. |
+| Isolation | Keep process isolation for remaining PowerShell tests. Move timeout and process-tree supervision into managed infrastructure when P1c or P2 demonstrates a concrete need; do not build a generic host speculatively. |
+| CI hosts | Run retained PowerShell tests on the applicable minimum PowerShell 7.4 hosts. Run managed contracts through `dotnet test`. Keep focused Windows lanes for Windows-owned behavior and schedule broader compatibility lanes only where they answer a named risk. |
+| Parameters | Make every parameterized script and every advanced function named-only with `PositionalBinding = $false`. This is part of the breaking release, not a silent compatibility change. |
+| Static analysis | Pin PSScriptAnalyzer 1.25.0. Block a curated correctness profile globally and block new default diagnostics on changed lines. Do not require an immediate cleanup of all historical style warnings. |
+| Coverage | Collect and gate PowerShell and managed coverage separately. Establish report-only component baselines after ownership is corrected, then ratchet changed-code and component coverage without using one domain to mask another. Critical state and negative-path coverage remains enumerated rather than inferred from percentages. |
+| Exceptions | Thin wrappers, generated templates, and platform-only code may be exempt from the percentage gate only through a reviewed manifest entry mapping them to behavioral or platform tests. They remain visible in reports. |
+| Typed boundary | Keep PowerShell for PowerShell-native orchestration. Put repository parsers, typed policy, process supervision, timeout handling, report DTOs, aggregation, and managed coverage logic in C# when a concrete check owns that behavior. |
+| First extraction | Start with one managed repository-contract canary. Migrate the Pester shard runner only after the remaining PowerShell-test inventory proves which process-host behavior is still required. |
+| Skills | Publish separate portable `powershell-engineering` and `engineering-course-correction` skills. The first improves PowerShell work; the second interrupts ineffective loops across languages and repositories. |
+| Delivery | Deliver focused pull requests under one breaking pre-1.0 minor release. |
+| Outcome | Require deterministic seeded-defect coverage and two consecutive substantive PowerShell pull requests with zero valid post-publication reviewer findings. |
+
+## Why the current suite missed real defects
+
+The repository has substantial tests, but they do not yet define the full
+behavioral contract. PR #87 repeatedly exposed dimensions that ordinary happy
+paths and source assertions omitted:
+
+- inserting a parameter changed positional binding;
+- a string `"false"` became Boolean true through PowerShell coercion;
+- a version-shaped prefix accepted a malformed fourth component;
+- unverified source evidence became verified during rescoring;
+- a binary hash covered startup but not the complete operation;
+- a generated script and its repository counterpart drifted;
+- a script declared an older host than the APIs it called;
+- copied validation evidence became stale after the tested tree changed.
+
+These are not primarily line-coverage failures. They are missing contract
+classes and, in some cases, misplaced ownership. Several flawed lines were
+already executed by positive tests. A useful engineering strategy must combine
+the natural harness for each subject with coverage, adversarial value classes,
+state tables, compatibility snapshots, and mutation controls.
+
+## Verified baseline
+
+### Repository inventory
+
+The planning-baseline tree contains:
+
+- 63 `.ps1` files, one `.psm1` file, and 11 PowerShell script templates;
+- 16 `*.Tests.ps1` files;
+- 31 PowerShell files under shared skill trees, one under `.agents/`, eight
+  under `evals/`, 21 under `tests/`, and three under `tools/`;
+- 39 scripts declaring PowerShell 7.0, 22 declaring 7.2, and three declaring no
+  minimum;
+- 21 shipped skill scripts, of which 18 declare 7.0 and three declare 7.2;
+- 13 Pester files declaring only `ModuleVersion = '5.0.0'` and three with no
+  Pester module requirement;
+- 33 parameterized scripts and 53 advanced functions; 39 of those functions do
+  not carry an explicit `CmdletBinding` attribute.
+
+Three CI jobs invoke Pester directly rather than using the hardened shard
+runner: `scaffold-linux` and `scaffold-windows` in `.github/workflows/ci.yml`,
+and `scaffold-windows` in `.github/workflows/full-ci.yml`. Pester 5.7.1 is
+copied across workflows, the runner, tests, and examples. The three tests with
+no Pester module requirement are `FileCreation.Tests.ps1`,
+`WindowsAcl.Tests.ps1`, and `Priority0.Tests.ps1`. No PSScriptAnalyzer or Pester
+code-coverage gate is configured.
+
+### Pester 6.2.0 canary
+
+Pester 6.2.0 is the stable PowerShell Gallery release published on 2026-09-09.
+Its supported PowerShell Core floor is 7.4. A disposable clean-process canary
+used the existing shard runner and produced exactly the Pester 5.7.1 result:
+
+- 16 shards;
+- 464 tests;
+- 451 passed;
+- 13 intentionally skipped;
+- zero failed, unexecuted, or infrastructure-failed work;
+- 83.381 seconds;
+- schema-version-2 runner output remained compatible.
+
+This makes the framework cutover low risk for the current suite. The migration
+still needs explicit checks for Pester 6 per-file discovery/run behavior, empty
+`-ForEach` data, mock fallback changes, removed legacy assertions, hidden test
+files, and configuration validation. Do not rewrite existing `Should -Be`
+assertions merely to adopt the new `Should-*` syntax.
+
+### Coverage baseline
+
+The authoritative disposable Pester 6.2.0 baseline used an explicit manifest of
+36 executable source files and included the evaluation harness:
+
+- all 464 tests passed with the same 451/13 split;
+- run time was 169.885 seconds;
+- Pester command coverage was 33.83%;
+- Cobertura executable-line coverage was 1,940 of 5,510 lines, or 35.21%;
+- `SkillEval.psm1` measured 84.0%;
+- `SkillEvalScorer.ps1` measured 96.2%;
+- many entry points and scripts exercised in child PowerShell processes measured
+  0% in the parent collector.
+
+An earlier 30-file run omitted the root evaluation files and is not a valid
+production baseline. Do not cite its 24.15% command or 26.0% line figures as the
+repository baseline.
+
+The corrected baseline demonstrates why a raw global floor is inappropriate.
+Coverage must be collected in the canonical isolated shards, merged across
+processes, and interpreted by component. An exception removes a file from the
+percentage gate only after proving its behavior elsewhere; it does not remove
+that file from the inventory or report.
+
+### Static-analysis baseline
+
+A disposable PSScriptAnalyzer 1.25.0 scan examined the 64 tracked `.ps1` and
+`.psm1` files and reported:
+
+- 307 diagnostics;
+- 192 warnings;
+- 115 information diagnostics;
+- zero errors;
+- 96 `PSAvoidUsingPositionalParameters` findings;
+- 86 `PSAvoidUsingWriteHost` findings;
+- 38 `PSUseSingularNouns` findings;
+- 28 `PSUseShouldProcessForStateChangingFunctions` findings.
+
+Turning every default warning into an immediate blocker would create a noisy
+cleanup project and encourage broad suppressions. The initial gate instead owns
+correctness rules explicitly and prevents new default diagnostics on changed
+lines while the historical set is reduced deliberately.
+
+## Target engineering contract
+
+### Runtime and toolchain
+
+P1b may create a structured repository manifest, provisionally
+`tools/powershell-toolchain.json`, containing at least:
+
+- minimum PowerShell version: 7.4;
+- Pester version: 6.2.0.
+
+P2 may add primary and scheduled host lanes, C# language version, and .NET SDK
+selectors only when parser-backed checks bind every field to the workflows that
+consume it. Do not add policy fields that are shape-checked but unenforced.
+P5 may add the PSScriptAnalyzer version only when the analyzer gate installs
+and executes that exact version.
+
+The existing managed test project pins MSTest SDK 4.2.3 in its project SDK.
+P1c decides whether the canary retains that version and whether more than one
+managed project needs central package ownership. The MSTest SDK does not belong
+in a PowerShell toolchain manifest merely because this program also changes
+PowerShell tests.
+
+Scripts and CI read the manifest where practical. A validator checks unavoidable
+literal copies such as `#Requires`, generated workflow text, and bootstrap
+commands. Any compatibility fixture using another version must declare its
+purpose and be excluded by an exact path, not a wildcard directory.
+
+### Public API compatibility
+
+For every parameterized script and every advanced function:
+
+- use `[CmdletBinding(PositionalBinding = $false)]`;
+- invoke it with named parameters in source and documentation;
+- validate mandatory paths, enums, numeric bounds, and mutually exclusive
+  states at the boundary;
+- snapshot parameter names, types, mandatory status, defaults, and output/exit
+  schemas through AST or command metadata tests;
+- treat a removed or renamed parameter, changed default, output-schema change,
+  or exit-code change as an explicit compatibility decision.
+
+Do not convert every simple private helper into an advanced function merely to
+satisfy this rule. Once a function is advanced, however, named-only binding is
+mandatory.
+
+### Structured and external data
+
+Data crossing a process, JSON, YAML, environment, filesystem, or CLI boundary is
+untrusted until validated:
+
+- require exact primitive types instead of PowerShell truthiness or coercion;
+- distinguish missing, null, false, zero, empty, malformed, and unsupported;
+- use structured parsers such as `SemanticVersion` instead of prefix regexes;
+- never infer JSON, YAML, XML, Markdown, or PowerShell grammar with regular
+  expressions or indentation heuristics;
+- validate the complete token, not only a matching prefix;
+- version report schemas and reject unknown incompatible shapes;
+- never make derived evidence stronger than its source;
+- use one shared synthetic value corpus against core, wrapper, and rendered
+  generated implementations.
+
+Known PR #87 seeds include malformed fourth-component versions, trailing junk,
+string and numeric Boolean substitutes, missing versus explicit-false evidence,
+old-but-valid versions, and hash mutation during an operation.
+
+### Test layers
+
+Every substantive component selects the applicable layers and records why an
+omitted layer is unnecessary. The owning harness follows the component:
+
+1. **Parser and static contract:** the language parser, format parser, compiler,
+  schema tool, or established validator owns syntax and structure. Runtime and
+  toolchain requirements, parameter metadata, exports, generated ownership,
+  and schema declarations match policy.
+2. **Pure unit tests:** Pester tests PowerShell functions and modules; MSTest
+  tests managed components. Both use table-driven boundary and equivalence
+  classes separated from process, filesystem, environment, and network
+  adapters.
+3. **State-table tests:** enumerate every valid state and the complement for
+  report protocols, trust flags, retries, timeouts, and workflow transitions
+  in the harness that owns the state machine.
+4. **Fresh-process tests:** assert command line, stdout, stderr, information and
+   warning streams, exit code, timeout, process-tree cleanup, environment
+   restoration, and behavior from paths containing spaces.
+5. **Platform tests:** run filesystem modes, ACLs, native loading, symlinks, and
+   path semantics on the operating systems that own those contracts.
+6. **Generated-artifact tests:** render templates, parse the result with the
+  owning format parser, and execute focused behavior from the generated copy
+  rather than asserting source text alone.
+7. **Fault and mutation controls:** prove the test fails when a critical check is
+   removed, a type is coerced, a parser is weakened, a report goes stale, or a
+   worker exits in each invalid state.
+8. **Integration tests:** exercise real external tools only through explicit,
+   pinned, isolated entry points and preserve identity evidence.
+
+Tests are evidence only when their expected values come from the contract or an
+independent oracle. An assertion copied from the current implementation is not
+an independent check.
+
+### Canonical test execution
+
+Retain process-per-file execution for the PowerShell tests that remain after
+P0r while Pester 6 parallel execution is experimental. The PowerShell runner
+must provide:
+
+- one fresh PowerShell process per test file;
+- hard process-tree timeouts;
+- explicit PowerShell and Pester paths/versions;
+- complete worker/result state validation;
+- honest aggregate counts and infrastructure errors;
+- deterministic result, log, test-result, and coverage artifacts;
+- component-to-test selection for focused validation;
+- a clean environment contract and explicit opt-ins for external tools.
+
+Every CI path that executes Pester goes through this runner. Managed tests run
+directly through `dotnet test`; they are not wrapped in Pester unless a
+PowerShell wrapper is itself the subject. Focused platform jobs pass explicit
+component subsets. CI may aggregate receipts, but it must preserve separate
+failure and coverage identities for the managed and PowerShell domains.
+
+### Static analysis
+
+Define a pinned PSScriptAnalyzer settings file and a typed changed-line gate.
+The initial correctness profile should cover, directly or through custom AST
+checks:
+
+- parse errors and runtime compatibility;
+- use of undefined variables and unsafe null/property access;
+- positional binding on scripts and advanced functions;
+- native-command exit handling;
+- state-changing commands without the required confirmation semantics;
+- environment mutation without restoration;
+- known aliases or constructs that behave differently across hosts;
+- unstructured parsing where a supported structured parser owns the format.
+
+Default diagnostics outside the curated profile remain visible. They fail only
+when introduced on changed lines until their existing occurrences are reviewed
+and removed. Suppressions require a concrete reason and cannot hide a seeded
+correctness defect.
+
+### Coverage
+
+Store explicit executable-source inventories and reviewed exceptions for both
+PowerShell and managed code. Each entry names its component, source path,
+owning tests, execution mode, platform, and exception rationale when applicable.
+Do not add a manifest until an executable collector consumes every field.
+
+Collect Pester 6 coverage inside every canonical shard that owns an in-process
+PowerShell component and instrument child processes where their scripts are the
+subject. Collect managed coverage through `dotnet test`. A change runs the
+applicable owning tests; it does not instrument unrelated components merely to
+raise an aggregate percentage.
+
+After ownership migration and separate report-only baselines, approve component
+ratchets. The previous global 80% command and 90% changed-line targets are
+provisional and must not become gates before this review. Enforce:
+
+- no unexplained regression in the owning component's applicable coverage;
+- explicit tests for changed branches and error paths in executable code;
+- 100% enumerated coverage for critical state tables, independent of percentage;
+- a reviewed behavioral or platform-test mapping for every percentage
+  exception.
+
+Publish separate managed and PowerShell reports plus a typed summary artifact.
+Never compute a cross-domain percentage. Keep coverage service-independent; the
+repository-owned C# gate parses coverage and git diffs. Establish hosted p50 and
+p90 duration after five runs rather than turning the local 169.885-second
+measurement into an unsupported CI service-level target.
+
+### Typed C# 14 test infrastructure
+
+Begin with the smallest repository-owned C# 14 test project needed for the P1c
+canary. Add shared infrastructure only when a second concrete consumer proves
+the abstraction. Managed code may own contracts PowerShell has repeatedly made
+fragile:
+
+- process start, asynchronous stream capture, cancellation, timeout, and process
+  tree termination;
+- environment construction and restoration;
+- executable identity and hash checks;
+- versioned JSON DTOs and validation;
+- worker/result state machines and aggregate accounting;
+- deterministic Cobertura merge and changed-line mapping;
+- machine-readable receipts.
+
+Do not begin by porting the shard runner. First prove the repository-contract
+boundary with one parser-backed or typed canary. If subsequent ownership work
+shows that process supervision is shared, migrate the shard runner while
+preserving its PowerShell command line and schema, and keep a thin PowerShell
+wrapper for contributor ergonomics. Do not rewrite domain scoring or every skill
+script into C#.
+
+### Portable PowerShell engineering skill
+
+Create a portable `powershell-engineering` core after P0r, P1a, and P1b so later
+implementation uses the accepted ownership, runtime, and Pester contracts. Keep
+its `SKILL.md` concise and route deep detail to bundled pages for:
+
+- API and compatibility design;
+- structured data and PowerShell type semantics;
+- Pester 6 test design and negative controls;
+- native processes, streams, environment, and filesystem behavior;
+- cross-platform and minimum-host validation;
+- coverage, static analysis, generated scripts, and review.
+
+The repository overlay supplies exact paths, toolchain versions, commands,
+coverage thresholds, platform lanes, generated-file ownership, and publication
+rules. Use the upstream `pester-migration` skill for mechanical v5-to-v6 changes;
+do not duplicate it.
+
+Add an early decision point before PowerShell implementation:
+
+- Is the required behavior PowerShell-native, or is PowerShell merely the
+  repository's familiar orchestration language?
+- Does a maintained parser, compiler, schema tool, validator, or managed API
+  already own the hard part?
+- Which harness will measure the implementation's executable coverage without
+  making the implementation its own oracle?
+- What is the smallest comparison that could demonstrate that C# or an
+  established tool is the better boundary?
+
+Evaluate the skill with synthetic forms of the defects observed in PR #87. The
+agent must identify the contract class, add a failing control before the fix,
+choose a structured parser or exact type check, preserve compatibility or name a
+break, and run the correct focused and full gates.
+
+### Portable engineering course-correction skill
+
+Use the `manage-skills` lifecycle to search installed, commons, and public
+sources before authoring. If no existing portable skill owns this outcome,
+create a separate `engineering-course-correction` skill for work that is
+accumulating activity without converging. It must not be PowerShell-specific and
+must not become generic motivational advice. It owns a short diagnostic and a
+bounded recovery workflow.
+
+The skill makes the reinforcing mechanism visible:
+
+| Loop | How it reinforces itself | Required break |
+| --- | --- | --- |
+| Local-pattern continuation | The LLM copies the nearest established pattern; each new copy makes that pattern look more authoritative to the next pass. | Run the greenfield question, identify the natural owner, and compare one credible alternative before extending the pattern. |
+| Review accretion | Each finding becomes another local patch and test; the larger surface creates more finding classes and makes replacement feel less acceptable. | Classify the finding as defect, requirement, or premise failure; cap local correction and run a replacement canary for a premise failure. |
+| Implementation-shaped evidence | Tests copy current outputs and reviewer examples; green results increase confidence without supplying an independent oracle. | Write the accepted contract and negative controls first, then obtain expected results from an external oracle. |
+| Sunk-cost continuation | Time, commits, and explanations are treated as reasons to retain code, so further investment raises the psychological cost of stopping. | Separate reusable evidence from code and ignore unrecoverable effort in the next architecture decision. |
+| Activity mistaken for completion | Commands, watchers, and green checks create visible motion; reporting that motion ends the turn while the owned workflow remains incomplete. | Name the terminal state and do not declare completion until the state machine reaches it or a real blocker is handed back explicitly. |
+
+Trigger it when any of these signals appears:
+
+- review repeatedly discovers new contract classes after publication;
+- commit or patch count grows because each fix reveals another unsupported
+  form;
+- tests are added mainly to encode examples found by the latest review;
+- a supposedly narrow change acquires parsers, state machines, or
+  infrastructure;
+- the same defect class returns after an acknowledged correction;
+- the agent cannot name the subject, owner, oracle, or stopping condition;
+- work continues because reverting or replacing it feels expensive;
+- a tool, watcher, or green check is reported as task completion while an owned
+  state remains active; or
+- the user must repeatedly ask whether the work has stalled or changed scope.
+
+The skill pauses new edits and asks practical questions in this order:
+
+1. What user outcome are we trying to achieve, independent of the current
+   artifact or pull request?
+2. Which premises came from an explicit requirement, which came from the
+   repository, and which did the agent infer by pattern completion?
+3. If this repository had no current implementation, which language, harness,
+   parser, or standard tool would we choose today, and why?
+4. Are we preserving a pattern because it is effective, or because neighboring
+   files make it easy for an LLM to continue?
+5. Is the implementation language also acting as its own parser, test harness,
+   and oracle? Which responsibility should move?
+6. What evidence would falsify the current approach? Have we run the cheapest
+   such check before adding more code?
+7. Are new tests derived from an accepted contract or from the implementation
+   and the latest reviewer example?
+8. Is the latest finding a contained defect, a new requirement, or evidence
+   that ownership and architecture are wrong?
+9. What changed after the previous correction besides the prose describing our
+   intent? Which executable control now prevents recurrence?
+10. Which work is independently valuable, and which is sunk cost that should
+    not influence the next decision?
+11. What is the smallest reversible canary for the strongest alternative?
+12. Should we continue, narrow, replace, or stop? What explicit user decision
+    or approval boundary is required next?
+
+The output is a compact recovery record: observed signals, inherited and
+inferred premises, current feedback loop, disconfirming evidence, viable
+alternatives, salvageable evidence, rejected sunk cost, recommended
+disposition, and the next checkpoint. It must name LLM-specific failure modes
+directly: local-pattern continuation, fluency mistaken for evidence,
+implementation-shaped tests, sunk-cost continuation, scope normalization,
+verbal self-correction without changed controls, and premature declarations of
+completion.
+
+Evaluate the skill with synthetic scenarios based on the failed parser pull
+requests, the Pester-versus-MSTest ownership question, a long patch stack driven
+by serial review discoveries, and an exact-head review watcher that finishes
+after the agent incorrectly stops. Success requires the agent to challenge the
+premise, propose a cheaper alternative, preserve only independently useful
+evidence, identify the approval boundary, and avoid another implementation edit
+until the recovery decision is accepted.
+
+## Focused delivery sequence
+
+Use separate pull requests for these changes while holding the breaking release
+until all required compatibility migrations are complete:
+
+1. Close PR #90 unmerged and retain its exact Pester 6 compatibility receipt.
+  Inventory every current test and validator by subject, owner, oracle, natural
+  harness, parser or standard tool, coverage domain, and keep, split, migrate,
+  replace, or delete disposition.
+2. Approve the ownership inventory and one managed canary contract before
+  implementation resumes.
+3. Create and evaluate the portable `engineering-course-correction` skill in a
+  separate pull request so its controls apply before implementation resumes.
+4. Implement the managed canary in a dedicated MSTest project. Use the owning
+  parser or API, remove the migrated Pester assertions, and compare defects,
+  diagnostics, coverage, runtime, and maintenance cost.
+5. Complete the Pester 6.2 cutover only for tests retained in Pester and route
+  their CI invocations through the isolated runner.
+6. Specify P1b's accepted, rejected, and deferred forms, then implement
+  parser-backed repository policy in managed code or an established validator.
+7. Add the portable PowerShell engineering skill, repository overlay, and
+  seeded deterministic scenarios.
+8. Raise all operational and shipped scripts/templates to PowerShell 7.4 and
+  migrate parameterized scripts and advanced functions to named-only binding,
+  with AST compatibility tests and migration documentation.
+9. Add the PSScriptAnalyzer correctness profile and changed-line no-new gate.
+10. Establish separate managed and PowerShell report-only coverage baselines;
+   add only the typed process/report infrastructure required by demonstrated
+   consumers.
+11. Enable approved component ratchets, changed-branch, state-table, and
+   exception gates without a cross-domain aggregate threshold.
+12. Move evaluation process/report infrastructure into the typed core in focused
+   parity-backed slices.
+13. Publish the breaking pre-1.0 minor release only after P8 acceptance.
+
+Every pull request updates this plan with current evidence rather than copied
+transient check state. No pull request combines a portable skill semantic change
+with unrelated runtime cleanup or a broad C# rewrite.
+
+## Acceptance and measurement
+
+A milestone is complete only when its executable exit evidence is recorded and
+the maintainer accepts the associated policy or compatibility decision. Green
+coverage and lint are necessary, not sufficient.
+
+Track from the first implementation pull request:
+
+- local and hosted wall time, queue time, and retries;
+- Pester discovery, pass, skip, not-run, failed block/container, and
+  infrastructure counts;
+- command and executable-line coverage by component and patch;
+- analyzer findings by rule, severity, existing versus changed line, and
+  suppression;
+- fault and mutation controls executed;
+- platform lanes exercised and skipped behavior;
+- review findings by contract class, whether valid, and whether a seeded test or
+  skill rule should have caught them;
+- harness ownership changes, duplicate assertions removed, and checks replaced
+  by standard tools;
+- course-correction triggers, time from trigger to pause, disposition, and
+  whether an executable control prevented recurrence;
+- human repair time and number of commit/review rounds.
+
+The engineering program succeeds when:
+
+1. every seeded defect class fails under its negative control and passes after
+   repair;
+2. every applicable runtime, analyzer, coverage, contract, platform, generated,
+   and integration gate is green;
+3. every check names its subject, owner, independent oracle, and natural harness;
+4. no structured-format semantic policy depends on regex or indentation
+  heuristics when a maintained parser or established validator owns the format;
+5. no executable PowerShell path bypasses the canonical PowerShell toolchain and
+  runner, and no managed test is wrapped in Pester without a PowerShell subject;
+6. managed and PowerShell coverage remain separately visible and gated;
+7. exceptions remain explicit, current, and behaviorally covered;
+8. course-correction scenarios interrupt the known ineffective loops before
+  another patch is published; and
+9. two consecutive substantive PowerShell pull requests receive zero valid
+   post-publication reviewer findings.
+
+For this measure, a substantive pull request changes executable behavior, a
+public or process contract, a validator, a test runner, a generated executable
+artifact, or an analyzer or coverage gate. Documentation-only and mechanical
+metadata changes do not qualify. A valid post-publication finding identifies an
+accepted defect or contract gap that requires a code, test, or contract change;
+style preferences, false positives, and genuinely new out-of-scope requirements
+do not count.
+
+A higher coverage percentage that does not reduce valid escaped defects is not a
+success. If reviewer findings continue, classify them, add the missing contract
+class, and rework the skill or gates before raising thresholds mechanically.
+
+## Boundaries
+
+This plan records sequencing and decision gates; it does not provide standing
+authorization. Local edits, commits, pushes, pull request writes, review replies,
+thread resolution, merges, remote policy changes, releases, and model runs each
+follow the repository's current approval boundaries. The maintainer decided on
+2026-09-15 to close PR #90 unmerged. Toolchain provisioning must be isolated and
+pinned. Real model evaluations of either new skill require separate approval for
+model, scenarios, repetitions, budget, and concurrency.
+
+Do not fold this work into the dual-model experiment or the pull-request process
+plan. Those plans may consume the stronger test infrastructure, but this plan
+owns PowerShell runtime, API, test, analyzer, coverage, and typed-infrastructure
+quality.
