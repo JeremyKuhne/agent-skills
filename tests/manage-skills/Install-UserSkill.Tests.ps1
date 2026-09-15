@@ -1,5 +1,5 @@
-#Requires -Version 7.0
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+#Requires -Version 7.4
+#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
 
 BeforeAll {
     $script:InstallerPath = (Resolve-Path (

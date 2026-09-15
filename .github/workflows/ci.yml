@@ -59,6 +59,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Install PowerShell toolchain validator dependencies
+        run: npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts
+
+      - name: Validate PowerShell toolchain
+        shell: pwsh
+        run: ./tools/Test-PowerShellToolchain.ps1
+
       - name: Validate agent instruction mirror
         shell: pwsh
         run: ./tools/Validate-AgentFiles.ps1
@@ -68,7 +75,7 @@ jobs:
         with:
           globs: |
             **/*.md
-            !node_modules
+            !**/node_modules/**
           config: .markdownlint.jsonc
 
       - name: Link check
@@ -163,14 +170,17 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Install PowerShell toolchain validator dependencies
+        run: npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts
+
       - name: Install Pester
         shell: pwsh
-        run: Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
+        run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
 
       - name: Run Pester tests
         shell: pwsh
         run: |
-          Import-Module Pester -RequiredVersion 5.7.1
+          Import-Module Pester -RequiredVersion 6.2.0
           $config = New-PesterConfiguration
           $config.Run.Path = 'tests'
           $config.Run.Throw = $true
@@ -239,13 +249,13 @@ jobs:
       - name: Install Pester for Windows filesystem facts
         if: steps.windows-filesystem.outputs.affected == 'true'
         shell: pwsh
-        run: Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
+        run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
 
       - name: Run Windows filesystem fact tests
         if: steps.windows-filesystem.outputs.affected == 'true'
         shell: pwsh
         run: |
-          Import-Module Pester -RequiredVersion 5.7.1
+          Import-Module Pester -RequiredVersion 6.2.0
           $config = New-PesterConfiguration
           $config.Run.Path = @('tests/windows-acls', 'tests/dotnet-file-creation')
           $config.Run.Throw = $true

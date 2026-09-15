@@ -1,4 +1,4 @@
-#Requires -Version 7.2
+#Requires -Version 7.4
 [CmdletBinding()]
 param(
     [string[]] $Path = @($PSScriptRoot),
@@ -9,7 +9,7 @@ param(
     [int] $ShardTimeoutMinutes = 30,
     [ValidateRange(0, 3600)]
     [int] $ShardTimeoutSeconds = 0,
-    [version] $PesterVersion = '5.7.1',
+    [version] $PesterVersion = '6.2.0',
     [string] $PowerShellPath,
     [string] $PathPrefix,
     [string] $BaselineSummaryPath,

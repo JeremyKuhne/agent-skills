@@ -93,8 +93,10 @@ opening or updating a pull request.
   reformat unrelated edits.
 - Keep changes scoped. Do not mix a portable-core improvement with a consumer
   binding or unrelated catalog cleanup.
-- Use structured parsers and APIs for structured data. Do not extend a regex
-  parser beyond the subset its contract documents.
+- Use structured parsers and APIs for structured data. Never infer JSON, YAML,
+  XML, Markdown, or PowerShell grammar with regexes or indentation heuristics.
+  If a maintained parser is unavailable, narrow or defer the check instead of
+  extending a partial parser.
 - Keep prose concise and concrete. Do not use HTML entities. Match surrounding
   Markdown wrapping and keep wrapped list prose on its content indentation.
 - Format source examples as production code. Apply the language-specific
@@ -131,7 +133,9 @@ Get-ChildItem ./skills -Directory | ForEach-Object {
 For repository-wide validation:
 
 ```pwsh
-npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"
+npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#**/node_modules/**"
+npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts
+./tools/Test-PowerShellToolchain.ps1
 ./tests/Invoke-PesterShards.ps1 -Path ./tests
 ```
 

@@ -1,5 +1,5 @@
-#Requires -Version 7.2
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+#Requires -Version 7.4
+#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
 
 BeforeAll {
     . (Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1')
@@ -48,6 +48,152 @@ BeforeAll {
     $script:SkillNames = @($script:SkillRecords.Name)
 }
 
+Describe 'PowerShell toolchain contract' {
+    BeforeAll {
+        $script:ToolchainManifestPath = Join-Path $script:RepoRoot 'tools/powershell-toolchain.json'
+        $script:ToolchainValidatorPath = Join-Path $script:RepoRoot 'tools/Test-PowerShellToolchain.ps1'
+        $script:WorkflowParserRoot = Join-Path $script:RepoRoot `
+            'tools/powershell-toolchain-validator'
+        $script:Toolchain = Get-Content -LiteralPath $script:ToolchainManifestPath -Raw |
+            ConvertFrom-Json
+
+        function New-ToolchainFixture ([string] $Name) {
+            $fixtureRoot = Join-Path $TestDrive $Name
+            foreach ($relativePath in @(
+                    'tools', 'tests', '.github/workflows',
+                    '.agents/skills/create-skill-repo',
+                    'skills/dotnet-file-creation', 'skills/windows-acls')) {
+                [IO.Directory]::CreateDirectory(
+                    (Join-Path $fixtureRoot $relativePath)) | Out-Null
+            }
+            Copy-Item -LiteralPath $script:ToolchainManifestPath `
+                -Destination (Join-Path $fixtureRoot 'tools/powershell-toolchain.json')
+            Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') `
+                -Value @(
+                '#Requires -Version 7.4',
+                "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
+                "Describe 'Valid' { It 'is never run' { `$true | Should -BeTrue } }")
+            Set-Content -LiteralPath (
+                Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1') -Value @(
+                '#Requires -Version 7.4',
+                '[CmdletBinding()]',
+                "param([version] `$PesterVersion = '6.2.0')")
+            Set-Content -LiteralPath (
+                Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+                'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+                '      - shell: pwsh',
+                '        run: Install-Module Pester -RequiredVersion 6.2.0')
+            Set-Content -LiteralPath (
+                Join-Path $fixtureRoot '.agents/skills/create-skill-repo/SKILL.md') `
+                -Value 'Requires PowerShell 7.4 and Pester 6.2.0.'
+            foreach ($relativePath in @(
+                    'skills/dotnet-file-creation/SKILL.md',
+                    'skills/windows-acls/SKILL.md')) {
+                Set-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) `
+                    -Value 'Requires PowerShell 7.4 and Pester 6.2 or later.'
+            }
+            return $fixtureRoot
+        }
+    }
+
+    It 'records the accepted versions and host lanes' {
+        $script:Toolchain.schemaVersion | Should -Be 1
+        $script:Toolchain.powerShell.minimumVersion | Should -BeExactly '7.4'
+        $script:Toolchain.modules.Pester | Should -BeExactly '6.2.0'
+        $script:Toolchain.modules.PSScriptAnalyzer | Should -BeExactly '1.25.0'
+        $script:Toolchain.dotnet.sdkVersion | Should -BeExactly '10.0.x'
+        $script:Toolchain.dotnet.previewSdkVersion | Should -BeExactly '11.0.x'
+        $script:Toolchain.dotnet.languageVersion | Should -BeExactly '14.0'
+        @($script:Toolchain.hosts.PSObject.Properties.Name | Sort-Object) |
+            Should -Be @('primary', 'scheduled', 'windows')
+    }
+
+    It 'keeps checked toolchain copies aligned with the manifest' {
+        { & $script:ToolchainValidatorPath -RepositoryRoot $script:RepoRoot } |
+            Should -Not -Throw
+    }
+
+    It 'pins the workflow parser and lockfile' {
+        $manifest = Get-Content (
+            Join-Path $script:WorkflowParserRoot 'package.json') -Raw |
+            ConvertFrom-Json
+        $lock = Get-Content (
+            Join-Path $script:WorkflowParserRoot 'package-lock.json') -Raw |
+            ConvertFrom-Json -AsHashtable
+
+        $manifest.dependencies.yaml | Should -BeExactly '2.9.1'
+        $lock.packages['node_modules/yaml'].version | Should -BeExactly '2.9.1'
+        $lock.packages['node_modules/yaml'].integrity |
+            Should -BeExactly 'sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw=='
+    }
+
+    It 'rejects a drifted Pester test requirement' {
+        $fixtureRoot = New-ToolchainFixture 'toolchain-drift'
+        $driftRequirement = "#Requires -Modules @{ ModuleName = 'Pester'; " +
+            "RequiredVersion = '6.1.0' }"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Drift.Tests.ps1') `
+            -Value @($driftRequirement, "Describe 'Drift' { It 'is never run' { `$true | Should -BeTrue } }")
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must require Pester 6.2.0 exactly*'
+    }
+
+    It 'rejects a drifted PowerShell test requirement' {
+        $fixtureRoot = New-ToolchainFixture 'powershell-floor-drift'
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            '#Requires -Version 7.4', '#Requires -Version 7.2') |
+            Set-Content -LiteralPath $testPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must require PowerShell 7.4 exactly*'
+    }
+
+    It 'rejects a drifted shard runner Pester default' {
+        $fixtureRoot = New-ToolchainFixture 'runner-default-drift'
+        $runnerPath = Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1'
+        (Get-Content -LiteralPath $runnerPath -Raw).Replace(
+            "PesterVersion = '6.2.0'", "PesterVersion = '6.1.0'") |
+            Set-Content -LiteralPath $runnerPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*default PesterVersion to '6.2.0'*"
+    }
+
+    It 'rejects a stale Pester command from parsed workflow YAML' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-pester-drift'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            'RequiredVersion 6.2.0', 'RequiredVersion 6.1.0') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '6.1.0' instead of '6.2.0'*"
+    }
+
+    It 'accepts workflow syntax through the pinned YAML parser' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-yaml-syntax'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        Set-Content -LiteralPath $workflowPath -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest # current host',
+            '    steps:',
+            '      - { shell: pwsh, run: "Install-Module Pester -RequiredVersion 6.2.0" }')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'rejects malformed workflow YAML through the pinned parser' {
+        $fixtureRoot = New-ToolchainFixture 'malformed-workflow'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') `
+            -Value 'jobs: [unterminated'
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*is not valid workflow YAML*'
+    }
+}
+
 Describe 'Pester shard runner' {
     BeforeAll {
         $script:ShardRunner = Join-Path $script:RepoRoot 'tests/Invoke-PesterShards.ps1'
@@ -79,7 +225,7 @@ Describe 'Healthy fixture' {
             $reportDirectory = Join-Path $root 'reports'
             $output = @(& $script:ShardPwsh -NoProfile -File $script:ShardRunner `
                     -Path $testPath -OutputDirectory $reportDirectory `
-                    -MaxConcurrency 2 -PesterVersion 5.7.1 @RunnerArguments 2>&1)
+                    -MaxConcurrency 2 -PesterVersion 6.2.0 @RunnerArguments 2>&1)
             $exitCode = $LASTEXITCODE
             $summary = Get-Content -LiteralPath (Join-Path $reportDirectory 'summary.json') -Raw |
                 ConvertFrom-Json
@@ -179,6 +325,22 @@ Describe 'Teardown fixture' {
         $run.Summary.FailedCount | Should -BeNullOrEmpty
         $run.Summary.CountsComplete | Should -BeFalse
         $run.Summary.Shards[0].Error | Should -Match 'No Pester tests were discovered'
+    }
+
+    It 'rejects empty ForEach data as empty discovery' {
+        $run = Invoke-ShardFixture 'empty-foreach' @'
+Describe 'Empty data fixture' {
+    It 'has case <Name>' -ForEach @() { $true | Should -BeTrue }
+}
+'@
+
+        $run.ExitCode | Should -Not -Be 0
+        $run.Summary.TotalCount | Should -Be 0
+        $run.Summary.FailedContainersCount | Should -Be 1
+        $run.Summary.InfrastructureFailureCount | Should -Be 0
+        $run.Summary.CountsComplete | Should -BeTrue
+        $run.Summary.Shards[0].Result | Should -Be 'Failed'
+        $run.Log | Should -Match 'AllowNullOrEmptyForEach'
     }
 
     It 'keeps intentional skips distinct from empty discovery' {

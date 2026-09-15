@@ -30,7 +30,7 @@ pinned by CI, then set `COPILOT_NATIVE_PATH` to its exact `copilot` or
 and are rejected by the smoke script.
 
 ```pwsh
-npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"
+npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#**/node_modules/**"
 ./tools/Validate-AgentFiles.ps1
 ./tools/Test-AgentFileLinks.ps1
 ./skills/manage-skills/scripts/Validate-Skills.ps1 ./skills -RequirePortfolioMetadata
@@ -38,7 +38,9 @@ Get-ChildItem ./skills -Directory | ForEach-Object {
     npx --yes skills-ref@0.1.5 validate $_.FullName
 }
 ./tools/Update-SkillCatalog.ps1
-Invoke-Pester ./tests
+npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts
+./tools/Test-PowerShellToolchain.ps1
+./tests/Invoke-PesterShards.ps1 -Path ./tests
 if ([string]::IsNullOrWhiteSpace($env:COPILOT_NATIVE_PATH)) {
   throw 'Set COPILOT_NATIVE_PATH to the pinned native Copilot CLI executable.'
 }

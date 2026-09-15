@@ -46,7 +46,7 @@ Run the same deterministic checks as CI before opening a PR:
 
 ```pwsh
 # Lint Markdown (the same config CI uses).
-npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#node_modules"
+npx --yes markdownlint-cli2 --config .markdownlint.jsonc "**/*.md" "#**/node_modules/**"
 
 # Offline link check (same engine as CI; requires the lychee binary).
 lychee --no-progress --offline "**/*.md"
@@ -61,7 +61,9 @@ npx --yes skills-ref@0.1.5 validate ./skills/<name>
 
 # Generated catalog and executable contracts.
 ./tools/Update-SkillCatalog.ps1
-Invoke-Pester ./tests
+npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts
+./tools/Test-PowerShellToolchain.ps1
+./tests/Invoke-PesterShards.ps1 -Path ./tests
 ```
 
 All must pass. Because the link check runs `--offline`, every relative link must
