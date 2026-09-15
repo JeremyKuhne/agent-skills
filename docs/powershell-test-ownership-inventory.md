@@ -275,8 +275,9 @@ Why this is the strongest discriminator:
   until a separately approved migration preserves its platform coverage.
 - Run the managed cases in required CI jobs on `windows-latest` and
   `ubuntu-24.04-arm`; record exact-head job identities, discovered, passed,
-  failed, skipped, and duration counts. Local runs do not satisfy this exit
-  evidence.
+  failed, skipped, and duration counts. Collect source-filtered coverage on one
+  supported architecture; coverage is not required on every architecture.
+  Local runs do not satisfy this exit evidence.
 - Compare implementation size, assertion clarity, defect classes, compiler and
   analyzer diagnostics, runtime, executable coverage visibility, and maintenance
   cost with the previous Pester slice. Record source and test line counts, new

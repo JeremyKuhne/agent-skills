@@ -192,14 +192,33 @@ The tradeoff is measurable rather than assumed:
 The local evidence proves parity, direct exception visibility, and managed
 coverage visibility. It does not complete P1c. Required exact-head CI jobs on
 `windows-latest` and `ubuntu-24.04-arm` must pass and report their own counts,
-durations, diagnostics, and coverage before the maintainer decides whether the
-boundary is worth its additional test infrastructure.
+durations, and diagnostics. Source-filtered coverage must pass on one supported
+architecture; coverage is not required on every architecture. The maintainer
+then decides whether the boundary is worth its additional test infrastructure.
 
 The complete local split also preserves discovery: the Pester runner reports 16
 shards and 444 tests, with 431 passed, 13 skipped, and zero failure or
 infrastructure categories in 83.148 seconds. Together with the 20 managed cases,
 the same 464 behavioral cases remain represented without aggregating their
 separate coverage domains.
+
+#### P1c first hosted receipt
+
+At commit `5f2547dd7634c06c7d8087fb170870d3971f50ed`, the exact-head Windows
+job passed all 20 tests in 1.472 seconds and reported the same 43 of 66 lines
+and 82.14% branch coverage. Ubuntu ARM64 also completed all 20 tests in 2.055
+seconds, then Microsoft.Testing.Platform's dynamic coverage collector crashed
+with `BadImageFormatException`, `Index not found`, and process exit 134. The
+failure occurred after test completion and before report validation.
+
+Microsoft documents dynamic managed instrumentation for Linux x64, not Linux
+ARM64. A local static-instrumentation probe kept the tests green but produced an
+empty Cobertura report, so it was rejected rather than published. The maintainer
+decided that coverage is not required on every architecture. The focused
+correction keeps the 20 behavior cases on both required hosts and collects the
+source-filtered coverage report only on `windows-latest`; it adds no host,
+package, or generalized coverage infrastructure. P1c remains in progress until
+that corrected exact head completes.
 
 #### P1a mechanical cutover
 
