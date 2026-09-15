@@ -180,7 +180,7 @@ The tradeoff is measurable rather than assumed:
 
 - 105 Pester lines are removed;
 - the canary adds 168 test lines, a 15-line project, an 11-line coverage config,
-  and a 59-line CI job;
+  and a 71-line CI job;
 - it adds one test helper and one 15-case data provider, with no new package;
 - the prior 58-case Pester shard took 2.036 seconds locally;
 - the split takes 2.064 seconds for retained Pester cases plus 0.868 seconds for
