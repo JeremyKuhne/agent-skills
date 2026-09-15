@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P0r done through PR #92; the approved managed test-ownership canary
-  is next; the course-correction skill is tracked as non-blocking backlog work
+- Status: P1c managed test-ownership canary accepted pending PR #93 merge; the
+  retained-Pester P1a cutover is next; course correction remains backlog work
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-15 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -33,8 +33,8 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | --- | --- | --- | --- | --- |
 | P0 | Baseline evidence | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence is recorded. Test-harness ownership decisions previously attributed to P0 are superseded by P0r. |
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
-| P1a | Mechanical PowerShell and Pester cutover | Paused | P0r | Only tests retained in Pester require PowerShell 7.4 and Pester 6.2 or later; repository Pester execution locks 6.2.0 exactly; the accepted changes are rebuilt from current `main` rather than inherited from PR #90. |
-| P1c | Managed test-ownership canary | In progress | P0r | The six approved cross-platform `TrustedFileWrites` tests move to a dedicated MSTest project using the linked source; only those duplicate Pester assertions are removed after parity; local parity and coverage evidence passes, while exact-head Windows and Linux CI evidence remains pending. |
+| P1a | Mechanical PowerShell and Pester cutover | Blocked | P0r, P1c | After PR #93 merges, only tests retained in Pester require PowerShell 7.4 and Pester 6.2 or later; repository Pester execution locks 6.2.0 exactly; the accepted changes are rebuilt from current `main` rather than inherited from PR #90. |
+| P1c | Managed test-ownership canary | In progress | P0r | The maintainer accepted the six-test canary after local and exact-head Windows/Linux evidence passed; merge PR #93 to complete the milestone. |
 | P1b | Parser-backed toolchain policy | Blocked | P0r, P1c | An approved contract table names every accepted, rejected, and deferred form before implementation; repository policy is implemented in managed code or an established validator; only fields with executable enforcement enter a manifest. |
 | P2 | Canonical isolated PowerShell execution | Blocked | P1a, P1c | Every remaining CI Pester invocation goes through one process-isolated runner; MSTest runs independently through `dotnet test`; Linux and Windows lanes reflect component ownership rather than a universal Pester suite. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
@@ -190,11 +190,8 @@ The tradeoff is measurable rather than assumed:
   atomic replacement, and failed-replacement staging cleanup.
 
 The local evidence proves parity, direct exception visibility, and managed
-coverage visibility. It does not complete P1c. Required exact-head CI jobs on
-`windows-latest` and `ubuntu-24.04-arm` must pass and report their own counts,
-durations, and diagnostics. Source-filtered coverage must pass on one supported
-architecture; coverage is not required on every architecture. The maintainer
-then decides whether the boundary is worth its additional test infrastructure.
+coverage visibility. The hosted receipt below supplies the required exact-head
+Windows and Linux behavior evidence and single-architecture coverage evidence.
 
 The complete local split also preserves discovery: the Pester runner reports 16
 shards and 444 tests, with 431 passed, 13 skipped, and zero failure or
@@ -217,8 +214,14 @@ empty Cobertura report, so it was rejected rather than published. The maintainer
 decided that coverage is not required on every architecture. The focused
 correction keeps the 20 behavior cases on both required hosts and collects the
 source-filtered coverage report only on `windows-latest`; it adds no host,
-package, or generalized coverage infrastructure. P1c remains in progress until
-that corrected exact head completes.
+package, or generalized coverage infrastructure.
+
+The final exact head, `4b946a3d34ad15c988fbfe3791f02e7473043091`, passed
+all CI jobs. Ubuntu ARM64 passed 20 of 20 behavior cases with no failures or
+skips in 544 milliseconds. Windows passed 20 of 20 with no failures or skips in
+1.529 seconds and reported 43 of 66 lines, or 65.15%, with 82.14% branch
+coverage. The maintainer accepted the ownership boundary with coverage on one
+supported architecture. P1c completes when PR #93 merges.
 
 #### P1a mechanical cutover
 
