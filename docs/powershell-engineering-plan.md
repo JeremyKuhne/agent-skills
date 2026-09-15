@@ -217,8 +217,9 @@ source-filtered coverage report only on `windows-latest`; it adds no host,
 package, or generalized coverage infrastructure.
 
 The behavior-equivalent evidence head
-`4b946a3d34ad15c988fbfe3791f02e7473043091` passed all CI jobs. Ubuntu
-ARM64 [job 104580591527](https://github.com/JeremyKuhne/agent-skills/actions/runs/35028319838/job/104580591527)
+`4b946a3d34ad15c988fbfe3791f02e7473043091` passed all applicable CI
+jobs; the tag-only release check was intentionally skipped. Ubuntu ARM64
+[job 104580591527](https://github.com/JeremyKuhne/agent-skills/actions/runs/35028319838/job/104580591527)
 passed 20 of 20 behavior cases with no failures or skips in 544 milliseconds.
 Windows [job 104580591626](https://github.com/JeremyKuhne/agent-skills/actions/runs/35028319838/job/104580591626)
 passed 20 of 20 with no failures or skips in 1.529 seconds and reported 43 of 66
