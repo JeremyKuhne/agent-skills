@@ -148,15 +148,15 @@ file; mixed files need more than one row. Until P0c packages the recovery
 workflow, P0r applies the questions embedded in this plan directly and performs
 no implementation work.
 
-P1c selects one canary only after this inventory is approved. A good canary has
-a clear non-PowerShell owner and either an executable managed implementation or
-a structured format that can use its typed API or maintained parser directly.
-The canary must compare implementation size, test clarity, defect classes,
-diagnostics, runtime, coverage visibility, and maintenance cost before the plan
-authorizes a broader migration. Its contract records the selected suite, why it
-is the cheapest discriminating check, and why the strongest alternatives were
-rejected. Do not select a nearby file merely because it is easy to port. This
-focused canary contract is approved during P0r and governs only the chosen test
+P0r selects the canary before implementation. A good canary has a clear
+non-PowerShell owner and either an executable managed implementation or a
+structured format that can use its typed API or maintained parser directly.
+P1c implements and evaluates that approved canary; it does not select a
+different suite. The evaluation compares implementation size, test clarity,
+defect classes, diagnostics, runtime, coverage visibility, and maintenance cost
+before the plan authorizes a broader migration. The P0r contract records why
+the canary is the cheapest discriminating check and why the strongest
+alternatives were rejected. This focused contract governs only the chosen test
 ownership experiment; it is distinct from P1b's later parser-backed
 toolchain-policy contract.
 

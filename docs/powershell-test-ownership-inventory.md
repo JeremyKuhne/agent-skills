@@ -275,10 +275,15 @@ Why this is the strongest discriminator:
 - Remove only those six Pester declarations after managed parity passes. Keep
   every other declaration in the `Trusted-parent recipes` context unchanged
   until a separately approved migration preserves its platform coverage.
-- Run the managed cases on Windows and Linux and record discovered, passed,
-  failed, skipped, and duration counts.
-- Compare assertion clarity, executable coverage visibility, runtime, and defect
-  classes with the previous Pester slice.
+- Run the managed cases in required CI jobs on `windows-latest` and
+  `ubuntu-24.04-arm`; record exact-head job identities, discovered, passed,
+  failed, skipped, and duration counts. Local runs do not satisfy this exit
+  evidence.
+- Compare implementation size, assertion clarity, defect classes, compiler and
+  analyzer diagnostics, runtime, executable coverage visibility, and maintenance
+  cost with the previous Pester slice. Record source and test line counts, new
+  dependencies and helpers, and any platform-specific setup so the comparison
+  is reproducible.
 
 #### Rejected
 
