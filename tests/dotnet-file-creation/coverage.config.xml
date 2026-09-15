@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+  <IncludeTestAssembly>True</IncludeTestAssembly>
+  <CodeCoverage>
+    <Sources>
+      <Include>
+        <Source>.*[\\/]skills[\\/]dotnet-file-creation[\\/]assets[\\/]TrustedFileWrites\.cs$</Source>
+      </Include>
+    </Sources>
+  </CodeCoverage>
+</Configuration>

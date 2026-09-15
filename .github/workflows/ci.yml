@@ -131,6 +131,77 @@ jobs:
             ./tests/repository/Invoke-SyntheticConsumer.ps1
           }
 
+  dotnet-file-creation:
+    name: .NET file creation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04-arm
+            coverage: false
+          - os: windows-latest
+            coverage: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run managed file creation tests
+        if: matrix.coverage == false
+        run: >-
+          dotnet test
+          --project ./tests/dotnet-file-creation/DotNetFileCreation.Tests.csproj
+          --configuration Release
+
+      - name: Run managed file creation tests with coverage
+        if: matrix.coverage == true
+        shell: pwsh
+        run: |
+          $coveragePath = Join-Path $env:RUNNER_TEMP 'dotnet-file-creation.cobertura.xml'
+          dotnet test `
+            --project ./tests/dotnet-file-creation/DotNetFileCreation.Tests.csproj `
+            --configuration Release `
+            --coverage `
+            --coverage-settings ./tests/dotnet-file-creation/coverage.config.xml `
+            --coverage-output $coveragePath `
+            --coverage-output-format cobertura
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Managed file creation tests failed.'
+          }
+
+          [xml] $coverage = Get-Content -LiteralPath $coveragePath -Raw
+          $classes = @($coverage.coverage.packages.package.classes.class |
+            Where-Object name -CEQ 'TrustedFileWrites')
+          if ($classes.Count -ne 1) {
+            throw "Expected one TrustedFileWrites coverage class; found $($classes.Count)."
+          }
+
+          $source = ([string] $classes[0].filename).Replace('\', '/')
+          if (-not $source.EndsWith(
+              '/skills/dotnet-file-creation/assets/TrustedFileWrites.cs',
+              [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Unexpected TrustedFileWrites coverage source: $source"
+          }
+
+          $lines = @($classes[0].lines.line)
+          $coveredLines = @($lines | Where-Object { [int] $_.hits -gt 0 }).Count
+          if ($coveredLines -eq 0) {
+            throw 'TrustedFileWrites coverage contains no covered lines.'
+          }
+
+          $culture = [System.Globalization.CultureInfo]::InvariantCulture
+          $lineRate = [double]::Parse([string] $classes[0].'line-rate', $culture)
+          $branchRate = [double]::Parse([string] $classes[0].'branch-rate', $culture)
+          $linePercent = (100 * $lineRate).ToString('F2', $culture)
+          $branchPercent = (100 * $branchRate).ToString('F2', $culture)
+          $summary = "TrustedFileWrites coverage: $coveredLines/$($lines.Count) lines ($linePercent%); branch rate $branchPercent%."
+          Write-Host $summary
+          "### .NET file creation`n`n$summary" >> $env:GITHUB_STEP_SUMMARY
+
   dotnet-pipes:
     name: .NET pipes (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
