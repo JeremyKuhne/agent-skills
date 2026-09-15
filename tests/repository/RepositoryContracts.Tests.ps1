@@ -68,6 +68,9 @@ Describe 'PowerShell toolchain contract' {
             }
             Copy-Item -LiteralPath $script:ToolchainManifestPath `
                 -Destination (Join-Path $fixtureRoot 'tools/powershell-toolchain.json')
+            Copy-Item -LiteralPath $script:WorkflowParserRoot `
+                -Destination (Join-Path $fixtureRoot `
+                    'tools/powershell-toolchain-validator') -Recurse
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') `
                 -Value @(
                 '#Requires -Version 7.4',
@@ -101,11 +104,8 @@ Describe 'PowerShell toolchain contract' {
         $script:Toolchain.powerShell.minimumVersion | Should -BeExactly '7.4'
         $script:Toolchain.modules.Pester | Should -BeExactly '6.2.0'
         $script:Toolchain.modules.PSScriptAnalyzer | Should -BeExactly '1.25.0'
-        $script:Toolchain.dotnet.sdkVersion | Should -BeExactly '10.0.x'
-        $script:Toolchain.dotnet.previewSdkVersion | Should -BeExactly '11.0.x'
-        $script:Toolchain.dotnet.languageVersion | Should -BeExactly '14.0'
-        @($script:Toolchain.hosts.PSObject.Properties.Name | Sort-Object) |
-            Should -Be @('primary', 'scheduled', 'windows')
+        @($script:Toolchain.PSObject.Properties.Name | Sort-Object) |
+            Should -Be @('modules', 'powerShell', 'schemaVersion')
     }
 
     It 'keeps checked toolchain copies aligned with the manifest' {
@@ -191,6 +191,94 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*is not valid workflow YAML*'
+    }
+
+    It 'uses parser metadata from the selected repository root' {
+        $fixtureRoot = New-ToolchainFixture 'parser-root-drift'
+        $packagePath = Join-Path $fixtureRoot `
+            'tools/powershell-toolchain-validator/package.json'
+        $package = Get-Content -LiteralPath $packagePath -Raw |
+            ConvertFrom-Json -AsHashtable
+        $package.dependencies.yaml = '2.9.0'
+        $package | ConvertTo-Json -Depth 10 |
+            Set-Content -LiteralPath $packagePath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*parser metadata must pin yaml 2.9.1 exactly*'
+    }
+
+    It 'rejects Windows PowerShell for a workflow Pester command' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-windows-powershell'
+        $workflowPath = Join-Path $fixtureRoot '.github/workflows/ci.yml'
+        (Get-Content -LiteralPath $workflowPath -Raw).Replace(
+            'shell: pwsh', 'shell: powershell') |
+            Set-Content -LiteralPath $workflowPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*contains a Pester command outside a pwsh shell*'
+    }
+
+    It 'ignores Pester text in an unrelated module parameter' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-unrelated-pester-value'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh',
+            '        run: Install-Module -Name Foo -Repository Pester -RequiredVersion 1.0')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'rejects a stale Pester pin through a static workflow variable' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-static-pester-variable'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh', '        run: |',
+            "          `$moduleName = 'Pester'",
+            '          Install-Module $moduleName -RequiredVersion 6.1.0')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '6.1.0' instead of '6.2.0'*"
+    }
+
+    It 'requires a pinned bootstrap before Invoke-Pester in each job' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-missing-bootstrap'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh', '        run: Invoke-Pester ./tests')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*job 'test' invokes Pester without a preceding pinned bootstrap*"
+    }
+
+    It 'includes root guidance in the literal legacy inventory' {
+        $fixtureRoot = New-ToolchainFixture 'root-guidance-drift'
+        $legacyVersion = '5.7' + '.1'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot 'CONTRIBUTING.md') `
+            -Value "Legacy Pester $legacyVersion"
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw (
+                "*CONTRIBUTING.md*retains legacy Pester $legacyVersion text*")
+    }
+
+    It 'renders an indented supported workflow template placeholder' {
+        $fixtureRoot = New-ToolchainFixture 'indented-template-placeholder'
+        $templatePath = Join-Path $fixtureRoot `
+            '.agents/example/.github/workflows/release.yml.tmpl'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $templatePath)) |
+            Out-Null
+        Set-Content -LiteralPath $templatePath -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh',
+            '        run: Install-Module Pester -RequiredVersion 6.2.0',
+            '  {{PLUGIN_SMOKE_STEPS}}')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 }
 

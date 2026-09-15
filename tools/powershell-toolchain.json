@@ -6,25 +6,5 @@
   "modules": {
     "Pester": "6.2.0",
     "PSScriptAnalyzer": "1.25.0"
-  },
-  "hosts": {
-    "primary": {
-      "operatingSystem": "ubuntu-24.04-arm",
-      "minimumPowerShellVersion": "7.4"
-    },
-    "windows": {
-      "operatingSystem": "windows-latest",
-      "minimumPowerShellVersion": "7.4"
-    },
-    "scheduled": {
-      "operatingSystem": "ubuntu-latest",
-      "minimumPowerShellVersion": "7.4",
-      "channel": "latest-stable"
-    }
-  },
-  "dotnet": {
-    "sdkVersion": "10.0.x",
-    "previewSdkVersion": "11.0.x",
-    "languageVersion": "14.0"
   }
 }

@@ -9,7 +9,7 @@ if (process.argv.length !== 3) {
 
 const workflowPath = process.argv[2];
 let source = fs.readFileSync(workflowPath, 'utf8');
-source = source.replace(/^\{\{PLUGIN_SMOKE_STEPS\}\}\s*$/m, '');
+source = source.replace(/^[ \t]*\{\{PLUGIN_SMOKE_STEPS\}\}[ \t]*$/m, '');
 if (/(?<!\$)\{\{[A-Z][A-Z0-9_]*\}\}/.test(source)) {
   console.error('Workflow template contains an unsupported placeholder.');
   process.exit(1);

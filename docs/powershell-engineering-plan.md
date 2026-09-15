@@ -43,19 +43,20 @@ stable. Do not combine all milestones into one migration pull request.
 ### P1 implementation evidence
 
 The replacement [toolchain manifest](../tools/powershell-toolchain.json) owns
-PowerShell 7.4, Pester 6.2.0, PSScriptAnalyzer 1.25.0, .NET SDK 10.0.x, C# 14,
-and the primary, Windows, and scheduled host lanes. The replacement validator
-uses `ConvertFrom-Json` for the manifest, `yaml` 2.9.1 for workflow YAML, and
-the PowerShell AST for test requirements, runner defaults, and PowerShell
-commands extracted from workflow steps. It does not parse YAML, Markdown, or
-PowerShell syntax with regular expressions. A literal legacy-version inventory
-is intentionally only a text inventory and makes no semantic claim.
+PowerShell 7.4, Pester 6.2.0, and PSScriptAnalyzer 1.25.0. The replacement
+validator uses `ConvertFrom-Json` for the manifest, `yaml` 2.9.1 for workflow
+YAML, and the PowerShell AST for test requirements, runner defaults, and
+PowerShell commands extracted from workflow steps. It does not parse YAML,
+Markdown, or PowerShell syntax with regular expressions. A literal
+legacy-version inventory is intentionally only a text inventory and makes no
+semantic claim. Host-lane and .NET SDK centralization remain P2 work because
+they require an explicit workflow-to-policy mapping contract.
 
 The replacement Pester 6.2.0 canary ran all 16 test files through the
-process-per-file runner on PowerShell 7.6.6. It completed in 85.367 seconds
-with 474 tests: 461 passed, 13 were intentionally skipped, and none failed,
+process-per-file runner on PowerShell 7.6.6. It completed in 84.369 seconds
+with 481 tests: 468 passed, 13 were intentionally skipped, and none failed,
 were not run, were inconclusive, or reported block, container, or
-infrastructure failures. Nine focused toolchain contracts and the empty
+infrastructure failures. Sixteen focused toolchain contracts and the empty
 `-ForEach` compatibility control explain the increase from the 464-test
 assessment baseline.
 
@@ -244,9 +245,11 @@ Create one structured repository manifest, provisionally
 
 - minimum PowerShell version: 7.4;
 - Pester version: 6.2.0;
-- PSScriptAnalyzer version: 1.25.0;
-- supported primary and scheduled host lanes;
-- C# language version: 14.0 and the repository .NET SDK requirement.
+- PSScriptAnalyzer version: 1.25.0.
+
+P2 may add primary and scheduled host lanes, C# language version, and .NET SDK
+selectors only when parser-backed checks bind every field to the workflows that
+consume it. Do not add policy fields that are shape-checked but unenforced.
 
 Scripts and CI read the manifest where practical. A validator checks unavoidable
 literal copies such as `#Requires`, generated workflow text, and bootstrap

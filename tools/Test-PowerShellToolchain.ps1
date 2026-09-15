@@ -23,12 +23,12 @@ $errors = [System.Collections.Generic.List[string]]::new()
 if ($manifest -isnot [System.Collections.IDictionary]) {
     throw 'PowerShell toolchain validation failed:`n- Manifest root must be an object.'
 }
-foreach ($key in @('schemaVersion', 'powerShell', 'modules', 'hosts', 'dotnet')) {
+foreach ($key in @('schemaVersion', 'powerShell', 'modules')) {
     if (-not $manifest.ContainsKey($key)) {
         $errors.Add("Manifest is missing '$key'.") | Out-Null
     }
 }
-foreach ($key in @('powerShell', 'modules', 'hosts', 'dotnet')) {
+foreach ($key in @('powerShell', 'modules')) {
     if ($manifest.ContainsKey($key) -and
         $manifest[$key] -isnot [System.Collections.IDictionary]) {
         $errors.Add("Manifest '$key' must be an object.") | Out-Null
@@ -46,7 +46,6 @@ $versionValues = [ordered]@{
     'powerShell.minimumVersion' = $manifest.powerShell.minimumVersion
     'modules.Pester' = $manifest.modules.Pester
     'modules.PSScriptAnalyzer' = $manifest.modules.PSScriptAnalyzer
-    'dotnet.languageVersion' = $manifest.dotnet.languageVersion
 }
 foreach ($entry in $versionValues.GetEnumerator()) {
     $parsedVersion = $null
@@ -61,41 +60,6 @@ if ($manifest.modules.Pester -notmatch '^\d+\.\d+\.\d+$') {
 if ($manifest.modules.PSScriptAnalyzer -notmatch '^\d+\.\d+\.\d+$') {
     $errors.Add("Manifest 'modules.PSScriptAnalyzer' must be an exact three-part version.") | Out-Null
 }
-if ($manifest.dotnet.sdkVersion -isnot [string] -or
-    $manifest.dotnet.sdkVersion -notmatch '^\d+\.\d+\.x$') {
-    $errors.Add("Manifest 'dotnet.sdkVersion' must be a feature-band selector such as '10.0.x'.") | Out-Null
-}
-if ($manifest.dotnet.previewSdkVersion -isnot [string] -or
-    $manifest.dotnet.previewSdkVersion -notmatch '^\d+\.\d+\.x$') {
-    $errors.Add("Manifest 'dotnet.previewSdkVersion' must be a feature-band selector such as '11.0.x'.") |
-        Out-Null
-}
-
-foreach ($hostName in @('primary', 'windows', 'scheduled')) {
-    if (-not $manifest.hosts.ContainsKey($hostName)) {
-        $errors.Add("Manifest is missing the '$hostName' host lane.") | Out-Null
-        continue
-    }
-    $hostLane = $manifest.hosts[$hostName]
-    if ($hostLane.operatingSystem -isnot [string] -or
-        [string]::IsNullOrWhiteSpace($hostLane.operatingSystem)) {
-        $errors.Add("Manifest host '$hostName' must name an operating system.") | Out-Null
-    }
-    if ($hostLane -isnot [System.Collections.IDictionary]) {
-        $errors.Add("Manifest host '$hostName' must be an object.") | Out-Null
-        continue
-    }
-    if ([string]$hostLane.minimumPowerShellVersion -cne
-        [string]$manifest.powerShell.minimumVersion) {
-        $errors.Add("Manifest host '$hostName' must use the repository PowerShell minimum.") |
-            Out-Null
-    }
-}
-if ([string]$manifest.hosts.scheduled.channel -cne 'latest-stable') {
-    $errors.Add("Manifest host 'scheduled' must use channel 'latest-stable'.") |
-        Out-Null
-}
-
 $pesterVersion = [string]$manifest.modules.Pester
 $minimumPowerShellVersion = [string]$manifest.powerShell.minimumVersion
 
@@ -134,26 +98,111 @@ function Get-CommandParameterValueAst (
     return $null
 }
 
-function Add-PesterCommandErrors (
+function Get-NearestScriptBlockAst ([object] $Node) {
+    $ancestor = $Node
+    while ($null -ne $ancestor) {
+        if ($ancestor -is [Management.Automation.Language.ScriptBlockAst]) {
+            return $ancestor
+        }
+        $ancestor = $ancestor.Parent
+    }
+    return $null
+}
+
+function Get-CommandModuleTargetAst (
+    [Management.Automation.Language.CommandAst] $CommandAst) {
+    $elements = @($CommandAst.CommandElements)
+    for ($index = 1; $index -lt $elements.Count; $index++) {
+        if ($elements[$index] -is
+            [Management.Automation.Language.CommandParameterAst] -and
+            $elements[$index].ParameterName -in @('Name', 'ModuleName')) {
+            return Get-CommandParameterValueAst -Elements $elements `
+                -ParameterIndex $index
+        }
+    }
+    $switchParameters = @(
+        'AcceptLicense', 'AllowClobber', 'AllowPrerelease', 'AsCustomObject',
+        'Confirm', 'Debug', 'DisableNameChecking', 'Force', 'Global',
+        'NoClobber', 'PassThru', 'SkipEditionCheck', 'SkipPublisherCheck',
+        'UseWindowsPowerShell', 'Verbose', 'WhatIf')
+    $skipParameterArgument = $false
+    for ($index = 1; $index -lt $elements.Count; $index++) {
+        if ($skipParameterArgument) {
+            $skipParameterArgument = $false
+            continue
+        }
+        if ($elements[$index] -is
+            [Management.Automation.Language.CommandParameterAst]) {
+            if ($null -eq $elements[$index].Argument -and
+                $elements[$index].ParameterName -notin $switchParameters) {
+                $skipParameterArgument = $true
+            }
+            continue
+        }
+        return $elements[$index]
+    }
+    return $null
+}
+
+function Get-StaticModuleName (
+    [Management.Automation.Language.CommandAst] $CommandAst,
+    [Management.Automation.Language.ScriptBlockAst] $RootAst) {
+    $targetAst = Get-CommandModuleTargetAst -CommandAst $CommandAst
+    $moduleName = Get-StaticStringAstValue -ExpressionAst $targetAst
+    if ($null -ne $moduleName -or
+        $targetAst -isnot [Management.Automation.Language.VariableExpressionAst]) {
+        return $moduleName
+    }
+    $variableName = $targetAst.VariablePath.UserPath
+    $assignments = @($RootAst.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.AssignmentStatementAst]
+            }, $true) | Where-Object {
+            $_.Extent.StartOffset -lt $CommandAst.Extent.StartOffset -and
+                $_.Left -is
+                    [Management.Automation.Language.VariableExpressionAst] -and
+                $_.Left.VariablePath.UserPath -ieq $variableName -and
+                [object]::ReferenceEquals(
+                    (Get-NearestScriptBlockAst -Node $_), $RootAst)
+        } | Sort-Object { $_.Extent.StartOffset } -Descending)
+    if ($assignments.Count -eq 0) { return $null }
+    return Get-StaticStringAstValue -ExpressionAst $assignments[0].Right
+}
+
+function Get-PesterCommandRecords (
     [Management.Automation.Language.ScriptBlockAst] $Ast,
     [string] $RelativePath,
     [string] $ExpectedVersion,
     [System.Collections.Generic.List[string]] $ErrorList) {
-    foreach ($commandAst in @($Ast.FindAll({
+    $commands = @($Ast.FindAll({
                 param($node)
-                $node -is [Management.Automation.Language.CommandAst] -and
-                    $node.GetCommandName() -in @(
-                        'Install-Module', 'Import-Module', 'ipmo')
-            }, $true))) {
+                $node -is [Management.Automation.Language.CommandAst]
+            }, $true) | Where-Object {
+            [object]::ReferenceEquals(
+                (Get-NearestScriptBlockAst -Node $_), $Ast)
+        } | Sort-Object { $_.Extent.StartOffset })
+    foreach ($commandAst in $commands) {
+        if ($commandAst.GetCommandName() -ieq 'Invoke-Pester') {
+            [pscustomobject]@{
+                Kind = 'Invoke'
+                Offset = $commandAst.Extent.StartOffset
+                Pinned = $false
+            }
+            continue
+        }
+        if ($commandAst.GetCommandName() -notin @(
+                'Install-Module', 'Import-Module', 'ipmo')) { continue }
         $elements = @($commandAst.CommandElements)
-        $targetsPester = @($elements | Select-Object -Skip 1 |
-            Where-Object {
-                (Get-StaticStringAstValue -ExpressionAst $_) -ieq 'Pester' -or
-                    ($_ -is [Management.Automation.Language.CommandParameterAst] -and
-                        (Get-StaticStringAstValue -ExpressionAst $_.Argument) -ieq
-                            'Pester')
-            }).Count -gt 0
-        if (-not $targetsPester) { continue }
+        $moduleName = Get-StaticModuleName -CommandAst $commandAst -RootAst $Ast
+        if ($null -eq $moduleName) {
+            if ($Ast.Extent.Text.IndexOf(
+                    'Pester', [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                $ErrorList.Add("'$RelativePath' contains a module command whose target cannot be verified statically.") |
+                    Out-Null
+            }
+            continue
+        }
+        if ($moduleName -ine 'Pester') { continue }
         $versionParameters = @(for ($index = 1;
                 $index -lt $elements.Count; $index++) {
                 if ($elements[$index] -is
@@ -162,17 +211,25 @@ function Add-PesterCommandErrors (
                     $index
                 }
             })
+        $pinned = $false
         if ($versionParameters.Count -ne 1) {
             $ErrorList.Add("'$RelativePath' must pin Pester with -RequiredVersion $ExpectedVersion.") |
                 Out-Null
-            continue
         }
-        $versionAst = Get-CommandParameterValueAst -Elements $elements `
-            -ParameterIndex $versionParameters[0]
-        $version = Get-StaticStringAstValue -ExpressionAst $versionAst
-        if ($version -cne $ExpectedVersion) {
-            $ErrorList.Add("'$RelativePath' copies Pester version '$version' instead of '$ExpectedVersion'.") |
-                Out-Null
+        else {
+            $versionAst = Get-CommandParameterValueAst -Elements $elements `
+                -ParameterIndex $versionParameters[0]
+            $version = Get-StaticStringAstValue -ExpressionAst $versionAst
+            if ($version -cne $ExpectedVersion) {
+                $ErrorList.Add("'$RelativePath' copies Pester version '$version' instead of '$ExpectedVersion'.") |
+                    Out-Null
+            }
+            else { $pinned = $true }
+        }
+        [pscustomobject]@{
+            Kind = 'Bootstrap'
+            Offset = $commandAst.Extent.StartOffset
+            Pinned = $pinned
         }
     }
 }
@@ -242,28 +299,38 @@ else {
     }
 }
 
-$parserRoot = Join-Path $PSScriptRoot 'powershell-toolchain-validator'
+$parserRoot = Join-Path $resolvedRoot 'tools/powershell-toolchain-validator'
 $parserManifestPath = Join-Path $parserRoot 'package.json'
 $parserLockPath = Join-Path $parserRoot 'package-lock.json'
 $parserPackagePath = Join-Path $parserRoot 'node_modules/yaml/package.json'
 $parserScriptPath = Join-Path $parserRoot 'read-workflow-runs.mjs'
 $parserVersion = '2.9.1'
 $parserIntegrity = 'sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw=='
-$parserManifest = Get-Content -LiteralPath $parserManifestPath -Raw |
-    ConvertFrom-Json -AsHashtable
-$parserLock = Get-Content -LiteralPath $parserLockPath -Raw |
-    ConvertFrom-Json -AsHashtable
-if ([string]$parserManifest.dependencies.yaml -cne $parserVersion -or
-    [string]$parserLock.packages['node_modules/yaml'].version -cne
-        $parserVersion -or
-    [string]$parserLock.packages['node_modules/yaml'].integrity -cne
-        $parserIntegrity) {
-    $errors.Add("Workflow parser metadata must pin yaml $parserVersion exactly.") |
+$parserMetadataReady = @(
+    $parserManifestPath, $parserLockPath, $parserScriptPath | Where-Object {
+        -not (Test-Path -LiteralPath $_ -PathType Leaf)
+    }).Count -eq 0
+if (-not $parserMetadataReady) {
+    $errors.Add("Workflow parser files are missing under '$parserRoot'.") |
         Out-Null
+}
+else {
+    $parserManifest = Get-Content -LiteralPath $parserManifestPath -Raw |
+        ConvertFrom-Json -AsHashtable
+    $parserLock = Get-Content -LiteralPath $parserLockPath -Raw |
+        ConvertFrom-Json -AsHashtable
+    if ([string]$parserManifest.dependencies.yaml -cne $parserVersion -or
+        [string]$parserLock.packages['node_modules/yaml'].version -cne
+            $parserVersion -or
+        [string]$parserLock.packages['node_modules/yaml'].integrity -cne
+            $parserIntegrity) {
+        $errors.Add("Workflow parser metadata must pin yaml $parserVersion exactly.") |
+            Out-Null
+    }
 }
 $node = @(Get-Command node -CommandType Application -ErrorAction SilentlyContinue |
     Select-Object -First 1)
-if ($node.Count -ne 1 -or
+if (-not $parserMetadataReady -or $node.Count -ne 1 -or
     -not (Test-Path -LiteralPath $parserPackagePath -PathType Leaf)) {
     $errors.Add("Install workflow parser dependencies with 'npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts'.") |
         Out-Null
@@ -290,7 +357,7 @@ $workflowFiles = @(
             }
     }
 )
-if ($node.Count -eq 1 -and
+if ($parserMetadataReady -and $node.Count -eq 1 -and
     (Test-Path -LiteralPath $parserPackagePath -PathType Leaf)) {
     foreach ($workflowFile in $workflowFiles) {
         $relativePath = [IO.Path]::GetRelativePath(
@@ -308,14 +375,9 @@ if ($node.Count -eq 1 -and
                 Out-Null
             continue
         }
-        foreach ($runRecord in $runRecords) {
+        $pinnedBootstrapByJob = @{}
+        foreach ($runRecord in $runRecords | Sort-Object job, step) {
             if ([string]$runRecord.run -notmatch '(?i)Pester') { continue }
-            if ([string]$runRecord.shell -notmatch
-                '^(?i)(?:pwsh|powershell)(?:\s|$)') {
-                $errors.Add("'$relativePath' job '$($runRecord.job)' step $($runRecord.step) contains Pester text outside a PowerShell shell.") |
-                    Out-Null
-                continue
-            }
             $tokens = $null
             $parseErrors = $null
             $runAst = [Management.Automation.Language.Parser]::ParseInput(
@@ -325,8 +387,29 @@ if ($node.Count -eq 1 -and
                     Out-Null
                 continue
             }
-            Add-PesterCommandErrors -Ast $runAst -RelativePath $relativePath `
-                -ExpectedVersion $pesterVersion -ErrorList $errors
+            $pesterCommands = @(Get-PesterCommandRecords -Ast $runAst `
+                -RelativePath $relativePath -ExpectedVersion $pesterVersion `
+                -ErrorList $errors)
+            if ($pesterCommands.Count -eq 0) { continue }
+            $shellParts = @([string]$runRecord.shell -split '\s+', 2)
+            if ($shellParts.Count -eq 0 -or $shellParts[0] -ine 'pwsh') {
+                $errors.Add("'$relativePath' job '$($runRecord.job)' step $($runRecord.step) contains a Pester command outside a pwsh shell.") |
+                    Out-Null
+                continue
+            }
+            foreach ($pesterCommand in $pesterCommands | Sort-Object Offset) {
+                if ($pesterCommand.Kind -eq 'Bootstrap' -and
+                    $pesterCommand.Pinned) {
+                    $pinnedBootstrapByJob[[string]$runRecord.job] = $true
+                    continue
+                }
+                if ($pesterCommand.Kind -eq 'Invoke' -and
+                    -not $pinnedBootstrapByJob.ContainsKey(
+                        [string]$runRecord.job)) {
+                    $errors.Add("'$relativePath' job '$($runRecord.job)' invokes Pester without a preceding pinned bootstrap.") |
+                        Out-Null
+                }
+            }
         }
     }
 }
@@ -335,20 +418,28 @@ $legacyPesterVersion = '5.7' + '.1'
 $activeRoots = @('.agents', '.github', 'evals', 'skills', 'tests', 'tools')
 $textExtensions = @(
     '.json', '.md', '.ps1', '.psd1', '.psm1', '.tmpl', '.yaml', '.yml')
-foreach ($activeRoot in $activeRoots) {
-    $path = Join-Path $resolvedRoot $activeRoot
-    if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
-    foreach ($file in Get-ChildItem -LiteralPath $path -File -Recurse |
-        Where-Object Extension -In $textExtensions) {
-        $content = Get-Content -LiteralPath $file.FullName -Raw
-        if ($content.IndexOf(
-                $legacyPesterVersion,
-                [StringComparison]::Ordinal) -ge 0) {
-            $relativePath = [IO.Path]::GetRelativePath(
-                $resolvedRoot, $file.FullName)
-            $errors.Add("'$relativePath' retains legacy Pester $legacyPesterVersion text.") |
-                Out-Null
-        }
+$inventoryFiles = @(
+    foreach ($activeRoot in $activeRoots) {
+        $path = Join-Path $resolvedRoot $activeRoot
+        if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+        Get-ChildItem -LiteralPath $path -File -Recurse |
+            Where-Object {
+                $_.Extension -in $textExtensions -and
+                    $_.FullName -notmatch '[\\/]node_modules[\\/]'
+            }
+    }
+    Get-ChildItem -LiteralPath $resolvedRoot -File |
+        Where-Object Extension -In $textExtensions
+)
+foreach ($file in @($inventoryFiles | Sort-Object FullName -Unique)) {
+    $content = Get-Content -LiteralPath $file.FullName -Raw
+    if ($content.IndexOf(
+            $legacyPesterVersion,
+            [StringComparison]::Ordinal) -ge 0) {
+        $relativePath = [IO.Path]::GetRelativePath(
+            $resolvedRoot, $file.FullName)
+        $errors.Add("'$relativePath' retains legacy Pester $legacyPesterVersion text.") |
+            Out-Null
     }
 }
 
