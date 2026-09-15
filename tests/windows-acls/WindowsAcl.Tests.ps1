@@ -1,4 +1,5 @@
-#requires -Version 7.0
+#Requires -Version 7.4
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
 
 # Fact-regression assertions behind the windows-acls skill. Each test pins one claim the guidance
 # depends on, so a Windows change that invalidates the advice fails here first.

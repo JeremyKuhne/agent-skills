@@ -1,5 +1,5 @@
-#Requires -Version 7.2
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+#Requires -Version 7.4
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
 
 BeforeAll {
     $script:ScriptsRoot = Join-Path $PSScriptRoot '..' '..' 'skills' 'engineering-baseline' 'scripts'

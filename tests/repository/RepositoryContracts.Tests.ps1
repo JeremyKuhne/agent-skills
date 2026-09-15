@@ -1,5 +1,5 @@
-#Requires -Version 7.2
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
+#Requires -Version 7.4
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
 
 BeforeAll {
     . (Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1')
@@ -79,7 +79,7 @@ Describe 'Healthy fixture' {
             $reportDirectory = Join-Path $root 'reports'
             $output = @(& $script:ShardPwsh -NoProfile -File $script:ShardRunner `
                     -Path $testPath -OutputDirectory $reportDirectory `
-                    -MaxConcurrency 2 -PesterVersion 5.7.1 @RunnerArguments 2>&1)
+                    -MaxConcurrency 2 -PesterVersion 6.2.0 @RunnerArguments 2>&1)
             $exitCode = $LASTEXITCODE
             $summary = Get-Content -LiteralPath (Join-Path $reportDirectory 'summary.json') -Raw |
                 ConvertFrom-Json

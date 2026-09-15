@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Pester
         shell: pwsh
-        run: Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser
+        run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser
       - name: Validate release candidate
         shell: pwsh
         run: ./tools/Validate-Repository.ps1
