@@ -27,7 +27,7 @@ writes, releases, and model runs. Use `Not started`, `Ready`, `In progress`,
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
 | P0 | Baseline and engineering decisions | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence recorded; runtime, API, coverage, C#, skill, and release decisions accepted. |
-| P1 | Central toolchain and Pester 6 cutover | In progress | P0 | One manifest owns PowerShell 7.4 and Pester 6.2.0; the Pester 6 parity canary passes; every active test requirement and Pester-installing workflow or template uses 6.2.0; structured files are inspected only through pinned parsers; 5.7.1 remains only in historical evidence. |
+| P1 | Central toolchain and Pester 6 cutover | In progress | P0 | One manifest owns PowerShell 7.4 and Pester 6.2.0; the Pester 6 parity canary passes; test requirements declare a 6.2.0 compatibility floor while repository execution imports 6.2.0 exactly; structured files are inspected only through pinned parsers; 5.7.1 remains only in historical evidence. |
 | P2 | Canonical isolated test execution | Ready | P1 | Every CI Pester invocation goes through the hardened process-per-file runner; Linux runs the full minimum-host suite, Windows runs focused platform suites, and a scheduled latest-runtime full suite is defined. |
 | P3 | Portable PowerShell engineering skill | Ready | P1 | A portable `powershell-engineering` core and repository overlay cover contracts, Pester 6, process behavior, structured data, platforms, coverage, and review; seeded scenarios catch the known defect classes. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1, P3 | All operational and shipped scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
@@ -53,11 +53,18 @@ intentionally only a text inventory and makes no semantic claim. Host-lane and
 workflow-to-policy mapping contract. PSScriptAnalyzer ownership remains P5,
 where the pinned version will be exercised by the analyzer gate.
 
+The manifest version is an execution lock, not the upper bound of Pester
+compatibility. CI bootstrap commands and the shard worker install and import
+Pester 6.2.0 exactly for reproducible evidence. Test-file `#Requires`
+declarations use `ModuleVersion = '6.2.0'`, and portable skill compatibility
+states Pester 6.2 or later. This keeps deterministic repository execution
+separate from the minimum version that the tests and portable guidance support.
+
 The replacement Pester 6.2.0 canary ran all 16 test files through the
-process-per-file runner on PowerShell 7.6.6. It completed in 88.250 seconds
-with 489 tests: 476 passed, 13 were intentionally skipped, and none failed,
+process-per-file runner on PowerShell 7.6.6. It completed in 85.894 seconds
+with 493 tests: 480 passed, 13 were intentionally skipped, and none failed,
 were not run, were inconclusive, or reported block, container, or
-infrastructure failures. Twenty-four focused toolchain contracts and the empty
+infrastructure failures. Twenty-eight focused toolchain contracts and the empty
 `-ForEach` compatibility control explain the increase from the 464-test
 assessment baseline.
 

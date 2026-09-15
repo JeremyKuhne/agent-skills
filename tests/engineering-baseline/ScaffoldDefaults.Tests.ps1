@@ -1,5 +1,5 @@
 #Requires -Version 7.4
-#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
 
 BeforeAll {
     $script:ScaffoldPath = (Resolve-Path (Join-Path $PSScriptRoot '..' '..' 'skills' 'engineering-baseline' 'scripts' 'New-DotnetRepo.ps1')).Path

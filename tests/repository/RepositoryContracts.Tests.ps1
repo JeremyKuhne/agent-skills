@@ -1,5 +1,5 @@
 #Requires -Version 7.4
-#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
 
 BeforeAll {
     . (Join-Path $PSScriptRoot 'SkillArtifactTestHelpers.ps1')
@@ -74,7 +74,7 @@ Describe 'PowerShell toolchain contract' {
             Set-Content -LiteralPath (Join-Path $fixtureRoot 'tests/Valid.Tests.ps1') `
                 -Value @(
                 '#Requires -Version 7.4',
-                "#Requires -Modules @{ ModuleName = 'Pester'; RequiredVersion = '6.2.0' }",
+                "#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }",
                 "Describe 'Valid' { It 'is never run' { `$true | Should -BeTrue } }")
             Set-Content -LiteralPath (
                 Join-Path $fixtureRoot 'tests/Invoke-PesterShards.ps1') -Value @(
@@ -93,7 +93,7 @@ Describe 'PowerShell toolchain contract' {
                     'skills/dotnet-file-creation/SKILL.md',
                     'skills/windows-acls/SKILL.md')) {
                 Set-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) `
-                    -Value 'Requires PowerShell 7.4 and Pester 6.2.0 exactly.'
+                    -Value 'Requires PowerShell 7.4 and Pester 6.2 or later.'
             }
             return $fixtureRoot
         }
@@ -136,7 +136,18 @@ Describe 'PowerShell toolchain contract' {
             -Value @($driftRequirement, "Describe 'Drift' { It 'is never run' { `$true | Should -BeTrue } }")
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw '*must require Pester 6.2.0 exactly*'
+            Should -Throw '*must require Pester 6.2.0 or later*'
+    }
+
+    It 'rejects an exact Pester test requirement as a compatibility contract' {
+        $fixtureRoot = New-ToolchainFixture 'exact-test-requirement'
+        $testPath = Join-Path $fixtureRoot 'tests/Valid.Tests.ps1'
+        (Get-Content -LiteralPath $testPath -Raw).Replace(
+            "ModuleVersion = '6.2.0'", "RequiredVersion = '6.2.0'") |
+            Set-Content -LiteralPath $testPath
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*must require Pester 6.2.0 or later*'
     }
 
     It 'rejects a drifted PowerShell test requirement' {
@@ -280,6 +291,31 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '6.1.0' instead of '6.2.0'*"
     }
 
+    It 'rejects a dynamic workflow command name as unverifiable' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-dynamic-command-name'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh', '        run: |',
+            "          `$command = 'Install-Module'",
+            '          & $command Pester -RequiredVersion 6.1.0')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*dynamic command name that cannot be verified statically*'
+    }
+
+    It 'rejects a wildcard Pester module target as unverifiable' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-wildcard-module-target'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh',
+            '        run: Import-Module Pester* -RequiredVersion 6.1.0')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw '*contains a wildcard module target that cannot be verified statically*'
+    }
+
     It 'rejects a stale Pester pin inside a nested PowerShell scope' {
         $fixtureRoot = New-ToolchainFixture 'workflow-nested-scope'
         Set-Content -LiteralPath (
@@ -389,6 +425,14 @@ Describe 'PowerShell toolchain contract' {
         $install.Count | Should -Be 1
         $tests.Count | Should -Be 1
         $install[0].step | Should -BeLessThan $tests[0].step
+    }
+
+    It 'includes the toolchain validator in the pull request checklist' {
+        $content = Get-Content -LiteralPath (
+            Join-Path $script:RepoRoot '.github/PULL_REQUEST_TEMPLATE.md') -Raw
+
+        $content | Should -Match 'npm ci --prefix ./tools/powershell-toolchain-validator'
+        $content | Should -Match '\./tools/Test-PowerShellToolchain\.ps1'
     }
 }
 

@@ -140,6 +140,25 @@ function Get-PesterCommandRecords (
             }, $true) | Sort-Object { $_.Extent.StartOffset })
     foreach ($commandAst in $commands) {
         $commandName = $commandAst.GetCommandName()
+        if ($null -eq $commandName) {
+            $staticArguments = @($commandAst.CommandElements |
+                Select-Object -Skip 1 | ForEach-Object {
+                    Get-StaticStringAstValue -ExpressionAst $_
+                } | Where-Object { $null -ne $_ })
+            if (@($staticArguments | Where-Object {
+                        $_ -ieq 'Pester' -or
+                            ([Management.Automation.WildcardPattern]::ContainsWildcardCharacters(
+                                $_) -and
+                                [Management.Automation.WildcardPattern]::new(
+                                    $_,
+                                    [Management.Automation.WildcardOptions]::IgnoreCase).IsMatch(
+                                    'Pester'))
+                    }).Count -gt 0) {
+                $ErrorList.Add("'$RelativePath' contains a dynamic command name that cannot be verified statically.") |
+                    Out-Null
+            }
+            continue
+        }
         if ($null -ne $commandName -and $commandName.Contains('\')) {
             $commandName = $commandName.Substring(
                 $commandName.LastIndexOf('\') + 1)
@@ -152,6 +171,17 @@ function Get-PesterCommandRecords (
         if ($null -eq $moduleName) {
             $ErrorList.Add("'$RelativePath' contains a module command whose target cannot be verified statically.") |
                 Out-Null
+            continue
+        }
+        if ([Management.Automation.WildcardPattern]::ContainsWildcardCharacters(
+                $moduleName)) {
+            if ([Management.Automation.WildcardPattern]::new(
+                    $moduleName,
+                    [Management.Automation.WildcardOptions]::IgnoreCase).IsMatch(
+                    'Pester')) {
+                $ErrorList.Add("'$RelativePath' contains a wildcard module target that cannot be verified statically.") |
+                    Out-Null
+            }
             continue
         }
         if ($moduleName -ine 'Pester') { continue }
@@ -214,9 +244,11 @@ foreach ($testFile in @($testFiles) + @($testTemplates)) {
     $requirements = @($ast.ScriptRequirements.RequiredModules |
         Where-Object Name -IEQ 'Pester')
     if ($requirements.Count -ne 1 -or
-        [string]$requirements[0].RequiredVersion -cne $pesterVersion) {
+        [string]$requirements[0].Version -cne $pesterVersion -or
+        $null -ne $requirements[0].RequiredVersion) {
         $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $testFile.FullName)
-        $errors.Add("'$relativePath' must require Pester $pesterVersion exactly.") | Out-Null
+        $errors.Add("'$relativePath' must require Pester $pesterVersion or later.") |
+            Out-Null
     }
 }
 
@@ -381,8 +413,8 @@ foreach ($file in @($inventoryFiles | Sort-Object FullName -Unique)) {
 
 $guidanceContracts = @(
     @{ Path = '.agents/skills/create-skill-repo/SKILL.md'; Pester = "Pester $pesterVersion" }
-    @{ Path = 'skills/dotnet-file-creation/SKILL.md'; Pester = "Pester $pesterVersion exactly" }
-    @{ Path = 'skills/windows-acls/SKILL.md'; Pester = "Pester $pesterVersion exactly" }
+    @{ Path = 'skills/dotnet-file-creation/SKILL.md'; Pester = 'Pester 6.2 or later' }
+    @{ Path = 'skills/windows-acls/SKILL.md'; Pester = 'Pester 6.2 or later' }
 )
 foreach ($contract in $guidanceContracts) {
     $relativePath = $contract.Path

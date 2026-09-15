@@ -19,6 +19,9 @@
       names, or links into a particular repository's tree) - see
       [FORMAT.md](../FORMAT.md).
 - [ ] Strict portfolio and reference validation pass for every source skill.
+- [ ] PowerShell toolchain validation passes after installing its locked parser
+      dependencies (`npm ci --prefix ./tools/powershell-toolchain-validator
+      --ignore-scripts`; `./tools/Test-PowerShellToolchain.ps1`).
 - [ ] Repository Pester tests pass (`./tests/Invoke-PesterShards.ps1 -Path ./tests`).
 - [ ] Portfolio metadata, overlay binding, compatibility, and relationships are
       accurate; the generated catalog is current.
