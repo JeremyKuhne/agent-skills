@@ -340,7 +340,7 @@ a structured format must use a maintained parser with an exact version and lock
 or integrity record when the parser is an added dependency:
 
 - JSON policy uses `System.Text.Json` and explicit DTO or schema checks.
-- YAML policy uses a maintained managed parser selected and pinned during P1c;
+- YAML policy uses a maintained managed parser selected and pinned during P1b;
   repository template placeholders are rendered explicitly before parsing.
 - PowerShell syntax and metadata use
   `System.Management.Automation.Language.Parser` and AST nodes. Pester may own
