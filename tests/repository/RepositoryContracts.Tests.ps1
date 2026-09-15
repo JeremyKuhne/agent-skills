@@ -93,7 +93,7 @@ Describe 'PowerShell toolchain contract' {
                     'skills/dotnet-file-creation/SKILL.md',
                     'skills/windows-acls/SKILL.md')) {
                 Set-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) `
-                    -Value 'Requires PowerShell 7.4 and Pester 6.2 or later.'
+                    -Value 'Requires PowerShell 7.4 and Pester 6.2.0 exactly.'
             }
             return $fixtureRoot
         }
@@ -219,6 +219,17 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw '*contains a Pester command outside a pwsh shell*'
     }
 
+    It 'ignores Pester prose in a non-PowerShell workflow shell' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-bash-pester-prose'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: bash', '        run: echo Pester')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
     It 'ignores Pester text in an unrelated module parameter' {
         $fixtureRoot = New-ToolchainFixture 'workflow-unrelated-pester-value'
         Set-Content -LiteralPath (
@@ -255,6 +266,18 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Throw '*module command whose target cannot be verified statically*'
+    }
+
+    It 'rejects a stale module-qualified Pester command' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-qualified-module-command'
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
+            'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
+            '      - shell: pwsh',
+            '        run: Microsoft.PowerShell.Core\Import-Module Pester -RequiredVersion 6.1.0')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Throw "*copies Pester version '6.1.0' instead of '6.2.0'*"
     }
 
     It 'rejects a stale Pester pin inside a nested PowerShell scope' {
@@ -333,6 +356,39 @@ Describe 'PowerShell toolchain contract' {
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw
+    }
+
+    It 'formats a non-object manifest error with a real newline' {
+        $fixtureRoot = Join-Path $TestDrive 'manifest-root-array'
+        [IO.Directory]::CreateDirectory((Join-Path $fixtureRoot 'tools')) |
+            Out-Null
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot 'tools/powershell-toolchain.json') `
+            -Value '[]'
+
+        $message = ''
+        try { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot }
+        catch { $message = $_.Exception.Message }
+
+        $message | Should -Match "validation failed:\r?\n- Manifest root"
+        $message | Should -Not -Match ([regex]::Escape('`n'))
+    }
+
+    It 'installs workflow parser dependencies before full repository tests' {
+        $workflowPath = Join-Path $script:RepoRoot '.github/workflows/full-ci.yml'
+        $parserScript = Join-Path $script:WorkflowParserRoot `
+            'read-workflow-runs.mjs'
+        $records = @(& node $parserScript $workflowPath | ConvertFrom-Json)
+        $windowsRuns = @($records | Where-Object job -EQ 'scaffold-windows')
+        $install = @($windowsRuns | Where-Object run -Match `
+                'npm ci --prefix ./tools/powershell-toolchain-validator' |
+            Select-Object -First 1)
+        $tests = @($windowsRuns | Where-Object run -Match 'Invoke-Pester' |
+            Select-Object -First 1)
+
+        $install.Count | Should -Be 1
+        $tests.Count | Should -Be 1
+        $install[0].step | Should -BeLessThan $tests[0].step
     }
 }
 

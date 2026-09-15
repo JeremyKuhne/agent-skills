@@ -21,7 +21,7 @@ catch {
 
 $errors = [System.Collections.Generic.List[string]]::new()
 if ($manifest -isnot [System.Collections.IDictionary]) {
-    throw 'PowerShell toolchain validation failed:`n- Manifest root must be an object.'
+    throw "PowerShell toolchain validation failed:`n- Manifest root must be an object."
 }
 foreach ($key in @('schemaVersion', 'powerShell', 'modules')) {
     if (-not $manifest.ContainsKey($key)) {
@@ -139,7 +139,12 @@ function Get-PesterCommandRecords (
                 $node -is [Management.Automation.Language.CommandAst]
             }, $true) | Sort-Object { $_.Extent.StartOffset })
     foreach ($commandAst in $commands) {
-        if ($commandAst.GetCommandName() -notin @(
+        $commandName = $commandAst.GetCommandName()
+        if ($null -ne $commandName -and $commandName.Contains('\')) {
+            $commandName = $commandName.Substring(
+                $commandName.LastIndexOf('\') + 1)
+        }
+        if ($commandName -notin @(
                 'Install-Module', 'Import-Module', 'ipmo')) { continue }
         $elements = @($commandAst.CommandElements)
         $moduleTarget = Get-CommandModuleTargetAst -CommandAst $commandAst
@@ -320,11 +325,8 @@ if ($parserMetadataReady -and $node.Count -eq 1 -and
         }
         foreach ($runRecord in $runRecords | Sort-Object job, step) {
             $shellParts = @([string]$runRecord.shell -split '\s+', 2)
-            if ($shellParts.Count -eq 0 -or $shellParts[0] -ine 'pwsh') {
-                if ([string]$runRecord.run -match '(?i)Pester') {
-                    $errors.Add("'$relativePath' job '$($runRecord.job)' step $($runRecord.step) contains a Pester command outside a pwsh shell.") |
-                        Out-Null
-                }
+            if ($shellParts.Count -eq 0 -or
+                $shellParts[0] -notin @('pwsh', 'powershell')) {
                 continue
             }
             $tokens = $null
@@ -340,6 +342,10 @@ if ($parserMetadataReady -and $node.Count -eq 1 -and
                 -RelativePath $relativePath -ExpectedVersion $pesterVersion `
                 -ErrorList $errors)
             if ($pesterCommands.Count -eq 0) { continue }
+            if ($shellParts[0] -ine 'pwsh') {
+                $errors.Add("'$relativePath' job '$($runRecord.job)' step $($runRecord.step) contains a Pester command outside a pwsh shell.") |
+                    Out-Null
+            }
         }
     }
 }
@@ -375,8 +381,8 @@ foreach ($file in @($inventoryFiles | Sort-Object FullName -Unique)) {
 
 $guidanceContracts = @(
     @{ Path = '.agents/skills/create-skill-repo/SKILL.md'; Pester = "Pester $pesterVersion" }
-    @{ Path = 'skills/dotnet-file-creation/SKILL.md'; Pester = 'Pester 6.2 or later' }
-    @{ Path = 'skills/windows-acls/SKILL.md'; Pester = 'Pester 6.2 or later' }
+    @{ Path = 'skills/dotnet-file-creation/SKILL.md'; Pester = "Pester $pesterVersion exactly" }
+    @{ Path = 'skills/windows-acls/SKILL.md'; Pester = "Pester $pesterVersion exactly" }
 )
 foreach ($contract in $guidanceContracts) {
     $relativePath = $contract.Path
