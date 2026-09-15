@@ -1,10 +1,11 @@
 # PowerShell engineering plan
 
-- Status: architecture reset approved for plan-only publication; P0r ownership
-  inventory is next; PR #90 will close unmerged
+- Status: P0r ownership inventory drafted; awaiting maintainer decision; PR #90
+  is closed unmerged and the plan reset merged through PR #91
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-15 UTC
-- Planning baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`
+- Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
+  later milestone evidence names its own exact tree
 - Scope: test ownership, PowerShell runtime and API contracts, Pester, MSTest,
   static analysis, separate managed and PowerShell coverage, process isolation,
   generated scripts, typed infrastructure, and reusable agent guidance
@@ -31,7 +32,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
 | P0 | Baseline evidence | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence is recorded. Test-harness ownership decisions previously attributed to P0 are superseded by P0r. |
-| P0r | Test-ownership and premise reset | Ready | P0 | Every current check is classified by subject, implementation owner, independent oracle, best harness, parser or standard tool, coverage domain, and migration disposition; the maintainer approves the inventory. PR #90 is retained as compatibility evidence and closed unmerged. |
+| P0r | Test-ownership and premise reset | Awaiting decision | P0 | The [test-ownership inventory](powershell-test-ownership-inventory.md) classifies current checks by subject, implementation owner, independent oracle, best harness, parser or standard tool, coverage domain, and migration disposition; the maintainer accepts or revises it and the proposed managed canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P0c | Engineering course-correction skill | Blocked | P0r | A portable skill detects ineffective implementation and review loops, challenges inherited premises, runs a bounded disconfirming check, and returns an explicit continue, narrow, replace, or stop decision; synthetic scenarios prove the behavior. |
 | P1a | Mechanical PowerShell and Pester cutover | Paused | P0r, P0c | Only tests retained in Pester require PowerShell 7.4 and Pester 6.2 or later; repository Pester execution locks 6.2.0 exactly; the accepted changes are rebuilt from current `main` rather than inherited from PR #90. |
 | P1c | Managed repository-contract canary | Blocked | P0r, P0c | One representative non-PowerShell or mixed Pester suite is split or migrated into a dedicated MSTest project using the owning parser or API; duplicate assertions are removed; focused and CI evidence establish whether the boundary improves clarity and defect detection. |
@@ -44,8 +45,8 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P7 | Evaluation infrastructure extraction | Not started | P6 | Shared process, timeout, hash, result-schema, and aggregation logic moves from `SkillEval.psm1` into the typed core without changing the PowerShell entry-point contracts; focused and full parity suites pass. |
 | P8 | Breaking release and effectiveness decision | Not started | P0c, P1b, P3a, P4-P7 | Migration guidance and release notes are complete; all seeded defects fail before their fixes and pass after; two consecutive substantive PowerShell pull requests have zero valid post-publication reviewer findings; course-correction scenarios pass; the maintainer records release and follow-up decisions. |
 
-Close PR #90 unmerged and retain its parity receipt as compatibility evidence;
-do not inherit its universal-Pester premise. Do not start P1b until P0r is
+PR #90 is closed unmerged; retain its parity receipt as compatibility evidence
+without inheriting its universal-Pester premise. Do not start P1b until P0r is
 accepted and P1c establishes the managed boundary. Do not resume P1a or start
 P1c until P0c lands. P1c is the smallest executable architecture test, not
 permission for wholesale migration. PR #88, PR #89, and PR #90 are evidence,
@@ -102,8 +103,9 @@ Pester 6 compatibility, but it is not approval of the universal-harness premise.
 
 ### P0r test-ownership reset
 
-Classify each check before choosing or preserving its harness. The inventory
-must record:
+The [test-ownership inventory](powershell-test-ownership-inventory.md) records
+each independently meaningful contract group before choosing or preserving its
+harness. It includes:
 
 | Field | Question |
 | --- | --- |
@@ -207,13 +209,16 @@ uses `RequiredVersion` in its compatibility declaration. The shard runner and
 CI bootstrap commands install and import Pester 6.2.0 exactly on that branch.
 
 The focused repository-contract shard completed with 51 passed, zero failed,
-and zero skipped tests. The full Pester 6.2.0 parity run completed on PowerShell
-7.6.6 in 81.273 seconds with 16 shards and 464 tests: 451 passed, 13 were
-intentionally skipped, and none failed, were not run, were inconclusive, or
-reported block, container, or infrastructure failures. This exactly preserves
-the assessment baseline's discovery and result counts. The receipt establishes
-compatibility of the mechanical PR #90 branch; it is not evidence that those
-changes are present on `main` or that every retained check belongs in Pester.
+and zero skipped tests. The full Pester 6.2.0 parity run completed at PR #90
+commit `f0e9ac9c554eb99c2c32e0ce166cc265d36aec1e` on PowerShell 7.6.6 in
+81.273 seconds with 16 shards and 464 tests: 451 passed, 13 were intentionally
+skipped, and none failed, were not run, were inconclusive, or reported block,
+container, or infrastructure failures. This exactly preserves the assessment
+baseline's discovery and result counts. The retained branch and command
+`./tests/Invoke-PesterShards.ps1 -Path ./tests -PesterVersion 6.2.0` make the
+receipt reproducible. It establishes compatibility of the mechanical PR #90
+branch; it is not evidence that those changes are present on `main` or that
+every retained check belongs in Pester.
 
 #### P1b policy enforcement
 
@@ -720,10 +725,10 @@ until the recovery decision is accepted.
 Use separate pull requests for these changes while holding the breaking release
 until all required compatibility migrations are complete:
 
-1. Close PR #90 unmerged and retain its exact Pester 6 compatibility receipt.
-  Inventory every current test and validator by subject, owner, oracle, natural
-  harness, parser or standard tool, coverage domain, and keep, split, migrate,
-  replace, or delete disposition.
+1. PR #90 is closed unmerged and its exact Pester 6 compatibility receipt is
+  retained. Review the inventory of every current test and validator by
+  subject, owner, oracle, natural harness, parser or standard tool, coverage
+  domain, and keep, split, migrate, replace, or delete disposition.
 2. Approve the ownership inventory and one managed canary contract before
   implementation resumes.
 3. Create and evaluate the portable `engineering-course-correction` skill in a
@@ -814,9 +819,10 @@ This plan records sequencing and decision gates; it does not provide standing
 authorization. Local edits, commits, pushes, pull request writes, review replies,
 thread resolution, merges, remote policy changes, releases, and model runs each
 follow the repository's current approval boundaries. The maintainer decided on
-2026-09-15 to close PR #90 unmerged. Toolchain provisioning must be isolated and
-pinned. Real model evaluations of either new skill require separate approval for
-model, scenarios, repetitions, budget, and concurrency.
+2026-09-15 to close PR #90 unmerged and merged the plan reset through PR #91.
+Toolchain provisioning must be isolated and pinned. Real model evaluations of
+either new skill require separate approval for model, scenarios, repetitions,
+budget, and concurrency.
 
 Do not fold this work into the dual-model experiment or the pull-request process
 plan. Those plans may consume the stronger test infrastructure, but this plan
