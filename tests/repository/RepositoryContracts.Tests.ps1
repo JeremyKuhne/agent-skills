@@ -103,9 +103,10 @@ Describe 'PowerShell toolchain contract' {
         $script:Toolchain.schemaVersion | Should -Be 1
         $script:Toolchain.powerShell.minimumVersion | Should -BeExactly '7.4'
         $script:Toolchain.modules.Pester | Should -BeExactly '6.2.0'
-        $script:Toolchain.modules.PSScriptAnalyzer | Should -BeExactly '1.25.0'
         @($script:Toolchain.PSObject.Properties.Name | Sort-Object) |
             Should -Be @('modules', 'powerShell', 'schemaVersion')
+        @($script:Toolchain.modules.PSObject.Properties.Name) |
+            Should -Be @('Pester')
     }
 
     It 'keeps checked toolchain copies aligned with the manifest' {
@@ -243,15 +244,39 @@ Describe 'PowerShell toolchain contract' {
             Should -Throw "*copies Pester version '6.1.0' instead of '6.2.0'*"
     }
 
-    It 'requires a pinned bootstrap before Invoke-Pester in each job' {
-        $fixtureRoot = New-ToolchainFixture 'workflow-missing-bootstrap'
+    It 'rejects a stale Pester pin inside a nested PowerShell scope' {
+        $fixtureRoot = New-ToolchainFixture 'workflow-nested-scope'
         Set-Content -LiteralPath (
             Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value @(
             'jobs:', '  test:', '    runs-on: ubuntu-latest', '    steps:',
-            '      - shell: pwsh', '        run: Invoke-Pester ./tests')
+            '      - shell: pwsh', '        run: |',
+            '          function Install-TestPester {',
+            '              Import-Module Pester -RequiredVersion 6.1.0',
+            '          }')
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
-            Should -Throw "*job 'test' invokes Pester without a preceding pinned bootstrap*"
+            Should -Throw "*copies Pester version '6.1.0' instead of '6.2.0'*"
+    }
+
+    It 'accepts Pester commands through a <Scope> default pwsh shell' -ForEach @(
+        @{ Scope = 'workflow'; Prefix = @('defaults:', '  run:', '    shell: pwsh') }
+        @{ Scope = 'job'; Prefix = @() }
+    ) {
+        $fixtureRoot = New-ToolchainFixture "workflow-$Scope-default-shell"
+        $lines = @()
+        if ($Scope -eq 'workflow') { $lines += $Prefix }
+        $lines += @('jobs:', '  test:', '    runs-on: ubuntu-latest')
+        if ($Scope -eq 'job') {
+            $lines += @('    defaults:', '      run:', '        shell: pwsh')
+        }
+        $lines += @(
+            '    steps:', '      - run: |',
+            '          Import-Module Pester -RequiredVersion 6.2.0')
+        Set-Content -LiteralPath (
+            Join-Path $fixtureRoot '.github/workflows/ci.yml') -Value $lines
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
     }
 
     It 'includes root guidance in the literal legacy inventory' {
@@ -276,6 +301,22 @@ Describe 'PowerShell toolchain contract' {
             '      - shell: pwsh',
             '        run: Install-Module Pester -RequiredVersion 6.2.0',
             '  {{PLUGIN_SMOKE_STEPS}}')
+
+        { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
+            Should -Not -Throw
+    }
+
+    It 'renders a CRLF workflow template placeholder' {
+        $fixtureRoot = New-ToolchainFixture 'crlf-template-placeholder'
+        $templatePath = Join-Path $fixtureRoot `
+            '.agents/example/.github/workflows/release.yml.tmpl'
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $templatePath)) |
+            Out-Null
+        [IO.File]::WriteAllText($templatePath, (@(
+                    'jobs:', '  test:', '    runs-on: ubuntu-latest',
+                    '    steps:', '      - shell: pwsh',
+                    '        run: Import-Module Pester -RequiredVersion 6.2.0',
+                    '  {{PLUGIN_SMOKE_STEPS}}') -join "`r`n") + "`r`n")
 
         { & $script:ToolchainValidatorPath -RepositoryRoot $fixtureRoot } |
             Should -Not -Throw

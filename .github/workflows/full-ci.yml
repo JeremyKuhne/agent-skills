@@ -73,9 +73,6 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Install PowerShell toolchain validator dependencies
-        run: npm ci --prefix ./tools/powershell-toolchain-validator --ignore-scripts
-
       - name: Install Pester
         shell: pwsh
         run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck

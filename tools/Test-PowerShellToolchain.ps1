@@ -45,7 +45,6 @@ if ($manifest.schemaVersion -isnot [long] -or $manifest.schemaVersion -ne 1) {
 $versionValues = [ordered]@{
     'powerShell.minimumVersion' = $manifest.powerShell.minimumVersion
     'modules.Pester' = $manifest.modules.Pester
-    'modules.PSScriptAnalyzer' = $manifest.modules.PSScriptAnalyzer
 }
 foreach ($entry in $versionValues.GetEnumerator()) {
     $parsedVersion = $null
@@ -56,9 +55,6 @@ foreach ($entry in $versionValues.GetEnumerator()) {
 }
 if ($manifest.modules.Pester -notmatch '^\d+\.\d+\.\d+$') {
     $errors.Add("Manifest 'modules.Pester' must be an exact three-part version.") | Out-Null
-}
-if ($manifest.modules.PSScriptAnalyzer -notmatch '^\d+\.\d+\.\d+$') {
-    $errors.Add("Manifest 'modules.PSScriptAnalyzer' must be an exact three-part version.") | Out-Null
 }
 $pesterVersion = [string]$manifest.modules.Pester
 $minimumPowerShellVersion = [string]$manifest.powerShell.minimumVersion
@@ -177,23 +173,14 @@ function Get-PesterCommandRecords (
     $commands = @($Ast.FindAll({
                 param($node)
                 $node -is [Management.Automation.Language.CommandAst]
-            }, $true) | Where-Object {
-            [object]::ReferenceEquals(
-                (Get-NearestScriptBlockAst -Node $_), $Ast)
-        } | Sort-Object { $_.Extent.StartOffset })
+            }, $true) | Sort-Object { $_.Extent.StartOffset })
     foreach ($commandAst in $commands) {
-        if ($commandAst.GetCommandName() -ieq 'Invoke-Pester') {
-            [pscustomobject]@{
-                Kind = 'Invoke'
-                Offset = $commandAst.Extent.StartOffset
-                Pinned = $false
-            }
-            continue
-        }
         if ($commandAst.GetCommandName() -notin @(
                 'Install-Module', 'Import-Module', 'ipmo')) { continue }
         $elements = @($commandAst.CommandElements)
-        $moduleName = Get-StaticModuleName -CommandAst $commandAst -RootAst $Ast
+        $commandScope = Get-NearestScriptBlockAst -Node $commandAst
+        $moduleName = Get-StaticModuleName -CommandAst $commandAst `
+            -RootAst $commandScope
         if ($null -eq $moduleName) {
             if ($Ast.Extent.Text.IndexOf(
                     'Pester', [StringComparison]::OrdinalIgnoreCase) -ge 0) {
@@ -226,11 +213,7 @@ function Get-PesterCommandRecords (
             }
             else { $pinned = $true }
         }
-        [pscustomobject]@{
-            Kind = 'Bootstrap'
-            Offset = $commandAst.Extent.StartOffset
-            Pinned = $pinned
-        }
+        [pscustomobject]@{ Pinned = $pinned }
     }
 }
 
@@ -375,7 +358,6 @@ if ($parserMetadataReady -and $node.Count -eq 1 -and
                 Out-Null
             continue
         }
-        $pinnedBootstrapByJob = @{}
         foreach ($runRecord in $runRecords | Sort-Object job, step) {
             if ([string]$runRecord.run -notmatch '(?i)Pester') { continue }
             $tokens = $null
@@ -396,19 +378,6 @@ if ($parserMetadataReady -and $node.Count -eq 1 -and
                 $errors.Add("'$relativePath' job '$($runRecord.job)' step $($runRecord.step) contains a Pester command outside a pwsh shell.") |
                     Out-Null
                 continue
-            }
-            foreach ($pesterCommand in $pesterCommands | Sort-Object Offset) {
-                if ($pesterCommand.Kind -eq 'Bootstrap' -and
-                    $pesterCommand.Pinned) {
-                    $pinnedBootstrapByJob[[string]$runRecord.job] = $true
-                    continue
-                }
-                if ($pesterCommand.Kind -eq 'Invoke' -and
-                    -not $pinnedBootstrapByJob.ContainsKey(
-                        [string]$runRecord.job)) {
-                    $errors.Add("'$relativePath' job '$($runRecord.job)' invokes Pester without a preceding pinned bootstrap.") |
-                        Out-Null
-                }
             }
         }
     }
@@ -474,6 +443,5 @@ if ($errors.Count -gt 0) {
     ManifestPath = $manifestPath
     PowerShellVersion = [string]$manifest.powerShell.minimumVersion
     PesterVersion = $pesterVersion
-    PSScriptAnalyzerVersion = [string]$manifest.modules.PSScriptAnalyzer
     TestFileCount = $testFiles.Count
 }

@@ -27,7 +27,7 @@ writes, releases, and model runs. Use `Not started`, `Ready`, `In progress`,
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
 | P0 | Baseline and engineering decisions | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence recorded; runtime, API, coverage, C#, skill, and release decisions accepted. |
-| P1 | Central toolchain and Pester 6 cutover | In progress | P0 | One manifest owns PowerShell 7.4, Pester 6.2.0, and PSScriptAnalyzer 1.25.0; the Pester 6 parity canary passes; every active test, workflow, template, and instruction uses 6.2.0; structured files are inspected only through pinned parsers; 5.7.1 remains only in historical evidence. |
+| P1 | Central toolchain and Pester 6 cutover | In progress | P0 | One manifest owns PowerShell 7.4 and Pester 6.2.0; the Pester 6 parity canary passes; every active test, workflow, template, and instruction uses 6.2.0; structured files are inspected only through pinned parsers; 5.7.1 remains only in historical evidence. |
 | P2 | Canonical isolated test execution | Ready | P1 | Every CI Pester invocation goes through the hardened process-per-file runner; Linux runs the full minimum-host suite, Windows runs focused platform suites, and a scheduled latest-runtime full suite is defined. |
 | P3 | Portable PowerShell engineering skill | Ready | P1 | A portable `powershell-engineering` core and repository overlay cover contracts, Pester 6, process behavior, structured data, platforms, coverage, and review; seeded scenarios catch the known defect classes. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1, P3 | All operational and shipped scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
@@ -43,20 +43,21 @@ stable. Do not combine all milestones into one migration pull request.
 ### P1 implementation evidence
 
 The replacement [toolchain manifest](../tools/powershell-toolchain.json) owns
-PowerShell 7.4, Pester 6.2.0, and PSScriptAnalyzer 1.25.0. The replacement
-validator uses `ConvertFrom-Json` for the manifest, `yaml` 2.9.1 for workflow
-YAML, and the PowerShell AST for test requirements, runner defaults, and
-PowerShell commands extracted from workflow steps. It does not parse YAML,
-Markdown, or PowerShell syntax with regular expressions. A literal
-legacy-version inventory is intentionally only a text inventory and makes no
-semantic claim. Host-lane and .NET SDK centralization remain P2 work because
-they require an explicit workflow-to-policy mapping contract.
+PowerShell 7.4 and Pester 6.2.0. The replacement validator uses
+`ConvertFrom-Json` for the manifest, `yaml` 2.9.1 for workflow YAML, and the
+PowerShell AST for test requirements, runner defaults, and PowerShell commands
+extracted from workflow steps. It does not parse YAML, Markdown, or PowerShell
+syntax with regular expressions. A literal legacy-version inventory is
+intentionally only a text inventory and makes no semantic claim. Host-lane and
+.NET SDK centralization remain P2 work because they require an explicit
+workflow-to-policy mapping contract. PSScriptAnalyzer ownership remains P5,
+where the pinned version will be exercised by the analyzer gate.
 
 The replacement Pester 6.2.0 canary ran all 16 test files through the
-process-per-file runner on PowerShell 7.6.6. It completed in 84.369 seconds
-with 481 tests: 468 passed, 13 were intentionally skipped, and none failed,
+process-per-file runner on PowerShell 7.6.6. It completed in 87.379 seconds
+with 484 tests: 471 passed, 13 were intentionally skipped, and none failed,
 were not run, were inconclusive, or reported block, container, or
-infrastructure failures. Sixteen focused toolchain contracts and the empty
+infrastructure failures. Nineteen focused toolchain contracts and the empty
 `-ForEach` compatibility control explain the increase from the 464-test
 assessment baseline.
 
@@ -244,12 +245,13 @@ Create one structured repository manifest, provisionally
 `tools/powershell-toolchain.json`, containing at least:
 
 - minimum PowerShell version: 7.4;
-- Pester version: 6.2.0;
-- PSScriptAnalyzer version: 1.25.0.
+- Pester version: 6.2.0.
 
 P2 may add primary and scheduled host lanes, C# language version, and .NET SDK
 selectors only when parser-backed checks bind every field to the workflows that
 consume it. Do not add policy fields that are shape-checked but unenforced.
+P5 may add the PSScriptAnalyzer version only when the analyzer gate installs
+and executes that exact version.
 
 Scripts and CI read the manifest where practical. A validator checks unavoidable
 literal copies such as `#Requires`, generated workflow text, and bootstrap

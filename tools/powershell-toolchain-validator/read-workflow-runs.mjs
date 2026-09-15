@@ -33,7 +33,32 @@ if (workflow === null || typeof workflow !== 'object' || Array.isArray(workflow)
   process.exit(1);
 }
 
+function getDefaultShell(container, label) {
+  const defaults = container.defaults;
+  if (defaults === undefined) {
+    return null;
+  }
+  if (defaults === null || typeof defaults !== 'object' || Array.isArray(defaults)) {
+    console.error(`${label} defaults must be a mapping.`);
+    process.exit(1);
+  }
+  const run = defaults.run;
+  if (run === undefined) {
+    return null;
+  }
+  if (run === null || typeof run !== 'object' || Array.isArray(run)) {
+    console.error(`${label} defaults.run must be a mapping.`);
+    process.exit(1);
+  }
+  if (run.shell !== undefined && typeof run.shell !== 'string') {
+    console.error(`${label} defaults.run.shell must be a scalar.`);
+    process.exit(1);
+  }
+  return run.shell ?? null;
+}
+
 const records = [];
+const workflowDefaultShell = getDefaultShell(workflow, 'Workflow');
 const jobs = workflow.jobs;
 if (jobs !== undefined) {
   if (jobs === null || typeof jobs !== 'object' || Array.isArray(jobs)) {
@@ -45,6 +70,7 @@ if (jobs !== undefined) {
     if (job === null || typeof job !== 'object' || Array.isArray(job)) {
       continue;
     }
+    const jobDefaultShell = getDefaultShell(job, `Workflow job '${jobName}'`) ?? workflowDefaultShell;
 
     const steps = job.steps;
     if (steps === undefined) {
@@ -75,7 +101,7 @@ if (jobs !== undefined) {
       records.push({
         job: jobName,
         step: index,
-        shell: step.shell ?? null,
+        shell: step.shell ?? jobDefaultShell,
         run: step.run,
       });
     }
