@@ -218,12 +218,13 @@ package, or generalized coverage infrastructure.
 
 The behavior-equivalent evidence head
 `4b946a3d34ad15c988fbfe3791f02e7473043091` passed all CI jobs. Ubuntu
-ARM64 passed 20 of 20 behavior cases with no failures or skips in 544
-milliseconds. Windows passed 20 of 20 with no failures or skips in 1.529 seconds
-and reported 43 of 66 lines, or 65.15%, with 82.14% branch coverage. The
-maintainer accepted the ownership boundary with coverage on one supported
-architecture. P1c completes when PR #93 merges and its then-current head passes
-the unchanged CI contract.
+ARM64 [job 104580591527](https://github.com/JeremyKuhne/agent-skills/actions/runs/35028319838/job/104580591527)
+passed 20 of 20 behavior cases with no failures or skips in 544 milliseconds.
+Windows [job 104580591626](https://github.com/JeremyKuhne/agent-skills/actions/runs/35028319838/job/104580591626)
+passed 20 of 20 with no failures or skips in 1.529 seconds and reported 43 of 66
+lines, or 65.15%, with 82.14% branch coverage. The maintainer accepted the
+ownership boundary with coverage on one supported architecture. P1c completes
+when PR #93 merges and its then-current head passes the unchanged CI contract.
 
 #### P1a mechanical cutover
 
@@ -297,6 +298,14 @@ repository policy. If a parser is unavailable, the check is narrowed or
 deferred rather than approximated. Host, SDK, analyzer, bootstrap, and
 execution-context fields must not enter a manifest until an executable gate
 consumes them.
+
+The P1b contract table must include the managed file-creation CI job: parsed
+workflow policy requires the `ubuntu-24.04-arm` behavior entry, the
+`windows-latest` behavior-and-coverage entry, their mutually exclusive coverage
+steps, and the linked test project and coverage configuration. Until P1b lands,
+exact-head CI and review are the enforcement evidence. Do not add a new
+regex-based Pester assertion for this YAML contract; that would recreate the
+test-ownership error P0r rejected.
 
 #### Publication and correction controls
 

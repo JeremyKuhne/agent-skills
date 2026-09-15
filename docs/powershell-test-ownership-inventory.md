@@ -341,4 +341,4 @@ The maintainer accepted the following on 2026-09-15:
 2. the bounded `TrustedFileWrites` core-behavior canary; and
 3. the course-correction skill remaining a separately scheduled backlog item.
 
-P0r completed when this accepted decision record merged through PR #92.
+P0r was completed when this accepted decision record merged through PR #92.
