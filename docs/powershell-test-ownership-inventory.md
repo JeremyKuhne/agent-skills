@@ -1,6 +1,7 @@
 # PowerShell test ownership inventory
 
-- Status: awaiting maintainer decision
+- Status: ownership dispositions and bounded canary accepted on 2026-09-15;
+  awaiting merge
 - Inventory baseline: `main` at
   `021330653daea94fae0c5b9389e9e9c7cb1218ea`
 - Scope: repository Pester and MSTest suites, deterministic validators,
@@ -15,14 +16,16 @@ program began. This inventory intentionally snapshots the later `main` commit
 that contains the merged plan reset. No implementation milestone landed between
 those points; the different SHAs represent chronology, not conflicting trees.
 
-## Decisions requested
+## Accepted decisions
 
-1. Accept or revise the ownership dispositions below.
-2. Accept or revise the proposed `TrustedFileWrites` managed canary contract.
-3. On acceptance, mark P0r complete and begin P0c, the portable engineering
-   course-correction skill. Do not implement the canary until P0c lands.
+1. Use the ownership dispositions below as the P0r direction.
+2. Use the exact six-test `TrustedFileWrites` contract as the managed canary.
+3. Complete P0r when this record merges, then begin P0c, the portable
+  engineering course-correction skill. Do not implement the canary until P0c
+  lands.
 
-The inventory recommends decisions. It does not approve its own milestone exit.
+The maintainer accepted these decisions on 2026-09-15. The inventory records
+that decision; it does not implement a migration.
 
 ## Method and counts
 
@@ -42,10 +45,14 @@ counted from source and checked against actual test discovery.
 | Discovered managed tests | 36 |
 | Generated Pester test templates | 6 |
 | Generated validator or smoke scripts | 3 |
-| Generated workflow templates in the reviewed families | 3 |
+| Generated workflow templates | 8 |
 
 Static declaration counts are inventory checks, not executed-test counts.
 Parameterized Pester and MSTest cases expand during discovery.
+
+The eight workflow templates comprise three under the repository-local
+create-skill-repo workflow and five under the portable engineering-baseline
+skill.
 
 | Pester file | Describe | Context | Static It |
 | --- | ---: | ---: | ---: |
@@ -229,7 +236,7 @@ Generated files need the same subject-based ownership as repository files. A
 | GT03 | `evaluations/tests/EvaluationScenarios.Tests.ps1.tmpl` | Scenario JSON identity and prompt shape | Generate schema-backed validation; retain Pester only for generated PowerShell scorer behavior |
 | GT04 | `validation/tools/{Validate-Repository,Test-SkillLinks}.ps1.tmpl` | Consumer metadata and link policy | Keep ergonomic wrappers only around the chosen parser/validator contracts; preserve consumer portability explicitly |
 | GT05 | `distribution/marketplace/tests/Invoke-PluginSmoke.ps1.tmpl` | Generated real plugin installation | Keep as direct pinned CLI integration, with isolated helper tests in the implementation language |
-| GT06 | `ci` skill/drift workflows and distribution release workflow | Generated CI trigger, install, validation, and release semantics | Parse rendered YAML and run generated canaries; source-text regex is insufficient |
+| GT06 | Three create-skill-repo workflow templates and five engineering-baseline workflow templates | Generated CI trigger, install, validation, publication, and release semantics | Parse rendered YAML and run generated canaries; source-text regex is insufficient |
 
 ## Proposed managed canary
 
@@ -253,8 +260,9 @@ Why this is the strongest discriminator:
 #### Accepted
 
 - Create one dedicated managed test project for the dotnet-file-creation asset.
-- Compile or project-reference the existing `TrustedFileWrites.cs`; do not copy
-  its implementation.
+- Compile the existing `TrustedFileWrites.cs` in the test project with a linked
+  `<Compile Include="../../skills/dotnet-file-creation/assets/TrustedFileWrites.cs" Link="TrustedFileWrites.cs" />`
+  item. Do not copy the source or create a speculative production project.
 - Migrate exactly these six existing `It` declarations from the
   `Trusted-parent recipes` context:
   - `rejects unsafe application keys before creating a file: <Key>`;
@@ -323,11 +331,10 @@ Why this is the strongest discriminator:
 
 ## Exit decision
 
-P0r can complete when the maintainer:
+The maintainer accepted the following on 2026-09-15:
 
-1. accepts or revises the dispositions in this inventory;
-2. approves one bounded canary contract, with the current recommendation being
-   `TrustedFileWrites` core behavior; and
-3. confirms that P0c lands before P1a or P1c implementation resumes.
+1. the dispositions in this inventory;
+2. the bounded `TrustedFileWrites` core-behavior canary; and
+3. P0c landing before P1a or P1c implementation resumes.
 
-Until then, this inventory is decision evidence only.
+P0r completes when this accepted decision record merges.

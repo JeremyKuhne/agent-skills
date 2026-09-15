@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P0r ownership inventory drafted; awaiting maintainer decision; PR #90
-  is closed unmerged and the plan reset merged through PR #91
+- Status: P0r ownership and canary decisions accepted; awaiting inventory merge;
+  PR #90 is closed unmerged and the plan reset merged through PR #91
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-15 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -32,10 +32,10 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
 | P0 | Baseline evidence | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence is recorded. Test-harness ownership decisions previously attributed to P0 are superseded by P0r. |
-| P0r | Test-ownership and premise reset | Awaiting decision | P0 | The [test-ownership inventory](powershell-test-ownership-inventory.md) classifies current checks by subject, implementation owner, independent oracle, best harness, parser or standard tool, coverage domain, and migration disposition; the maintainer accepts or revises it and the proposed managed canary. PR #90 is retained as compatibility evidence and closed unmerged. |
+| P0r | Test-ownership and premise reset | In progress | P0 | The maintainer accepted the [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary on 2026-09-15; merge this decision record to complete the milestone. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P0c | Engineering course-correction skill | Blocked | P0r | A portable skill detects ineffective implementation and review loops, challenges inherited premises, runs a bounded disconfirming check, and returns an explicit continue, narrow, replace, or stop decision; synthetic scenarios prove the behavior. |
 | P1a | Mechanical PowerShell and Pester cutover | Paused | P0r, P0c | Only tests retained in Pester require PowerShell 7.4 and Pester 6.2 or later; repository Pester execution locks 6.2.0 exactly; the accepted changes are rebuilt from current `main` rather than inherited from PR #90. |
-| P1c | Managed repository-contract canary | Blocked | P0r, P0c | One representative non-PowerShell or mixed Pester suite is split or migrated into a dedicated MSTest project using the owning parser or API; duplicate assertions are removed; focused and CI evidence establish whether the boundary improves clarity and defect detection. |
+| P1c | Managed test-ownership canary | Blocked | P0r, P0c | One representative managed production subject currently tested through Pester moves to a dedicated MSTest project using the owning API; duplicate assertions are removed; focused and CI evidence establish whether the boundary improves clarity, managed coverage, and defect detection. |
 | P1b | Parser-backed toolchain policy | Blocked | P0r, P1c | An approved contract table names every accepted, rejected, and deferred form before implementation; repository policy is implemented in managed code or an established validator; only fields with executable enforcement enter a manifest. |
 | P2 | Canonical isolated PowerShell execution | Blocked | P1a, P1c | Every remaining CI Pester invocation goes through one process-isolated runner; MSTest runs independently through `dotnet test`; Linux and Windows lanes reflect component ownership rather than a universal Pester suite. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
@@ -149,14 +149,16 @@ workflow, P0r applies the questions embedded in this plan directly and performs
 no implementation work.
 
 P1c selects one canary only after this inventory is approved. A good canary has
-a clear non-PowerShell owner, currently relies on text heuristics, and can use a
-real parser or typed API. The canary must compare implementation size, test
-clarity, defect classes, diagnostics, runtime, and maintenance cost before the
-plan authorizes a broader migration. Its contract records the selected suite,
-why it is the cheapest discriminating check, and why the strongest alternatives
-were rejected. Do not select a nearby file merely because it is easy to port.
-This focused canary contract is approved during P0r and governs only the chosen
-migration experiment; it is distinct from P1b's later toolchain-policy contract.
+a clear non-PowerShell owner and either an executable managed implementation or
+a structured format that can use its typed API or maintained parser directly.
+The canary must compare implementation size, test clarity, defect classes,
+diagnostics, runtime, coverage visibility, and maintenance cost before the plan
+authorizes a broader migration. Its contract records the selected suite, why it
+is the cheapest discriminating check, and why the strongest alternatives were
+rejected. Do not select a nearby file merely because it is easy to port. This
+focused canary contract is approved during P0r and governs only the chosen test
+ownership experiment; it is distinct from P1b's later parser-backed
+toolchain-policy contract.
 
 #### P1a mechanical cutover
 
@@ -602,12 +604,12 @@ fragile:
 - deterministic Cobertura merge and changed-line mapping;
 - machine-readable receipts.
 
-Do not begin by porting the shard runner. First prove the repository-contract
-boundary with one parser-backed or typed canary. If subsequent ownership work
+Do not begin by porting the shard runner. First prove the test-ownership boundary
+with one managed-code or parser-backed canary. If subsequent ownership work
 shows that process supervision is shared, migrate the shard runner while
 preserving its PowerShell command line and schema, and keep a thin PowerShell
-wrapper for contributor ergonomics. Do not rewrite domain scoring or every skill
-script into C#.
+wrapper for contributor ergonomics. Do not rewrite domain scoring or every
+skill script into C#.
 
 ### Portable PowerShell engineering skill
 
