@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P1c managed test-ownership canary accepted pending PR #93 merge; the
-  retained-Pester P1a cutover is next; course correction remains backlog work
+- Status: P1c done through PR #93; retained-Pester P1a cutover locally passes
+  focused and full parity; remaining repository gates and publication are next
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-15 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -33,8 +33,8 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | --- | --- | --- | --- | --- |
 | P0 | Baseline evidence | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence is recorded. Test-harness ownership decisions previously attributed to P0 are superseded by P0r. |
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
-| P1a | Mechanical PowerShell and Pester cutover | Blocked | P0r, P1c | After PR #93 merges, only tests retained in Pester require PowerShell 7.4 and Pester 6.2 or later; repository Pester execution locks 6.2.0 exactly; the accepted changes are rebuilt from current `main` rather than inherited from PR #90. |
-| P1c | Managed test-ownership canary | In progress | P0r | The maintainer accepted the six-test canary after local and exact-head Windows/Linux evidence passed; merge PR #93 to complete the milestone. |
+| P1a | Mechanical PowerShell and Pester cutover | In progress | P0r, P1c | The current branch applies the PowerShell 7.4 and Pester 6.2 compatibility floor only to still-executed Pester tests and templates; repository execution locks 6.2.0 exactly; focused and full local parity pass, with remaining repository gates and hosted evidence pending. |
+| P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
 | P1b | Parser-backed toolchain policy | Blocked | P0r, P1c | An approved contract table names every accepted, rejected, and deferred form before implementation; repository policy is implemented in managed code or an established validator; only fields with executable enforcement enter a manifest. |
 | P2 | Canonical isolated PowerShell execution | Blocked | P1a, P1c | Every remaining CI Pester invocation goes through one process-isolated runner; MSTest runs independently through `dotnet test`; Linux and Windows lanes reflect component ownership rather than a universal Pester suite. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
@@ -46,13 +46,12 @@ milestone is next to execute; it does not claim that exit evidence exists.
 
 PR #90 is closed unmerged; retain its parity receipt as compatibility evidence
 without inheriting its universal-Pester premise. Do not start P1b until P0r is
-accepted and P1c establishes the managed boundary. P1c is the next executable
-architecture test, not permission for wholesale migration. The proposed
-course-correction skill is backlog work and does not block P1a, P1c, or release.
-PR #88, PR #89, and PR #90 are evidence, not implementation bases; do not
-cherry-pick their implementation commits into a replacement. Do not combine the
-managed canary, PowerShell cutover, parser policy, or PowerShell skill into one
-pull request.
+accepted and P1c establishes the managed boundary. P1c proves one ownership
+boundary, not permission for wholesale migration. The proposed course-correction
+skill is backlog work and does not block P1a, P1c, or release. PR #88, PR #89,
+and PR #90 are evidence, not implementation bases; do not cherry-pick their
+implementation commits into a replacement. Do not combine the managed canary,
+PowerShell cutover, parser policy, or PowerShell skill into one pull request.
 
 ### P1 recovery decision
 
@@ -269,7 +268,7 @@ maintainer explicitly revises the contract. P1a adds no package, manifest,
 validator, generated catalog, agent instruction, or pull-request workflow
 change.
 
-#### P1a implementation evidence
+#### Historical P1a evidence from PR #90
 
 The PR #90 branch changes only the approved test, generated-test, workflow,
 runner, guidance, and plan paths. All 16 repository tests and six generated
@@ -288,6 +287,30 @@ baseline's discovery and result counts. The retained branch and command
 receipt reproducible. It establishes compatibility of the mechanical PR #90
 branch; it is not evidence that those changes are present on `main` or that
 every retained check belongs in Pester.
+
+#### Retained-Pester P1a local evidence
+
+The current P1a branch starts from `main` after PR #93 and contains no commit
+from PR #88, PR #89, or PR #90. All 16 still-executed repository Pester files
+and six generated Pester templates parse with PowerShell 7.4 and
+`ModuleVersion = '6.2.0'`; none declares `RequiredVersion` as a compatibility
+constraint. The new managed file-creation project has no Pester dependency.
+The runner and current or generated CI bootstraps lock execution to Pester
+6.2.0 exactly.
+
+The focused repository-contract shard passes 51 of 51 tests with both its outer
+runner and nested fixtures on Pester 6.2.0. The full suite runs in 16 isolated
+shards on PowerShell 7.6.6 and Pester 6.2.0: 444 tests are discovered, 431 pass,
+13 are intentionally skipped, and none fail, are not run, are inconclusive, or
+report block, container, or infrastructure failures. Wall time is 80.620
+seconds. These counts match the post-PR #93 Pester 5.7.1 split baseline; the 20
+migrated `TrustedFileWrites` cases remain in the separate managed project.
+
+An earlier tool-generated receipt reported 669 tests, but every shard path
+belonged to `C:\repos\agent-skills` rather than the retained-Pester worktree.
+That cross-worktree run is invalid and is not milestone evidence. The valid
+receipt requires every shard path to start with
+`C:\repos\agent-skills-p1a-retained\`.
 
 #### P1b policy enforcement
 

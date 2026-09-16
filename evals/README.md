@@ -259,7 +259,7 @@ code works, that an answer is proportionate, or that a novice understands it.
 Run the suite-specific deterministic checks without a model or Copilot CLI:
 
 ```pwsh
-Import-Module Pester -RequiredVersion 5.7.1
+Import-Module Pester -RequiredVersion 6.2.0
 $configuration = New-PesterConfiguration
 $configuration.Run.Path = './tests/evals/SkillEval.Tests.ps1'
 $configuration.Run.Throw = $true
@@ -356,7 +356,7 @@ Run independent Pester files in isolated PowerShell processes:
 ./tests/Invoke-PesterShards.ps1 `
   -Path ./tests `
   -MaxConcurrency 4 `
-  -PesterVersion 5.7.1
+  -PesterVersion 6.2.0
 ```
 
 Use `-PathPrefix` for local tool directories needed only by child processes.
@@ -370,7 +370,7 @@ minute setting. The summary records the configured and effective timeout.
 The runner discovers a native `pwsh` executable by default. Supply
 `-PowerShellPath` to select an explicit compatible executable or to exercise
 process-start failure handling. The runner and its repository contract tests
-require PowerShell 7.2 or later. Worker startup failures are retained as
+require PowerShell 7.4 or later. Worker startup failures are retained as
 per-shard errors with diagnostic log paths rather than aborting summary creation.
 
 The schema-version-2 summary reports overall `Result`, `FailedShardCount`, and
