@@ -439,9 +439,17 @@ internal static class PowerShellToolchainPolicy
     private static bool HasDynamicExecution(ScriptBlockAst ast)
     {
         return ast.FindAll(
-                node => node is CommandAst command &&
-                    (command.InvocationOperator != TokenKind.Unknown ||
-                     IsCommandName(command.GetCommandName(), "Invoke-Expression", "iex")),
+                node => node switch
+                {
+                    CommandAst command =>
+                        command.InvocationOperator != TokenKind.Unknown ||
+                        IsCommandName(command.GetCommandName(), "Invoke-Expression", "iex"),
+                    InvokeMemberExpressionAst invocation =>
+                        invocation.Member is StringConstantExpressionAst member &&
+                        (string.Equals(member.Value, "Invoke", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(member.Value, "InvokeReturnAsIs", StringComparison.OrdinalIgnoreCase)),
+                    _ => false
+                },
                 searchNestedScriptBlocks: true)
             .Any();
     }
@@ -703,23 +711,93 @@ internal static class PowerShellToolchainPolicy
         }
 
         int importIndex = FindStatementIndex(workerBlock.Statements, importStatement);
-        int configurationIndex = FindDirectAssignmentIndex(workerBlock, configuration);
-        int invocationIndex = FindDirectAssignmentIndex(workerBlock, invocation);
+        int configurationIndex = FindCanonicalPesterAssignmentIndex(
+            workerBlock,
+            configuration,
+            "configuration",
+            HasNoArguments);
+        int invocationIndex = FindCanonicalPesterAssignmentIndex(
+            workerBlock,
+            invocation,
+            "result",
+            HasConfigurationArgument);
         return importIndex >= 0 &&
             configurationIndex > importIndex &&
-            invocationIndex > configurationIndex;
+            invocationIndex > configurationIndex &&
+            HasCanonicalWorkerTermination(workerBlock, invocationIndex);
     }
 
-    private static int FindDirectAssignmentIndex(
+    private static int FindCanonicalPesterAssignmentIndex(
         StatementBlockAst block,
-        CommandAst command)
+        CommandAst command,
+        string targetVariable,
+        Func<CommandAst, bool> hasAcceptedArguments)
     {
         return command.InvocationOperator == TokenKind.Unknown &&
             command.Parent is PipelineAst pipeline &&
+            pipeline.PipelineElements.Count == 1 &&
+            pipeline.PipelineElements[0] == command &&
             pipeline.Parent is AssignmentStatementAst assignment &&
-            assignment.Parent == block
+            assignment.Operator == TokenKind.Equals &&
+            assignment.Parent == block &&
+            assignment.Left is VariableExpressionAst target &&
+            IsUnqualifiedVariableName(target, targetVariable) &&
+            hasAcceptedArguments(command)
                 ? FindStatementIndex(block.Statements, assignment)
                 : -1;
+    }
+
+    private static bool HasNoArguments(CommandAst command)
+    {
+        return command.CommandElements.Count == 1;
+    }
+
+    private static bool HasConfigurationArgument(CommandAst command)
+    {
+        if (command.CommandElements.Count != 3 ||
+            command.CommandElements[1] is not CommandParameterAst parameter ||
+            !string.Equals(parameter.ParameterName, "Configuration", StringComparison.OrdinalIgnoreCase) ||
+            parameter.Argument is not null ||
+            command.CommandElements[2] is not VariableExpressionAst configuration)
+        {
+            return false;
+        }
+
+        return IsUnqualifiedVariableName(configuration, "configuration");
+    }
+
+    private static bool HasCanonicalWorkerTermination(
+        StatementBlockAst workerBlock,
+        int invocationIndex)
+    {
+        if (workerBlock.FindAll(
+                node => node is ReturnStatementAst,
+                searchNestedScriptBlocks: true).Any())
+        {
+            return false;
+        }
+
+        ExitStatementAst[] exits = workerBlock.FindAll(
+                node => node is ExitStatementAst,
+                searchNestedScriptBlocks: true)
+            .Cast<ExitStatementAst>()
+            .ToArray();
+        if (exits.Length != 2)
+        {
+            return false;
+        }
+
+        return exits.All(exit =>
+        {
+            Ast? directStatement = exit;
+            while (directStatement.Parent is not null && directStatement.Parent != workerBlock)
+            {
+                directStatement = directStatement.Parent;
+            }
+
+            return directStatement is StatementAst statement &&
+                FindStatementIndex(workerBlock.Statements, statement) > invocationIndex;
+        });
     }
 
     private static int FindStatementIndex(

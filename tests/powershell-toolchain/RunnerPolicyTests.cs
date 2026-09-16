@@ -24,6 +24,8 @@ public sealed class RunnerPolicyTests
             Microsoft.PowerShell.Core\Import-Module Pester -RequiredVersion $RequiredPesterVersion
             $configuration = Pester\New-PesterConfiguration
             $result = Pester\Invoke-Pester -Configuration $configuration
+            if ($result.Result -ne 'Passed') { exit 1 }
+            exit 0
         }
         """;
 
@@ -126,6 +128,12 @@ public sealed class RunnerPolicyTests
             yield return ["invoke-expression-import", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion\n    Invoke-Expression 'Import-Module Other'")];
+            yield return ["scriptblock-member-invocation", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "[scriptblock]::Create('Microsoft.PowerShell.Core\\Import-Module Other').Invoke()\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["command-info-member-invocation", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "$command = Get-Command Microsoft.PowerShell.Core\\Import-Module\n    $command.ScriptBlock.Invoke()\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
             yield return ["nested-function", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "function Import-PesterLater { Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion }")];
@@ -150,6 +158,36 @@ public sealed class RunnerPolicyTests
             yield return ["coordinator-pester-command", ValidRunner.Replace(
                 "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
                 "Pester\\New-PesterConfiguration\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["return-before-import", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "return\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["exit-before-import", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "exit 0\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["configuration-target", ValidRunner.Replace(
+                "$configuration = Pester\\New-PesterConfiguration",
+                "$other = Pester\\New-PesterConfiguration")];
+            yield return ["configuration-argument", ValidRunner.Replace(
+                "$configuration = Pester\\New-PesterConfiguration",
+                "$configuration = Pester\\New-PesterConfiguration extra")];
+            yield return ["configuration-pipeline", ValidRunner.Replace(
+                "$configuration = Pester\\New-PesterConfiguration",
+                "$configuration = Pester\\New-PesterConfiguration | Out-Null")];
+            yield return ["invoke-target", ValidRunner.Replace(
+                "$result = Pester\\Invoke-Pester -Configuration $configuration",
+                "$other = Pester\\Invoke-Pester -Configuration $configuration")];
+            yield return ["invoke-add-assignment", ValidRunner.Replace(
+                "$result = Pester\\Invoke-Pester -Configuration $configuration",
+                "$result += Pester\\Invoke-Pester -Configuration $configuration")];
+            yield return ["invoke-missing-configuration", ValidRunner.Replace(
+                "$result = Pester\\Invoke-Pester -Configuration $configuration",
+                "$result = Pester\\Invoke-Pester")];
+            yield return ["invoke-wrong-configuration", ValidRunner.Replace(
+                "$result = Pester\\Invoke-Pester -Configuration $configuration",
+                "$result = Pester\\Invoke-Pester -Configuration $other")];
+            yield return ["invoke-extra-argument", ValidRunner.Replace(
+                "$result = Pester\\Invoke-Pester -Configuration $configuration",
+                "$result = Pester\\Invoke-Pester -Configuration $configuration -PassThru")];
             yield return ["new-item-provider-target", ValidRunner.Replace(
                 "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
                 "New-Item -Path Function:\\Invoke-Pester -Value { }\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
