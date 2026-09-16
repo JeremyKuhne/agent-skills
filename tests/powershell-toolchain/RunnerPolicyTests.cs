@@ -33,6 +33,12 @@ public sealed class RunnerPolicyTests
             yield return ["literal-import-pin", ValidRunner.Replace(
                 "Import-Module Pester -RequiredVersion $PesterVersion",
                 "Import-Module Pester -RequiredVersion '6.2.0'")];
+            yield return ["pester-is-not-module-name", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Other -Function Pester -RequiredVersion $PesterVersion")];
+            yield return ["ambiguous-module-name", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Other -Name Pester -RequiredVersion $PesterVersion")];
             yield return ["alias-import", ValidRunner.Replace("Import-Module", "ipmo")];
             yield return ["syntax-error", $"{ValidRunner}\nfunction Broken {{"];
         }
@@ -48,6 +54,11 @@ public sealed class RunnerPolicyTests
                 .Replace(
                     "Import-Module Pester -RequiredVersion $PesterVersion",
                     "IMPORT-MODULE pester -requiredversion $pesterVersion"),
+            Manifest);
+        PowerShellToolchainPolicy.ValidateRunnerRequirements(
+            ValidRunner.Replace(
+            "Import-Module Pester -RequiredVersion $PesterVersion",
+            "Import-Module -Name Pester -RequiredVersion $PesterVersion"),
             Manifest);
     }
 

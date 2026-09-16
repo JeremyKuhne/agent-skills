@@ -79,12 +79,12 @@ public sealed class ManifestPolicyTests
                 }
                 """];
             yield return ["numeric-version", ValidManifest.Replace("\"7.4\"", "7.4")];
-            foreach (string value in new[] { "7", "7.4.0", "07.4", " 7.4", "7.4 ", "v7.4", "7.4-preview", "7.x" })
+            foreach (string value in new[] { "7", "7.4.0", "07.4", " 7.4", "7.4 ", "v7.4", "7.4-preview", "7.4+build", "7.x" })
             {
                 yield return [$"test-version-{value}", ValidManifest.Replace("\"7.4\"", $"\"{value}\"")];
             }
 
-            foreach (string value in new[] { "6.2", "6.2.0.0", "06.2.0", " 6.2.0", "6.2.0 ", "v6.2.0", "6.2.0-preview", "6.2.x", "6.3.0" })
+            foreach (string value in new[] { "6.2", "6.2.0.0", "06.2.0", " 6.2.0", "6.2.0 ", "v6.2.0", "6.2.0-preview", "6.2.0+build", "6.2.x", "6.3.0" })
             {
                 yield return [$"compatibility-version-{value}", ValidManifest.Replace(
                     "\"compatibilityMinimumVersion\": \"6.2.0\"",

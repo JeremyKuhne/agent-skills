@@ -196,13 +196,38 @@ internal static class PowerShellToolchainPolicy
 
     private static bool CommandImportsPester(CommandAst command)
     {
-        return command.CommandElements
-            .OfType<StringConstantExpressionAst>()
-            .Skip(1)
-            .Any(element => string.Equals(
-                element.Value,
-                "Pester",
-                StringComparison.OrdinalIgnoreCase));
+        List<string> moduleNames = [];
+        if (command.CommandElements.Count > 1 &&
+            command.CommandElements[1] is StringConstantExpressionAst positionalName)
+        {
+            moduleNames.Add(positionalName.Value);
+        }
+
+        for (int index = 1; index < command.CommandElements.Count; index++)
+        {
+            if (command.CommandElements[index] is not CommandParameterAst parameter ||
+                !string.Equals(parameter.ParameterName, "Name", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (parameter.Argument is StringConstantExpressionAst attachedName)
+            {
+                moduleNames.Add(attachedName.Value);
+                continue;
+            }
+
+            if (index + 1 >= command.CommandElements.Count ||
+                command.CommandElements[index + 1] is not StringConstantExpressionAst separatedName)
+            {
+                return false;
+            }
+
+            moduleNames.Add(separatedName.Value);
+        }
+
+        return moduleNames.Count == 1 &&
+            string.Equals(moduleNames[0], "Pester", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ImportsAcceptedPesterVersion(CommandAst command)
