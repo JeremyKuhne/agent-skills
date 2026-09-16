@@ -35,8 +35,12 @@ public sealed class RunnerPolicyTests
                 "param([version] $PesterVersion = '6.2.0')",
                 "param()")];
             yield return ["untyped-parameter", ValidRunner.Replace("[version] $PesterVersion", "$PesterVersion")];
-            yield return ["wrong-default", ValidRunner.Replace("'6.2.0'", "'6.1.0'")];
-            yield return ["dynamic-default", ValidRunner.Replace("'6.2.0'", "$env:PESTER_VERSION")];
+            yield return ["wrong-default", ValidRunner.Replace(
+                "param([version] $PesterVersion = '6.2.0')",
+                "param([version] $PesterVersion = '6.1.0')")];
+            yield return ["dynamic-default", ValidRunner.Replace(
+                "param([version] $PesterVersion = '6.2.0')",
+                "param([version] $PesterVersion = $env:PESTER_VERSION)")];
             yield return ["missing-version-guard", ValidRunner.Replace(
                 "$RequiredPesterVersion -ne [version]'6.2.0'",
                 "$false")];
@@ -95,6 +99,9 @@ public sealed class RunnerPolicyTests
             yield return ["unresolved-import-alias", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion\n    Load-Module Other")];
+            yield return ["unrecognized-static-command", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion\n    Get-Location")];
             yield return ["function-shadowed-import", ValidRunner.Replace(
                 "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
                 "function Import-Module { }\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
