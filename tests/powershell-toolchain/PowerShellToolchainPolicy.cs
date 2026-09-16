@@ -208,6 +208,18 @@ internal static class PowerShellToolchainPolicy
                 "The Pester runner must not use dynamic command execution.");
         }
 
+        if (HasCommandRebinding(ast))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not define functions or mutate aliases.");
+        }
+
+        if (HasUnrecognizedCommand(ast))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must use only recognized static command names.");
+        }
+
         CommandAst[] imports = ast.FindAll(
                 node => node is CommandAst command &&
                     IsImportCommandName(command.GetCommandName()),
@@ -225,8 +237,7 @@ internal static class PowerShellToolchainPolicy
 
     private static bool IsImportCommandName(string? commandName)
     {
-        return string.Equals(commandName, "Import-Module", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(commandName, "ipmo", StringComparison.OrdinalIgnoreCase);
+        return IsCommandName(commandName, "Import-Module", "ipmo");
     }
 
     private static bool IsCanonicalExecutionVersionLock(CommandAst command, ScriptBlockAst script)
@@ -339,6 +350,69 @@ internal static class PowerShellToolchainPolicy
             .Any();
     }
 
+    private static bool HasCommandRebinding(ScriptBlockAst ast)
+    {
+        return ast.FindAll(
+                node => node is FunctionDefinitionAst ||
+                    node is CommandAst command && IsAliasMutationCommand(command.GetCommandName()),
+                searchNestedScriptBlocks: true)
+            .Any();
+    }
+
+    private static bool IsAliasMutationCommand(string? commandName)
+    {
+        return IsCommandName(
+            commandName,
+            "Set-Alias",
+            "sal",
+            "New-Alias",
+            "nal",
+            "Import-Alias",
+            "ipal",
+            "Remove-Alias",
+            "ral");
+    }
+
+    private static bool HasUnrecognizedCommand(ScriptBlockAst ast)
+    {
+        return ast.FindAll(
+                node => node is CommandAst command &&
+                    !IsRecognizedRunnerCommand(command.GetCommandName()),
+                searchNestedScriptBlocks: true)
+            .Any();
+    }
+
+    private static bool IsRecognizedRunnerCommand(string? commandName)
+    {
+        return commandName is not null &&
+            (string.Equals(commandName, "Add-Member", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "ConvertFrom-Json", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "ConvertTo-Json", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "ForEach-Object", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Format-Table", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Get-ChildItem", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Get-Command", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Get-Content", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(
+                 commandName,
+                 "Microsoft.PowerShell.Core\\Import-Module",
+                 StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Invoke-Pester", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Join-Path", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Measure-Object", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "New-Item", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "New-PesterConfiguration", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "New-Variable", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Out-Null", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Resolve-Path", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Select-Object", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Set-Content", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Sort-Object", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Test-Path", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Where-Object", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Write-Host", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static bool IsVariableMutationCommand(string? commandName)
     {
         return IsCommandName(
@@ -416,16 +490,16 @@ internal static class PowerShellToolchainPolicy
     {
         if (!string.Equals(
                 command.GetCommandName(),
-                "Import-Module",
+                "Microsoft.PowerShell.Core\\Import-Module",
                 StringComparison.OrdinalIgnoreCase) ||
             command.InvocationOperator != TokenKind.Unknown ||
             command.Parent is not PipelineAst pipeline ||
             pipeline.Parent is not StatementBlockAst block ||
             block.Parent is not IfStatementAst conditional ||
-            !conditional.Clauses.Any(clause =>
-                clause.Item2 == block &&
-                clause.Item2.Statements.Contains(pipeline) &&
-                IsShardModeCondition(clause.Item1)))
+            conditional.Clauses.Count == 0 ||
+            conditional.Clauses[0].Item2 != block ||
+            !block.Statements.Contains(pipeline) ||
+            !IsShardModeCondition(conditional.Clauses[0].Item1))
         {
             return false;
         }

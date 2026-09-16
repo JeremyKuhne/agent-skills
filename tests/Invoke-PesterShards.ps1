@@ -31,7 +31,7 @@ if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
     if (-not [string]::IsNullOrWhiteSpace($PathPrefix)) {
         $env:PATH = $PathPrefix + [IO.Path]::PathSeparator + $env:PATH
     }
-    Import-Module Pester -RequiredVersion $RequiredPesterVersion -Force -ErrorAction Stop
+    Microsoft.PowerShell.Core\Import-Module Pester -RequiredVersion $RequiredPesterVersion -Force -ErrorAction Stop
     $configuration = New-PesterConfiguration
     $configuration.Run.Path = (Resolve-Path -LiteralPath $ShardPath).Path
     $configuration.Run.Throw = $false
