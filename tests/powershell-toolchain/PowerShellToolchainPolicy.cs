@@ -196,6 +196,24 @@ internal static class PowerShellToolchainPolicy
                 "The Pester runner must immediately create a constant RequiredPesterVersion from PesterVersion.");
         }
 
+        IfStatementAst[] versionGuards = ast.FindAll(
+                node => node is IfStatementAst candidate &&
+                    candidate.Clauses.Any(clause =>
+                        ReferencesVariable(clause.Item1, "RequiredPesterVersion")),
+                searchNestedScriptBlocks: true)
+            .Cast<IfStatementAst>()
+            .ToArray();
+        if (versionGuards.Length != 1 ||
+            !IsCanonicalExecutionVersionGuard(
+                versionGuards[0],
+                ast,
+                executionVersionLocks[0],
+                manifest.PesterExecutionVersion))
+        {
+            throw new ToolchainPolicyException(
+                $"The Pester runner must reject versions other than '{manifest.PesterExecutionVersion}' before execution.");
+        }
+
         if (HasExecutionVersionWrite(ast))
         {
             throw new ToolchainPolicyException(
@@ -220,6 +238,12 @@ internal static class PowerShellToolchainPolicy
                 "The Pester runner must not define functions or mutate aliases.");
         }
 
+        if (HasCommandProviderTarget(ast))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not target Function or Alias providers.");
+        }
+
         if (HasUnrecognizedCommand(ast))
         {
             throw new ToolchainPolicyException(
@@ -238,6 +262,13 @@ internal static class PowerShellToolchainPolicy
         {
             throw new ToolchainPolicyException(
                 "The Pester runner must import Pester once with -RequiredVersion $RequiredPesterVersion.");
+        }
+
+
+        if (!HasCanonicalPesterCommandOrder(ast, imports[0]))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must invoke Pester only after its canonical worker import.");
         }
     }
 
@@ -320,6 +351,54 @@ internal static class PowerShellToolchainPolicy
             sawErrorAction;
     }
 
+    private static bool IsCanonicalExecutionVersionGuard(
+        IfStatementAst guard,
+        ScriptBlockAst script,
+        CommandAst executionVersionLock,
+        string executionVersion)
+    {
+        if (guard.Parent != script.EndBlock ||
+            guard.Clauses.Count != 1 ||
+            guard.ElseClause is not null ||
+            guard.Clauses[0].Item1 is not PipelineAst condition ||
+            condition.PipelineElements.Count != 1 ||
+            condition.PipelineElements[0] is not CommandExpressionAst commandExpression ||
+            commandExpression.Expression is not BinaryExpressionAst comparison ||
+            comparison.Operator != TokenKind.Ine ||
+            comparison.Left is not VariableExpressionAst variable ||
+            !IsUnqualifiedVariableName(variable, "RequiredPesterVersion") ||
+            comparison.Right is not ConvertExpressionAst conversion ||
+            !string.Equals(conversion.Type.TypeName.FullName, "version", StringComparison.OrdinalIgnoreCase) ||
+            conversion.Child is not StringConstantExpressionAst version ||
+            version.Value != executionVersion ||
+            guard.Clauses[0].Item2.Statements.Count != 1 ||
+            guard.Clauses[0].Item2.Statements[0] is not ThrowStatementAst)
+        {
+            return false;
+        }
+
+        int lockIndex = FindStatementIndex(script.EndBlock.Statements, executionVersionLock.Parent);
+        int guardIndex = FindStatementIndex(script.EndBlock.Statements, guard);
+        return lockIndex == 0 &&
+            (guardIndex == 1 ||
+             guardIndex == 2 && IsErrorActionPreferenceAssignment(script.EndBlock.Statements[1]));
+    }
+
+    private static bool IsErrorActionPreferenceAssignment(StatementAst statement)
+    {
+        if (statement is not AssignmentStatementAst assignment ||
+            assignment.Operator != TokenKind.Equals ||
+            assignment.Left is not VariableExpressionAst variable ||
+            !IsUnqualifiedVariableName(variable, "ErrorActionPreference") ||
+            assignment.Right is not CommandExpressionAst commandExpression ||
+            commandExpression.Expression is not StringConstantExpressionAst value)
+        {
+            return false;
+        }
+
+        return string.Equals(value.Value, "Stop", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool HasExecutionVersionWrite(ScriptBlockAst ast)
     {
         return ast.FindAll(
@@ -365,6 +444,37 @@ internal static class PowerShellToolchainPolicy
                         ReferencesCommandProvider(assignment.Left),
                 searchNestedScriptBlocks: true)
             .Any();
+    }
+
+    private static bool HasCommandProviderTarget(ScriptBlockAst ast)
+    {
+        return ast.FindAll(
+                node => node is CommandAst command &&
+                    IsCommandName(command.GetCommandName(), "New-Item", "Set-Content") &&
+                    command.CommandElements.Skip(1).Any(ContainsCommandProviderPath),
+                searchNestedScriptBlocks: true)
+            .Any();
+    }
+
+    private static bool ContainsCommandProviderPath(Ast ast)
+    {
+        return ast.Find(
+                node => node switch
+                {
+                    StringConstantExpressionAst literal =>
+                        IsCommandProviderPath(literal.Value),
+                    ExpandableStringExpressionAst expandable
+                        when expandable.NestedExpressions.Count == 0 =>
+                        IsCommandProviderPath(expandable.Value),
+                    _ => false
+                },
+                searchNestedScriptBlocks: true) is not null;
+    }
+
+    private static bool IsCommandProviderPath(string value)
+    {
+        return value.StartsWith("Function:", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("Alias:", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasModuleLoadingDirective(ScriptBlockAst ast)
@@ -432,11 +542,11 @@ internal static class PowerShellToolchainPolicy
                  commandName,
                  "Microsoft.PowerShell.Core\\Import-Module",
                  StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(commandName, "Invoke-Pester", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Pester\\Invoke-Pester", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(commandName, "Join-Path", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(commandName, "Measure-Object", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(commandName, "New-Item", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(commandName, "New-PesterConfiguration", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(commandName, "Pester\\New-PesterConfiguration", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(commandName, "New-Variable", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(commandName, "Out-Null", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(commandName, "Resolve-Path", StringComparison.OrdinalIgnoreCase) ||
@@ -540,6 +650,80 @@ internal static class PowerShellToolchainPolicy
         }
 
         return conditional.Parent == script.EndBlock;
+    }
+
+    private static bool HasCanonicalPesterCommandOrder(
+        ScriptBlockAst script,
+        CommandAst import)
+    {
+        if (import.Parent is not PipelineAst importStatement ||
+            importStatement.Parent is not StatementBlockAst workerBlock)
+        {
+            return false;
+        }
+
+        CommandAst[] pesterCommands = script.FindAll(
+                node => node is CommandAst command &&
+                    IsCommandName(
+                        command.GetCommandName(),
+                        "New-PesterConfiguration",
+                        "Invoke-Pester"),
+                searchNestedScriptBlocks: true)
+            .Cast<CommandAst>()
+            .ToArray();
+        if (pesterCommands.Length != 2)
+        {
+            return false;
+        }
+
+        CommandAst? configuration = pesterCommands.SingleOrDefault(command =>
+            string.Equals(
+                command.GetCommandName(),
+                "Pester\\New-PesterConfiguration",
+                StringComparison.OrdinalIgnoreCase));
+        CommandAst? invocation = pesterCommands.SingleOrDefault(command =>
+            string.Equals(
+                command.GetCommandName(),
+                "Pester\\Invoke-Pester",
+                StringComparison.OrdinalIgnoreCase));
+        if (configuration is null || invocation is null)
+        {
+            return false;
+        }
+
+        int importIndex = FindStatementIndex(workerBlock.Statements, importStatement);
+        int configurationIndex = FindDirectAssignmentIndex(workerBlock, configuration);
+        int invocationIndex = FindDirectAssignmentIndex(workerBlock, invocation);
+        return importIndex >= 0 &&
+            configurationIndex > importIndex &&
+            invocationIndex > configurationIndex;
+    }
+
+    private static int FindDirectAssignmentIndex(
+        StatementBlockAst block,
+        CommandAst command)
+    {
+        return command.InvocationOperator == TokenKind.Unknown &&
+            command.Parent is PipelineAst pipeline &&
+            pipeline.Parent is AssignmentStatementAst assignment &&
+            assignment.Parent == block
+                ? FindStatementIndex(block.Statements, assignment)
+                : -1;
+    }
+
+    private static int FindStatementIndex(
+        IReadOnlyList<StatementAst> statements,
+        Ast statement)
+    {
+        for (int index = 0; index < statements.Count; index++)
+        {
+            if (statements[index] == statement)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static bool IsShardModeCondition(PipelineBaseAst condition)

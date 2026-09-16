@@ -32,14 +32,14 @@ if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
         $env:PATH = $PathPrefix + [IO.Path]::PathSeparator + $env:PATH
     }
     Microsoft.PowerShell.Core\Import-Module Pester -RequiredVersion $RequiredPesterVersion -Force -ErrorAction Stop
-    $configuration = New-PesterConfiguration
+    $configuration = Pester\New-PesterConfiguration
     $configuration.Run.Path = (Resolve-Path -LiteralPath $ShardPath).Path
     $configuration.Run.Throw = $false
     $configuration.Run.Exit = $false
     $configuration.Run.PassThru = $true
     $configuration.Output.Verbosity = 'Normal'
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    $result = Invoke-Pester -Configuration $configuration
+    $result = Pester\Invoke-Pester -Configuration $configuration
     $stopwatch.Stop()
     [pscustomobject]@{
         Path = (Resolve-Path -LiteralPath $ShardPath).Path

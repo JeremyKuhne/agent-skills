@@ -17,8 +17,13 @@ public sealed class RunnerPolicyTests
         param([version] $PesterVersion = '6.2.0')
 
         New-Variable -Name RequiredPesterVersion -Value $PesterVersion -Option Constant -ErrorAction Stop
+        if ($RequiredPesterVersion -ne [version]'6.2.0') {
+            throw 'Wrong Pester version.'
+        }
         if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
             Microsoft.PowerShell.Core\Import-Module Pester -RequiredVersion $RequiredPesterVersion
+            $configuration = Pester\New-PesterConfiguration
+            $result = Pester\Invoke-Pester -Configuration $configuration
         }
         """;
 
@@ -32,6 +37,12 @@ public sealed class RunnerPolicyTests
             yield return ["untyped-parameter", ValidRunner.Replace("[version] $PesterVersion", "$PesterVersion")];
             yield return ["wrong-default", ValidRunner.Replace("'6.2.0'", "'6.1.0'")];
             yield return ["dynamic-default", ValidRunner.Replace("'6.2.0'", "$env:PESTER_VERSION")];
+            yield return ["missing-version-guard", ValidRunner.Replace(
+                "$RequiredPesterVersion -ne [version]'6.2.0'",
+                "$false")];
+            yield return ["wrong-version-guard", ValidRunner.Replace(
+                "$RequiredPesterVersion -ne [version]'6.2.0'",
+                "$RequiredPesterVersion -ne [version]'6.1.0'")];
             yield return ["requires-module", ValidRunner.Replace(
                 "#Requires -Version 7.4",
                 "#Requires -Version 7.4\n#Requires -Modules Pester")];
@@ -117,12 +128,30 @@ public sealed class RunnerPolicyTests
             yield return ["worker-import-in-elseif", ValidRunner.Replace(
                 "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
                 "if ($false) {\n} elseif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["configuration-before-import", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "$early = Pester\\New-PesterConfiguration\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["invoke-before-import", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "Pester\\Invoke-Pester -Configuration $configuration\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["coordinator-pester-command", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "Pester\\New-PesterConfiguration\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["new-item-provider-target", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "New-Item -Path Function:\\Invoke-Pester -Value { }\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["set-content-provider-target", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "Set-Content -LiteralPath Alias:\\Invoke-Pester -Value Write-Host\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
             yield return ["top-level-import", """
                 #Requires -Version 7.4
                 [CmdletBinding()]
                 param([version] $PesterVersion = '6.2.0')
 
                 New-Variable -Name RequiredPesterVersion -Value $PesterVersion -Option Constant -ErrorAction Stop
+                if ($RequiredPesterVersion -ne [version]'6.2.0') {
+                    throw 'Wrong Pester version.'
+                }
                 Microsoft.PowerShell.Core\Import-Module Pester -RequiredVersion $RequiredPesterVersion
                 """];
             yield return ["reassigned-version", ValidRunner.Replace(
