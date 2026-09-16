@@ -11,9 +11,31 @@ BeforeAll {
         '.agents/skills/create-skill-repo/SKILL.md')
     $script:Publishing = Join-Path $script:RepoRoot (
         '.agents/skills/create-skill-repo/publishing.md')
+    $script:PwshPath = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
+    $script:PesterRunner = Join-Path $script:RepoRoot 'tests/Invoke-PesterShards.ps1'
     $script:CopilotClientVersionCases = Get-Content -LiteralPath (
         Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
         -Raw | ConvertFrom-Json
+
+    function Invoke-GeneratedPesterSuite ([string] $Root, [string] $Name) {
+        $runner = Join-Path $Root 'tests/Invoke-PesterShards.ps1'
+        $reportDirectory = Join-Path $TestDrive "$Name reports"
+        $output = @(& $script:PwshPath -NoProfile -File $runner `
+                -Path (Join-Path $Root 'tests') `
+                -OutputDirectory $reportDirectory 2>&1)
+        $exitCode = $LASTEXITCODE
+        $summaryPath = Join-Path $reportDirectory 'summary.json'
+        [pscustomobject]@{
+            ExitCode = $exitCode
+            Output = $output -join [Environment]::NewLine
+            SourceHash = (Get-FileHash -LiteralPath $script:PesterRunner -Algorithm SHA256).Hash
+            GeneratedHash = (Get-FileHash -LiteralPath $runner -Algorithm SHA256).Hash
+            Summary = if (Test-Path -LiteralPath $summaryPath -PathType Leaf) {
+                Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+            }
+            else { $null }
+        }
+    }
 
     function Get-ScaffoldScriptFunctionModule (
         [string] $Path,
@@ -134,6 +156,8 @@ Describe 'New-SkillRepository' {
         Test-Path (Join-Path $root 'REMOTE-SETUP.md') | Should -BeTrue
         Test-Path (Join-Path $root 'plugin.json') | Should -BeFalse
         Test-Path (Join-Path $root '.mcp.json') | Should -BeFalse
+        Get-Content -LiteralPath (Join-Path $root '.github/workflows/skills.yml') |
+            Should -Contain '        run: ./tests/Invoke-PesterShards.ps1 -Path ./tests'
         Get-Content (Join-Path $root 'README.md') -Raw |
             Should -Match 'github\.com/Example/private-skills.*private'
     }
@@ -160,6 +184,8 @@ Describe 'New-SkillRepository' {
             Join-Path $root '.github/workflows/release.yml') -Raw
         $releaseWorkflow | Should -Match '(?m)^ {6}- name: Install native Copilot CLI$'
         $releaseWorkflow | Should -Match '(?m)^ {6}- name: Smoke-test plugin installation$'
+        $releaseWorkflow -split '\r?\n' |
+            Should -Contain '        run: ./tests/Invoke-PesterShards.ps1 -Path ./tests'
         $releaseWorkflow | Should -Match '@github/copilot-linux-x64@1\.0\.63'
         $releaseWorkflow | Should -Match '(?m)^ {10}\$copilotPath = \(Resolve-Path -LiteralPath \('
         $releaseWorkflow | Should -Not -Match 'Get-Command copilot'
@@ -184,8 +210,14 @@ Describe 'New-SkillRepository' {
         }
         { & (Join-Path $root 'tools/Validate-Repository.ps1') } |
             Should -Not -Throw
-        $generatedTests = Invoke-Pester (Join-Path $root 'tests') -PassThru
-        $generatedTests.FailedCount | Should -Be 0
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'distribution'
+        $generatedTests.ExitCode | Should -Be 0 -Because $generatedTests.Output
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Passed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.TotalCount | Should -BeGreaterThan 0
+        $generatedTests.Summary.FailedCount | Should -Be 0
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
         $pluginSmoke = Join-Path $root 'tests/Invoke-PluginSmoke.ps1'
         $pluginSmokeContent = Get-Content -LiteralPath $pluginSmoke -Raw
         $pluginSmokeContent | Should -Match '(?ms)\[Parameter\(Mandatory\)\]\r?\n\s*\[string\] \$CopilotPath'
@@ -387,8 +419,14 @@ exit 1
         $pendingOverlay | Should -Match '(?s)```markdown\r?\n---\r?\ncore: manage-skills'
         { & (Join-Path $root 'tools/Validate-Repository.ps1') } |
             Should -Not -Throw
-        $generatedTests = Invoke-Pester (Join-Path $root 'tests') -PassThru
-        $generatedTests.FailedCount | Should -Be 0
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'pending-installs'
+        $generatedTests.ExitCode | Should -Be 0 -Because $generatedTests.Output
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Passed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.TotalCount | Should -BeGreaterThan 0
+        $generatedTests.Summary.FailedCount | Should -Be 0
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
     }
 
     It 'rejects infrastructure combinations that cannot provide their contract' {

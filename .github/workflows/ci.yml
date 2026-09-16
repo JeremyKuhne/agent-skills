@@ -238,15 +238,9 @@ jobs:
         shell: pwsh
         run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
 
-      - name: Run Pester tests
+      - name: Run isolated Pester shards
         shell: pwsh
-        run: |
-          Import-Module Pester -RequiredVersion 6.2.0
-          $config = New-PesterConfiguration
-          $config.Run.Path = 'tests'
-          $config.Run.Throw = $true
-          $config.Output.Verbosity = 'Detailed'
-          Invoke-Pester -Configuration $config
+        run: ./tests/Invoke-PesterShards.ps1 -Path ./tests
 
       - name: Scaffold, build, test, and pack
         shell: pwsh
@@ -312,16 +306,12 @@ jobs:
         shell: pwsh
         run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
 
-      - name: Run Windows filesystem fact tests
+      - name: Run isolated Windows filesystem fact shards
         if: steps.windows-filesystem.outputs.affected == 'true'
         shell: pwsh
         run: |
-          Import-Module Pester -RequiredVersion 6.2.0
-          $config = New-PesterConfiguration
-          $config.Run.Path = @('tests/windows-acls', 'tests/dotnet-file-creation')
-          $config.Run.Throw = $true
-          $config.Output.Verbosity = 'Detailed'
-          Invoke-Pester -Configuration $config
+          $paths = @('tests/windows-acls', 'tests/dotnet-file-creation')
+          ./tests/Invoke-PesterShards.ps1 -Path $paths
 
       - name: Scaffold, build, test, and pack
         shell: pwsh
