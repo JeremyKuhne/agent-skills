@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P1a and P1c done through PR #94; P2 repository and generated-consumer
-  routing is locally complete, with hosted evidence next
+- Status: P1a, P1c, and P2 done through PR #95; the P1b parser-backed policy
+  contract is awaiting maintainer acceptance before implementation
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-15 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -35,8 +35,8 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
-| P1b | Parser-backed toolchain policy | Blocked | P0r, P1c | An approved contract table names every accepted, rejected, and deferred form before implementation; repository policy is implemented in managed code or an established validator; only fields with executable enforcement enter a manifest. |
-| P2 | Canonical isolated PowerShell execution | In progress | P1a, P1c | The current branch routes active repository and generated-consumer Pester invocations through the existing process-isolated runner with local focused, generated, and full parity. Exact-head hosted evidence remains. |
+| P1b | Parser-backed toolchain policy | Awaiting decision | P0r, P1c | The proposed [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) names accepted, rejected, and deferred forms, parser ownership, negative controls, manifest scope, and implementation slices. No implementation starts before maintainer acceptance. |
+| P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
 | P5 | Static-analysis gate | Not started | P1a, P4 | A curated correctness profile is globally clean; other PSScriptAnalyzer diagnostics cannot be added on changed lines; suppressions are narrow, justified, and tested where behavioral risk remains. |
@@ -344,8 +344,8 @@ runner calls and no direct `Invoke-Pester` command in active repository
 workflows. No regex-backed Pester assertion was added for YAML semantics. The
 full local run completed 16 shards and discovered 444 tests: 431 passed, 13
 were intentionally skipped, and none failed, were not run, were inconclusive,
-or reported block, container, or infrastructure failures. Every shard path belonged to
-`C:\repos\agent-skills-p2-canonical\`.
+or reported block, container, or infrastructure failures. Every shard path
+belonged to `C:\repos\agent-skills-p2-canonical\`.
 
 Validated generated repositories receive a byte-for-byte copy of the canonical
 runner, as they already receive the canonical skill validator. Generated CI,
@@ -355,11 +355,28 @@ launches the generated runner in a fresh PowerShell process for both a
 distribution source and a validated consumer fixture, requires complete
 nonzero passing summaries, and passes all 17 scaffold cases. This avoids a
 second runner implementation while keeping generated repositories
-self-contained. P2 stays in progress until exact-head hosted evidence passes.
+self-contained. The hosted evidence below completes P2.
+
+#### P2 hosted and merge evidence
+
+PR #95 merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621` on
+2026-09-16. Its exact head `d8acb7985f988f328063cefc55009e79f2b9b90a`
+passed CI run `35042569711`. All applicable repository validation, managed test,
+and Windows and Linux scaffold jobs succeeded; the tag-only release check was
+intentionally skipped.
+
+Copilot review run `35042683641` completed successfully on that exact head.
+Review `5217468566` covered all ten changed files, recommended approval, and
+reported no comments or suppressed findings. The final audit found no inline
+comments, issue comments, or review threads. PR #95 is therefore the first of
+the two consecutive substantive PowerShell pull requests required by the P8
+effectiveness measure to have zero valid post-publication findings.
 
 #### P1b policy enforcement
 
 P1b begins after the managed canary with a reviewed contract table, not code.
+The proposed contract is recorded in
+[PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md).
 For each surface it must state the accepted forms, rejected forms, deferred
 forms, source of truth, and independent oracle. Semantic checks use maintained
 parsers with exact dependency locks and live with the component that owns
