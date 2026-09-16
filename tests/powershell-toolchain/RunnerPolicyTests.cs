@@ -16,7 +16,9 @@ public sealed class RunnerPolicyTests
         [CmdletBinding()]
         param([version] $PesterVersion = '6.2.0')
 
-        Import-Module Pester -RequiredVersion $PesterVersion
+        if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
+            Import-Module Pester -RequiredVersion $PesterVersion
+        }
         """;
 
     public static IEnumerable<object[]> RejectedRunners
@@ -39,6 +41,52 @@ public sealed class RunnerPolicyTests
             yield return ["ambiguous-module-name", ValidRunner.Replace(
                 "Import-Module Pester -RequiredVersion $PesterVersion",
                 "Import-Module Other -Name Pester -RequiredVersion $PesterVersion")];
+            yield return ["dynamic-invocation", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "& 'Import-Module' Pester -RequiredVersion $PesterVersion")];
+            yield return ["nested-function", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "function Import-PesterLater { Import-Module Pester -RequiredVersion $PesterVersion }")];
+            yield return ["nested-condition", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "if ($false) { Import-Module Pester -RequiredVersion $PesterVersion }")];
+            yield return ["wrong-worker-condition", ValidRunner.Replace(
+                "-not [string]::IsNullOrWhiteSpace($ShardPath)",
+                "$ShardPath")];
+            yield return ["top-level-import", """
+                #Requires -Version 7.4
+                [CmdletBinding()]
+                param([version] $PesterVersion = '6.2.0')
+
+                Import-Module Pester -RequiredVersion $PesterVersion
+                """];
+            yield return ["reassigned-version", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "$PesterVersion = '6.1.0'\n    Import-Module Pester -RequiredVersion $PesterVersion")];
+            yield return ["incremented-version", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "$PesterVersion++\n    Import-Module Pester -RequiredVersion $PesterVersion")];
+            yield return ["prefix-incremented-version", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "++$PesterVersion\n    Import-Module Pester -RequiredVersion $PesterVersion")];
+            yield return ["decremented-version", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "$PesterVersion--\n    Import-Module Pester -RequiredVersion $PesterVersion")];
+            yield return ["prefix-decremented-version", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "--$PesterVersion\n    Import-Module Pester -RequiredVersion $PesterVersion")];
+            yield return ["duplicate-required-version", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Pester -RequiredVersion $PesterVersion -RequiredVersion '6.1.0'")];
+            yield return ["duplicate-attached-required-version", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Pester -RequiredVersion $PesterVersion -RequiredVersion:'6.1.0'")];
+            yield return ["extra-positional-module", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Pester Other -RequiredVersion $PesterVersion")];
+            yield return ["second-import", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Pester -RequiredVersion $PesterVersion\n    Import-Module Other")];
             yield return ["alias-import", ValidRunner.Replace("Import-Module", "ipmo")];
             yield return ["syntax-error", $"{ValidRunner}\nfunction Broken {{"];
         }
@@ -57,8 +105,8 @@ public sealed class RunnerPolicyTests
             Manifest);
         PowerShellToolchainPolicy.ValidateRunnerRequirements(
             ValidRunner.Replace(
-            "Import-Module Pester -RequiredVersion $PesterVersion",
-            "Import-Module -Name Pester -RequiredVersion $PesterVersion"),
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module -Name Pester -RequiredVersion $PesterVersion"),
             Manifest);
     }
 

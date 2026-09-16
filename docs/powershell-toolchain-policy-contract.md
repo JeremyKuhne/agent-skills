@@ -24,8 +24,10 @@ values are currently known.
 PR #94 established the PowerShell 7.4 test floor, Pester 6.2 compatibility
 floor, and exact Pester 6.2.0 execution lock. PR #95 routed repository and
 generated-repository Pester execution through the canonical isolated runner.
-The current tree has no `tools/powershell-toolchain.json`, no managed toolchain
-validator, and no PSScriptAnalyzer gate.
+At the contract baseline, the tree had no `tools/powershell-toolchain.json`, no
+managed toolchain validator, and no PSScriptAnalyzer gate. The first P1b
+implementation slice adds the manifest and managed validator; the analyzer gate
+remains deferred to P5.
 
 Current executable sources of truth are distributed:
 

@@ -405,15 +405,16 @@ PowerShell's parser and AST for requirements and runner structure. It covers
 missing, null, duplicate, unknown, wrong-case, wrong-type, and noncanonical
 manifest forms; host and Pester requirement mutations; runner default and
 import mutations; and the checked-in manifest, all 16 tracked Pester files, six
-generated Pester test templates, and canonical runner. All 69 managed tests
-pass in Release in 567 milliseconds.
+generated Pester test templates, and canonical runner. All 88 managed tests
+pass in Release.
 
 The runner now rejects coordinator and worker `PesterVersion` values other than
 6.2.0 before creating output or starting a shard. The full isolated Pester suite
 discovers 446 tests: 433 pass, 13 are intentionally skipped, and none fail or
 report block, container, not-run, inconclusive, or infrastructure failures.
-Every shard path belongs to the implementation worktree. The one-case increase
-from the 444-test P2 receipt is the two-mode runner override negative control.
+Every shard path belongs to the implementation worktree. The two-case increase
+from the 444-test P2 receipt comes from the runner override negative control's
+coordinator and worker rows.
 
 This slice does not parse YAML or enforce workflow topology. Those checks,
 rendered generated workflows, the managed file-creation matrix, and the known

@@ -177,79 +177,247 @@ internal static class PowerShellToolchainPolicy
                 $"The Pester runner must default a typed PesterVersion parameter to '{manifest.PesterExecutionVersion}'.");
         }
 
+        if (HasPesterVersionWrite(ast))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not assign to PesterVersion after parameter binding.");
+        }
+
         CommandAst[] imports = ast.FindAll(
                 node => node is CommandAst command &&
                     string.Equals(
                         command.GetCommandName(),
                         "Import-Module",
                         StringComparison.OrdinalIgnoreCase),
-                searchNestedScriptBlocks: true)
+                searchNestedScriptBlocks: false)
             .Cast<CommandAst>()
-            .Where(command => CommandImportsPester(command))
             .ToArray();
-        if (imports.Length != 1 || !ImportsAcceptedPesterVersion(imports[0]))
+        if (imports.Length != 1 ||
+            !IsCanonicalWorkerImport(imports[0], ast) ||
+            !HasAcceptedImportArguments(imports[0]))
         {
             throw new ToolchainPolicyException(
                 "The Pester runner must import Pester once with -RequiredVersion $PesterVersion.");
         }
     }
 
-    private static bool CommandImportsPester(CommandAst command)
+    private static bool HasPesterVersionWrite(ScriptBlockAst ast)
     {
-        List<string> moduleNames = [];
-        if (command.CommandElements.Count > 1 &&
-            command.CommandElements[1] is StringConstantExpressionAst positionalName)
+        return ast.FindAll(
+                node => node switch
+                {
+                    AssignmentStatementAst assignment =>
+                        ReferencesPesterVersion(assignment.Left),
+                    UnaryExpressionAst unary =>
+                        IsMutationOperator(unary.TokenKind) &&
+                        ReferencesPesterVersion(unary.Child),
+                    _ => false
+                },
+                searchNestedScriptBlocks: true)
+            .Any();
+    }
+
+    private static bool IsMutationOperator(TokenKind tokenKind)
+    {
+        return tokenKind is TokenKind.PlusPlus or
+            TokenKind.PostfixPlusPlus or
+            TokenKind.MinusMinus or
+            TokenKind.PostfixMinusMinus;
+    }
+
+    private static bool ReferencesPesterVersion(Ast ast)
+    {
+        return ast.Find(
+                node => node is VariableExpressionAst variable &&
+                    string.Equals(
+                        variable.VariablePath.UserPath,
+                        "PesterVersion",
+                        StringComparison.OrdinalIgnoreCase),
+                searchNestedScriptBlocks: true) is not null;
+    }
+
+    private static bool IsCanonicalWorkerImport(CommandAst command, ScriptBlockAst script)
+    {
+        if (command.InvocationOperator != TokenKind.Unknown ||
+            command.Parent is not PipelineAst pipeline ||
+            pipeline.Parent is not StatementBlockAst block ||
+            block.Parent is not IfStatementAst conditional ||
+            !conditional.Clauses.Any(clause =>
+                clause.Item2 == block &&
+                clause.Item2.Statements.Contains(pipeline) &&
+                IsShardModeCondition(clause.Item1)))
         {
-            moduleNames.Add(positionalName.Value);
+            return false;
         }
+
+        return conditional.Parent == script.EndBlock;
+    }
+
+    private static bool IsShardModeCondition(PipelineBaseAst condition)
+    {
+        if (condition is not PipelineAst pipeline ||
+            pipeline.PipelineElements.Count != 1 ||
+            pipeline.PipelineElements[0] is not CommandExpressionAst commandExpression ||
+            commandExpression.Expression is not UnaryExpressionAst unary ||
+            unary.TokenKind != TokenKind.Not ||
+            unary.Child is not InvokeMemberExpressionAst invocation ||
+            !invocation.Static ||
+            invocation.Expression is not TypeExpressionAst type ||
+            !string.Equals(type.TypeName.FullName, "string", StringComparison.OrdinalIgnoreCase) ||
+            invocation.Member is not StringConstantExpressionAst member ||
+            !string.Equals(member.Value, "IsNullOrWhiteSpace", StringComparison.Ordinal) ||
+            invocation.Arguments.Count != 1 ||
+            invocation.Arguments[0] is not VariableExpressionAst variable)
+        {
+            return false;
+        }
+
+        return string.Equals(
+            variable.VariablePath.UserPath,
+            "ShardPath",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ReferencesVariable(Ast ast, string variableName)
+    {
+        return ast.Find(
+                node => node is VariableExpressionAst variable &&
+                    string.Equals(
+                        variable.VariablePath.UserPath,
+                        variableName,
+                        StringComparison.OrdinalIgnoreCase),
+                searchNestedScriptBlocks: true) is not null;
+    }
+
+    private static bool HasAcceptedImportArguments(CommandAst command)
+    {
+        string? moduleName = null;
+        bool sawRequiredVersion = false;
+        bool sawForce = false;
+        bool sawErrorAction = false;
 
         for (int index = 1; index < command.CommandElements.Count; index++)
         {
-            if (command.CommandElements[index] is not CommandParameterAst parameter ||
-                !string.Equals(parameter.ParameterName, "Name", StringComparison.OrdinalIgnoreCase))
+            CommandElementAst element = command.CommandElements[index];
+            if (element is StringConstantExpressionAst positionalName)
             {
+                if (moduleName is not null)
+                {
+                    return false;
+                }
+
+                moduleName = positionalName.Value;
                 continue;
             }
 
-            if (parameter.Argument is StringConstantExpressionAst attachedName)
-            {
-                moduleNames.Add(attachedName.Value);
-                continue;
-            }
-
-            if (index + 1 >= command.CommandElements.Count ||
-                command.CommandElements[index + 1] is not StringConstantExpressionAst separatedName)
+            if (element is not CommandParameterAst parameter)
             {
                 return false;
             }
 
-            moduleNames.Add(separatedName.Value);
-        }
-
-        return moduleNames.Count == 1 &&
-            string.Equals(moduleNames[0], "Pester", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool ImportsAcceptedPesterVersion(CommandAst command)
-    {
-        for (int index = 1; index < command.CommandElements.Count - 1; index++)
-        {
-            if (command.CommandElements[index] is CommandParameterAst parameter &&
-                string.Equals(
-                    parameter.ParameterName,
-                    "RequiredVersion",
-                    StringComparison.OrdinalIgnoreCase) &&
-                command.CommandElements[index + 1] is VariableExpressionAst value &&
-                string.Equals(
-                    value.VariablePath.UserPath,
-                    "PesterVersion",
-                    StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(parameter.ParameterName, "Name", StringComparison.OrdinalIgnoreCase))
             {
-                return true;
+                if (moduleName is not null ||
+                    !TryGetStringArgument(command, parameter, ref index, out moduleName))
+                {
+                    return false;
+                }
+            }
+            else if (string.Equals(
+                         parameter.ParameterName,
+                         "RequiredVersion",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawRequiredVersion ||
+                    !TryGetVariableArgument(
+                        command,
+                        parameter,
+                        ref index,
+                        "PesterVersion"))
+                {
+                    return false;
+                }
+
+                sawRequiredVersion = true;
+            }
+            else if (string.Equals(parameter.ParameterName, "Force", StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawForce || parameter.Argument is not null)
+                {
+                    return false;
+                }
+
+                sawForce = true;
+            }
+            else if (string.Equals(
+                         parameter.ParameterName,
+                         "ErrorAction",
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawErrorAction ||
+                    !TryGetStringArgument(command, parameter, ref index, out string? errorAction) ||
+                    !string.Equals(errorAction, "Stop", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                sawErrorAction = true;
+            }
+            else
+            {
+                return false;
             }
         }
 
-        return false;
+        return string.Equals(moduleName, "Pester", StringComparison.OrdinalIgnoreCase) &&
+            sawRequiredVersion;
+    }
+
+    private static bool TryGetStringArgument(
+        CommandAst command,
+        CommandParameterAst parameter,
+        ref int index,
+        out string? value)
+    {
+        if (parameter.Argument is StringConstantExpressionAst attached)
+        {
+            value = attached.Value;
+            return true;
+        }
+
+        if (parameter.Argument is not null ||
+            index + 1 >= command.CommandElements.Count ||
+            command.CommandElements[index + 1] is not StringConstantExpressionAst separated)
+        {
+            value = null;
+            return false;
+        }
+
+        index++;
+        value = separated.Value;
+        return true;
+    }
+
+    private static bool TryGetVariableArgument(
+        CommandAst command,
+        CommandParameterAst parameter,
+        ref int index,
+        string variableName)
+    {
+        VariableExpressionAst? value = parameter.Argument as VariableExpressionAst;
+        if (parameter.Argument is null &&
+            index + 1 < command.CommandElements.Count &&
+            command.CommandElements[index + 1] is VariableExpressionAst separated)
+        {
+            index++;
+            value = separated;
+        }
+
+        return value is not null &&
+            string.Equals(
+                value.VariablePath.UserPath,
+                variableName,
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static int CountVersionRequirements(IEnumerable<Token> tokens)
