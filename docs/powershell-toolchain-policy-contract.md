@@ -1,17 +1,18 @@
 # PowerShell toolchain policy contract
 
-- Status: proposed for maintainer acceptance
+- Status: accepted by the maintainer on 2026-09-15
 - Baseline: `main` at `7e68d294300fbb9ddc649e90cbea4eefda35d621`
 - Milestone: P1b parser-backed toolchain policy
 - Scope: contract only; this document adds no manifest, parser, validator, or CI
   behavior
 
-## Decision requested
+## Accepted decision
 
-Approve the manifest schema, parser ownership, accepted and rejected forms,
-negative controls, implementation slices, and deferrals below before P1b code
-begins. An approval authorizes this contract, not later commit, push, pull
-request, or merge operations.
+The maintainer accepted the manifest schema, parser ownership, accepted and
+rejected forms, negative controls, implementation slices, and deferrals below
+on 2026-09-15. That acceptance authorizes the contract and makes P1b ready; it
+does not by itself authorize later commit, push, pull request, or merge
+operations.
 
 P1b will centralize only policy that its first executable gate consumes. It will
 not recreate the parser code from PR #88 or PR #89, infer structured syntax with
@@ -216,10 +217,9 @@ A parser limitation, unsupported current form, or new grammar class stops the
 implementation for a contract decision. It does not authorize a regex fallback
 or another serial parser patch.
 
-## Acceptance checklist
+## Accepted implementation gate
 
-P1b implementation may begin only after the maintainer accepts this contract
-and confirms:
+The maintainer accepted this contract after confirming:
 
 - the manifest has exactly the four policy values above;
 - the package and lock strategy is acceptable;

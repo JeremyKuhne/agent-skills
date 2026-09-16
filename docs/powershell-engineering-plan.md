@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P1a, P1c, and P2 done through PR #95; the P1b parser-backed policy
-  contract is awaiting maintainer acceptance before implementation
+- Status: P1a, P1c, and P2 done through PR #95; the accepted P1b parser-backed
+  policy contract is ready for implementation
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-15 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -35,7 +35,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
-| P1b | Parser-backed toolchain policy | Awaiting decision | P0r, P1c | The proposed [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) names accepted, rejected, and deferred forms, parser ownership, negative controls, manifest scope, and implementation slices. No implementation starts before maintainer acceptance. |
+| P1b | Parser-backed toolchain policy | Ready | P0r, P1c | The maintainer accepted the [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) on 2026-09-15. It names accepted, rejected, and deferred forms, parser ownership, negative controls, manifest scope, and implementation slices. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
@@ -375,7 +375,7 @@ effectiveness measure to have zero valid post-publication findings.
 #### P1b policy enforcement
 
 P1b begins after the managed canary with a reviewed contract table, not code.
-The proposed contract is recorded in
+The accepted contract is recorded in
 [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md).
 For each surface it must state the accepted forms, rejected forms, deferred
 forms, source of truth, and independent oracle. Semantic checks use maintained
