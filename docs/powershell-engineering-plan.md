@@ -405,7 +405,7 @@ PowerShell's parser and AST for requirements and runner structure. It covers
 missing, null, duplicate, unknown, wrong-case, wrong-type, and noncanonical
 manifest forms; host and Pester requirement mutations; runner default and
 import mutations; and the checked-in manifest, all 16 tracked Pester files, six
-generated Pester test templates, and canonical runner. All 88 managed tests
+generated Pester test templates, and canonical runner. All 91 managed tests
 pass in Release.
 
 The runner now rejects coordinator and worker `PesterVersion` values other than
@@ -1006,3 +1006,5 @@ Do not fold this work into the dual-model experiment or the pull-request process
 plan. Those plans may consume the stronger test infrastructure, but this plan
 owns PowerShell runtime, API, test, analyzer, coverage, and typed-infrastructure
 quality.
+
+- final review follow-up: count full and aliased imports across nested scopes, require one canonical worker-branch import, and reject all extra import forms; managed and focused Pester gates remain green

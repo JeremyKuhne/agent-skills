@@ -185,11 +185,8 @@ internal static class PowerShellToolchainPolicy
 
         CommandAst[] imports = ast.FindAll(
                 node => node is CommandAst command &&
-                    string.Equals(
-                        command.GetCommandName(),
-                        "Import-Module",
-                        StringComparison.OrdinalIgnoreCase),
-                searchNestedScriptBlocks: false)
+                    IsImportCommandName(command.GetCommandName()),
+                searchNestedScriptBlocks: true)
             .Cast<CommandAst>()
             .ToArray();
         if (imports.Length != 1 ||
@@ -199,6 +196,12 @@ internal static class PowerShellToolchainPolicy
             throw new ToolchainPolicyException(
                 "The Pester runner must import Pester once with -RequiredVersion $PesterVersion.");
         }
+    }
+
+    private static bool IsImportCommandName(string? commandName)
+    {
+        return string.Equals(commandName, "Import-Module", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandName, "ipmo", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasPesterVersionWrite(ScriptBlockAst ast)
@@ -238,7 +241,11 @@ internal static class PowerShellToolchainPolicy
 
     private static bool IsCanonicalWorkerImport(CommandAst command, ScriptBlockAst script)
     {
-        if (command.InvocationOperator != TokenKind.Unknown ||
+        if (!string.Equals(
+                command.GetCommandName(),
+                "Import-Module",
+                StringComparison.OrdinalIgnoreCase) ||
+            command.InvocationOperator != TokenKind.Unknown ||
             command.Parent is not PipelineAst pipeline ||
             pipeline.Parent is not StatementBlockAst block ||
             block.Parent is not IfStatementAst conditional ||
@@ -265,7 +272,7 @@ internal static class PowerShellToolchainPolicy
             invocation.Expression is not TypeExpressionAst type ||
             !string.Equals(type.TypeName.FullName, "string", StringComparison.OrdinalIgnoreCase) ||
             invocation.Member is not StringConstantExpressionAst member ||
-            !string.Equals(member.Value, "IsNullOrWhiteSpace", StringComparison.Ordinal) ||
+            !string.Equals(member.Value, "IsNullOrWhiteSpace", StringComparison.OrdinalIgnoreCase) ||
             invocation.Arguments.Count != 1 ||
             invocation.Arguments[0] is not VariableExpressionAst variable)
         {

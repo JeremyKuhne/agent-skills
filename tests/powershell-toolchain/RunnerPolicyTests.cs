@@ -87,6 +87,15 @@ public sealed class RunnerPolicyTests
             yield return ["second-import", ValidRunner.Replace(
                 "Import-Module Pester -RequiredVersion $PesterVersion",
                 "Import-Module Pester -RequiredVersion $PesterVersion\n    Import-Module Other")];
+            yield return ["second-alias-import", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Pester -RequiredVersion $PesterVersion\n    ipmo Pester")];
+            yield return ["second-nested-import", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Pester -RequiredVersion $PesterVersion\n    function Import-Later { Import-Module Pester }")];
+            yield return ["second-dead-import", ValidRunner.Replace(
+                "Import-Module Pester -RequiredVersion $PesterVersion",
+                "Import-Module Pester -RequiredVersion $PesterVersion\n    if ($false) { Import-Module Pester }")];
             yield return ["alias-import", ValidRunner.Replace("Import-Module", "ipmo")];
             yield return ["syntax-error", $"{ValidRunner}\nfunction Broken {{"];
         }
