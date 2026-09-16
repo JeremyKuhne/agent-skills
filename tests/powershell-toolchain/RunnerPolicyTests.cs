@@ -24,7 +24,8 @@ public sealed class RunnerPolicyTests
             Microsoft.PowerShell.Core\Import-Module Pester -RequiredVersion $RequiredPesterVersion
             $configuration = Pester\New-PesterConfiguration
             $result = Pester\Invoke-Pester -Configuration $configuration
-            if ($result.Result -ne 'Passed') { exit 1 }
+            if ($result.Result -ne 'Passed' -or $result.TotalCount -eq 0 -or
+                $result.NotRunCount -gt 0 -or $result.InconclusiveCount -gt 0) { exit 1 }
             exit 0
         }
         """;
@@ -134,6 +135,12 @@ public sealed class RunnerPolicyTests
             yield return ["command-info-member-invocation", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "$command = Get-Command Microsoft.PowerShell.Core\\Import-Module\n    $command.ScriptBlock.Invoke()\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["dynamic-member-invocation", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "$member = 'Invoke'\n    $scriptBlock.$member()\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["invoke-return-as-is-member", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "$scriptBlock.InvokeReturnAsIs()\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
             yield return ["nested-function", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "function Import-PesterLater { Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion }")];
@@ -158,12 +165,42 @@ public sealed class RunnerPolicyTests
             yield return ["coordinator-pester-command", ValidRunner.Replace(
                 "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
                 "Pester\\New-PesterConfiguration\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["duplicate-configuration-command", ValidRunner.Replace(
+                "$result = Pester\\Invoke-Pester -Configuration $configuration",
+                "$other = Pester\\New-PesterConfiguration")];
+            yield return ["duplicate-invocation-command", ValidRunner.Replace(
+                "$configuration = Pester\\New-PesterConfiguration",
+                "$other = Pester\\Invoke-Pester -Configuration $configuration")];
+            yield return ["top-level-return", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "return\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["top-level-exit", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "exit 0\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["top-level-throw", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "throw 'stop'\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["statement-before-worker", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "$other = $null\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
             yield return ["return-before-import", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "return\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
             yield return ["exit-before-import", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "exit 0\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
+            yield return ["failure-exit-code", ValidRunner.Replace(
+                ") { exit 1 }",
+                ") { exit 0 }")];
+            yield return ["inverted-failure-condition", ValidRunner.Replace(
+                "$result.Result -ne 'Passed'",
+                "$result.Result -eq 'Passed'")];
+            yield return ["success-exit-code", ValidRunner.Replace(
+                "exit 0",
+                "exit 1")];
+            yield return ["success-exit-in-failure-branch", ValidRunner.Replace(
+                "exit 0",
+                "if ($result.Result -ne 'Passed') { exit 0 }")];
             yield return ["configuration-target", ValidRunner.Replace(
                 "$configuration = Pester\\New-PesterConfiguration",
                 "$other = Pester\\New-PesterConfiguration")];

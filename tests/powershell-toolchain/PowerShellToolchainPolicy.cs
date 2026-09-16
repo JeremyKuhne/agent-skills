@@ -225,6 +225,12 @@ internal static class PowerShellToolchainPolicy
                 $"The Pester runner must reject versions other than '{manifest.PesterExecutionVersion}' before execution.");
         }
 
+        if (HasUnexpectedTopLevelTermination(ast, versionGuards[0]))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not terminate before its worker branch.");
+        }
+
         if (HasExecutionVersionWrite(ast))
         {
             throw new ToolchainPolicyException(
@@ -268,7 +274,7 @@ internal static class PowerShellToolchainPolicy
             .Cast<CommandAst>()
             .ToArray();
         if (imports.Length != 1 ||
-            !IsCanonicalWorkerImport(imports[0], ast) ||
+            !IsCanonicalWorkerImport(imports[0], ast, versionGuards[0]) ||
             !HasAcceptedImportArguments(imports[0]))
         {
             throw new ToolchainPolicyException(
@@ -445,9 +451,9 @@ internal static class PowerShellToolchainPolicy
                         command.InvocationOperator != TokenKind.Unknown ||
                         IsCommandName(command.GetCommandName(), "Invoke-Expression", "iex"),
                     InvokeMemberExpressionAst invocation =>
-                        invocation.Member is StringConstantExpressionAst member &&
-                        (string.Equals(member.Value, "Invoke", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(member.Value, "InvokeReturnAsIs", StringComparison.OrdinalIgnoreCase)),
+                        invocation.Member is not StringConstantExpressionAst member ||
+                        string.Equals(member.Value, "Invoke", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(member.Value, "InvokeReturnAsIs", StringComparison.OrdinalIgnoreCase),
                     _ => false
                 },
                 searchNestedScriptBlocks: true)
@@ -463,6 +469,15 @@ internal static class PowerShellToolchainPolicy
                         ReferencesCommandProvider(assignment.Left),
                 searchNestedScriptBlocks: true)
             .Any();
+    }
+
+    private static bool HasUnexpectedTopLevelTermination(
+        ScriptBlockAst script,
+        IfStatementAst versionGuard)
+    {
+        return script.EndBlock.Statements.Any(statement =>
+            statement != versionGuard &&
+            statement is ReturnStatementAst or ExitStatementAst or ThrowStatementAst);
     }
 
     private static bool HasCommandProviderTarget(ScriptBlockAst ast)
@@ -650,7 +665,10 @@ internal static class PowerShellToolchainPolicy
             StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsCanonicalWorkerImport(CommandAst command, ScriptBlockAst script)
+    private static bool IsCanonicalWorkerImport(
+        CommandAst command,
+        ScriptBlockAst script,
+        IfStatementAst versionGuard)
     {
         if (!string.Equals(
                 command.GetCommandName(),
@@ -668,7 +686,14 @@ internal static class PowerShellToolchainPolicy
             return false;
         }
 
-        return conditional.Parent == script.EndBlock;
+        if (conditional.Parent != script.EndBlock)
+        {
+            return false;
+        }
+
+        int guardIndex = FindStatementIndex(script.EndBlock.Statements, versionGuard);
+        int workerIndex = FindStatementIndex(script.EndBlock.Statements, conditional);
+        return workerIndex == guardIndex + 1;
     }
 
     private static bool HasCanonicalPesterCommandOrder(
@@ -695,20 +720,25 @@ internal static class PowerShellToolchainPolicy
             return false;
         }
 
-        CommandAst? configuration = pesterCommands.SingleOrDefault(command =>
-            string.Equals(
-                command.GetCommandName(),
-                "Pester\\New-PesterConfiguration",
-                StringComparison.OrdinalIgnoreCase));
-        CommandAst? invocation = pesterCommands.SingleOrDefault(command =>
-            string.Equals(
-                command.GetCommandName(),
-                "Pester\\Invoke-Pester",
-                StringComparison.OrdinalIgnoreCase));
-        if (configuration is null || invocation is null)
+        CommandAst[] configurations = pesterCommands.Where(command =>
+                string.Equals(
+                    command.GetCommandName(),
+                    "Pester\\New-PesterConfiguration",
+                    StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        CommandAst[] invocations = pesterCommands.Where(command =>
+                string.Equals(
+                    command.GetCommandName(),
+                    "Pester\\Invoke-Pester",
+                    StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (configurations.Length != 1 || invocations.Length != 1)
         {
             return false;
         }
+
+        CommandAst configuration = configurations[0];
+        CommandAst invocation = invocations[0];
 
         int importIndex = FindStatementIndex(workerBlock.Statements, importStatement);
         int configurationIndex = FindCanonicalPesterAssignmentIndex(
@@ -724,7 +754,7 @@ internal static class PowerShellToolchainPolicy
         return importIndex >= 0 &&
             configurationIndex > importIndex &&
             invocationIndex > configurationIndex &&
-            HasCanonicalWorkerTermination(workerBlock, invocationIndex);
+            HasCanonicalWorkerTermination(script, workerBlock, invocationIndex);
     }
 
     private static int FindCanonicalPesterAssignmentIndex(
@@ -767,37 +797,114 @@ internal static class PowerShellToolchainPolicy
     }
 
     private static bool HasCanonicalWorkerTermination(
+        ScriptBlockAst script,
         StatementBlockAst workerBlock,
         int invocationIndex)
     {
-        if (workerBlock.FindAll(
-                node => node is ReturnStatementAst,
+        if (invocationIndex < 0 ||
+            workerBlock.Statements.Count < invocationIndex + 3 ||
+            workerBlock.Statements[^2] is not IfStatementAst failure ||
+            workerBlock.Statements[^1] is not ExitStatementAst success)
+        {
+            return false;
+        }
+
+        if (failure.Clauses.Count != 1 ||
+            failure.ElseClause is not null ||
+            failure.Clauses[0].Item2.Statements.Count != 1 ||
+            failure.Clauses[0].Item2.Statements[0] is not ExitStatementAst failureExit ||
+            !IsExitCode(failureExit, 1) ||
+            !IsExitCode(success, 0))
+        {
+            return false;
+        }
+
+        if (script.FindAll(
+            node => node is ReturnStatementAst,
                 searchNestedScriptBlocks: true).Any())
         {
             return false;
         }
 
-        ExitStatementAst[] exits = workerBlock.FindAll(
+        ExitStatementAst[] exits = script.FindAll(
                 node => node is ExitStatementAst,
                 searchNestedScriptBlocks: true)
             .Cast<ExitStatementAst>()
             .ToArray();
-        if (exits.Length != 2)
+        if (exits.Length != 2 ||
+            !exits.Contains(failureExit) ||
+            !exits.Contains(success))
         {
             return false;
         }
 
-        return exits.All(exit =>
-        {
-            Ast? directStatement = exit;
-            while (directStatement.Parent is not null && directStatement.Parent != workerBlock)
-            {
-                directStatement = directStatement.Parent;
-            }
+        return IsCanonicalResultFailureCondition(failure.Clauses[0].Item1);
+    }
 
-            return directStatement is StatementAst statement &&
-                FindStatementIndex(workerBlock.Statements, statement) > invocationIndex;
-        });
+    private static bool IsCanonicalResultFailureCondition(PipelineBaseAst condition)
+    {
+        if (condition is not PipelineAst pipeline ||
+            pipeline.PipelineElements.Count != 1 ||
+            pipeline.PipelineElements[0] is not CommandExpressionAst commandExpression)
+        {
+            return false;
+        }
+
+        List<ExpressionAst> terms = [];
+        CollectLogicalOrTerms(commandExpression.Expression, terms);
+        return terms.Count == 4 &&
+            IsResultMemberComparison(terms[0], "Result", TokenKind.Ine, "Passed") &&
+            IsResultMemberComparison(terms[1], "TotalCount", TokenKind.Ieq, 0) &&
+            IsResultMemberComparison(terms[2], "NotRunCount", TokenKind.Igt, 0) &&
+            IsResultMemberComparison(terms[3], "InconclusiveCount", TokenKind.Igt, 0);
+    }
+
+    private static void CollectLogicalOrTerms(
+        ExpressionAst expression,
+        List<ExpressionAst> terms)
+    {
+        if (expression is BinaryExpressionAst binary && binary.Operator == TokenKind.Or)
+        {
+            CollectLogicalOrTerms(binary.Left, terms);
+            CollectLogicalOrTerms(binary.Right, terms);
+            return;
+        }
+
+        terms.Add(expression);
+    }
+
+    private static bool IsResultMemberComparison(
+        ExpressionAst expression,
+        string memberName,
+        TokenKind comparisonOperator,
+        object expectedValue)
+    {
+        if (expression is not BinaryExpressionAst comparison ||
+            comparison.Operator != comparisonOperator ||
+            comparison.Left is not MemberExpressionAst resultProperty ||
+            resultProperty.Expression is not VariableExpressionAst result ||
+            !IsUnqualifiedVariableName(result, "result") ||
+            resultProperty.Member is not StringConstantExpressionAst member ||
+            !string.Equals(member.Value, memberName, StringComparison.OrdinalIgnoreCase) ||
+            comparison.Right is not ConstantExpressionAst value)
+        {
+            return false;
+        }
+
+        return Equals(value.Value, expectedValue);
+    }
+
+    private static bool IsExitCode(ExitStatementAst exit, int expectedCode)
+    {
+        if (exit.Pipeline is not PipelineAst pipeline ||
+            pipeline.PipelineElements.Count != 1 ||
+            pipeline.PipelineElements[0] is not CommandExpressionAst commandExpression ||
+            commandExpression.Expression is not ConstantExpressionAst value)
+        {
+            return false;
+        }
+
+        return value.Value is int exitCode && exitCode == expectedCode;
     }
 
     private static int FindStatementIndex(

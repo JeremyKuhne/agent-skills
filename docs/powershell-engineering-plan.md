@@ -406,9 +406,10 @@ missing, null, duplicate, unknown, wrong-case, wrong-type, and noncanonical
 manifest forms; host and Pester requirement mutations; runner default and
 import, immutable-snapshot, scope, module-directive, dynamic-execution,
 command-rebinding, provider-rebinding, qualified-import, and worker-branch
-controls; and the checked-in manifest, all 16 tracked Pester files, six
-Pester tests emitted by the real scaffolder, and canonical runner. All 137
-managed tests pass in Release.
+controls, including exact command-kind cardinality, guard-to-worker reachability,
+and worker termination; and the checked-in manifest, all 16 tracked Pester
+files, six Pester tests emitted by the real scaffolder, and canonical runner.
+All 149 managed tests pass in Release.
 
 The runner now rejects coordinator and worker `PesterVersion` values other than
 6.2.0 before creating output or starting a shard. The full isolated Pester suite
@@ -438,22 +439,22 @@ group-level disposition and migration risk.
 
 | Lane | Current receipt | Subject and oracle | Boundary |
 | --- | ---: | --- | --- |
-| PowerShell toolchain policy MSTest | 137 passed | Closed JSON manifest through `System.Text.Json`; repository-owned PowerShell requirements and canonical-runner structure through the official AST; accepted policy contract supplies expected forms | Static repository policy, not runner process behavior or a sandbox for selected tests |
+| PowerShell toolchain policy MSTest | 149 passed | Closed JSON manifest through `System.Text.Json`; repository-owned PowerShell requirements and canonical-runner structure through the official AST; accepted policy contract supplies expected forms | Static repository policy, not runner process behavior or a sandbox for selected tests |
 | File-creation MSTest | 20 passed | `TrustedFileWrites` managed behavior; exception types, file contents, replacement, and cleanup through direct BCL/filesystem observation | The accepted six-test canary only; remaining platform and BCL contexts stay in Pester until separately migrated |
 | Dotnet-pipes MSTest | 36 passed | Managed frame protocol, anonymous and named pipes, concurrency, timeout, cancellation, recovery, and CLI errors | Existing managed component; independent of the PowerShell migration |
 | Pester through the canonical runner | 446 total: 433 passed, 13 platform/tool skips | PowerShell functions, modules, streams, mocks, process entry points, orchestration, runner state, and retained platform behavior | Also contains mixed repository/artifact policy groups identified for later split or migration; Pester placement does not settle ownership |
 | Established validators | 25 skills pass strict validation and `skills-ref`; 179 Markdown files pass markdownlint; 151 agent files pass the local link check | Portable skill format, configured Markdown rules, and link resolution | These tools own their standard formats; custom tests cover only repository-specific policy or tool behavior |
 | Direct integration and hosted CI | Builds, generated-consumer canaries, real CLI/process checks, and required Windows/Linux jobs | Compiler, package, generated artifact, operating-system, and external CLI outcomes | A test framework may launch the check, but the external system remains the oracle |
 
-The 137-case toolchain-policy project is divided by policy subject:
+The 149-case toolchain-policy project is divided by policy subject:
 
 | MSTest class | Cases | Subject |
 | --- | ---: | --- |
 | `ManifestPolicyTests` | 47 | Closed manifest shape, types, exact names, duplicate rejection, and lexical version values |
 | `PowerShellRequirementPolicyTests` | 12 | PowerShell 7.4 and Pester 6.2 compatibility requirements in retained and generated tests |
-| `RunnerPolicyTests` | 74 | Canonical runner body shape, default and guard, immutable version snapshot, root/nested module loading, import/Pester-command placement, targets, operators, pipelines, arguments, reachability, command resolution, and mutation controls |
+| `RunnerPolicyTests` | 86 | Canonical runner body shape, default and guard, immutable version snapshot, root/nested module loading, exact Pester-command kinds and placement, targets, operators, pipelines, arguments, guard-to-worker reachability, dynamic member execution, exact result/count failure predicate and exit codes, command resolution, and mutation controls |
 | `RepositoryPolicyTests` | 4 | Checked-in manifest, 16 tracked Pester files, six Pester tests emitted by the real scaffolder, and the actual canonical runner |
-| **Total** | **137** | |
+| **Total** | **149** | |
 
 #### Publication and correction controls
 
