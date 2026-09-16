@@ -88,8 +88,14 @@ shape:
 All properties are required. Property names are case-sensitive. Unknown
 properties, duplicate properties at any object depth, comments, trailing
 commas, non-string version values, and a non-integer schema version are
-rejected. Version strings are canonical decimal forms without a `v` prefix,
-build metadata, prerelease text, wildcards, or a fourth component.
+rejected. `schemaVersion` is the JSON number `1` exactly.
+
+`testMinimumVersion` is the exact two-component ASCII decimal string `"7.4"`.
+`compatibilityMinimumVersion` and `executionVersion` are the exact
+three-component ASCII decimal string `"6.2.0"`. Decimal components contain
+only `0` or a nonzero digit followed by zero or more digits. Leading or trailing
+whitespace, leading zeros, a `v` prefix, a missing or extra component,
+prerelease text, build metadata, and wildcards are rejected.
 
 `testMinimumVersion` is the floor for retained Pester tests and the shard runner;
 it is not yet the floor for every operational or shipped script.
@@ -163,10 +169,10 @@ contract row.
 | Class | Required mutations |
 | --- | --- |
 | JSON shape | Missing property; explicit null; wrong primitive type; unknown property; duplicate property; unsupported schema version; malformed JSON |
-| Version text | Lower version; higher version; fourth component; prefix; prerelease; trailing junk; numeric instead of string |
+| Version text | Lower version; higher version; one component; an extra component; leading zero; leading or trailing whitespace; `v` prefix; prerelease; build metadata; wildcard; numeric instead of string |
 | PowerShell requirements | Missing host requirement; wrong host floor; missing Pester module; `RequiredVersion` substituted for `ModuleVersion`; duplicate or dynamic module requirement; syntax error |
 | Runner lock | Missing or changed default; unpinned import; literal import that bypasses the parameter; dynamic or aliased invocation |
-| Workflow structure | Malformed YAML; job missing; wrong host; missing or reordered bootstrap; wrong shell; direct Pester call; dynamic runner command; wildcard or wrong path set |
+| Workflow structure | Malformed YAML; job missing; unexpected additional Pester-invoking job; wrong host; missing or reordered bootstrap; wrong shell; direct Pester call; dynamic runner command; wildcard or wrong path set |
 | YAML scalar forms | Plain, single-quoted, double-quoted, literal, and folded scalars that parse to the same accepted PowerShell command; comments and unrelated strings must not count as commands; duplicate keys, merge keys, anchors, and aliases are rejected on policy-bearing nodes |
 | Typed matrix values | Missing, null, string, numeric, or duplicate `coverage`; omitted/extra host row; coverage conditions both true, both false, missing, or swapped |
 | Managed commands | Omitted or different shell; wrong project; Debug configuration; missing coverage setting; wrong output format; Pester wrapper; empty or wrong-source coverage report |

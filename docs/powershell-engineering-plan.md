@@ -3,7 +3,7 @@
 - Status: P1a, P1c, and P2 done through PR #95; the accepted P1b parser-backed
   policy contract is ready for implementation
 - Assessment date: 2026-09-13 local time; architecture review extends through
-  2026-09-15 UTC
+  2026-09-16 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
   later milestone evidence names its own exact tree
 - Scope: test ownership, PowerShell runtime and API contracts, Pester, MSTest,
@@ -26,7 +26,7 @@ The implementation agent owns local work and evidence. The repository
 maintainer accepts milestone exits and separately authorizes commits, pushes,
 pull request writes, releases, and model runs. Use `Not started`, `Ready`, `In
 progress`, `Paused`, `Awaiting decision`, `Blocked`, and `Done`. Status last
-reviewed: 2026-09-15. `Ready` means the entry conditions are satisfied and the
+reviewed: 2026-09-16 UTC. `Ready` means the entry conditions are satisfied and the
 milestone is next to execute; it does not claim that exit evidence exists.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
@@ -584,17 +584,14 @@ lines while the historical set is reduced deliberately.
 
 ### Runtime and toolchain
 
-P1b may create a structured repository manifest, provisionally
-`tools/powershell-toolchain.json`, containing at least:
-
-- minimum PowerShell version: 7.4;
-- Pester version: 6.2.0.
-
-P2 may add primary and scheduled host lanes, C# language version, and .NET SDK
-selectors only when parser-backed checks bind every field to the workflows that
-consume it. Do not add policy fields that are shape-checked but unenforced.
-P5 may add the PSScriptAnalyzer version only when the analyzer gate installs
-and executes that exact version.
+The accepted
+[PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md)
+permits P1b to create `tools/powershell-toolchain.json` with exactly four
+version-one values: schema version 1, PowerShell test minimum 7.4, Pester
+compatibility minimum 6.2.0, and Pester execution version 6.2.0. It excludes
+host lanes, .NET SDK and C# versions, PSScriptAnalyzer, coverage policy, and
+per-file inventories. A later milestone may add a field only when an accepted
+contract binds it to an executable gate.
 
 The existing managed test project pins MSTest SDK 4.2.3 in its project SDK.
 P1c decides whether the canary retains that version and whether more than one
