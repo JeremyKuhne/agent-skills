@@ -32,6 +32,12 @@ public sealed class RunnerPolicyTests
             yield return ["untyped-parameter", ValidRunner.Replace("[version] $PesterVersion", "$PesterVersion")];
             yield return ["wrong-default", ValidRunner.Replace("'6.2.0'", "'6.1.0'")];
             yield return ["dynamic-default", ValidRunner.Replace("'6.2.0'", "$env:PESTER_VERSION")];
+            yield return ["requires-module", ValidRunner.Replace(
+                "#Requires -Version 7.4",
+                "#Requires -Version 7.4\n#Requires -Modules Pester")];
+            yield return ["using-module", ValidRunner.Replace(
+                "#Requires -Version 7.4",
+                "using module Pester\n#Requires -Version 7.4")];
             yield return ["missing-version-lock", ValidRunner.Replace(
                 "New-Variable -Name RequiredPesterVersion -Value $PesterVersion -Option Constant -ErrorAction Stop",
                 "")];
@@ -81,6 +87,18 @@ public sealed class RunnerPolicyTests
             yield return ["function-shadowed-import", ValidRunner.Replace(
                 "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
                 "function Import-Module { }\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["function-provider-rebinding", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "${function:Invoke-Pester} = { }\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["scoped-function-provider-rebinding", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "${script:function:Invoke-Pester} = { }\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["alias-provider-rebinding", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "${alias:Run-Tests} = 'Invoke-Pester'\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["scoped-alias-provider-rebinding", ValidRunner.Replace(
+                "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
+                "${global:alias:Run-Tests} = 'Invoke-Pester'\nif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
             yield return ["dot-sourced-command", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion\n    . $scriptPath")];

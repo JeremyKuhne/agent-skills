@@ -150,6 +150,12 @@ internal static class PowerShellToolchainPolicy
                 $"The Pester runner must require PowerShell {manifest.TestMinimumVersion} exactly.");
         }
 
+        if (HasModuleLoadingDirective(ast))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not contain module-loading directives.");
+        }
+
         ParameterAst[] parameters = ast.ParamBlock?.Parameters
             .Where(parameter => string.Equals(
                 parameter.Name.VariablePath.UserPath,
@@ -354,9 +360,38 @@ internal static class PowerShellToolchainPolicy
     {
         return ast.FindAll(
                 node => node is FunctionDefinitionAst ||
-                    node is CommandAst command && IsAliasMutationCommand(command.GetCommandName()),
+                    node is CommandAst command && IsAliasMutationCommand(command.GetCommandName()) ||
+                    node is AssignmentStatementAst assignment &&
+                        ReferencesCommandProvider(assignment.Left),
                 searchNestedScriptBlocks: true)
             .Any();
+    }
+
+    private static bool HasModuleLoadingDirective(ScriptBlockAst ast)
+    {
+        return (ast.ScriptRequirements?.RequiredModules.Count ?? 0) != 0 ||
+            ast.FindAll(
+                    node => node is UsingStatementAst usingStatement &&
+                        usingStatement.UsingStatementKind == UsingStatementKind.Module,
+                    searchNestedScriptBlocks: true)
+                .Any();
+    }
+
+    private static bool ReferencesCommandProvider(Ast ast)
+    {
+        return ast.FindAll(
+                node => node is VariableExpressionAst variable &&
+                    HasProviderSegment(variable.VariablePath.UserPath, "function", "alias"),
+                searchNestedScriptBlocks: true)
+            .Any();
+    }
+
+    private static bool HasProviderSegment(string variablePath, params string[] providerNames)
+    {
+        string[] segments = variablePath.Split(':', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 1 &&
+            segments[..^1].Any(segment => providerNames.Any(providerName =>
+                string.Equals(segment, providerName, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool IsAliasMutationCommand(string? commandName)
