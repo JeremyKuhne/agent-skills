@@ -21,6 +21,4 @@ jobs:
         run: ./tools/Validate-Repository.ps1
       - name: Test repository contracts
         shell: pwsh
-        run: |
-          Import-Module Pester -RequiredVersion 6.2.0
-          Invoke-Pester ./tests
+        run: ./tests/Invoke-PesterShards.ps1 -Path ./tests

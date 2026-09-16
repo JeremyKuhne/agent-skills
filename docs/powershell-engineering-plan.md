@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P1c done through PR #93; retained-Pester P1a cutover locally passes
-  focused and full parity; remaining repository gates and publication are next
+- Status: P1a and P1c done through PR #94; P2 repository and generated-consumer
+  routing is locally complete, with hosted evidence next
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-15 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -33,10 +33,10 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | --- | --- | --- | --- | --- |
 | P0 | Baseline evidence | Done | None | Current script, test, analyzer, Pester 6, and coverage evidence is recorded. Test-harness ownership decisions previously attributed to P0 are superseded by P0r. |
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
-| P1a | Mechanical PowerShell and Pester cutover | In progress | P0r, P1c | The current branch applies the PowerShell 7.4 and Pester 6.2 compatibility floor only to still-executed Pester tests and templates; repository execution locks 6.2.0 exactly; focused and full local parity pass, with remaining repository gates and hosted evidence pending. |
+| P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
 | P1b | Parser-backed toolchain policy | Blocked | P0r, P1c | An approved contract table names every accepted, rejected, and deferred form before implementation; repository policy is implemented in managed code or an established validator; only fields with executable enforcement enter a manifest. |
-| P2 | Canonical isolated PowerShell execution | Blocked | P1a, P1c | Every remaining CI Pester invocation goes through one process-isolated runner; MSTest runs independently through `dotnet test`; Linux and Windows lanes reflect component ownership rather than a universal Pester suite. |
+| P2 | Canonical isolated PowerShell execution | In progress | P1a, P1c | The current branch routes active repository and generated-consumer Pester invocations through the existing process-isolated runner with local focused, generated, and full parity. Exact-head hosted evidence remains. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
 | P5 | Static-analysis gate | Not started | P1a, P4 | A curated correctness profile is globally clean; other PSScriptAnalyzer diagnostics cannot be added on changed lines; suppressions are narrow, justified, and tested where behavioral risk remains. |
@@ -311,6 +311,51 @@ belonged to `C:\repos\agent-skills` rather than the retained-Pester worktree.
 That cross-worktree run is invalid and is not milestone evidence. The valid
 receipt requires every shard path to start with
 `C:\repos\agent-skills-p1a-retained\`.
+
+#### P1a hosted and merge evidence
+
+PR #94 merged as `0b439bb6b1712220642a8945e1195eb89000d6f8` on
+2026-09-16. Its final head `74312e50705fb9eddf46b8941236c8de6393e670`
+passed all applicable CI jobs; the tag-only release check was intentionally
+skipped. The exact-head CI covered repository validation, both managed test
+projects on Windows and Linux ARM64, and the Windows and Linux scaffold lanes.
+
+Copilot's substantive review at
+`0a63599e3f4dbf5243d126e05790e212ba947139` recommended approval and reported
+one non-blocking documentation mismatch: generated contribution guidance did
+not state the generated tests' PowerShell 7.4 and Pester 6.2 minimums. The
+final commit corrected both generated guidance files without requesting another
+review for the prose-only change. No inline comment or unresolved review thread
+remained at merge.
+
+#### P2 canonical runner local evidence
+
+The first P2 slice routes the three active repository CI jobs that invoked
+Pester directly through `tests/Invoke-PesterShards.ps1`. Ordinary Linux CI and
+scheduled Windows CI run the full `tests` tree. Conditional ordinary Windows
+CI keeps its focused `windows-acls` and `dotnet-file-creation` path set. The
+runner implementation and managed `dotnet test` jobs are unchanged.
+
+The focused Windows-path command completed two isolated shards on PowerShell
+7.6.6 and Pester 6.2.0: 66 tests were discovered, 56 passed, ten were
+intentionally skipped on the local host, and no failure or infrastructure
+category was reported. A direct source inventory found exactly three isolated
+runner calls and no direct `Invoke-Pester` command in active repository
+workflows. No regex-backed Pester assertion was added for YAML semantics. The
+full local run completed 16 shards and discovered 444 tests: 431 passed, 13
+were intentionally skipped, and none failed, were not run, were inconclusive,
+or reported block, container, or infrastructure failures. Every shard path belonged to
+`C:\repos\agent-skills-p2-canonical\`.
+
+Validated generated repositories receive a byte-for-byte copy of the canonical
+runner, as they already receive the canonical skill validator. Generated CI,
+release workflows, README validation commands, `CONTRIBUTING.md`, and
+`FORMAT.md` invoke that local copy. The existing create-skill-repo shard now
+launches the generated runner in a fresh PowerShell process for both a
+distribution source and a validated consumer fixture, requires complete
+nonzero passing summaries, and passes all 17 scaffold cases. This avoids a
+second runner implementation while keeping generated repositories
+self-contained. P2 stays in progress until exact-head hosted evidence passes.
 
 #### P1b policy enforcement
 

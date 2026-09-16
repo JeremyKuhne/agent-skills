@@ -337,9 +337,12 @@ $validationSection = if ($rank -ge 1) {
     @'
 ## Validate
 
+Tests support PowerShell 7.4 or later and Pester 6.2 or later. The checked-in
+runner executes Pester 6.2.0 exactly.
+
 ```pwsh
 ./tools/Validate-Repository.ps1
-Invoke-Pester ./tests
+./tests/Invoke-PesterShards.ps1 -Path ./tests
 ```
 '@
 } else {
@@ -502,6 +505,12 @@ try {
         }
         Copy-Item -LiteralPath $validatorSource -Destination (
             Join-Path $Root 'tools/Validate-Skills.ps1')
+        $pesterRunnerSource = Join-Path $PSScriptRoot '../../../../tests/Invoke-PesterShards.ps1'
+        if (-not (Test-Path -LiteralPath $pesterRunnerSource -PathType Leaf)) {
+            throw "Required Pester runner not found: $pesterRunnerSource"
+        }
+        Copy-Item -LiteralPath $pesterRunnerSource -Destination (
+            Join-Path $Root 'tests/Invoke-PesterShards.ps1')
     }
     if ($rank -ge 2) {
         Expand-TemplateSet (Join-Path $templateRoot 'ci') $Root $tokens

@@ -53,7 +53,8 @@ Vendored runtime copies under `.agents/skills/` are immutable upstream mirrors.
 Record local bindings in overlays and preserve source repository, revision,
 pin, path, and tree-SHA provenance.
 
-Tests require PowerShell 7.4 or later and Pester 6.2.0 or later. Run
-`./tools/Validate-Repository.ps1` and `Invoke-Pester ./tests` when those tools
-are present. Regenerate a source catalog by running
+Tests support PowerShell 7.4 or later and Pester 6.2 or later; the checked-in
+runner executes Pester 6.2.0 exactly. Run `./tools/Validate-Repository.ps1` and
+`./tests/Invoke-PesterShards.ps1 -Path ./tests` when those tools are present.
+Regenerate a source catalog by running
 `./tools/Update-SkillCatalog.ps1 -Apply`.
