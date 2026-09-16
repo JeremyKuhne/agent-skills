@@ -119,11 +119,11 @@ controls before implementation.
 | Manifest structure | Repository toolchain policy; managed validator; accepted JSON schema above | Exact version-one object with the four required scalar values | Missing, null, duplicate, unknown, wrong-case, wrong-type, noncanonical, or unsupported-version members | Additional tools, hosts, SDKs, analyzers, coverage, and per-file inventories | Deserialize with `System.Text.Json`; reject malformed JSON and every shape outside the closed DTO |
 | Retained test host | Tracked Pester tests and generated Pester test artifacts; PowerShell parser; manifest `testMinimumVersion` | One script requirement whose minimum version is exactly 7.4 | Missing or duplicate requirement; lower or higher literal; dynamic text; parse error | Operational and shipped scripts, compatibility fixtures, and a future floor | Parse tracked tests directly and parse scaffolded test output; compare AST requirements with the manifest |
 | Pester compatibility | Retained Pester tests and generated Pester test artifacts; PowerShell parser; manifest compatibility floor | One Pester module requirement using `ModuleVersion = '6.2.0'`; key order and quoting may vary semantically | Missing Pester requirement, `RequiredVersion`, lower or higher floor, duplicate Pester entry, dynamic value, malformed module specification | Compatibility with another Pester minor or major | Read module specifications from the AST; never search comments or strings |
-| Canonical runner | [Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1); PowerShell parser; manifest execution version | PowerShell 7.4 requirement; typed `PesterVersion` default exactly 6.2.0; worker import uses that parameter with `RequiredVersion` | Missing or dynamic default, different version, unpinned import, alias, or direct ambient-module execution | Moving process supervision to C# and changing the runner schema | Inspect parameter and command ASTs and retain existing behavioral state-table tests |
+| Canonical runner | [Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1); PowerShell parser; manifest execution version | PowerShell 7.4 requirement; typed `PesterVersion` default exactly 6.2.0; callers omit the argument or pass 6.2.0 exactly; coordinator and worker reject any other value; worker import uses the accepted value with `RequiredVersion` | Missing or dynamic default, a caller override other than 6.2.0, unpinned import, alias, or direct ambient-module execution | Moving process supervision to C# and changing the runner schema | Inspect parameter and command ASTs, add an override-rejection behavior test, and retain existing state-table tests |
 | Repository Pester jobs | Active workflow jobs; YamlDotNet plus PowerShell parser; this row and PR #95's hosted behavior | Ordinary Linux `scaffold-linux` runs all tests; ordinary Windows `scaffold-windows` conditionally runs the exact `windows-acls` and `dotnet-file-creation` set; scheduled Windows `scaffold-windows` runs all tests; each uses `shell: pwsh` | Direct `Invoke-Pester`, missing runner, extra or missing focused path, wildcard path, dynamic command name, another shell, or a newly discovered Pester job absent from the contract | Adding Pester to scaffold-only Linux jobs, new platform lanes, or changing component ownership | Parse workflow mappings and sequences, then parse each `run` scalar as PowerShell; compare static command and path ASTs with this topology |
 | Pester bootstrap | Jobs that invoke the runner; YamlDotNet plus PowerShell parser; manifest execution version | A preceding same-job `pwsh` step installs Pester with `-RequiredVersion 6.2.0`; unrelated flags may vary | Missing, later, cross-job, conditional-incompatible, dynamic, floating, or mismatched installation | Pre-provisioned runner images and alternate package sources | Resolve ordered steps in parsed YAML and inspect the install command AST |
 | Generated Pester execution | `New-SkillRepository.ps1` output; generated-repository canary; same parser stack | The runner emitted by the scaffolder is byte-identical to the canonical runner in that checkout; team-CI and distribution workflows invoke it for all tests after exact installation | Raw-template parsing, unresolved template tokens, direct `Invoke-Pester`, a divergent emitted runner, or source-text-only evidence | A separately versioned portable runner package and later line-ending changes after the generated repository is committed | Generate validated, team-CI, and distribution fixtures; compare source and emitted bytes, parse emitted files, and execute the generated runner |
-| Managed file-creation behavior | `dotnet-file-creation` workflow job and managed test project; YamlDotNet and `dotnet test`; the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and PR #93's hosted behavior | Matrix rows are `{ ubuntu-24.04-arm, coverage: false }` and `{ windows-latest, coverage: true }`; both run the same Release project directly in an explicit `pwsh` step | Missing or duplicate host, string/numeric/null coverage values, omitted or different shell, Pester wrapper, wrong project, or non-Release execution | Additional architectures and coverage on unsupported collectors | Parse typed matrix values and the PowerShell command AST; run the project on both hosted rows |
+| Managed file-creation behavior | `dotnet-file-creation` workflow job and managed test project; YamlDotNet and `dotnet test`; the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and PR #93's hosted behavior | Matrix rows are `{ os: ubuntu-24.04-arm, coverage: false }` and `{ os: windows-latest, coverage: true }`; both run the same Release project directly in an explicit `pwsh` step | Missing, duplicate, or extra `os` row; missing `os` key; string/numeric/null coverage values; omitted or different shell; Pester wrapper; wrong project; or non-Release execution | Additional architectures and coverage on unsupported collectors | Parse typed matrix values and the PowerShell command AST; run the project on both hosted rows |
 | Managed file-creation coverage | Windows coverage step and [coverage.config.xml](../tests/dotnet-file-creation/coverage.config.xml); XML parser and report inspection | Coverage runs only on the `windows-latest` row when `matrix.coverage == true`, uses the linked project and checked-in settings file, emits Cobertura, and verifies the `TrustedFileWrites` source has covered lines | Coverage on the ARM64 row, overlapping or missing behavior/coverage conditions, wrong settings/project/format, empty report, or unrelated source | Thresholds, ratchets, aggregation, and coverage on every architecture | Parse YAML condition/scalars and XML settings; retain hosted Windows report validation |
 
 ## Known implementation delta
@@ -176,7 +176,7 @@ contract row.
 | JSON shape | Missing property; explicit null; wrong primitive type; unknown property; duplicate property; unsupported schema version; `schemaVersion` tokens `1.0` and `1e0`; malformed JSON |
 | Version text | Lower version; higher version; one component; an extra component; leading zero; leading or trailing whitespace; `v` prefix; prerelease; build metadata; wildcard; numeric instead of string |
 | PowerShell requirements | Missing host requirement; wrong host floor; missing Pester module; `RequiredVersion` substituted for `ModuleVersion`; duplicate or dynamic module requirement; syntax error |
-| Runner lock | Missing or changed default; unpinned import; literal import that bypasses the parameter; dynamic or aliased invocation |
+| Runner lock | Missing or changed default; coordinator or worker called with a `PesterVersion` other than 6.2.0; unpinned import; literal import that bypasses the accepted parameter; dynamic or aliased invocation |
 | Workflow structure | Malformed YAML; job missing; unexpected additional Pester-invoking job; wrong host; missing or reordered bootstrap; wrong shell; direct Pester call; dynamic runner command; wildcard or wrong path set |
 | YAML scalar forms | Plain, single-quoted, double-quoted, literal, and folded scalars that parse to the same accepted PowerShell command; comments and unrelated strings must not count as commands; duplicate keys, merge keys, anchors, and aliases are rejected on policy-bearing nodes |
 | Typed matrix values | Missing, null, string, numeric, or duplicate `coverage`; omitted/extra host row; coverage conditions both true, both false, missing, or swapped |
@@ -211,20 +211,24 @@ separate accepted migration replaces them.
 
 ## Implementation sequence after acceptance
 
-1. Add only the managed MSTest project scaffolding, exact package references,
-  and checked-in lock file. This setup adds no manifest or policy behavior.
-2. Encode the accepted fixtures, rejected mutations, and expected diagnostics
-  before adding validator behavior or the repository manifest.
-3. Add the closed version-one manifest and implement JSON and PowerShell
+1. In the first local implementation slice, create the managed MSTest project,
+  exact package references, checked-in lock file, accepted fixtures, rejected
+  mutations, and expected diagnostics together. Author the tests after the
+  minimum project scaffolding needed to compile them but before adding any
+  validator behavior or repository manifest; do not publish a scaffold-only
+  intermediate commit. Scaffolding alone is not an implementation slice. The
+  first slice is complete only when the accepted and rejected tests compile
+  and fail because the policy behavior and manifest do not yet exist.
+2. Add the closed version-one manifest and implement JSON and PowerShell
   requirement checks, then the active workflow
    and generated-fixture checks, then the managed file-creation lane checks.
-4. Add one CI gate that restores the managed policy project with
+3. Add one CI gate that restores the managed policy project with
   `dotnet restore --locked-mode` and tests it with `dotnet test --no-restore`.
-5. Remove only Pester assertions that the managed gate demonstrably duplicates;
+4. Remove only Pester assertions that the managed gate demonstrably duplicates;
    retain PowerShell behavior and scaffold transaction tests.
-6. Run focused managed tests, generated canaries, both existing managed suites,
+5. Run focused managed tests, generated canaries, both existing managed suites,
    full isolated Pester parity, and repository validation.
-7. Record exact-head CI, review findings, and the accepted completion decision in
+6. Record exact-head CI, review findings, and the accepted completion decision in
    the engineering plan.
 
 A parser limitation, unsupported current form, or new grammar class stops the
