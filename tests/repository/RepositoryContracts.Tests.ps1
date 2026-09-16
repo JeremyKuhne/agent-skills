@@ -95,6 +95,35 @@ Describe 'Healthy fixture' {
         }
     }
 
+    It 'rejects a Pester version override outside the execution lock in <Mode> mode' -ForEach @(
+        @{ Mode = 'coordinator' }
+        @{ Mode = 'worker' }
+    ) {
+        $root = Join-Path $TestDrive "rejected-pester-version-$Mode"
+        [System.IO.Directory]::CreateDirectory($root) | Out-Null
+        $fixturePath = Join-Path $root 'Fixture.Tests.ps1'
+        [System.IO.File]::WriteAllText($fixturePath, @'
+Describe 'Unreachable fixture' {
+    It 'cannot run' { $true | Should -BeTrue }
+}
+'@)
+        $reportDirectory = Join-Path $root 'reports'
+    $arguments = if ($Mode -eq 'worker') {
+        @('-ShardPath', $fixturePath, '-ResultPath', (Join-Path $root 'result.json'))
+    }
+    else {
+        @('-Path', $fixturePath, '-OutputDirectory', $reportDirectory)
+    }
+
+        $output = @(& $script:ShardPwsh -NoProfile -File $script:ShardRunner `
+        @arguments -PesterVersion 6.1.0 2>&1) -join [Environment]::NewLine
+
+        $LASTEXITCODE | Should -Not -Be 0
+        $output | Should -Match 'PesterVersion must be exactly 6\.2\.0'
+    Test-Path -LiteralPath $reportDirectory | Should -BeFalse
+    Test-Path -LiteralPath (Join-Path $root 'result.json') | Should -BeFalse
+    }
+
     It 'reports a healthy shard with real test counts' {
         $run = Invoke-ShardFixture 'healthy' @'
 Describe 'Healthy fixture' {

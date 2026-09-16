@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P1a, P1c, and P2 done through PR #95; the accepted P1b parser-backed
-  policy contract is ready for implementation
+- Status: P1a, P1c, and P2 done through PR #95; P1b manifest and PowerShell
+  requirement policy pass locally, with workflow policy and hosted evidence next
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-16 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -35,7 +35,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
-| P1b | Parser-backed toolchain policy | Ready | P0r, P1c | The maintainer accepted the [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) on 2026-09-15. It names accepted, rejected, and deferred forms, parser ownership, negative controls, manifest scope, and implementation slices. |
+| P1b | Parser-backed toolchain policy | In progress | P0r, P1c | The accepted [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) now has a closed manifest plus managed JSON and PowerShell-AST enforcement for retained tests, generated test templates, and the canonical runner. Workflow YAML, generated workflow, and managed file-creation lane policy remain separate slices. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
@@ -392,6 +392,32 @@ steps, and the linked test project and coverage configuration. Until P1b lands,
 exact-head CI and review are the enforcement evidence. Do not add a new
 regex-based Pester assertion for this YAML contract; that would recreate the
 test-ownership error P0r rejected.
+
+#### P1b first-slice local evidence
+
+The first implementation slice adds the accepted four-value manifest and a
+dedicated `MSTest.Sdk/4.2.3` project. It pins YamlDotNet 18.1.0 and
+`System.Management.Automation` 7.4.20 with exact package ranges and checked-in
+lock data. Locked restore passes with no warning or error.
+
+The managed suite uses `System.Text.Json` for the closed manifest and
+PowerShell's parser and AST for requirements and runner structure. It covers
+missing, null, duplicate, unknown, wrong-case, wrong-type, and noncanonical
+manifest forms; host and Pester requirement mutations; runner default and
+import mutations; and the checked-in manifest, all 16 tracked Pester files, six
+generated Pester test templates, and canonical runner. All 69 managed tests
+pass in Release in 567 milliseconds.
+
+The runner now rejects coordinator and worker `PesterVersion` values other than
+6.2.0 before creating output or starting a shard. The full isolated Pester suite
+discovers 446 tests: 433 pass, 13 are intentionally skipped, and none fail or
+report block, container, not-run, inconclusive, or infrastructure failures.
+Every shard path belongs to the implementation worktree. The one-case increase
+from the 444-test P2 receipt is the two-mode runner override negative control.
+
+This slice does not parse YAML or enforce workflow topology. Those checks,
+rendered generated workflows, the managed file-creation matrix, and the known
+explicit-`pwsh` workflow normalization remain for the next P1b slice.
 
 #### Publication and correction controls
 
