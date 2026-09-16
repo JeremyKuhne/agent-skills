@@ -33,8 +33,8 @@ Current executable sources of truth are distributed:
   `#Requires -Version 7.4` and a Pester `ModuleVersion` of `6.2.0`;
 - [Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1) defaults its exact
   execution version to 6.2.0 and imports that exact version in each worker;
-- active and generated workflows install Pester 6.2.0 and invoke the isolated
-  runner;
+- active and generated workflow jobs that execute Pester install version 6.2.0
+  and invoke the isolated runner;
 - both managed test projects use `MSTest.Sdk/4.2.3`, target `net10.0`, and run
   directly through `dotnet test`; and
 - the file-creation matrix runs behavior on `ubuntu-24.04-arm` and
@@ -58,10 +58,13 @@ P1b implementation will use these owners:
 
 The managed project will pin `MSTest.Sdk/4.2.3`, YamlDotNet 18.1.0, and
 `System.Management.Automation` 7.4.20. Package references use exact versions
-in its project file and checked-in NuGet lock data. Validation must not download
-schemas or execute workflow commands. `System.Management.Automation` 7.4.20 is
-available from NuGet.org and contains the required public parser API; the
-broader `Microsoft.PowerShell.SDK` package is not required.
+in its project file and checked-in NuGet lock data. The project enables
+`RestorePackagesWithLockFile`; canonical validation first runs `dotnet restore
+--locked-mode`, then `dotnet test --no-restore`, so validation cannot silently
+regenerate the lock. Validation must not download schemas or execute workflow
+commands. `System.Management.Automation` 7.4.20 is available from NuGet.org and
+contains the required public parser API; the broader
+`Microsoft.PowerShell.SDK` package is not required.
 
 The project may keep policy code beside its tests until a second production
 consumer justifies a separate command-line tool. P1b does not add a generic
@@ -88,7 +91,9 @@ shape:
 All properties are required. Property names are case-sensitive. Unknown
 properties, duplicate properties at any object depth, comments, trailing
 commas, non-string version values, and a non-integer schema version are
-rejected. `schemaVersion` is the JSON number `1` exactly.
+rejected. `schemaVersion` is the single raw JSON token `1`; the validator checks
+`JsonElement.GetRawText()` before conversion, so numerically equivalent tokens
+such as `1.0` and `1e0` are rejected.
 
 `testMinimumVersion` is the exact two-component ASCII decimal string `"7.4"`.
 `compatibilityMinimumVersion` and `executionVersion` are the exact
@@ -168,7 +173,7 @@ contract row.
 
 | Class | Required mutations |
 | --- | --- |
-| JSON shape | Missing property; explicit null; wrong primitive type; unknown property; duplicate property; unsupported schema version; malformed JSON |
+| JSON shape | Missing property; explicit null; wrong primitive type; unknown property; duplicate property; unsupported schema version; `schemaVersion` tokens `1.0` and `1e0`; malformed JSON |
 | Version text | Lower version; higher version; one component; an extra component; leading zero; leading or trailing whitespace; `v` prefix; prerelease; build metadata; wildcard; numeric instead of string |
 | PowerShell requirements | Missing host requirement; wrong host floor; missing Pester module; `RequiredVersion` substituted for `ModuleVersion`; duplicate or dynamic module requirement; syntax error |
 | Runner lock | Missing or changed default; unpinned import; literal import that bypasses the parameter; dynamic or aliased invocation |
@@ -206,12 +211,15 @@ separate accepted migration replaces them.
 
 ## Implementation sequence after acceptance
 
-1. Add the closed version-one manifest and a managed MSTest project with exact,
-   locked parser dependencies.
-2. Encode the negative controls before validating repository files.
-3. Implement JSON and PowerShell requirement checks, then the active workflow
+1. Add only the managed MSTest project scaffolding, exact package references,
+  and checked-in lock file. This setup adds no manifest or policy behavior.
+2. Encode the accepted fixtures, rejected mutations, and expected diagnostics
+  before adding validator behavior or the repository manifest.
+3. Add the closed version-one manifest and implement JSON and PowerShell
+  requirement checks, then the active workflow
    and generated-fixture checks, then the managed file-creation lane checks.
-4. Add one direct `dotnet test` CI gate for the managed policy project.
+4. Add one CI gate that restores the managed policy project with
+  `dotnet restore --locked-mode` and tests it with `dotnet test --no-restore`.
 5. Remove only Pester assertions that the managed gate demonstrably duplicates;
    retain PowerShell behavior and scaffold transaction tests.
 6. Run focused managed tests, generated canaries, both existing managed suites,
