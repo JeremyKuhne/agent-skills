@@ -150,6 +150,17 @@ internal static class PowerShellToolchainPolicy
                 $"The Pester runner must require PowerShell {manifest.TestMinimumVersion} exactly.");
         }
 
+        if (ast.DynamicParamBlock is not null ||
+            ast.BeginBlock is not null ||
+            ast.ProcessBlock is not null ||
+            ast.CleanBlock is not null ||
+            ast.EndBlock is null ||
+            !ast.EndBlock.Unnamed)
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must use only its ordinary unnamed script body.");
+        }
+
         if (HasModuleLoadingDirective(ast))
         {
             throw new ToolchainPolicyException(

@@ -53,6 +53,9 @@ public sealed class RunnerPolicyTests
             yield return ["using-module", ValidRunner.Replace(
                 "#Requires -Version 7.4",
                 "using module Pester\n#Requires -Version 7.4")];
+            yield return ["nested-requires-module", ValidRunner.Replace(
+                "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
+                "$nested = {\n#Requires -Modules Pester\n$null\n}\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
             yield return ["missing-version-lock", ValidRunner.Replace(
                 "New-Variable -Name RequiredPesterVersion -Value $PesterVersion -Option Constant -ErrorAction Stop",
                 "")];
@@ -135,6 +138,9 @@ public sealed class RunnerPolicyTests
             yield return ["worker-import-in-elseif", ValidRunner.Replace(
                 "if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {",
                 "if ($false) {\n} elseif (-not [string]::IsNullOrWhiteSpace($ShardPath)) {")];
+            yield return ["named-begin-end-blocks", ValidRunner.Replace(
+                "New-Variable -Name RequiredPesterVersion -Value $PesterVersion -Option Constant -ErrorAction Stop",
+                "begin { $null = 'before' }\nend {\n    New-Variable -Name RequiredPesterVersion -Value $PesterVersion -Option Constant -ErrorAction Stop") + "\n}"];
             yield return ["configuration-before-import", ValidRunner.Replace(
                 "Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion",
                 "$early = Pester\\New-PesterConfiguration\n    Microsoft.PowerShell.Core\\Import-Module Pester -RequiredVersion $RequiredPesterVersion")];
