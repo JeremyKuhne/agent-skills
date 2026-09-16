@@ -17,10 +17,11 @@ param(
     [string] $ResultPath
 )
 
+New-Variable -Name RequiredPesterVersion -Value $PesterVersion -Option Constant -ErrorAction Stop
 $ErrorActionPreference = 'Stop'
 
-if ($PesterVersion -ne [version]'6.2.0') {
-    throw "PesterVersion must be exactly 6.2.0; received '$PesterVersion'."
+if ($RequiredPesterVersion -ne [version]'6.2.0') {
+    throw "PesterVersion must be exactly 6.2.0; received '$RequiredPesterVersion'."
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
@@ -30,7 +31,7 @@ if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
     if (-not [string]::IsNullOrWhiteSpace($PathPrefix)) {
         $env:PATH = $PathPrefix + [IO.Path]::PathSeparator + $env:PATH
     }
-    Import-Module Pester -RequiredVersion $PesterVersion -Force -ErrorAction Stop
+    Import-Module Pester -RequiredVersion $RequiredPesterVersion -Force -ErrorAction Stop
     $configuration = New-PesterConfiguration
     $configuration.Run.Path = (Resolve-Path -LiteralPath $ShardPath).Path
     $configuration.Run.Throw = $false
@@ -117,7 +118,7 @@ $pwshPath = if ([string]::IsNullOrWhiteSpace($PowerShellPath)) {
 }
 else { [System.IO.Path]::GetFullPath($PowerShellPath) }
 $scriptPath = $PSCommandPath
-$pesterVersionText = $PesterVersion.ToString()
+$pesterVersionText = $RequiredPesterVersion.ToString()
 $shardTimeoutMilliseconds = if ($ShardTimeoutSeconds -gt 0) {
     $ShardTimeoutSeconds * 1000
 }
@@ -312,7 +313,7 @@ $infrastructureFailureCount = @($shards | Where-Object Error).Count + $runnerErr
 $summary = [pscustomobject]@{
     SchemaVersion = 2
     GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
-    PesterVersion = $PesterVersion.ToString()
+    PesterVersion = $RequiredPesterVersion.ToString()
     MaxConcurrency = $MaxConcurrency
     ShardTimeoutMinutes = $ShardTimeoutMinutes
     ShardTimeoutSeconds = if ($ShardTimeoutSeconds -gt 0) { $ShardTimeoutSeconds } else { $null }

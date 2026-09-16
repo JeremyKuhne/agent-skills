@@ -177,10 +177,35 @@ internal static class PowerShellToolchainPolicy
                 $"The Pester runner must default a typed PesterVersion parameter to '{manifest.PesterExecutionVersion}'.");
         }
 
-        if (HasPesterVersionWrite(ast))
+        CommandAst[] executionVersionLocks = ast.FindAll(
+                node => node is CommandAst command &&
+                    IsCommandName(command.GetCommandName(), "New-Variable", "nv"),
+                searchNestedScriptBlocks: true)
+            .Cast<CommandAst>()
+            .ToArray();
+        if (executionVersionLocks.Length != 1 ||
+            !IsCanonicalExecutionVersionLock(executionVersionLocks[0], ast))
         {
             throw new ToolchainPolicyException(
-                "The Pester runner must not assign to PesterVersion after parameter binding.");
+                "The Pester runner must immediately create a constant RequiredPesterVersion from PesterVersion.");
+        }
+
+        if (HasExecutionVersionWrite(ast))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not assign to its execution-version variables.");
+        }
+
+        if (HasVariableMutationCommand(ast, executionVersionLocks[0]))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not use variable mutation commands.");
+        }
+
+        if (HasDynamicExecution(ast))
+        {
+            throw new ToolchainPolicyException(
+                "The Pester runner must not use dynamic command execution.");
         }
 
         CommandAst[] imports = ast.FindAll(
@@ -194,7 +219,7 @@ internal static class PowerShellToolchainPolicy
             !HasAcceptedImportArguments(imports[0]))
         {
             throw new ToolchainPolicyException(
-                "The Pester runner must import Pester once with -RequiredVersion $PesterVersion.");
+                "The Pester runner must import Pester once with -RequiredVersion $RequiredPesterVersion.");
         }
     }
 
@@ -204,20 +229,149 @@ internal static class PowerShellToolchainPolicy
             string.Equals(commandName, "ipmo", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool HasPesterVersionWrite(ScriptBlockAst ast)
+    private static bool IsCanonicalExecutionVersionLock(CommandAst command, ScriptBlockAst script)
+    {
+        if (!string.Equals(command.GetCommandName(), "New-Variable", StringComparison.OrdinalIgnoreCase) ||
+            command.InvocationOperator != TokenKind.Unknown ||
+            command.Parent is not PipelineAst pipeline ||
+            pipeline.Parent != script.EndBlock ||
+            script.EndBlock.Statements.FirstOrDefault() != pipeline)
+        {
+            return false;
+        }
+
+        string? name = null;
+        bool sawValue = false;
+        bool sawOption = false;
+        bool sawErrorAction = false;
+        for (int index = 1; index < command.CommandElements.Count; index++)
+        {
+            if (command.CommandElements[index] is not CommandParameterAst parameter)
+            {
+                return false;
+            }
+
+            if (string.Equals(parameter.ParameterName, "Name", StringComparison.OrdinalIgnoreCase))
+            {
+                if (name is not null ||
+                    !TryGetStringArgument(command, parameter, ref index, out name))
+                {
+                    return false;
+                }
+            }
+            else if (string.Equals(parameter.ParameterName, "Value", StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawValue ||
+                    !TryGetVariableArgument(command, parameter, ref index, "PesterVersion"))
+                {
+                    return false;
+                }
+
+                sawValue = true;
+            }
+            else if (string.Equals(parameter.ParameterName, "Option", StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawOption ||
+                    !TryGetStringArgument(command, parameter, ref index, out string? option) ||
+                    !string.Equals(option, "Constant", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                sawOption = true;
+            }
+            else if (string.Equals(parameter.ParameterName, "ErrorAction", StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawErrorAction ||
+                    !TryGetStringArgument(command, parameter, ref index, out string? errorAction) ||
+                    !string.Equals(errorAction, "Stop", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                sawErrorAction = true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return string.Equals(name, "RequiredPesterVersion", StringComparison.OrdinalIgnoreCase) &&
+            sawValue &&
+            sawOption &&
+            sawErrorAction;
+    }
+
+    private static bool HasExecutionVersionWrite(ScriptBlockAst ast)
     {
         return ast.FindAll(
                 node => node switch
                 {
                     AssignmentStatementAst assignment =>
-                        ReferencesPesterVersion(assignment.Left),
+                        ReferencesExecutionVersion(assignment.Left),
                     UnaryExpressionAst unary =>
                         IsMutationOperator(unary.TokenKind) &&
-                        ReferencesPesterVersion(unary.Child),
+                        ReferencesExecutionVersion(unary.Child),
                     _ => false
                 },
                 searchNestedScriptBlocks: true)
             .Any();
+    }
+
+    private static bool HasVariableMutationCommand(ScriptBlockAst ast, CommandAst executionVersionLock)
+    {
+        return ast.FindAll(
+                node => node is CommandAst command &&
+                    command != executionVersionLock &&
+                    IsVariableMutationCommand(command.GetCommandName()),
+                searchNestedScriptBlocks: true)
+            .Any();
+    }
+
+    private static bool HasDynamicExecution(ScriptBlockAst ast)
+    {
+        return ast.FindAll(
+                node => node is CommandAst command &&
+                    (command.InvocationOperator != TokenKind.Unknown ||
+                     IsCommandName(command.GetCommandName(), "Invoke-Expression", "iex")),
+                searchNestedScriptBlocks: true)
+            .Any();
+    }
+
+    private static bool IsVariableMutationCommand(string? commandName)
+    {
+        return IsCommandName(
+            commandName,
+            "Set-Variable",
+            "set",
+            "sv",
+            "New-Variable",
+            "nv",
+            "Clear-Variable",
+            "clv",
+            "Remove-Variable",
+            "rv");
+    }
+
+    private static bool IsCommandName(string? commandName, params string[] acceptedNames)
+    {
+        if (commandName is null)
+        {
+            return false;
+        }
+
+        int qualifier = commandName.LastIndexOf('\\');
+        ReadOnlySpan<char> unqualifiedName = commandName.AsSpan(qualifier + 1);
+        foreach (string acceptedName in acceptedNames)
+        {
+            if (unqualifiedName.Equals(acceptedName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsMutationOperator(TokenKind tokenKind)
@@ -228,15 +382,34 @@ internal static class PowerShellToolchainPolicy
             TokenKind.PostfixMinusMinus;
     }
 
-    private static bool ReferencesPesterVersion(Ast ast)
+    private static bool ReferencesExecutionVersion(Ast ast)
     {
         return ast.Find(
                 node => node is VariableExpressionAst variable &&
-                    string.Equals(
-                        variable.VariablePath.UserPath,
-                        "PesterVersion",
-                        StringComparison.OrdinalIgnoreCase),
+                    (IsExecutionVersionName(variable, "PesterVersion") ||
+                     IsExecutionVersionName(variable, "RequiredPesterVersion")),
                 searchNestedScriptBlocks: true) is not null;
+    }
+
+    private static bool IsExecutionVersionName(
+        VariableExpressionAst variable,
+        string expectedName)
+    {
+        string userPath = variable.VariablePath.UserPath;
+        int qualifier = userPath.LastIndexOf(':');
+        return userPath.AsSpan(qualifier + 1).Equals(
+            expectedName,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsUnqualifiedVariableName(
+        VariableExpressionAst variable,
+        string expectedName)
+    {
+        return string.Equals(
+            variable.VariablePath.UserPath,
+            expectedName,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsCanonicalWorkerImport(CommandAst command, ScriptBlockAst script)
@@ -340,7 +513,7 @@ internal static class PowerShellToolchainPolicy
                         command,
                         parameter,
                         ref index,
-                        "PesterVersion"))
+                        "RequiredPesterVersion"))
                 {
                     return false;
                 }
@@ -420,11 +593,7 @@ internal static class PowerShellToolchainPolicy
             value = separated;
         }
 
-        return value is not null &&
-            string.Equals(
-                value.VariablePath.UserPath,
-                variableName,
-                StringComparison.OrdinalIgnoreCase);
+        return value is not null && IsUnqualifiedVariableName(value, variableName);
     }
 
     private static int CountVersionRequirements(IEnumerable<Token> tokens)

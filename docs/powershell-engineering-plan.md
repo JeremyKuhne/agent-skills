@@ -404,8 +404,9 @@ The managed suite uses `System.Text.Json` for the closed manifest and
 PowerShell's parser and AST for requirements and runner structure. It covers
 missing, null, duplicate, unknown, wrong-case, wrong-type, and noncanonical
 manifest forms; host and Pester requirement mutations; runner default and
-import mutations; and the checked-in manifest, all 16 tracked Pester files, six
-generated Pester test templates, and canonical runner. All 91 managed tests
+import, immutable-snapshot, scope, dynamic-execution, and variable-mutation
+controls; and the checked-in manifest, all 16 tracked Pester files, six
+generated Pester test templates, and canonical runner. All 103 managed tests
 pass in Release.
 
 The runner now rejects coordinator and worker `PesterVersion` values other than
