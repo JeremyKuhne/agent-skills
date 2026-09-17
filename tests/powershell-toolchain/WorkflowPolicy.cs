@@ -1,10 +1,8 @@
 using System.Management.Automation.Language;
 using YamlDotNet.Core;
-using YamlDotNet.Core.Events;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 using PowerShellParser = System.Management.Automation.Language.Parser;
-using YamlParser = YamlDotNet.Core.Parser;
 
 namespace PowerShellToolchain.Tests;
 
