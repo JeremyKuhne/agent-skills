@@ -12,7 +12,7 @@ internal sealed record ToolchainManifest(
 internal sealed class ToolchainPolicyException(string message, Exception? innerException = null)
     : Exception(message, innerException);
 
-internal static class PowerShellToolchainPolicy
+internal static partial class PowerShellToolchainPolicy
 {
     public static ToolchainManifest ParseManifest(string json)
     {
