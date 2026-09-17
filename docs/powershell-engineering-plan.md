@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P1a, P1c, and P2 done through PR #95; the narrowed P1b metadata slice
-  passes locally, with hosted evidence and later workflow policy pending
+- Status: P1a, P1c, and P2 done; the P1b metadata slice merged through PR #98,
+  and the bounded active-workflow slice passes locally
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-16 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -35,7 +35,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
-| P1b | Parser-backed toolchain policy | In progress | P0r, P1c | The revised [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) limits the first slice to the closed manifest, test requirements, and runner metadata. Local managed and real-process checks pass; hosted evidence and later workflow policy remain pending. |
+| P1b | Parser-backed toolchain policy | In progress | P0r, P1c | PR #98 merged the bounded manifest, test-requirement, and runner-metadata policy. The active repository-workflow topology and bootstrap slice passes locally; generated workflows and managed file-creation workflow policy remain pending. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
@@ -426,10 +426,36 @@ failure, not-run, inconclusive, block, container, or infrastructure category is
 reported. The existing managed file-creation and dotnet-pipes suites pass 20 of
 20 and 36 of 36 cases respectively.
 
+PR #98 merged as `7fab5afaaaaacd1d8edfa4db97667163b4ed95a8` on
+2026-09-17. Its exact head `e0bfc1fd821426109530477e649a833a53abf772`
+passed all nine applicable checks; the tag-only release check was intentionally
+skipped. Copilot review `5229796285` covered all 14 changed files, recommended
+approval, and reported no inline or suppressed findings. No unresolved thread
+remained at merge.
+
+#### P1b active-workflow slice local evidence
+
+The second slice adds YamlDotNet 18.1.0 and validates the two active repository
+workflow files as structured YAML. It owns three static execution modes: Linux
+all-tests and conditionally focused Windows tests in `ci.yml`, plus scheduled
+or manually dispatched Windows all-tests in `full-ci.yml`. Each runner step has
+the accepted host, `pwsh` shell, condition, and literal path set, and exactly one
+preceding matching `Install-Module Pester -RequiredVersion 6.2.0` step.
+
+The active-workflow policy adds YamlDotNet 18.1.0 and 585 lines of managed
+validation isolated from the 264-line manifest and metadata core. Its 58
+focused cases cover malformed and duplicate YAML, policy-bearing
+anchors, aliases, and merge keys, accepted scalar styles, job and host drift,
+bootstrap order, shell, condition, and version drift, direct static Pester
+calls, runner cardinality, and exact full/focused path sets. Comments,
+unrelated strings, reusable jobs, and anchors outside policy-owned mappings do
+not count as execution. All 138 managed policy cases pass in Debug and Release,
+including the real `ci.yml` and `full-ci.yml` integration check.
+
 This evidence establishes local correctness only. Exact-head hosted CI and a
-clean review are still required before this slice can merge. The active and
-generated workflow topology, bootstrap ordering, and managed file-creation
-workflow policy remain separate later slices.
+clean review are still required before this slice can merge. Generated workflow
+execution and managed file-creation workflow policy remain separate later
+slices.
 
 #### Publication and correction controls
 

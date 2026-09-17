@@ -171,6 +171,23 @@ public sealed class RepositoryPolicyTests
             manifest);
     }
 
+    [TestMethod]
+    public void ActivePesterWorkflows_AcceptedTopology_Passes()
+    {
+        ToolchainManifest manifest = LoadManifest();
+        string workflowRoot = Path.Join(RepositoryRoot, ".github", "workflows");
+        IReadOnlyDictionary<string, string> workflows = Directory
+            .GetFiles(workflowRoot, "*.*", SearchOption.TopDirectoryOnly)
+            .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(
+                path => Path.GetRelativePath(RepositoryRoot, path).Replace('\\', '/'),
+                File.ReadAllText,
+                StringComparer.Ordinal);
+
+        PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, manifest);
+    }
+
     private static ToolchainManifest LoadManifest()
     {
         return PowerShellToolchainPolicy.ParseManifest(
