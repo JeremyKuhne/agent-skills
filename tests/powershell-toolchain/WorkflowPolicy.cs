@@ -93,6 +93,7 @@ internal static partial class PowerShellToolchainPolicy
         ToolchainManifest manifest)
     {
         if (!workflow.Value.Jobs.TryGetValue(jobId, out WorkflowJob? job) ||
+            job is null ||
             !string.Equals(job.RunsOn, host, StringComparison.Ordinal) ||
             job.Condition is not null)
         {
@@ -178,6 +179,7 @@ internal static partial class PowerShellToolchainPolicy
                 throw new ToolchainPolicyException($"{path} must contain one mapping document.");
             }
 
+            RejectNullOwnedJobShapes(path, root);
             RejectOwnedIndirection(path, root);
             WorkflowFile? workflow = new DeserializerBuilder()
                 .WithDuplicateKeyChecking()
@@ -198,6 +200,30 @@ internal static partial class PowerShellToolchainPolicy
         catch (YamlException exception)
         {
             throw new ToolchainPolicyException($"{path} is not accepted YAML.", exception);
+        }
+    }
+
+    private static void RejectNullOwnedJobShapes(string path, YamlMappingNode root)
+    {
+        YamlMappingNode jobs = RequireMapping(RequireNode(root, "jobs", path), $"{path}.jobs");
+        string[] ownedJobIds = string.Equals(path, CiPath, StringComparison.Ordinal)
+            ? ["scaffold-linux", "scaffold-windows"]
+            : string.Equals(path, FullCiPath, StringComparison.Ordinal)
+                ? ["scaffold-windows"]
+                : [];
+        foreach (string jobId in ownedJobIds)
+        {
+            YamlNode jobNode = RequireNode(jobs, jobId, $"{path}.jobs");
+            if (jobNode is not YamlMappingNode job)
+            {
+                throw new ToolchainPolicyException($"{path}.jobs.{jobId} must be a mapping.");
+            }
+
+            if (RequireNode(job, "steps", $"{path}.jobs.{jobId}") is not YamlSequenceNode)
+            {
+                throw new ToolchainPolicyException(
+                    $"{path}.jobs.{jobId}.steps must be a sequence.");
+            }
         }
     }
 
@@ -482,6 +508,12 @@ internal static partial class PowerShellToolchainPolicy
     {
         return node as YamlMappingNode ??
             throw new ToolchainPolicyException($"{path} must be a mapping.");
+    }
+
+    private static YamlSequenceNode RequireSequence(YamlNode node, string path)
+    {
+        return node as YamlSequenceNode ??
+            throw new ToolchainPolicyException($"{path} must be a sequence.");
     }
 
     private sealed record ParsedWorkflow(string Path, WorkflowFile Value);

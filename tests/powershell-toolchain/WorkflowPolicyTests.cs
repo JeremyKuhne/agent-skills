@@ -99,6 +99,13 @@ public sealed class WorkflowPolicyTests
             yield return ["missing-linux-job", continuousIntegration.Replace(
                 "  scaffold-linux:",
                 "  renamed-linux:")];
+            yield return ["null-linux-job", continuousIntegration.Replace(
+              "  scaffold-linux:\n    runs-on: ubuntu-24.04-arm",
+              "  scaffold-linux: null\n  renamed-linux:\n    runs-on: ubuntu-24.04-arm")];
+            yield return ["null-linux-steps", continuousIntegration.Replace(
+              "    steps:\n      - name: Install Pester",
+              "    steps: null\n    ignored-steps:\n      - name: Install Pester",
+              StringComparison.Ordinal)];
             yield return ["wrong-linux-host", continuousIntegration.Replace(
                 "runs-on: ubuntu-24.04-arm",
                 "runs-on: ubuntu-latest")];
