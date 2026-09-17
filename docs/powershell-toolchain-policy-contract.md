@@ -1,7 +1,7 @@
 # PowerShell toolchain policy contract
 
-- Status: accepted by the maintainer on 2026-09-15
-- Baseline: `main` at `7e68d294300fbb9ddc649e90cbea4eefda35d621`
+- Status: revised by the maintainer on 2026-09-16 after PR #97 closed unmerged
+- Baseline: `main` at `a02d011d34bae6120001ca399629d6f59621b24e`
 - Milestone: P1b parser-backed toolchain policy
 - Scope: contract only; this document adds no manifest, parser, validator, or CI
   behavior
@@ -19,13 +19,21 @@ not recreate the parser code from PR #88 or PR #89, infer structured syntax with
 regular expressions, or add fields for later milestones merely because their
 values are currently known.
 
+PR #97 demonstrated that statically proving the runner's command resolution,
+mutation safety, and control-flow reachability was not a finite repository
+policy. That pull request closed unmerged after 12 commits and 11 review rounds.
+The replacement first slice validates configuration and metadata that the
+PowerShell parser represents directly. Existing real-process tests continue to
+own runner behavior. The policy is not a security boundary and does not attempt
+to constrain what compromised repository code could execute.
+
 ## Current baseline
 
 PR #94 established the PowerShell 7.4 test floor, Pester 6.2 compatibility
 floor, and exact Pester 6.2.0 execution lock. PR #95 routed repository and
 generated-repository Pester execution through the canonical isolated runner.
-The current tree has no `tools/powershell-toolchain.json`, no managed toolchain
-validator, and no PSScriptAnalyzer gate.
+At this baseline, the tree had no `tools/powershell-toolchain.json`, no managed
+toolchain validator, and no PSScriptAnalyzer gate.
 
 Current executable sources of truth are distributed:
 
@@ -49,16 +57,17 @@ P1b implementation will use these owners:
 
 | Concern | Owner | Independent oracle |
 | --- | --- | --- |
-| Manifest JSON | `System.Text.Json` with explicit DTOs and unknown-member rejection | This accepted schema and its negative-control table |
+| Manifest JSON | `System.Text.Json` DOM with explicit member and value validation | This accepted schema and its negative-control table |
 | Workflow YAML | YamlDotNet 18.1.0 | This accepted workflow object model and rendered workflow fixtures |
-| PowerShell syntax and commands | `System.Management.Automation.Language.Parser` from `System.Management.Automation` 7.4.20 | PowerShell AST node types and this accepted command model |
+| PowerShell syntax and metadata | `System.Management.Automation.Language.Parser` from `System.Management.Automation` 7.4.20 | PowerShell requirements and parameter AST node types |
 | Repository policy | A new managed MSTest project under `tests/powershell-toolchain/` | This document, deliberately mutated fixtures, and current hosted behavior |
 | Portable skill format | `skills-ref@0.1.5` | Agent Skills format; P1b does not duplicate it |
 | Markdown and links | markdownlint and offline lychee | Existing repository configurations; P1b does not parse Markdown |
 
-The managed project will pin `MSTest.Sdk/4.2.3`, YamlDotNet 18.1.0, and
-`System.Management.Automation` 7.4.20. Package references use exact versions
-in its project file and checked-in NuGet lock data. The project enables
+The first-slice managed project will pin `MSTest.Sdk/4.2.3` and
+`System.Management.Automation` 7.4.20. The workflow-policy slice adds and pins
+YamlDotNet only when it consumes YAML. Package references use exact versions in
+the project file and checked-in NuGet lock data. The project enables
 `RestorePackagesWithLockFile`; canonical validation first runs `dotnet restore
 --locked-mode`, then `dotnet test --no-restore`, so validation cannot silently
 regenerate the lock. Validation must not download schemas or execute workflow
@@ -116,10 +125,10 @@ controls before implementation.
 
 | Surface | Subject, owner, and oracle | Accepted forms | Rejected forms | Deferred forms | Executable P1b gate |
 | --- | --- | --- | --- | --- | --- |
-| Manifest structure | Repository toolchain policy; managed validator; accepted JSON schema above | Exact version-one object with the four required scalar values | Missing, null, duplicate, unknown, wrong-case, wrong-type, noncanonical, or unsupported-version members | Additional tools, hosts, SDKs, analyzers, coverage, and per-file inventories | Deserialize with `System.Text.Json`; reject malformed JSON and every shape outside the closed DTO |
+| Manifest structure | Repository toolchain policy; managed validator; accepted JSON schema above | Exact version-one object with the four required scalar values | Missing, null, duplicate, unknown, wrong-case, wrong-type, noncanonical, or unsupported-version members | Additional tools, hosts, SDKs, analyzers, coverage, and per-file inventories | Parse with `System.Text.Json`; reject malformed JSON and every value or member outside the closed shape |
 | Retained test host | Tracked Pester tests and generated Pester test artifacts; PowerShell parser; manifest `testMinimumVersion` | One script requirement whose minimum version is exactly 7.4 | Missing or duplicate requirement; lower or higher literal; dynamic text; parse error | Operational and shipped scripts, compatibility fixtures, and a future floor | Parse tracked tests directly and parse scaffolded test output; compare AST requirements with the manifest |
 | Pester compatibility | Retained Pester tests and generated Pester test artifacts; PowerShell parser; manifest compatibility floor | One Pester module requirement using `ModuleVersion = '6.2.0'`; key order and quoting may vary semantically | Missing Pester requirement, `RequiredVersion`, lower or higher floor, duplicate Pester entry, dynamic value, malformed module specification | Compatibility with another Pester minor or major | Read module specifications from the AST; never search comments or strings |
-| Canonical runner | [Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1); PowerShell parser; manifest execution version | PowerShell 7.4 requirement; typed `PesterVersion` default exactly 6.2.0; callers omit the argument or pass 6.2.0 exactly; coordinator and worker reject any other value; worker import uses the accepted value with `RequiredVersion` | Missing or dynamic default, a caller override other than 6.2.0, unpinned import, alias, or direct ambient-module execution | Moving process supervision to C# and changing the runner schema | Inspect parameter and command ASTs, add an override-rejection behavior test, and retain existing state-table tests |
+| Canonical runner metadata | [Invoke-PesterShards.ps1](../tests/Invoke-PesterShards.ps1); PowerShell parser; manifest test and execution versions | PowerShell 7.4 requirement and one typed `PesterVersion` parameter whose literal default is exactly 6.2.0 | Missing, duplicate, untyped, dynamic, lower, or higher requirement/default | Static interpretation of runner commands, imports, invocation APIs, variable writes, providers, rebinding, and control-flow reachability | Inspect requirement and parameter ASTs; retain real-process state-table tests and add one mismatch-rejection behavior test |
 | Repository Pester jobs | Active workflow jobs; YamlDotNet plus PowerShell parser; this row and PR #95's hosted behavior | Ordinary Linux `scaffold-linux` runs all tests; ordinary Windows `scaffold-windows` conditionally runs the exact `windows-acls` and `dotnet-file-creation` set; scheduled Windows `scaffold-windows` runs all tests; each uses `shell: pwsh` | Direct `Invoke-Pester`, missing runner, extra or missing focused path, wildcard path, dynamic command name, another shell, or a newly discovered Pester job absent from the contract | Adding Pester to scaffold-only Linux jobs, new platform lanes, or changing component ownership | Parse workflow mappings and sequences, then parse each `run` scalar as PowerShell; compare static command and path ASTs with this topology |
 | Pester bootstrap | Jobs that invoke the runner; YamlDotNet plus PowerShell parser; manifest execution version | A preceding same-job `pwsh` step installs Pester with `-RequiredVersion 6.2.0`; unrelated flags may vary | Missing, later, cross-job, conditional-incompatible, dynamic, floating, or mismatched installation | Pre-provisioned runner images and alternate package sources | Resolve ordered steps in parsed YAML and inspect the install command AST |
 | Generated Pester execution | `New-SkillRepository.ps1` output; generated-repository canary; same parser stack | The runner emitted by the scaffolder is byte-identical to the canonical runner in that checkout; team-CI and distribution workflows invoke it for all tests after exact installation | Raw-template parsing, unresolved template tokens, direct `Invoke-Pester`, a divergent emitted runner, or source-text-only evidence | A separately versioned portable runner package and later line-ending changes after the generated repository is committed | Generate validated, team-CI, and distribution fixtures; compare source and emitted bytes, parse emitted files, and execute the generated runner |
@@ -129,9 +138,10 @@ controls before implementation.
 ## Known implementation delta
 
 The current non-coverage file-creation step omits `shell`, so GitHub selects the
-host default. P1b implementation must make that step explicitly `pwsh` before
-the managed command contract can pass. The command already runs unchanged in
-PowerShell on Windows; the implementation PR must prove the same Ubuntu ARM64
+host default. The later workflow-policy slice must make that step explicitly
+`pwsh` before the managed command contract can pass. The metadata-only first
+slice does not claim that workflow row. The command already runs unchanged in
+PowerShell on Windows; the workflow-policy PR must prove the same Ubuntu ARM64
 behavior through exact-head CI. No other current-tree mismatch is accepted by
 this contract.
 
@@ -176,7 +186,7 @@ contract row.
 | JSON shape | Missing property; explicit null; wrong primitive type; unknown property; duplicate property; unsupported schema version; `schemaVersion` tokens `1.0` and `1e0`; malformed JSON |
 | Version text | Lower version; higher version; one component; an extra component; leading zero; leading or trailing whitespace; `v` prefix; prerelease; build metadata; wildcard; numeric instead of string |
 | PowerShell requirements | Missing host requirement; wrong host floor; missing Pester module; `RequiredVersion` substituted for `ModuleVersion`; duplicate or dynamic module requirement; syntax error |
-| Runner lock | Missing or changed default; coordinator or worker called with a `PesterVersion` other than 6.2.0; unpinned import; literal import that bypasses the accepted parameter; dynamic or aliased invocation |
+| Runner metadata and behavior | Missing, duplicate, untyped, dynamic, lower, or higher default; wrong PowerShell requirement; one real-process call with a `PesterVersion` other than 6.2.0 |
 | Workflow structure | Malformed YAML; job missing; unexpected additional Pester-invoking job; wrong host; missing or reordered bootstrap; wrong shell; direct Pester call; dynamic runner command; wildcard or wrong path set |
 | YAML scalar forms | Plain, single-quoted, double-quoted, literal, and folded scalars that parse to the same accepted PowerShell command; comments and unrelated strings must not count as commands; duplicate keys, merge keys, anchors, and aliases are rejected on policy-bearing nodes |
 | Typed matrix values | Missing, null, string, numeric, or duplicate `coverage`; omitted/extra host row; coverage conditions both true, both false, missing, or swapped |
@@ -212,16 +222,16 @@ separate accepted migration replaces them.
 ## Implementation sequence after acceptance
 
 1. In the first local implementation slice, create the managed MSTest project,
-  exact package references, checked-in lock file, accepted fixtures, rejected
-  mutations, and expected diagnostics together. Author the tests after the
-  minimum project scaffolding needed to compile them but before adding any
-  validator behavior or repository manifest; do not publish a scaffold-only
-  intermediate commit. Scaffolding alone is not an implementation slice. The
-  first slice is complete only when the accepted and rejected tests compile
-  and fail because the policy behavior and manifest do not yet exist.
-2. Add the closed version-one manifest and implement JSON and PowerShell
-  requirement checks, then the active workflow
-   and generated-fixture checks, then the managed file-creation lane checks.
+   exact package references, checked-in lock file, accepted fixtures, rejected
+   mutations, and expected diagnostics together. Author the tests after the
+   minimum project scaffolding needed to compile them but before adding any
+   validator behavior or repository manifest; do not publish a scaffold-only
+   intermediate commit. Scaffolding alone is not an implementation slice. The
+   first slice is complete only when the closed manifest, retained and rendered
+   test requirements, and canonical runner metadata pass their finite gates.
+2. Implement workflow and generated-workflow checks in a later slice, adding
+   YamlDotNet when that slice begins, then implement the managed file-creation
+   lane checks.
 3. Add one CI gate that restores the managed policy project with
   `dotnet restore --locked-mode` and tests it with `dotnet test --no-restore`.
 4. Remove only Pester assertions that the managed gate demonstrably duplicates;
@@ -234,6 +244,11 @@ separate accepted migration replaces them.
 A parser limitation, unsupported current form, or new grammar class stops the
 implementation for a contract decision. It does not authorize a regex fallback
 or another serial parser patch.
+
+A finding about arbitrary script execution, command rebinding, provider writes,
+or another way compromised repository code could evade the metadata gate is out
+of scope. A plausible mismatch in the declared requirement, parameter default,
+or observed runner behavior remains in scope.
 
 ## Accepted implementation gate
 

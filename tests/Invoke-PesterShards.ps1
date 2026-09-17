@@ -19,6 +19,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if ($PesterVersion -ne [version]'6.2.0') {
+    throw "PesterVersion must be exactly 6.2.0; received '$PesterVersion'."
+}
+
 if (-not [string]::IsNullOrWhiteSpace($ShardPath)) {
     if ([string]::IsNullOrWhiteSpace($ResultPath)) {
         throw '-ResultPath is required in shard mode.'
