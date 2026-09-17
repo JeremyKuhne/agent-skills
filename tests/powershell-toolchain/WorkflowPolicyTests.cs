@@ -87,6 +87,12 @@ public sealed class WorkflowPolicyTests
             string fullContinuousIntegration = FullContinuousIntegration.ReplaceLineEndings("\n");
 
             yield return ["malformed-yaml", continuousIntegration + "\n  broken: ["];
+            yield return ["missing-trigger-mapping", continuousIntegration.Replace(
+              "on:\n  pull_request:\n",
+              "")];
+            yield return ["null-trigger-mapping", continuousIntegration.Replace(
+              "on:\n  pull_request:",
+              "on: null")];
             yield return ["duplicate-job-key", continuousIntegration.Replace(
                 "  scaffold-linux:",
                 "  scaffold-linux: {}\n  scaffold-linux:")];

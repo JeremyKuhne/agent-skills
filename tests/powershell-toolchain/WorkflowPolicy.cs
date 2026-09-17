@@ -34,9 +34,12 @@ internal static partial class PowerShellToolchainPolicy
     {
         ParsedWorkflow continuous = ParseRequired(workflows, CiPath);
         ParsedWorkflow full = ParseRequired(workflows, FullCiPath);
+        RunnerCommandInfo[] continuousCommands = FindCommands(continuous);
+        RunnerCommandInfo[] fullCommands = FindCommands(full);
 
         ValidateMode(
             continuous,
+            continuousCommands,
             "scaffold-linux",
             "ubuntu-24.04-arm",
             condition: null,
@@ -44,6 +47,7 @@ internal static partial class PowerShellToolchainPolicy
             manifest);
         ValidateMode(
             continuous,
+            continuousCommands,
             "scaffold-windows",
             "windows-latest",
             WindowsCondition,
@@ -52,6 +56,7 @@ internal static partial class PowerShellToolchainPolicy
         RequireFullTriggers(full);
         ValidateMode(
             full,
+            fullCommands,
             "scaffold-windows",
             "windows-latest",
             condition: null,
@@ -60,8 +65,8 @@ internal static partial class PowerShellToolchainPolicy
 
         RunnerCommandInfo[] expectedRunners =
         [
-            .. FindCommands(continuous).Where(command => command.Kind == CommandKind.Runner),
-            .. FindCommands(full).Where(command => command.Kind == CommandKind.Runner)
+            .. continuousCommands.Where(command => command.Kind == CommandKind.Runner),
+            .. fullCommands.Where(command => command.Kind == CommandKind.Runner)
         ];
         if (expectedRunners.Length != 3)
         {
@@ -69,7 +74,7 @@ internal static partial class PowerShellToolchainPolicy
                 "Active workflows must contain exactly the three accepted static runner invocations.");
         }
 
-        if (FindCommands(continuous).Concat(FindCommands(full)).Any(command =>
+        if (continuousCommands.Concat(fullCommands).Any(command =>
                 command.Kind == CommandKind.DirectPester))
         {
             throw new ToolchainPolicyException(
@@ -93,6 +98,7 @@ internal static partial class PowerShellToolchainPolicy
 
     private static void ValidateMode(
         ParsedWorkflow workflow,
+        IEnumerable<RunnerCommandInfo> workflowCommands,
         string jobId,
         string host,
         string? condition,
@@ -108,7 +114,7 @@ internal static partial class PowerShellToolchainPolicy
                 $"{workflow.Path} must contain the accepted {jobId} job.");
         }
 
-        RunnerCommandInfo[] commands = FindCommands(workflow)
+        RunnerCommandInfo[] commands = workflowCommands
             .Where(command => string.Equals(command.JobId, jobId, StringComparison.Ordinal))
             .ToArray();
         RunnerCommandInfo[] runners = commands
@@ -188,6 +194,7 @@ internal static partial class PowerShellToolchainPolicy
                 throw new ToolchainPolicyException($"{path} must contain one mapping document.");
             }
 
+            _ = RequireMapping(RequireNode(root, "on", path), $"{path}.on");
             RejectNullOwnedJobShapes(path, root);
             RejectOwnedIndirection(path, root);
             WorkflowFile? workflow = new DeserializerBuilder()
