@@ -1,7 +1,7 @@
 # PowerShell engineering plan
 
-- Status: P1a, P1c, and P2 done through PR #95; the accepted P1b parser-backed
-  policy contract is ready for implementation
+- Status: P1a, P1c, and P2 done through PR #95; the narrowed P1b metadata slice
+  passes locally, with hosted evidence and later workflow policy pending
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-16 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -35,7 +35,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
-| P1b | Parser-backed toolchain policy | Ready | P0r, P1c | The maintainer accepted the [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) on 2026-09-15. It names accepted, rejected, and deferred forms, parser ownership, negative controls, manifest scope, and implementation slices. |
+| P1b | Parser-backed toolchain policy | In progress | P0r, P1c | The revised [PowerShell toolchain policy contract](powershell-toolchain-policy-contract.md) limits the first slice to the closed manifest, test requirements, and runner metadata. Local managed and real-process checks pass; hosted evidence and later workflow policy remain pending. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
@@ -392,6 +392,44 @@ steps, and the linked test project and coverage configuration. Until P1b lands,
 exact-head CI and review are the enforcement evidence. Do not add a new
 regex-based Pester assertion for this YAML contract; that would recreate the
 test-ownership error P0r rejected.
+
+#### P1b runner-policy recovery
+
+PR #97 closed unmerged after 12 commits and 11 Copilot review rounds. Its
+managed policy grew to 1,163 lines, about 950 of them devoted to proving runner
+command, mutation, and reachability behavior through AST exclusions. Four new
+classes of bypass remained at the final head despite green deterministic tests.
+
+The replacement starts from current `main` and does not carry that history
+forward. The first slice owns the closed manifest, retained and rendered test
+requirements, and directly represented runner metadata only. Real-process
+state-table tests own runner outcomes, including rejection of a mismatched
+Pester version. The managed policy does not model arbitrary PowerShell
+execution and is not a security boundary. Workflow YAML and bootstrap policy
+remain separate later slices.
+
+#### P1b replacement first-slice local evidence
+
+The replacement adds a 264-line managed policy using `System.Text.Json` and
+PowerShell's parser. It has no command whitelist, mutation scan, control-flow
+model, YamlDotNet dependency, or workflow interpretation. Its 79 Release and
+Debug cases divide into 51 manifest cases, 12 retained-test requirement cases,
+12 runner-metadata cases, and four repository integration cases. The repository
+checks validate the checked-in manifest, all 16 tracked Pester files, the
+canonical runner metadata, and six test files emitted by the real distribution
+scaffolder.
+
+The runner adds one direct early guard for a `PesterVersion` other than 6.2.0.
+The focused real-process state table passes all 52 cases. Full isolated Pester
+execution discovers 445 cases: 432 pass, 13 are intentionally skipped, and no
+failure, not-run, inconclusive, block, container, or infrastructure category is
+reported. The existing managed file-creation and dotnet-pipes suites pass 20 of
+20 and 36 of 36 cases respectively.
+
+This evidence establishes local correctness only. Exact-head hosted CI and a
+clean review are still required before this slice can merge. The active and
+generated workflow topology, bootstrap ordering, and managed file-creation
+workflow policy remain separate later slices.
 
 #### Publication and correction controls
 

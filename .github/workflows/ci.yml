@@ -131,6 +131,32 @@ jobs:
             ./tests/repository/Invoke-SyntheticConsumer.ps1
           }
 
+  powershell-toolchain:
+    name: PowerShell toolchain policy
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore locked policy dependencies
+        shell: pwsh
+        run: >-
+          dotnet restore
+          ./tests/powershell-toolchain/PowerShellToolchain.Tests.csproj
+          --locked-mode
+
+      - name: Run managed policy tests
+        shell: pwsh
+        run: >-
+          dotnet test
+          --project ./tests/powershell-toolchain/PowerShellToolchain.Tests.csproj
+          --configuration Release
+          --no-restore
+
   dotnet-file-creation:
     name: .NET file creation (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

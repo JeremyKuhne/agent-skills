@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "powerShell": {
+    "testMinimumVersion": "7.4"
+  },
+  "pester": {
+    "compatibilityMinimumVersion": "6.2.0",
+    "executionVersion": "6.2.0"
+  }
+}
