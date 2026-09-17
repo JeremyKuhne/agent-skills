@@ -125,6 +125,9 @@ public sealed class WorkflowPolicyTests
                 "run: __runner_placeholder__",
                 "run: ./tests/Invoke-PesterShards.ps1 -Path ./tests",
                 StringComparison.Ordinal)];
+            yield return ["conditional-linux-bootstrap", continuousIntegration.Replace(
+              "run: Install-Module Pester -RequiredVersion 6.2.0 -Force",
+              "run: if ($true) { Install-Module Pester -RequiredVersion 6.2.0 -Force }")];
             yield return ["wrong-bootstrap-shell", continuousIntegration.Replace(
                 "shell: pwsh\n        run: Install-Module Pester",
                 "shell: bash\n        run: Install-Module Pester",
@@ -214,6 +217,9 @@ public sealed class WorkflowPolicyTests
             yield return ["extra-focused-path", continuousIntegration.Replace(
             "@('tests/windows-acls', 'tests/dotnet-file-creation')",
             "@('tests/windows-acls', 'tests/dotnet-file-creation', 'tests/repository')")];
+            yield return ["conditional-focused-runner", continuousIntegration.Replace(
+              "./tests/Invoke-PesterShards.ps1 -Path $paths",
+              "if ($true) { ./tests/Invoke-PesterShards.ps1 -Path $paths }")];
             yield return ["full-ci-missing-trigger", continuousIntegration, fullContinuousIntegration.Replace(
                 "schedule:",
                 "renamed-schedule:")];
@@ -428,6 +434,20 @@ public sealed class WorkflowPolicyTests
 
         Assert.ThrowsExactly<ToolchainPolicyException>(() =>
             PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, Manifest));
+    }
+
+    [TestMethod]
+    public void ValidateActivePesterWorkflows_DirectPesterInAdditionalOwnedJob_ThrowsPolicyException()
+    {
+        string continuousIntegration = ContinuousIntegration.Replace(
+            "jobs:",
+            "jobs:\n  direct-pester:\n    runs-on: ubuntu-latest\n    steps:\n      - shell: pwsh\n        run: Invoke-Pester -Path ./tests");
+
+        Assert.ThrowsExactly<ToolchainPolicyException>(() =>
+            PowerShellToolchainPolicy.ValidateActivePesterWorkflows(
+                continuousIntegration,
+                FullContinuousIntegration,
+                Manifest));
     }
 
     [TestMethod]

@@ -69,6 +69,13 @@ internal static partial class PowerShellToolchainPolicy
                 "Active workflows must contain exactly the three accepted static runner invocations.");
         }
 
+        if (FindCommands(continuous).Concat(FindCommands(full)).Any(command =>
+                command.Kind == CommandKind.DirectPester))
+        {
+            throw new ToolchainPolicyException(
+                "Active workflows must invoke Pester only through the canonical runner.");
+        }
+
         foreach ((string path, string yaml) in workflows.Where(entry =>
                      !string.Equals(entry.Key, CiPath, StringComparison.Ordinal) &&
                      !string.Equals(entry.Key, FullCiPath, StringComparison.Ordinal) &&
@@ -145,7 +152,9 @@ internal static partial class PowerShellToolchainPolicy
             install.Step.Run!,
             $"{install.WorkflowPath}.{install.JobId}.steps[{install.StepIndex}].run");
         CommandAst[] commands = FindPowerShellCommands(script);
-        if (commands.Length != 1 || Classify(commands[0]) != CommandKind.Install)
+        if (commands.Length != 1 ||
+            Classify(commands[0]) != CommandKind.Install ||
+            !IsSingleTopLevelCommand(script, "Install-Module"))
         {
             return false;
         }
@@ -424,7 +433,11 @@ internal static partial class PowerShellToolchainPolicy
             arrayExpression.SubExpression.Statements[0] is not PipelineAst arrayPipeline ||
             arrayPipeline.PipelineElements.Count != 1 ||
             arrayPipeline.PipelineElements[0] is not CommandExpressionAst arrayCommand ||
-            arrayCommand.Expression is not ArrayLiteralAst arrayLiteral)
+            arrayCommand.Expression is not ArrayLiteralAst arrayLiteral ||
+            command.Parent is not PipelineAst runnerPipeline ||
+            script.EndBlock.Statements[1] != runnerPipeline ||
+            runnerPipeline.PipelineElements.Count != 1 ||
+            runnerPipeline.PipelineElements[0] != command)
         {
             return false;
         }

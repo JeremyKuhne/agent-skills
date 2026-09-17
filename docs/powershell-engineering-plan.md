@@ -442,14 +442,14 @@ or manually dispatched Windows all-tests in `full-ci.yml`. Each runner step has
 the accepted host, `pwsh` shell, condition, and literal path set, and exactly one
 preceding matching `Install-Module Pester -RequiredVersion 6.2.0` step.
 
-The active-workflow policy adds YamlDotNet 18.1.0 and 567 lines of managed
-validation isolated from the 264-line manifest and metadata core. Its 53
+The active-workflow policy adds YamlDotNet 18.1.0 and 580 lines of managed
+validation isolated from the 264-line manifest and metadata core. Its 56
 focused cases cover malformed and duplicate YAML, policy-bearing
 anchors, aliases, and merge keys, accepted scalar styles, job and host drift,
 bootstrap order, shell, condition, and version drift, direct static Pester
 calls, runner cardinality, and exact full/focused path sets. Comments,
 unrelated strings, reusable jobs, and anchors outside policy-owned mappings do
-not count as execution. All 133 managed policy cases pass in Debug and Release,
+not count as execution. All 136 managed policy cases pass in Debug and Release,
 including the real `ci.yml` and `full-ci.yml` integration check.
 
 This evidence establishes local correctness only. Exact-head hosted CI and a
