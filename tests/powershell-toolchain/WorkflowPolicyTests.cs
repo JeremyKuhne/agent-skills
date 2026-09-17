@@ -326,6 +326,36 @@ public sealed class WorkflowPolicyTests
     }
 
     [TestMethod]
+    public void ValidateActivePesterWorkflows_AdditionalCandidateWithUnrelatedAnchor_Passes()
+    {
+        IReadOnlyDictionary<string, string> workflows = new Dictionary<string, string>(
+            StringComparer.Ordinal)
+        {
+            [".github/workflows/ci.yml"] = ContinuousIntegration,
+            [".github/workflows/full-ci.yml"] = FullContinuousIntegration,
+            [".github/workflows/unrelated.yml"] = """
+                name: Unrelated
+                on:
+                  workflow_dispatch:
+                jobs:
+                  anchored:
+                    runs-on: ubuntu-latest
+                    env:
+                      VALUE: &value accepted
+                    steps:
+                      - run: echo *value
+                  documentation:
+                    runs-on: ubuntu-latest
+                    steps:
+                      - shell: bash
+                        run: echo 'Invoke-Pester is documentation'
+                """
+        };
+
+        PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, Manifest);
+    }
+
+    [TestMethod]
     public void ValidateActivePesterWorkflows_UnrelatedRunString_Passes()
     {
         string continuousIntegration = ContinuousIntegration.Replace(

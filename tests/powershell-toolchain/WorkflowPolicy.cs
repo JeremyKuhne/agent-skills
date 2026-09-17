@@ -229,6 +229,12 @@ internal static partial class PowerShellToolchainPolicy
 
     private static void RejectOwnedIndirection(string path, YamlMappingNode root)
     {
+        if (!string.Equals(path, CiPath, StringComparison.Ordinal) &&
+            !string.Equals(path, FullCiPath, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         YamlMappingNode jobs = RequireMapping(RequireNode(root, "jobs", path), $"{path}.jobs");
         YamlNode[] owned = string.Equals(path, CiPath, StringComparison.Ordinal)
             ?
@@ -236,13 +242,11 @@ internal static partial class PowerShellToolchainPolicy
                 RequireNode(jobs, "scaffold-linux", $"{path}.jobs"),
                 RequireNode(jobs, "scaffold-windows", $"{path}.jobs")
             ]
-            : string.Equals(path, FullCiPath, StringComparison.Ordinal)
-                ?
-                [
-                    RequireNode(root, "on", path),
-                    RequireNode(jobs, "scaffold-windows", $"{path}.jobs")
-                ]
-                : [jobs];
+            :
+            [
+                RequireNode(root, "on", path),
+                RequireNode(jobs, "scaffold-windows", $"{path}.jobs")
+            ];
         if (owned.Any(HasIndirection))
         {
             throw new ToolchainPolicyException(
