@@ -339,6 +339,43 @@ public sealed class WorkflowPolicyTests
     }
 
     [TestMethod]
+    public void ValidateActivePesterWorkflows_UnrelatedBashScript_Passes()
+    {
+        string continuousIntegration = ContinuousIntegration.Replace(
+            "jobs:",
+            "jobs:\n  unrelated:\n    runs-on: ubuntu-latest\n    steps:\n      - shell: bash\n        run: |\n          for item in Invoke-Pester; do\n            echo \"$item\"\n          done");
+
+        PowerShellToolchainPolicy.ValidateActivePesterWorkflows(
+            continuousIntegration,
+            FullContinuousIntegration,
+            Manifest);
+    }
+
+    [TestMethod]
+    public void ValidateActivePesterWorkflows_UnrelatedScalarSequence_Passes()
+    {
+        IReadOnlyDictionary<string, string> workflows = new Dictionary<string, string>(
+            StringComparer.Ordinal)
+        {
+            [".github/workflows/ci.yml"] = ContinuousIntegration,
+            [".github/workflows/full-ci.yml"] = FullContinuousIntegration,
+            [".github/workflows/unrelated.yml"] = """
+                name: Unrelated
+                on:
+                  workflow_dispatch:
+                jobs:
+                  delegated:
+                    uses: example/repository/.github/workflows/reusable.yml@main
+                    with:
+                      mode: run
+                      Invoke-Pester: documentation
+                """
+        };
+
+        PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, Manifest);
+    }
+
+    [TestMethod]
     public void ValidateActivePesterWorkflows_UnexpectedRunnerWorkflow_ThrowsPolicyException()
     {
         IReadOnlyDictionary<string, string> workflows = new Dictionary<string, string>(

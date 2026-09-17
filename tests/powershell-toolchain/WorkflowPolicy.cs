@@ -273,8 +273,7 @@ internal static partial class PowerShellToolchainPolicy
             job.Value.Steps.SelectMany((step, stepIndex) =>
             {
                 if (step.Run is null ||
-                    !string.Equals(step.Shell, "pwsh", StringComparison.Ordinal) &&
-                    !ContainsPesterCandidate(step.Run))
+                    !string.Equals(step.Shell, "pwsh", StringComparison.Ordinal))
                 {
                     return [];
                 }
@@ -438,36 +437,31 @@ internal static partial class PowerShellToolchainPolicy
     {
         try
         {
-            YamlParser parser = new(new StringReader(yaml));
-            bool nextScalarIsRunValue = false;
-            while (parser.MoveNext())
-            {
-                if (parser.Current is not Scalar scalar)
-                {
-                    continue;
-                }
-
-                if (nextScalarIsRunValue)
-                {
-                    if (ContainsPesterCandidate(scalar.Value))
-                    {
-                        return true;
-                    }
-
-                    nextScalarIsRunValue = false;
-                }
-                else if (string.Equals(scalar.Value, "run", StringComparison.Ordinal))
-                {
-                    nextScalarIsRunValue = true;
-                }
-            }
+            YamlStream stream = new();
+            stream.Load(new StringReader(yaml));
+            return stream.Documents.Any(document =>
+                HasPesterRunValue(document.RootNode));
         }
         catch (YamlException)
         {
             return false;
         }
+    }
 
-        return false;
+    private static bool HasPesterRunValue(YamlNode node)
+    {
+        return node switch
+        {
+            YamlMappingNode mapping => mapping.Children.Any(entry =>
+                entry.Key is YamlScalarNode key &&
+                string.Equals(key.Value, "run", StringComparison.Ordinal) &&
+                entry.Value is YamlScalarNode run &&
+                run.Value is not null &&
+                ContainsPesterCandidate(run.Value) ||
+                HasPesterRunValue(entry.Value)),
+            YamlSequenceNode sequence => sequence.Children.Any(HasPesterRunValue),
+            _ => false
+        };
     }
 
     private static bool IsSingleTopLevelCommand(ScriptBlockAst script, string commandName)
