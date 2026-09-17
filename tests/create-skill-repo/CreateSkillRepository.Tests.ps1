@@ -141,6 +141,14 @@ Describe 'New-SkillRepository' {
         Test-Path (Join-Path $root '.agents/skills/README.md') | Should -BeTrue
         { & (Join-Path $root 'tools/Validate-Repository.ps1') } |
             Should -Not -Throw
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'validated'
+        $generatedTests.ExitCode | Should -Be 0 -Because $generatedTests.Output
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Passed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.TotalCount | Should -BeGreaterThan 0
+        $generatedTests.Summary.FailedCount | Should -Be 0
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
     }
 
     It 'adds Team CI without unselected distribution manifests' {
@@ -160,6 +168,14 @@ Describe 'New-SkillRepository' {
             Should -Contain '        run: ./tests/Invoke-PesterShards.ps1 -Path ./tests'
         Get-Content (Join-Path $root 'README.md') -Raw |
             Should -Match 'github\.com/Example/private-skills.*private'
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'team-ci'
+        $generatedTests.ExitCode | Should -Be 0 -Because $generatedTests.Output
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Passed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.TotalCount | Should -BeGreaterThan 0
+        $generatedTests.Summary.FailedCount | Should -Be 0
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
     }
 
     It 'adds only selected distribution surfaces and evaluations' {
