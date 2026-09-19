@@ -471,7 +471,9 @@ runner bytes, raw templates and unresolved tokens, bootstrap order and version,
 runner shell and path, direct Pester, missing or extra generated runners, and
 unrelated workflow shapes. All 155 managed policy cases pass in Debug and
 Release. The create-skill-repo canary also executes and byte-checks the emitted
-runner in its named validated, team-CI, and distribution fixtures; all 17 cases
+runner in its named validated, team-CI, and distribution fixtures. A synthetic
+generated assertion failure also proves nonzero process exit and complete
+failed-test summary propagation without an infrastructure failure. All 18 cases
 pass through the canonical Pester runner.
 
 This evidence establishes local correctness only. Exact-head hosted CI and a

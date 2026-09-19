@@ -151,6 +151,33 @@ Describe 'New-SkillRepository' {
         $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
     }
 
+    It 'propagates a generated test failure through the runner summary and exit' {
+        $root = Join-Path $TestDrive 'failing generated repo'
+
+        & $script:Scaffold -Root $root -Name failing-skills `
+            -Description 'Failing generated fixture.' -Role source `
+            -Infrastructure validated -Visibility local -Audience person `
+            -License none -SkipGit
+        [System.IO.File]::WriteAllText(
+            (Join-Path $root 'tests/SyntheticFailure.Tests.ps1'),
+            @'
+#Requires -Version 7.4
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
+
+Describe 'Synthetic generated failure' {
+    It 'fails' { $false | Should -BeTrue }
+}
+'@)
+
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'failure'
+        $generatedTests.ExitCode | Should -Not -Be 0
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Failed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.FailedCount | Should -Be 1
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
+    }
+
     It 'adds Team CI without unselected distribution manifests' {
         $root = Join-Path $TestDrive 'private consumer'
 
