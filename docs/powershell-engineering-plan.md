@@ -453,9 +453,32 @@ not count as execution. All 138 managed policy cases pass in Debug and Release,
 including the real `ci.yml` and `full-ci.yml` integration check.
 
 This evidence establishes local correctness only. Exact-head hosted CI and a
-clean review are still required before this slice can merge. Generated workflow
-execution and managed file-creation workflow policy remain separate later
-slices.
+clean review were required before the slice merged as PR #99.
+
+#### P1b generated-output slice local evidence
+
+The third slice validates generated Pester execution from scaffolder output,
+not raw templates. It generates validated, team-CI, and distribution
+repositories, compares each emitted runner byte-for-byte with the canonical
+runner, parses emitted workflow YAML, and inspects only explicit `pwsh` command
+steps. Team CI must contain one all-tests runner in `skills.yml`; distribution
+must contain one in both `skills.yml` and `release.yml`. Each runner follows one
+same-job exact Pester 6.2.0 installation. Job names and runner images remain
+outside this contract.
+
+The generated-output policy is 207 lines. Its 16 focused cases cover divergent
+runner bytes, raw templates and unresolved tokens, bootstrap order and version,
+runner shell and path, direct Pester, missing or extra generated runners, and
+unrelated workflow shapes. All 155 managed policy cases pass in Debug and
+Release. The create-skill-repo canary also executes and byte-checks the emitted
+runner in its named validated, team-CI, and distribution fixtures. A synthetic
+generated assertion failure also proves nonzero process exit and complete
+failed-test summary propagation without an infrastructure failure. All 18 cases
+pass through the canonical Pester runner.
+
+This evidence establishes local correctness only. Exact-head hosted CI and a
+clean review are still required before this slice can merge. Managed
+file-creation workflow policy remains a separate later slice.
 
 #### Publication and correction controls
 

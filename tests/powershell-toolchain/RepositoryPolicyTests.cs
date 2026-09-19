@@ -41,88 +41,15 @@ public sealed class RepositoryPolicyTests
     public void GeneratedPesterTests_AcceptedRequirements_Pass()
     {
         ToolchainManifest manifest = LoadManifest();
-        string scaffoldPath = Path.Join(
-            RepositoryRoot,
-            ".agents",
-            "skills",
-            "create-skill-repo",
-            "scripts",
-            "New-SkillRepository.ps1");
         string temporaryRoot = Path.Join(
             Path.GetTempPath(),
             $"agent-skills-toolchain-{Guid.NewGuid():N}");
         string generatedRoot = Path.Join(temporaryRoot, "generated");
-        string launcherPath = Path.Join(temporaryRoot, "Invoke-Scaffold.ps1");
 
         try
         {
             Directory.CreateDirectory(temporaryRoot);
-            File.WriteAllText(
-                launcherPath,
-                """
-                param(
-                    [Parameter(Mandatory)] [string] $Scaffold,
-                    [Parameter(Mandatory)] [string] $Root
-                )
-
-                & $Scaffold `
-                    -Root $Root `
-                    -Name policy-fixture `
-                    -Description 'Generated policy fixture.' `
-                    -Role source `
-                    -Infrastructure distribution `
-                    -Visibility public `
-                    -Audience public `
-                    -Owner Example `
-                    -DistributionSurfaces direct,plugin,marketplace,agents,mcp `
-                    -IncludeEvaluations `
-                    -SkipGit
-                """);
-
-            ProcessStartInfo startInfo = new("pwsh")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            };
-            foreach (string argument in new[]
-                     {
-                         "-NoProfile",
-                         "-File",
-                         launcherPath,
-                         "-Scaffold",
-                         scaffoldPath,
-                         "-Root",
-                         generatedRoot
-                     })
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-
-            using Process process = Process.Start(startInfo)
-                ?? throw new InvalidOperationException("The scaffold process did not start.");
-            using CancellationTokenSource deadline = new(TimeSpan.FromMinutes(2));
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(deadline.Token);
-            Task<string> errorTask = process.StandardError.ReadToEndAsync(deadline.Token);
-            try
-            {
-                process.WaitForExitAsync(deadline.Token).GetAwaiter().GetResult();
-            }
-            finally
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit();
-                }
-            }
-
-            string output = outputTask.GetAwaiter().GetResult();
-            string error = errorTask.GetAwaiter().GetResult();
-            Assert.AreEqual(
-                0,
-                process.ExitCode,
-                $"Scaffolder output:{Environment.NewLine}{output}{Environment.NewLine}{error}");
+            ScaffoldRepository(generatedRoot, "distribution");
 
             string[] testFiles = Directory.GetFiles(
                 Path.Join(generatedRoot, "tests"),
@@ -161,6 +88,56 @@ public sealed class RepositoryPolicyTests
     }
 
     [TestMethod]
+    public void GeneratedPesterExecution_AcceptedOutputs_Pass()
+    {
+        ToolchainManifest manifest = LoadManifest();
+        byte[] canonicalRunner = File.ReadAllBytes(
+            Path.Join(RepositoryRoot, "tests", "Invoke-PesterShards.ps1"));
+        string temporaryRoot = Path.Join(
+            Path.GetTempPath(),
+            $"agent-skills-generated-execution-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(temporaryRoot);
+            foreach (string infrastructure in new[] { "validated", "team-ci", "distribution" })
+            {
+                string generatedRoot = Path.Join(temporaryRoot, infrastructure);
+                ScaffoldRepository(generatedRoot, infrastructure);
+                PowerShellToolchainPolicy.ValidateGeneratedRunner(
+                    canonicalRunner,
+                    File.ReadAllBytes(Path.Join(
+                        generatedRoot,
+                        "tests",
+                        "Invoke-PesterShards.ps1")));
+
+                if (string.Equals(infrastructure, "team-ci", StringComparison.Ordinal))
+                {
+                    PowerShellToolchainPolicy.ValidateGeneratedTeamContinuousIntegration(
+                        ReadGeneratedWorkflows(generatedRoot),
+                        manifest);
+                }
+                else if (string.Equals(
+                    infrastructure,
+                    "distribution",
+                    StringComparison.Ordinal))
+                {
+                    PowerShellToolchainPolicy.ValidateGeneratedDistributionWorkflows(
+                        ReadGeneratedWorkflows(generatedRoot),
+                        manifest);
+                }
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(temporaryRoot))
+            {
+                Directory.Delete(temporaryRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public void CanonicalRunner_AcceptedMetadata_Passes()
     {
         ToolchainManifest manifest = LoadManifest();
@@ -186,6 +163,109 @@ public sealed class RepositoryPolicyTests
                 StringComparer.Ordinal);
 
         PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, manifest);
+    }
+
+    private static void ScaffoldRepository(string generatedRoot, string infrastructure)
+    {
+        string temporaryRoot = Path.GetDirectoryName(generatedRoot)
+            ?? throw new InvalidOperationException("Generated root has no parent directory.");
+        string launcherPath = Path.Join(temporaryRoot, "Invoke-Scaffold.ps1");
+        string scaffoldPath = Path.Join(
+            RepositoryRoot,
+            ".agents",
+            "skills",
+            "create-skill-repo",
+            "scripts",
+            "New-SkillRepository.ps1");
+        File.WriteAllText(
+            launcherPath,
+            """
+            param(
+                [Parameter(Mandatory)] [string] $Scaffold,
+                [Parameter(Mandatory)] [string] $Root,
+                [Parameter(Mandatory)] [string] $Infrastructure
+            )
+
+            $parameters = @{
+                Root = $Root
+                Name = 'policy-fixture'
+                Description = 'Generated policy fixture.'
+                Role = 'source'
+                Infrastructure = $Infrastructure
+                Visibility = 'public'
+                Audience = 'public'
+                Owner = 'Example'
+                SkipGit = $true
+            }
+            if ($Infrastructure -eq 'distribution') {
+                $parameters.DistributionSurfaces = @(
+                    'direct', 'plugin', 'marketplace', 'agents', 'mcp')
+                $parameters.IncludeEvaluations = $true
+            }
+
+            & $Scaffold @parameters
+            """);
+
+        ProcessStartInfo startInfo = new("pwsh")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (string argument in new[]
+                 {
+                     "-NoProfile",
+                     "-File",
+                     launcherPath,
+                     "-Scaffold",
+                     scaffoldPath,
+                     "-Root",
+                     generatedRoot,
+                     "-Infrastructure",
+                     infrastructure
+                 })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using Process process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("The scaffold process did not start.");
+        using CancellationTokenSource deadline = new(TimeSpan.FromMinutes(2));
+        Task<string> outputTask = process.StandardOutput.ReadToEndAsync(deadline.Token);
+        Task<string> errorTask = process.StandardError.ReadToEndAsync(deadline.Token);
+        try
+        {
+            process.WaitForExitAsync(deadline.Token).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+        }
+
+        string output = outputTask.GetAwaiter().GetResult();
+        string error = errorTask.GetAwaiter().GetResult();
+        Assert.AreEqual(
+            0,
+            process.ExitCode,
+            $"Scaffolder output:{Environment.NewLine}{output}{Environment.NewLine}{error}");
+    }
+
+    private static IReadOnlyDictionary<string, string> ReadGeneratedWorkflows(
+        string generatedRoot)
+    {
+        string workflowRoot = Path.Join(generatedRoot, ".github", "workflows");
+        return Directory
+            .GetFiles(workflowRoot, "*.*", SearchOption.TopDirectoryOnly)
+            .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(
+                path => Path.GetRelativePath(generatedRoot, path).Replace('\\', '/'),
+                File.ReadAllText,
+                StringComparer.Ordinal);
     }
 
     private static ToolchainManifest LoadManifest()
