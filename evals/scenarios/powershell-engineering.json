@@ -34,6 +34,41 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-routing-application-performance-near-miss",
+      "skill": "powershell-engineering",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Measure and reduce runtime allocations in a PowerShell data-processing command under representative production inputs. Establish a baseline, isolate process state, validate outputs, and report uncertainty. This is application runtime performance, not PowerShell API or correctness design. Do not edit files or run commands. Return exactly these four labeled lines with no other prose: `Measurement: establish-baseline`, `Process-state: matched`, `Correctness: validate-output`, and `Uncertainty: report`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": false,
+      "requiredSkillInvocations": ["performance-testing"],
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Measurement:\\s*establish-baseline\\s*\\r?\\nProcess-state:\\s*matched\\s*\\r?\\nCorrectness:\\s*validate-output\\s*\\r?\\nUncertainty:\\s*report\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-routing-pester-migration-near-miss",
+      "skill": "powershell-engineering",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Convert an existing Pester 5 test suite mechanically to Pester 6 syntax while preserving test intent. This is migration work, not a request to redesign production PowerShell, test ownership, or process semantics. Dedicated upstream pester-migration guidance owns it when available. Do not edit files or run commands. Return exactly these three labeled lines with no other prose: `Route: upstream-pester-migration`, `Scope: mechanical-v5-to-v6`, and `Redesign: not-requested`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": false,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Route:\\s*upstream-pester-migration\\s*\\r?\\nScope:\\s*mechanical-v5-to-v6\\s*\\r?\\nRedesign:\\s*not-requested\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }

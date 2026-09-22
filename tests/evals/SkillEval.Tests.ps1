@@ -138,14 +138,27 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 2
+        $powerShellEngineeringScenarios.Count | Should -Be 4
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-keeps-powershell-native-process-contract'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 86
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-routing-application-performance-near-miss'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-routing-pester-migration-near-miss'
+        $performanceNearMiss = @($powerShellEngineeringScenarios |
+            Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
+        $performanceNearMiss.expectSkillInvocation | Should -BeFalse
+        $performanceNearMiss.requiredSkillInvocations | Should -Contain 'performance-testing'
+        $migrationNearMiss = @($powerShellEngineeringScenarios |
+            Where-Object id -eq 'powershell-engineering-routing-pester-migration-near-miss')[0]
+        $migrationNearMiss.expectSkillInvocation | Should -BeFalse
+        $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
+            Should -BeNullOrEmpty
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 88
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -244,6 +257,44 @@ Describe 'Skill evaluation scenario contract' {
                 'PowerShell-role: implementation'
                 'Oracle: parser-output'
                 'Test: happy-path-after-fix') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance route accepted'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: establish-baseline'
+                'Process-state: matched'
+                'Correctness: validate-output'
+                'Uncertainty: report') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance route negated'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: skip-baseline'
+                'Process-state: unmatched'
+                'Correctness: assume-output'
+                'Uncertainty: omit') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester migration route accepted'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: upstream-pester-migration'
+                'Scope: mechanical-v5-to-v6'
+                'Redesign: not-requested') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester migration route negated'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: powershell-engineering'
+                'Scope: production-redesign'
+                'Redesign: requested') -join "`n"
             Expected = $false
         }
     ) {

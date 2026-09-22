@@ -83,11 +83,12 @@ routing application runtime performance to `performance-testing`. Both cases use
 labeled outputs so affirmative plans and explicit refusals cannot satisfy the same
 keyword patterns. It is not part of the default release matrix.
 
-`scenarios/powershell-engineering.json` is an opt-in two-case implementation-boundary
-suite. It retains PowerShell for PowerShell-owned child-process behavior and routes YAML
-workflow semantics to a maintained parser with PowerShell limited to orchestration. Both
-cases are read-only and use exact labeled outputs. It is not part of the default release
-matrix.
+`scenarios/powershell-engineering.json` is an opt-in four-case implementation-boundary
+suite. It retains PowerShell for PowerShell-owned child-process behavior, routes YAML
+workflow semantics to a maintained parser, routes application performance to
+`performance-testing`, and leaves mechanical Pester 5-to-6 migration to upstream
+`pester-migration` guidance. All four cases are read-only and use exact labeled outputs.
+It is not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
