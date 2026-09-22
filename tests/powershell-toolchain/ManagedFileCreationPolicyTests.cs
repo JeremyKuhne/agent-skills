@@ -76,6 +76,7 @@ public sealed class ManagedFileCreationPolicyTests
         get
         {
             string workflow = Workflow.ReplaceLineEndings("\n");
+            yield return ["malformed-yaml", workflow + "\n  broken: ["];
             yield return ["missing-job", workflow.Replace(
                 "dotnet-file-creation:",
                 "renamed-file-creation:")];
