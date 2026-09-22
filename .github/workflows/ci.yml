@@ -178,6 +178,7 @@ jobs:
 
       - name: Run managed file creation tests
         if: matrix.coverage == false
+        shell: pwsh
         run: >-
           dotnet test
           --project ./tests/dotnet-file-creation/DotNetFileCreation.Tests.csproj

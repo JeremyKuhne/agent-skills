@@ -1,9 +1,9 @@
 # PowerShell engineering plan
 
-- Status: P1a, P1c, and P2 done; the P1b metadata slice merged through PR #98,
-  and the bounded active-workflow slice passes locally
+- Status: P1a, P1c, and P2 done; P1b's first three bounded slices merged
+  through PR #100, and its final managed file-creation slice passes locally
 - Assessment date: 2026-09-13 local time; architecture review extends through
-  2026-09-16 UTC
+  2026-09-22 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
   later milestone evidence names its own exact tree
 - Scope: test ownership, PowerShell runtime and API contracts, Pester, MSTest,
@@ -26,7 +26,7 @@ The implementation agent owns local work and evidence. The repository
 maintainer accepts milestone exits and separately authorizes commits, pushes,
 pull request writes, releases, and model runs. Use `Not started`, `Ready`, `In
 progress`, `Paused`, `Awaiting decision`, `Blocked`, and `Done`. Status last
-reviewed: 2026-09-16 UTC. `Ready` means the entry conditions are satisfied and the
+reviewed: 2026-09-22 UTC. `Ready` means the entry conditions are satisfied and the
 milestone is next to execute; it does not claim that exit evidence exists.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
@@ -35,7 +35,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
-| P1b | Parser-backed toolchain policy | In progress | P0r, P1c | PR #98 merged the bounded manifest, test-requirement, and runner-metadata policy. The active repository-workflow topology and bootstrap slice passes locally; generated workflows and managed file-creation workflow policy remain pending. |
+| P1b | Parser-backed toolchain policy | In progress | P0r, P1c | PRs #98 through #100 merged the bounded metadata, active-workflow, and generated-output policies. The final managed file-creation workflow and coverage slice passes locally and awaits hosted CI and review. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
 | P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
@@ -476,9 +476,35 @@ generated assertion failure also proves nonzero process exit and complete
 failed-test summary propagation without an infrastructure failure. All 18 cases
 pass through the canonical Pester runner.
 
-This evidence establishes local correctness only. Exact-head hosted CI and a
-clean review are still required before this slice can merge. Managed
-file-creation workflow policy remains a separate later slice.
+PR #100 merged as `e7b71e77d428443226fa3711e24094d33a5de192` on
+2026-09-22. Its exact head `5e4b66c9389da186d068cf63f5fe012e7b3468c4`
+passed all nine applicable CI checks; the tag-only release check was
+intentionally skipped. Copilot review `5256628866` covered the final head,
+recommended approval, and reported no inline or suppressed findings.
+
+#### P1b managed file-creation slice local evidence
+
+The fourth slice validates the managed file-creation workflow as structured
+YAML and the named coverage settings and report as XML. It owns exactly two
+matrix rows: Ubuntu ARM64 without coverage and Windows with coverage. The
+matrix drives `runs-on`, and both rows run the same managed test project in
+Release through explicit `pwsh` steps. The Windows step additionally requires
+the checked-in coverage settings, a variable output path, and Cobertura output.
+The non-coverage workflow step now declares `shell: pwsh`, resolving the only
+accepted current-tree mismatch.
+
+The 418-line policy has 34 focused cases covering matrix keys and typed values,
+host rows, complementary conditions, shells, project and configuration drift,
+Pester wrappers, coverage options, settings XML, and Cobertura source and line
+evidence. Comments, strings, and unrelated conditional steps do not count as
+managed test commands. One repository integration validates the real workflow
+and settings; another generates and validates a real Cobertura report. All 191
+managed policy cases pass in Debug and Release. The linked managed project
+passes all 20 Release cases with and without coverage; the report contains one
+`TrustedFileWrites` production class with 43 of 66 lines covered.
+
+This evidence establishes local correctness only. Exact-head hosted CI on both
+matrix rows and a clean review are still required before this slice can merge.
 
 #### Publication and correction controls
 

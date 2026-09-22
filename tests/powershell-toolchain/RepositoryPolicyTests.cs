@@ -165,6 +165,93 @@ public sealed class RepositoryPolicyTests
         PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, manifest);
     }
 
+    [TestMethod]
+    public void ManagedFileCreationWorkflow_AcceptedPolicy_Passes()
+    {
+        PowerShellToolchainPolicy.ValidateManagedFileCreationWorkflow(
+            File.ReadAllText(Path.Join(RepositoryRoot, ".github", "workflows", "ci.yml")),
+            File.ReadAllText(Path.Join(
+                RepositoryRoot,
+                "tests",
+                "dotnet-file-creation",
+                "coverage.config.xml")));
+    }
+
+    [TestMethod]
+    public void ManagedFileCreationCoverage_RealReport_Passes()
+    {
+        string temporaryRoot = Path.Join(
+            RepositoryRoot,
+            $".managed-file-coverage-{Guid.NewGuid():N}");
+        string coveragePath = Path.Join(temporaryRoot, "coverage.cobertura.xml");
+        try
+        {
+            Directory.CreateDirectory(temporaryRoot);
+            ProcessStartInfo startInfo = new("dotnet")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = RepositoryRoot
+            };
+            foreach (string argument in new[]
+                     {
+                         "test",
+                         "--project",
+                         "./tests/dotnet-file-creation/DotNetFileCreation.Tests.csproj",
+                         "--configuration",
+                         "Release",
+                         "--artifacts-path",
+                         Path.Join(temporaryRoot, "artifacts"),
+                         "--coverage",
+                         "--coverage-settings",
+                         "./tests/dotnet-file-creation/coverage.config.xml",
+                         "--coverage-output",
+                         coveragePath,
+                         "--coverage-output-format",
+                         "cobertura"
+                     })
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using Process process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("The managed coverage process did not start.");
+            using CancellationTokenSource deadline = new(TimeSpan.FromMinutes(2));
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(deadline.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(deadline.Token);
+            try
+            {
+                process.WaitForExitAsync(deadline.Token).GetAwaiter().GetResult();
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit();
+                }
+            }
+
+            string output = outputTask.GetAwaiter().GetResult();
+            string error = errorTask.GetAwaiter().GetResult();
+            Assert.AreEqual(
+                0,
+                process.ExitCode,
+                $"Managed coverage output:{Environment.NewLine}{output}{Environment.NewLine}{error}");
+            Assert.IsTrue(File.Exists(coveragePath), "The managed coverage report was not created.");
+            PowerShellToolchainPolicy.ValidateManagedFileCreationCoverageReport(
+                File.ReadAllText(coveragePath));
+        }
+        finally
+        {
+            if (Directory.Exists(temporaryRoot))
+            {
+                Directory.Delete(temporaryRoot, recursive: true);
+            }
+        }
+    }
+
     private static void ScaffoldRepository(string generatedRoot, string infrastructure)
     {
         string temporaryRoot = Path.GetDirectoryName(generatedRoot)
