@@ -169,6 +169,12 @@ internal static partial class PowerShellToolchainPolicy
             YamlMappingNode matrix = RequireMapping(
                 RequireNode(strategy, "matrix", $"ci.yml.jobs.{ManagedFileCreationJob}.strategy"),
                 $"ci.yml.jobs.{ManagedFileCreationJob}.strategy.matrix");
+            if (matrix.Children.Count != 1 || !HasMappingKey(matrix, "include"))
+            {
+                throw new ToolchainPolicyException(
+                    "The managed file-creation matrix must contain only include.");
+            }
+
             YamlSequenceNode include = RequireSequence(
                 RequireNode(matrix, "include", $"ci.yml.jobs.{ManagedFileCreationJob}.strategy.matrix"),
                 $"ci.yml.jobs.{ManagedFileCreationJob}.strategy.matrix.include");

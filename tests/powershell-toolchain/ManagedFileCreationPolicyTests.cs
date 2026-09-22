@@ -114,6 +114,9 @@ public sealed class ManagedFileCreationPolicyTests
             yield return ["extra-matrix-key", workflow.Replace(
                 "coverage: false",
                 "coverage: false\n        architecture: arm64")];
+            yield return ["extra-matrix-axis", workflow.Replace(
+                "    include:",
+                "    architecture: [x64, arm64]\n    include:")];
             yield return ["both-conditions-false", workflow.Replace(
                 "if: matrix.coverage == true",
                 "if: matrix.coverage == false")];
@@ -155,6 +158,9 @@ public sealed class ManagedFileCreationPolicyTests
             yield return ["additional-pester", workflow.Replace(
                 "          Write-Host 'Report inspection remains a hosted runtime check.'",
                 "          Invoke-Pester ./tests/dotnet-file-creation\n          Write-Host 'Report inspection remains a hosted runtime check.'")];
+            yield return ["slash-qualified-pester", workflow.Replace(
+                "          Write-Host 'Report inspection remains a hosted runtime check.'",
+                "          ./Invoke-Pester -Path ./tests/dotnet-file-creation\n          Write-Host 'Report inspection remains a hosted runtime check.'")];
         }
     }
 

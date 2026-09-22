@@ -493,12 +493,12 @@ the checked-in coverage settings, a variable output path, and Cobertura output.
 The non-coverage workflow step now declares `shell: pwsh`, resolving the only
 accepted current-tree mismatch.
 
-The 419-line policy has 36 focused cases covering malformed YAML, matrix keys and typed values,
+The 425-line policy has 38 focused cases covering malformed YAML, matrix keys and typed values,
 host rows, complementary conditions, shells, project and configuration drift,
 Pester wrappers, coverage options, settings XML, and Cobertura source and line
 evidence. Comments, strings, and unrelated conditional steps do not count as
 managed test commands. One repository integration validates the real workflow
-and settings. All 192 managed policy cases pass in Debug and Release. The linked
+and settings. All 194 managed policy cases pass in Debug and Release. The linked
 managed project passes all 20 Release cases with and without coverage; the
 Windows coverage job remains the real report oracle. A local Windows report
 contains one `TrustedFileWrites` production class with 43 of 66 lines covered.
