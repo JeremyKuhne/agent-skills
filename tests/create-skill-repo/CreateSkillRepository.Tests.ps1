@@ -141,6 +141,41 @@ Describe 'New-SkillRepository' {
         Test-Path (Join-Path $root '.agents/skills/README.md') | Should -BeTrue
         { & (Join-Path $root 'tools/Validate-Repository.ps1') } |
             Should -Not -Throw
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'validated'
+        $generatedTests.ExitCode | Should -Be 0 -Because $generatedTests.Output
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Passed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.TotalCount | Should -BeGreaterThan 0
+        $generatedTests.Summary.FailedCount | Should -Be 0
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
+    }
+
+    It 'propagates a generated test failure through the runner summary and exit' {
+        $root = Join-Path $TestDrive 'failing generated repo'
+
+        & $script:Scaffold -Root $root -Name failing-skills `
+            -Description 'Failing generated fixture.' -Role source `
+            -Infrastructure validated -Visibility local -Audience person `
+            -License none -SkipGit
+        [System.IO.File]::WriteAllText(
+            (Join-Path $root 'tests/SyntheticFailure.Tests.ps1'),
+            @'
+#Requires -Version 7.4
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.2.0' }
+
+Describe 'Synthetic generated failure' {
+    It 'fails' { $false | Should -BeTrue }
+}
+'@)
+
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'failure'
+        $generatedTests.ExitCode | Should -Not -Be 0
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Failed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.FailedCount | Should -Be 1
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
     }
 
     It 'adds Team CI without unselected distribution manifests' {
@@ -160,6 +195,14 @@ Describe 'New-SkillRepository' {
             Should -Contain '        run: ./tests/Invoke-PesterShards.ps1 -Path ./tests'
         Get-Content (Join-Path $root 'README.md') -Raw |
             Should -Match 'github\.com/Example/private-skills.*private'
+        $generatedTests = Invoke-GeneratedPesterSuite $root 'team-ci'
+        $generatedTests.ExitCode | Should -Be 0 -Because $generatedTests.Output
+        $generatedTests.GeneratedHash | Should -BeExactly $generatedTests.SourceHash
+        $generatedTests.Summary.Result | Should -Be 'Passed'
+        $generatedTests.Summary.CountsComplete | Should -BeTrue
+        $generatedTests.Summary.TotalCount | Should -BeGreaterThan 0
+        $generatedTests.Summary.FailedCount | Should -Be 0
+        $generatedTests.Summary.InfrastructureFailureCount | Should -Be 0
     }
 
     It 'adds only selected distribution surfaces and evaluations' {
