@@ -79,6 +79,7 @@ public sealed class ManagedFileCreationPolicyTests
             yield return ["missing-job", workflow.Replace(
                 "dotnet-file-creation:",
                 "renamed-file-creation:")];
+            yield return ["null-jobs", "on:\n  pull_request:\njobs: null\n"];
             yield return ["wrong-matrix-host", workflow.Replace(
                 "runs-on: '${{ matrix.os }}'",
                 "runs-on: windows-latest")];

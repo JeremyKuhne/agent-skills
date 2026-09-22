@@ -25,7 +25,8 @@ internal static partial class PowerShellToolchainPolicy
         string coverageSettings)
     {
         ManagedWorkflow workflow = ParseManagedWorkflow(continuousIntegration);
-        if (!workflow.Jobs.TryGetValue(ManagedFileCreationJob, out ManagedJob? job) ||
+        if (workflow.Jobs is null ||
+            !workflow.Jobs.TryGetValue(ManagedFileCreationJob, out ManagedJob? job) ||
             job?.Strategy?.Matrix?.Include is not { } rows ||
             job.Steps is null ||
             !string.Equals(job.RunsOn, "${{ matrix.os }}", StringComparison.Ordinal))
@@ -367,7 +368,7 @@ internal static partial class PowerShellToolchainPolicy
     private sealed class ManagedWorkflow
     {
         [YamlMember(Alias = "jobs")]
-        public Dictionary<string, ManagedJob?> Jobs { get; init; } = new(StringComparer.Ordinal);
+        public Dictionary<string, ManagedJob?>? Jobs { get; init; } = new(StringComparer.Ordinal);
     }
 
     private sealed class ManagedJob

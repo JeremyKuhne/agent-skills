@@ -493,15 +493,15 @@ the checked-in coverage settings, a variable output path, and Cobertura output.
 The non-coverage workflow step now declares `shell: pwsh`, resolving the only
 accepted current-tree mismatch.
 
-The 418-line policy has 34 focused cases covering matrix keys and typed values,
+The 419-line policy has 35 focused cases covering matrix keys and typed values,
 host rows, complementary conditions, shells, project and configuration drift,
 Pester wrappers, coverage options, settings XML, and Cobertura source and line
 evidence. Comments, strings, and unrelated conditional steps do not count as
 managed test commands. One repository integration validates the real workflow
-and settings; another generates and validates a real Cobertura report. All 191
-managed policy cases pass in Debug and Release. The linked managed project
-passes all 20 Release cases with and without coverage; the report contains one
-`TrustedFileWrites` production class with 43 of 66 lines covered.
+and settings. All 191 managed policy cases pass in Debug and Release. The linked
+managed project passes all 20 Release cases with and without coverage; the
+Windows coverage job remains the real report oracle. A local Windows report
+contains one `TrustedFileWrites` production class with 43 of 66 lines covered.
 
 This evidence establishes local correctness only. Exact-head hosted CI on both
 matrix rows and a clean review are still required before this slice can merge.
