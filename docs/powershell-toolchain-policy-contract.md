@@ -137,13 +137,10 @@ controls before implementation.
 
 ## Known implementation delta
 
-The current non-coverage file-creation step omits `shell`, so GitHub selects the
-host default. The later workflow-policy slice must make that step explicitly
-`pwsh` before the managed command contract can pass. The metadata-only first
-slice does not claim that workflow row. The command already runs unchanged in
-PowerShell on Windows; the workflow-policy PR must prove the same Ubuntu ARM64
-behavior through exact-head CI. No other current-tree mismatch is accepted by
-this contract.
+The managed file-creation workflow slice resolves the accepted mismatch by
+making the non-coverage step explicitly `pwsh`. Exact-head Ubuntu ARM64 CI must
+prove that the unchanged Release command still runs on the non-coverage row.
+No other current-tree mismatch is accepted by this contract.
 
 ## Workflow parsing rules
 

@@ -165,6 +165,18 @@ public sealed class RepositoryPolicyTests
         PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, manifest);
     }
 
+    [TestMethod]
+    public void ManagedFileCreationWorkflow_AcceptedPolicy_Passes()
+    {
+        PowerShellToolchainPolicy.ValidateManagedFileCreationWorkflow(
+            File.ReadAllText(Path.Join(RepositoryRoot, ".github", "workflows", "ci.yml")),
+            File.ReadAllText(Path.Join(
+                RepositoryRoot,
+                "tests",
+                "dotnet-file-creation",
+                "coverage.config.xml")));
+    }
+
     private static void ScaffoldRepository(string generatedRoot, string infrastructure)
     {
         string temporaryRoot = Path.GetDirectoryName(generatedRoot)

@@ -330,8 +330,9 @@ internal static partial class PowerShellToolchainPolicy
             return CommandKind.Install;
         }
 
-        int qualifier = name?.LastIndexOf('\\') ?? -1;
-        return name is not null && name.AsSpan(qualifier + 1).Equals(
+        string? normalizedName = name?.Replace('\\', '/');
+        int qualifier = normalizedName?.LastIndexOf('/') ?? -1;
+        return normalizedName is not null && normalizedName.AsSpan(qualifier + 1).Equals(
             "Invoke-Pester",
             StringComparison.OrdinalIgnoreCase)
                 ? CommandKind.DirectPester
