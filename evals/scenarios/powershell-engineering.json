@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "id": "powershell-engineering-keeps-powershell-native-process-contract",
+      "skill": "powershell-engineering",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review this proposed implementation boundary without running commands. A PowerShell command is responsible for launching a child process, forwarding selected environment values, preserving stdout and stderr separately, and converting the child exit code into the command's public result. The repository needs regression coverage for success, nonzero exit, malformed output, environment restoration, and process cleanup. Decide the implementation owner, oracle, and test lane. Return exactly four labeled lines with no other prose: `Boundary: PowerShell`, `Owner: PowerShell-process-entry-point`, `Oracle: fresh-process-receipt`, and `Test: Pester-state-table`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Boundary:\\s*PowerShell\\s*\\r?\\nOwner:\\s*PowerShell-process-entry-point\\s*\\r?\\nOracle:\\s*fresh-process-receipt\\s*\\r?\\nTest:\\s*Pester-state-table\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-routes-yaml-policy-to-maintained-parser",
+      "skill": "powershell-engineering",
+      "category": "routing",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review this proposed implementation boundary without running commands. A team wants a repository policy that understands YAML workflow mappings, sequences, booleans, nulls, comments, folded scalars, anchors, aliases, and duplicate keys. The proposal is a PowerShell regex and line parser because nearby validation scripts are PowerShell. Decide the implementation boundary, PowerShell's role, the oracle, and the first test. Return exactly four labeled lines with no other prose: `Boundary: maintained-YAML-parser`, `PowerShell-role: orchestration-only`, `Oracle: parser-DOM`, and `Test: mutation-before-fix`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Boundary:\\s*maintained-YAML-parser\\s*\\r?\\nPowerShell-role:\\s*orchestration-only\\s*\\r?\\nOracle:\\s*parser-DOM\\s*\\r?\\nTest:\\s*mutation-before-fix\\s*\\z"],
+      "forbiddenResponsePatterns": ["(?i)PowerShell-(?:regex|line)-parser"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 # PowerShell engineering plan
 
-- Status: P1a, P1c, and P2 done; P1b's first three bounded slices merged
-  through PR #100, and its final managed file-creation slice passes locally
+- Status: P1 and P2 done; the first P3 portable-skill slice is in progress
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-22 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -35,9 +34,9 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P0r | Test-ownership and premise reset | Done | P0 | PR #92 records the accepted [test-ownership inventory](powershell-test-ownership-inventory.md) and bounded `TrustedFileWrites` canary. PR #90 is retained as compatibility evidence and closed unmerged. |
 | P1a | Mechanical PowerShell and Pester cutover | Done | P0r, P1c | PR #94 applied the PowerShell 7.4 and Pester 6.2 compatibility floor to retained Pester tests and templates, locked repository execution to 6.2.0, passed local parity and exact-head CI, addressed the substantive review finding, and merged as `0b439bb6b1712220642a8945e1195eb89000d6f8`. |
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
-| P1b | Parser-backed toolchain policy | In progress | P0r, P1c | PRs #98 through #100 merged the bounded metadata, active-workflow, and generated-output policies. The final managed file-creation workflow and coverage slice passes locally and awaits hosted CI and review. |
+| P1b | Parser-backed toolchain policy | Done | P0r, P1c | PRs #98 through #101 merged the bounded metadata, active-workflow, generated-output, and managed file-creation policies; PR #101 merged as `c9d7e15`. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
-| P3a | Portable PowerShell engineering skill | Blocked | P0r, P1a, P1b | A portable `powershell-engineering` core asks whether PowerShell is the right implementation language and covers PowerShell-native contracts, Pester 6, process behavior, platforms, coverage, and review. |
+| P3a | Portable PowerShell engineering skill | In progress | P0r, P1a, P1b | The first slice adds the portable core, implementation-boundary guidance, and two routing scenarios. Local evidence: both skill validators pass and the focused evaluation contract passes 139 tests with one intentional skip. Later slices add the remaining PowerShell-native deep dives and repository overlay. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
 | P5 | Static-analysis gate | Not started | P1a, P4 | A curated correctness profile is globally clean; other PSScriptAnalyzer diagnostics cannot be added on changed lines; suppressions are narrow, justified, and tested where behavioral risk remains. |
 | P6 | Typed test infrastructure and dual coverage gates | Not started | P1c, P2 | Managed repository contracts and process supervision live in C#; MSTest and Pester coverage are collected and gated separately; no aggregate percentage lets one domain hide another; reviewed exceptions map to behavioral evidence. |
