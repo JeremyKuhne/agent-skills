@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 6
+        $powerShellEngineeringScenarios.Count | Should -Be 8
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -153,6 +153,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-preserves-public-api-contract'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-names-public-api-break'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-preserves-json-boolean-states'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-preserves-parsed-array-shape'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -162,7 +166,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 90
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 92
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -339,6 +343,82 @@ Describe 'Skill evaluation scenario contract' {
                 'Parameters: unchanged'
                 'Result: unchanged'
                 'Action: no-migration') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'JSON Boolean states accepted'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: structured-JSON'
+                'Validation: presence-and-Boolean-type'
+                'Cases: false-distinct-from-missing-null-zero-empty-and-string') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'JSON regex parsing rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: regex'
+                'Validation: presence-and-Boolean-type'
+                'Cases: false-distinct-from-missing-null-zero-empty-and-string') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'JSON truthiness rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: structured-JSON'
+                'Validation: truthiness'
+                'Cases: false-distinct-from-missing-null-zero-empty-and-string') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'JSON missing conflated with false rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: structured-JSON'
+                'Validation: presence-and-Boolean-type'
+                'Cases: false-equivalent-to-missing-null-zero-empty-and-string') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'parsed array shape accepted'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: test-key-exists'
+                'Retrieval: direct-array-reference'
+                'Output: avoid-pipeline-enumeration'
+                'Cases: missing-empty-single-multiple') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'array shape lost in expression rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: test-key-exists'
+                'Retrieval: if-expression'
+                'Output: avoid-pipeline-enumeration'
+                'Cases: missing-empty-single-multiple') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'array shape lost in pipeline rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: test-key-exists'
+                'Retrieval: direct-array-reference'
+                'Output: enumerate'
+                'Cases: missing-empty-single-multiple') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'empty array mistaken for missing rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: infer-from-null'
+                'Retrieval: direct-array-reference'
+                'Output: avoid-pipeline-enumeration'
+                'Cases: missing-empty-single-multiple') -join "`n"
             Expected = $false
         }
     ) {

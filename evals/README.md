@@ -83,13 +83,15 @@ routing application runtime performance to `performance-testing`. Both cases use
 labeled outputs so affirmative plans and explicit refusals cannot satisfy the same
 keyword patterns. It is not part of the default release matrix.
 
-`scenarios/powershell-engineering.json` is an opt-in six-case implementation-boundary
-and API-compatibility suite. It retains PowerShell for PowerShell-owned child-process
-behavior, routes YAML workflow semantics to a maintained parser, routes application
+`scenarios/powershell-engineering.json` is an opt-in eight-case implementation-boundary,
+API-compatibility, and structured-data suite. It retains PowerShell for PowerShell-owned
+child-process behavior, routes YAML semantics to a maintained parser, routes application
 performance to `performance-testing`, and leaves mechanical Pester 5-to-6 migration to
-upstream `pester-migration` guidance. Two cases distinguish a compatibility-preserving
-implementation refactor from an explicit parameter, output-schema, and exit-code break.
-All six cases are read-only and use exact labeled outputs. It is not part of the default
+upstream `pester-migration` guidance. Two cases distinguish a preserved command contract
+from an explicit parameter, output-schema, and exit-code break. Two more cases keep a
+JSON Boolean false distinct from missing, null, zero, and string substitutes, and keep
+empty and singleton arrays from collapsing through PowerShell expression output. All
+eight cases are read-only and use exact labeled outputs. It is not part of the default
 release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
