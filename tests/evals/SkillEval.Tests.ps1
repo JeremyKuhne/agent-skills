@@ -13,6 +13,7 @@ BeforeAll {
     $script:PerformanceTestingScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/performance-testing.json'
     $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
     $script:RoslynAnalyzersScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/roslyn-analyzers.json'
+    $script:PowerShellEngineeringScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/powershell-engineering.json'
     $script:PwshPath = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
     $script:CopilotClientVersionCases = Get-Content -LiteralPath (
         Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
@@ -32,6 +33,7 @@ Describe 'Skill evaluation scenario contract' {
         $performanceTestingScenarios = @(Get-SkillEvalScenarios -Path $script:PerformanceTestingScenarioPath)
         $dotNetFileCreationScenarios = @(Get-SkillEvalScenarios -Path $script:DotNetFileCreationScenarioPath)
         $roslynAnalyzersScenarios = @(Get-SkillEvalScenarios -Path $script:RoslynAnalyzersScenarioPath)
+        $powerShellEngineeringScenarios = @(Get-SkillEvalScenarios -Path $script:PowerShellEngineeringScenarioPath)
         $scenarios = @(
             $createPrScenarios
             $technicalWritingScenarios
@@ -42,7 +44,8 @@ Describe 'Skill evaluation scenario contract' {
             $dotNetPipesScenarios
             $performanceTestingScenarios
             $dotNetFileCreationScenarios
-            $roslynAnalyzersScenarios)
+            $roslynAnalyzersScenarios
+            $powerShellEngineeringScenarios)
 
         $createPrScenarios.Count | Should -Be 8
         @($createPrScenarios | Where-Object skill -ne 'create-pr').Count | Should -Be 0
@@ -135,12 +138,35 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 84
+        $powerShellEngineeringScenarios.Count | Should -Be 4
+        @($powerShellEngineeringScenarios |
+                Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-keeps-powershell-native-process-contract'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-routing-application-performance-near-miss'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-routing-pester-migration-near-miss'
+        $performanceNearMiss = @($powerShellEngineeringScenarios |
+            Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
+        $performanceNearMiss.expectSkillInvocation | Should -BeFalse
+        $performanceNearMiss.requiredSkillInvocations | Should -Contain 'performance-testing'
+        $migrationNearMiss = @($powerShellEngineeringScenarios |
+            Where-Object id -eq 'powershell-engineering-routing-pester-migration-near-miss')[0]
+        $migrationNearMiss.expectSkillInvocation | Should -BeFalse
+        $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
+            Should -BeNullOrEmpty
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 88
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
             Should -Not -Match 'manage-skills'
         @($roslynAnalyzersScenarios.prompt | Where-Object { $_ -match 'roslyn-analyzers' }).Count |
+            Should -Be 0
+        @($powerShellEngineeringScenarios.prompt |
+                Where-Object { $_ -match 'powershell-engineering' }).Count |
             Should -Be 0
     }
 
@@ -174,6 +200,111 @@ Describe 'Skill evaluation scenario contract' {
                 }
             }
         }
+    }
+
+    It 'compiles every powershell-engineering scenario pattern' {
+        $scenarios = @(Get-SkillEvalScenarios -Path $script:PowerShellEngineeringScenarioPath)
+        foreach ($scenario in $scenarios) {
+            foreach ($field in @(
+                    'requiredResponsePatterns',
+                    'forbiddenResponsePatterns',
+                    'requiredCommandPatterns',
+                    'forbiddenCommandPatterns')) {
+                foreach ($pattern in @($scenario.$field)) {
+                    { [regex]::new([string] $pattern) } |
+                        Should -Not -Throw -Because "$($scenario.id).$field must contain valid regular expressions"
+                }
+            }
+        }
+    }
+
+    It 'scores structured powershell-engineering response: <CaseName>' -ForEach @(
+        @{
+            CaseName = 'PowerShell boundary accepted'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell'
+                'Owner: PowerShell-process-entry-point'
+                'Oracle: fresh-process-receipt'
+                'Test: Pester-state-table') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'PowerShell boundary negated'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: not-PowerShell'
+                'Owner: PowerShell-process-entry-point'
+                'Oracle: fresh-process-receipt'
+                'Test: Pester-state-table') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'YAML parser boundary accepted'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: maintained-YAML-parser'
+                'PowerShell-role: orchestration-only'
+                'Oracle: parser-DOM'
+                'Test: mutation-before-fix') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'YAML parser boundary negated'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: PowerShell-regex-parser'
+                'PowerShell-role: implementation'
+                'Oracle: parser-output'
+                'Test: happy-path-after-fix') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance route accepted'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: establish-baseline'
+                'Process-state: matched'
+                'Correctness: validate-output'
+                'Uncertainty: report') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance route negated'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: skip-baseline'
+                'Process-state: unmatched'
+                'Correctness: assume-output'
+                'Uncertainty: omit') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester migration route accepted'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: upstream-pester-migration'
+                'Scope: mechanical-v5-to-v6'
+                'Redesign: not-requested') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester migration route negated'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: powershell-engineering'
+                'Scope: production-redesign'
+                'Redesign: requested') -join "`n"
+            Expected = $false
+        }
+    ) {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:PowerShellEngineeringScenarioPath |
+            Where-Object id -eq $ScenarioId)[0]
+        $passes =
+            @($scenario.requiredResponsePatterns | Where-Object { $Response -notmatch $_ }).Count -eq 0 -and
+            @($scenario.forbiddenResponsePatterns | Where-Object { $Response -match $_ }).Count -eq 0
+
+        $passes | Should -Be $Expected -Because $CaseName
     }
 
     It 'scores structured roslyn-analyzers response: <CaseName>' -ForEach @(
