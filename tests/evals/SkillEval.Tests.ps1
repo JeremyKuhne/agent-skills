@@ -307,7 +307,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Compatibility: preserve'
                 'Parameters: snapshot-unchanged'
-                'Result: process-receipt-unchanged'
+                'Result: public-invocation-unchanged'
                 'Migration: none') -join "`n"
             Expected = $true
         }
@@ -317,7 +317,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Compatibility: breaking-change'
                 'Parameters: snapshot-changed'
-                'Result: process-receipt-changed'
+                'Result: public-invocation-changed'
                 'Migration: required') -join "`n"
             Expected = $false
         }

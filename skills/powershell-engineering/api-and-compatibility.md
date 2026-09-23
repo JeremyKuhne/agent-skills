@@ -24,8 +24,10 @@ consumer can rely on it or the repository has explicitly promised it.
 
 ## Design new entry points
 
-- Use `[CmdletBinding(PositionalBinding = $false)]` for new parameterized scripts
-  and advanced functions. Invoke them with named parameters in source and examples.
+- For new named-only parameterized scripts and advanced functions, use
+  `[CmdletBinding(PositionalBinding = $false)]` and omit explicit
+  `[Parameter(Position = ...)]` values. Invoke them with named parameters in source
+  and examples.
 - Validate mandatory paths, enums, numeric bounds, mutually exclusive states, and
   unsupported combinations at the boundary.
 - Define pipeline input, wildcard behavior, parameter aliases, and parameter sets
@@ -33,7 +35,8 @@ consumer can rely on it or the repository has explicitly promised it.
 - Define output objects and failure behavior before implementation. Keep human
   display separate from machine-readable output.
 - Do not convert a simple private helper into an advanced function solely to apply
-  public-command rules. Once a function is advanced, named-only binding applies.
+  public-command rules. Once a function is advanced, apply the named-only settings
+  above explicitly rather than relying on `[CmdletBinding()]` defaults.
 
 ## Classify changes before editing
 
