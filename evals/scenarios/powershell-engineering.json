@@ -103,6 +103,40 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-preserves-json-boolean-states",
+      "skill": "powershell-engineering",
+      "category": "structured-data",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell wrapper that reads JSON receipts without running commands. The required `passed` field must be a JSON Boolean: `false` is valid failure evidence, but missing, null, numeric `0`, empty text, and string `\"false\"` are invalid. A proposal uses `if ($receipt.passed)` and a regex over the JSON text. Decide the parser, validation, and negative controls. Return exactly these three labeled lines with no other prose: `Parser: structured-JSON`, `Validation: presence-and-Boolean-type`, and `Cases: false-distinct-from-missing-null-zero-empty-and-string`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Parser:\\s*structured-JSON\\s*\\r?\\nValidation:\\s*presence-and-Boolean-type\\s*\\r?\\nCases:\\s*false-distinct-from-missing-null-zero-empty-and-string\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-preserves-parsed-array-shape",
+      "skill": "powershell-engineering",
+      "category": "structured-data",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell wrapper reading JSON objects with a required `items` array. It currently assigns `$items = if ($doc.Contains('items')) { $doc['items'] }` and observes that a parsed empty array appears as null and a one-item array as a scalar. Missing `items` must not be mistaken for a present empty array. Without running commands or editing files, decide how to retain presence and shape and what to test. Return exactly these four labeled lines with no other prose: `Presence: test-key-exists`, `Retrieval: direct-array-reference`, `Output: avoid-pipeline-enumeration`, and `Cases: missing-empty-single-multiple`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Presence:\\s*test-key-exists\\s*\\r?\\nRetrieval:\\s*direct-array-reference\\s*\\r?\\nOutput:\\s*avoid-pipeline-enumeration\\s*\\r?\\nCases:\\s*missing-empty-single-multiple\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }

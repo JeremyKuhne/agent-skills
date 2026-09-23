@@ -1,6 +1,6 @@
 ---
 name: powershell-engineering
-description: Design, implement, test, or review PowerShell scripts and modules, including deciding whether PowerShell is the right implementation boundary. Use for PowerShell APIs, process and stream behavior, structured-data tooling choices, Pester contracts, cross-platform behavior, or generated PowerShell. Do not use for application performance or mechanical Pester 5-to-6 migration; route those to dedicated guidance.
+description: Design, implement, test, or review PowerShell scripts and modules, including deciding whether PowerShell is the right implementation boundary. Use for PowerShell APIs, process and stream behavior, structured-data parsing, PowerShell value coercion and array shape, Pester contracts, cross-platform behavior, or generated PowerShell. Do not use for application performance or mechanical Pester 5-to-6 migration; route those to dedicated guidance.
 license: MIT
 compatibility: Guidance targets PowerShell 7.4 or later and Pester 6.2 or later. Structured formats require a maintained parser, schema tool, compiler, or managed API.
 metadata:
@@ -40,6 +40,10 @@ before editing.
 When work changes a parameterized script, exported function, supported runtime,
 output shape, stream behavior, or exit code, read
 [api-and-compatibility.md](api-and-compatibility.md) before editing.
+
+When work consumes structured or external data, or depends on PowerShell's
+value types and array shape, read
+[structured-data-and-types.md](structured-data-and-types.md) before editing.
 
 ## Workflow
 
