@@ -37,6 +37,10 @@ validator, external CLI, or managed API when that system owns the hard part.
 When the owner is unclear, read [implementation-boundary.md](implementation-boundary.md)
 before editing.
 
+When work changes a parameterized script, exported function, supported runtime,
+output shape, stream behavior, or exit code, read
+[api-and-compatibility.md](api-and-compatibility.md) before editing.
+
 ## Workflow
 
 1. **Read local bindings.** Gather supported hosts, exact commands, generated-file

@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 4
+        $powerShellEngineeringScenarios.Count | Should -Be 6
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -149,6 +149,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-routing-application-performance-near-miss'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-routing-pester-migration-near-miss'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-preserves-public-api-contract'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-names-public-api-break'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -158,7 +162,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 88
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 90
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -295,6 +299,46 @@ Describe 'Skill evaluation scenario contract' {
                 'Route: powershell-engineering'
                 'Scope: production-redesign'
                 'Redesign: requested') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'preserved API accepted'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: preserve'
+                'Parameters: snapshot-unchanged'
+                'Result: public-invocation-unchanged'
+                'Migration: none') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'preserved API negated'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: breaking-change'
+                'Parameters: snapshot-changed'
+                'Result: public-invocation-changed'
+                'Migration: required') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'breaking API accepted'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: breaking-change'
+                'Parameters: binding-name-and-default-changed'
+                'Result: schema-and-exit-changed'
+                'Action: name-break-and-migrate-callers') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'breaking API negated'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: preserve'
+                'Parameters: unchanged'
+                'Result: unchanged'
+                'Action: no-migration') -join "`n"
             Expected = $false
         }
     ) {

@@ -69,6 +69,40 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-preserves-public-api-contract",
+      "skill": "powershell-engineering",
+      "category": "api-compatibility",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review this PowerShell API refactor without running commands. An exported function already uses named-only binding. Its parameter names, types, parameter sets, mandatory status, validation, and defaults are documented. It emits one object with a documented property schema and uses a documented terminating error contract. The proposal changes only private implementation and preserves all of those behaviors. Decide the compatibility treatment and controls. Return exactly these four labeled lines with no other prose: `Compatibility: preserve`, `Parameters: snapshot-unchanged`, `Result: public-invocation-unchanged`, and `Migration: none`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Compatibility:\\s*preserve\\s*\\r?\\nParameters:\\s*snapshot-unchanged\\s*\\r?\\nResult:\\s*public-invocation-unchanged\\s*\\r?\\nMigration:\\s*none\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-names-public-api-break",
+      "skill": "powershell-engineering",
+      "category": "api-compatibility",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review this proposed PowerShell API cleanup without running commands. An existing public script accepts a positional `-Configuration` parameter whose default is `Debug`, emits objects with `Path` and `Configuration`, and exits 2 for invalid input. The proposal disables positional binding, renames the parameter to `-Mode`, changes its default to `Release`, renames the output property to `Mode`, and changes that failure exit code to 1. Decide the compatibility treatment. Return exactly these four labeled lines with no other prose: `Compatibility: breaking-change`, `Parameters: binding-name-and-default-changed`, `Result: schema-and-exit-changed`, and `Action: name-break-and-migrate-callers`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Compatibility:\\s*breaking-change\\s*\\r?\\nParameters:\\s*binding-name-and-default-changed\\s*\\r?\\nResult:\\s*schema-and-exit-changed\\s*\\r?\\nAction:\\s*name-break-and-migrate-callers\\s*\\z"],
+      "forbiddenResponsePatterns": ["(?i)Compatibility:\\s*(?:preserve|non-breaking)"],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }
