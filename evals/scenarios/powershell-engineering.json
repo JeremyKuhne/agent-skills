@@ -273,6 +273,40 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-separates-static-analysis-gates",
+      "skill": "powershell-engineering",
+      "category": "static-analysis",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell static-analysis plan without running commands. Existing default style diagnostics predate the change. A curated correctness profile must be globally clean, while a changed line introduces a new default warning. A proposal suppresses all default warnings or uses regex to infer PowerShell syntax because a full historical cleanup is costly. Decide the profile, legacy handling, changed-line gate, and parser. Return exactly four labeled lines with no other prose: `Profile: curated-correctness-global`, `Legacy: report-existing-default-diagnostics`, `Changed: reject-new-default-diagnostics`, and `Syntax: PowerShell-parser-not-regex`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Profile:\\s*curated-correctness-global\\s*\\r?\\nLegacy:\\s*report-existing-default-diagnostics\\s*\\r?\\nChanged:\\s*reject-new-default-diagnostics\\s*\\r?\\nSyntax:\\s*PowerShell-parser-not-regex\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-rejects-broad-analyzer-suppression",
+      "skill": "powershell-engineering",
+      "category": "static-analysis",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell static-analysis suppression without running commands. A wrapper is missing a required native-child exit check. Its analyzer reports that issue, and someone proposes disabling the rule globally because it is noisy. If a genuine exception exists for one helper, it needs a narrow reason and independent behavior evidence. Decide the global suppression, exception scope, oracle, and a control that catches the missing exit check. Return exactly four labeled lines with no other prose: `Suppression: reject-global`, `Exception: exact-rule-and-site-if-justified`, `Oracle: native-exit-behavior-test`, and `Control: missing-exit-check-must-fail`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Suppression:\\s*reject-global\\s*\\r?\\nException:\\s*exact-rule-and-site-if-justified\\s*\\r?\\nOracle:\\s*native-exit-behavior-test\\s*\\r?\\nControl:\\s*missing-exit-check-must-fail\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 # PowerShell engineering plan
 
-- Status: P1 and P2 done; P3a coverage ownership guidance is in progress
+- Status: P1 and P2 done; P3a static-analysis guidance is in progress
 - Assessment date: 2026-09-13 local time; architecture review extends through
   2026-09-22 UTC
 - Program baseline: `main` at `9c0f860567385374a3dd454ccb2a18398a6324c4`;
@@ -36,7 +36,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
 | P1b | Parser-backed toolchain policy | Done | P0r, P1c | PRs #98 through #101 merged the bounded metadata, active-workflow, generated-output, and managed file-creation policies; PR #101 merged as `c9d7e15`. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
-| P3a | Portable PowerShell engineering skill | In progress | P0r, P1a, P1b | PRs #102 through #108 merged boundary, API compatibility, structured-data, Pester 6 test-design, native-boundary, and platform guidance; PR #108 merged as `c825830`. This slice adds portable coverage-ownership guidance and two synthetic scenarios. Local evidence: the focused evaluation contract passes 192 tests with one intentional skip. Later slices add static analysis, generated scripts, review, and the repository overlay. |
+| P3a | Portable PowerShell engineering skill | In progress | P0r, P1a, P1b | PRs #102 through #109 merged boundary, API compatibility, structured-data, Pester 6 test-design, native-boundary, platform, and coverage guidance; PR #109 merged as `a6a8dba`. This slice adds portable static-analysis guidance and two synthetic scenarios. Local evidence: the focused evaluation contract passes 201 tests with one intentional skip. Later slices add generated scripts, review, and the repository overlay. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
 | P5 | Static-analysis gate | Not started | P1a, P4 | A curated correctness profile is globally clean; other PSScriptAnalyzer diagnostics cannot be added on changed lines; suppressions are narrow, justified, and tested where behavioral risk remains. |
 | P6 | Typed test infrastructure and dual coverage gates | Not started | P1c, P2 | Managed repository contracts and process supervision live in C#; MSTest and Pester coverage are collected and gated separately; no aggregate percentage lets one domain hide another; reviewed exceptions map to behavioral evidence. |

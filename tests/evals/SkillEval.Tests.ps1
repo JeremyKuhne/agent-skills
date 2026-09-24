@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 16
+        $powerShellEngineeringScenarios.Count | Should -Be 18
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -173,6 +173,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-separates-child-and-managed-coverage'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-maps-platform-coverage-exceptions'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-separates-static-analysis-gates'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-rejects-broad-analyzer-suppression'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -182,7 +186,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 100
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 102
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -849,6 +853,96 @@ Describe 'Skill evaluation scenario contract' {
                 'Visibility: keep-source-in-report'
                 'Skip: treat-as-covered'
                 'Critical: enumerate-error-state-tests') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'static analysis lanes accepted'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: curated-correctness-global'
+                'Legacy: report-existing-default-diagnostics'
+                'Changed: reject-new-default-diagnostics'
+                'Syntax: PowerShell-parser-not-regex') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'curated correctness made optional rejected'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: advisory-only'
+                'Legacy: report-existing-default-diagnostics'
+                'Changed: reject-new-default-diagnostics'
+                'Syntax: PowerShell-parser-not-regex') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'legacy diagnostics hidden rejected'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: curated-correctness-global'
+                'Legacy: suppress-all-default-diagnostics'
+                'Changed: reject-new-default-diagnostics'
+                'Syntax: PowerShell-parser-not-regex') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'changed-line default diagnostic accepted rejected'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: curated-correctness-global'
+                'Legacy: report-existing-default-diagnostics'
+                'Changed: allow-new-default-diagnostics'
+                'Syntax: PowerShell-parser-not-regex') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'regex syntax parser rejected'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: curated-correctness-global'
+                'Legacy: report-existing-default-diagnostics'
+                'Changed: reject-new-default-diagnostics'
+                'Syntax: regex') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'narrow analyzer exception accepted'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: reject-global'
+                'Exception: exact-rule-and-site-if-justified'
+                'Oracle: native-exit-behavior-test'
+                'Control: missing-exit-check-must-fail') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'global analyzer suppression rejected'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: disable-globally'
+                'Exception: exact-rule-and-site-if-justified'
+                'Oracle: native-exit-behavior-test'
+                'Control: missing-exit-check-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'implementation-shaped suppression oracle rejected'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: reject-global'
+                'Exception: exact-rule-and-site-if-justified'
+                'Oracle: current-implementation-output'
+                'Control: missing-exit-check-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'missing exit check left untested rejected'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: reject-global'
+                'Exception: exact-rule-and-site-if-justified'
+                'Oracle: native-exit-behavior-test'
+                'Control: no-negative-test') -join "`n"
             Expected = $false
         }
     ) {
