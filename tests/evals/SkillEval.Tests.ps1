@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 12
+        $powerShellEngineeringScenarios.Count | Should -Be 14
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -165,6 +165,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-rejects-valid-output-with-failed-child'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-restores-environment-and-scratch'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-proves-minimum-host-compatibility'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-requires-owning-platform-evidence'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -174,7 +178,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 96
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 98
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -662,6 +666,86 @@ Describe 'Skill evaluation scenario contract' {
                 'Paths: ordinary-only'
                 'Cleanup: finally-on-every-exit'
                 'Cases: success-failure-cancel') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'minimum host evidence accepted'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell-7.4'
+                'Probe: execute-on-minimum-host'
+                'Evidence: incompatible-until-tested-and-repaired'
+                'Decision: replace-api-or-name-break') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'newer host substituted rejected'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell-7.4'
+                'Probe: execute-on-newer-host'
+                'Evidence: incompatible-until-tested-and-repaired'
+                'Decision: replace-api-or-name-break') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'parse-only compatibility claim rejected'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell-7.4'
+                'Probe: parse-on-minimum-host'
+                'Evidence: incompatible-until-tested-and-repaired'
+                'Decision: replace-api-or-name-break') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'silent runtime floor change rejected'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell-7.4'
+                'Probe: execute-on-minimum-host'
+                'Evidence: incompatible-until-tested-and-repaired'
+                'Decision: silently-raise-floor') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'owning platform evidence accepted'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows-filesystem'
+                'Lane: Windows-behavior-test'
+                'Evidence: no-cross-host-inference'
+                'Skips: report-not-pass') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'other OS substituted rejected'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows-filesystem'
+                'Lane: Unix-behavior-test'
+                'Evidence: no-cross-host-inference'
+                'Skips: report-not-pass') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'cross-host inference rejected'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows-filesystem'
+                'Lane: Windows-behavior-test'
+                'Evidence: Unix-implies-Windows'
+                'Skips: report-not-pass') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'skipped owning host treated as pass rejected'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows-filesystem'
+                'Lane: Windows-behavior-test'
+                'Evidence: no-cross-host-inference'
+                'Skips: treat-as-pass') -join "`n"
             Expected = $false
         }
     ) {

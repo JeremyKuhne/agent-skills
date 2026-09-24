@@ -205,6 +205,40 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-proves-minimum-host-compatibility",
+      "skill": "powershell-engineering",
+      "category": "platform-compatibility",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell module without running commands. Its documented minimum host is PowerShell 7.4, but an implementation calls an API known to require PowerShell 7.5. The local PowerShell 7.6 lane passes and CI pins a newer host; no minimum-host behavior test has run. Decide the supported floor, decisive probe, evidence status, and correction. Return exactly four labeled lines with no other prose: `Floor: PowerShell-7.4`, `Probe: execute-on-minimum-host`, `Evidence: incompatible-until-tested-and-repaired`, and `Decision: replace-api-or-name-break`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Floor:\\s*PowerShell-7\\.4\\s*\\r?\\nProbe:\\s*execute-on-minimum-host\\s*\\r?\\nEvidence:\\s*incompatible-until-tested-and-repaired\\s*\\r?\\nDecision:\\s*replace-api-or-name-break\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-requires-owning-platform-evidence",
+      "skill": "powershell-engineering",
+      "category": "platform-compatibility",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review cross-platform evidence for a PowerShell command without running commands. Its contract includes Windows file access-control behavior and Unix file modes. The Unix lane passed, but the Windows behavior job was skipped. Someone claims both platforms are validated because CI is green. Decide who owns the missing behavior, what lane must run, whether one host proves the other, and how to report the skip. Return exactly four labeled lines with no other prose: `Owner: Windows-filesystem`, `Lane: Windows-behavior-test`, `Evidence: no-cross-host-inference`, and `Skips: report-not-pass`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Owner:\\s*Windows-filesystem\\s*\\r?\\nLane:\\s*Windows-behavior-test\\s*\\r?\\nEvidence:\\s*no-cross-host-inference\\s*\\r?\\nSkips:\\s*report-not-pass\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }

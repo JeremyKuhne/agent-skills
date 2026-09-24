@@ -1,6 +1,6 @@
 ---
 name: powershell-engineering
-description: Design, implement, test, or review PowerShell scripts and modules, including deciding whether PowerShell is the right implementation boundary. Use for PowerShell APIs, process, stream, environment, and filesystem behavior, structured-data parsing, PowerShell value coercion and array shape, Pester 6 test design and negative controls, cross-platform behavior, or generated PowerShell. Do not use for application performance or mechanical Pester 5-to-6 migration; route those to dedicated guidance.
+description: Design, implement, test, or review PowerShell scripts and modules, including deciding whether PowerShell is the right implementation boundary. Use for PowerShell APIs, process, stream, environment, and filesystem behavior, structured-data parsing, PowerShell value coercion and array shape, Pester 6 test design and negative controls, cross-platform and minimum-host validation, or generated PowerShell. Do not use for application performance or mechanical Pester 5-to-6 migration; route those to dedicated guidance.
 license: MIT
 compatibility: Guidance targets PowerShell 7.4 or later and Pester 6.2 or later. Structured formats require a maintained parser, schema tool, compiler, or managed API.
 metadata:
@@ -52,6 +52,9 @@ editing.
 When launching native children or changing the environment or filesystem
 around them, read [native-processes-and-filesystem.md](native-processes-and-filesystem.md)
 before editing.
+
+When claiming minimum-host or cross-platform compatibility, read
+[platform-and-minimum-host.md](platform-and-minimum-host.md) before editing.
 
 ## Workflow
 
