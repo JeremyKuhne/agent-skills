@@ -324,6 +324,23 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-routes-packaged-generated-counterpart",
+      "skill": "powershell-engineering",
+      "category": "generated-artifacts",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review this packaging change without running commands. A template-generated PowerShell script is packaged into an installable archive, but no checked-in generated script changes. The packaged copy is stale relative to the generator. Decide the workflow, source, artifact, and check. Return exactly four labeled lines with no other prose: `Route: generated-artifact-review`, `Source: generator-and-inputs`, `Artifact: packaged-counterpart`, and `Check: compare-isolated-output-and-test-packaged-entry-point`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Route:\\s*generated-artifact-review\\s*\\r?\\nSource:\\s*generator-and-inputs\\s*\\r?\\nArtifact:\\s*packaged-counterpart\\s*\\r?\\nCheck:\\s*compare-isolated-output-and-test-packaged-entry-point\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }
