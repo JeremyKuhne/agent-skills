@@ -307,6 +307,23 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-prevents-generated-script-drift",
+      "skill": "powershell-engineering",
+      "category": "generated-artifacts",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review generated PowerShell without running commands. A template and generator emit a checked-in runtime script and a checked-in release counterpart. A maintainer fixes only the release copy; regeneration overwrites that patch. CI regenerates in place before comparing, so it never detects a stale copy, and tests only the template rather than the emitted script. Decide the owner, change, drift gate, negative control, and behavior test. Return exactly five labeled lines with no other prose: `Owner: generator-and-inputs`, `Change: edit-source-then-regenerate`, `Drift: compare-all-outputs-without-overwrite`, `Control: stale-counterpart-must-fail`, and `Behavior: execute-generated-entry-point`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Owner:\\s*generator-and-inputs\\s*\\r?\\nChange:\\s*edit-source-then-regenerate\\s*\\r?\\nDrift:\\s*compare-all-outputs-without-overwrite\\s*\\r?\\nControl:\\s*stale-counterpart-must-fail\\s*\\r?\\nBehavior:\\s*execute-generated-entry-point\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }
