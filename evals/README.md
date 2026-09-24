@@ -83,9 +83,9 @@ routing application runtime performance to `performance-testing`. Both cases use
 labeled outputs so affirmative plans and explicit refusals cannot satisfy the same
 keyword patterns. It is not part of the default release matrix.
 
-`scenarios/powershell-engineering.json` is an opt-in twelve-case suite covering
+`scenarios/powershell-engineering.json` is an opt-in fourteen-case suite covering
 implementation boundaries, API compatibility, structured data, Pester 6 test design,
-and native process/filesystem contracts.
+native process/filesystem contracts, and minimum-host and platform evidence.
 It retains PowerShell for PowerShell-owned child-process behavior, routes YAML semantics
 to a maintained parser, routes application performance to `performance-testing`, and
 leaves mechanical Pester 5-to-6 migration to upstream `pester-migration` guidance. Two
@@ -97,8 +97,10 @@ also requires a passed result from a completed worker with exit code 0 and no fa
 blocks, containers, or infrastructure errors. A skip-only receipt does not prove the
 skipped behavior ran. Two native-boundary cases reject success based only on parseable
 stdout after a failed child and require restoration of temporary environment and owned
-scratch state across failure paths. All twelve cases are read-only and use exact labeled
-outputs. It is not part of the default release matrix.
+scratch state across failure paths. Two platform cases reject a newer PowerShell host as
+proof of minimum-version compatibility and a Unix result as proof of skipped Windows
+filesystem behavior. All fourteen cases are read-only and use exact labeled outputs.
+It is not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
