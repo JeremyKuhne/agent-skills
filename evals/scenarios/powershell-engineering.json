@@ -171,6 +171,40 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-rejects-valid-output-with-failed-child",
+      "skill": "powershell-engineering",
+      "category": "native-boundary",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell wrapper around a native converter without running commands. The contract requires exit 0 and valid JSON on stdout for success; stderr is diagnostic and must stay separate. The child receives an input path containing spaces, emits valid JSON on stdout and an error on stderr, then exits 7. An existing mock only checks nonempty stdout. Decide the probe, argument check, stream handling, exit rule, and one negative control. Return exactly five labeled lines with no other prose: `Probe: fresh-child-process`, `Arguments: preserve-path-with-spaces`, `Streams: stdout-stderr-separate`, `Exit: nonzero-is-failure`, and `Negative-control: valid-output-exit-seven-must-fail`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Probe:\\s*fresh-child-process\\s*\\r?\\nArguments:\\s*preserve-path-with-spaces\\s*\\r?\\nStreams:\\s*stdout-stderr-separate\\s*\\r?\\nExit:\\s*nonzero-is-failure\\s*\\r?\\nNegative-control:\\s*valid-output-exit-seven-must-fail\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-restores-environment-and-scratch",
+      "skill": "powershell-engineering",
+      "category": "native-boundary",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell wrapper without running commands. It temporarily changes its own TOOL_MODE environment variable, creates a scratch directory, and invokes a native child using an input path containing spaces. TOOL_MODE may originally be present or absent. The child can succeed, exit nonzero, or be cancelled; the wrapper currently restores the variable and removes scratch only after success. Decide the environment, workspace, path, cleanup, and test cases. Return exactly five labeled lines with no other prose: `Environment: restore-present-and-absent`, `Workspace: unique-owned-directory`, `Paths: literal-with-spaces`, `Cleanup: finally-on-every-exit`, and `Cases: success-failure-cancel`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Environment:\\s*restore-present-and-absent\\s*\\r?\\nWorkspace:\\s*unique-owned-directory\\s*\\r?\\nPaths:\\s*literal-with-spaces\\s*\\r?\\nCleanup:\\s*finally-on-every-exit\\s*\\r?\\nCases:\\s*success-failure-cancel\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }

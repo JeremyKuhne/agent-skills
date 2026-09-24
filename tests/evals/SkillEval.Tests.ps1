@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 10
+        $powerShellEngineeringScenarios.Count | Should -Be 12
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -161,6 +161,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-designs-pester-contract-tests'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-rejects-empty-pester-discovery'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-rejects-valid-output-with-failed-child'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-restores-environment-and-scratch'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -170,7 +174,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 94
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 96
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -570,6 +574,94 @@ Describe 'Skill evaluation scenario contract' {
                 'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
                 'Failures: reject-failed-blocks-containers-and-infrastructure'
                 'Negative-control: no-empty-selection-test') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'native child receipt accepted'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: fresh-child-process'
+                'Arguments: preserve-path-with-spaces'
+                'Streams: stdout-stderr-separate'
+                'Exit: nonzero-is-failure'
+                'Negative-control: valid-output-exit-seven-must-fail') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'mocked native child rejected'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: mock-only'
+                'Arguments: preserve-path-with-spaces'
+                'Streams: stdout-stderr-separate'
+                'Exit: nonzero-is-failure'
+                'Negative-control: valid-output-exit-seven-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'merged native streams rejected'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: fresh-child-process'
+                'Arguments: preserve-path-with-spaces'
+                'Streams: combined'
+                'Exit: nonzero-is-failure'
+                'Negative-control: valid-output-exit-seven-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'valid output accepted despite failure rejected'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: fresh-child-process'
+                'Arguments: preserve-path-with-spaces'
+                'Streams: stdout-stderr-separate'
+                'Exit: ignore-nonzero'
+                'Negative-control: valid-output-exit-seven-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'environment and scratch restored'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: restore-present-and-absent'
+                'Workspace: unique-owned-directory'
+                'Paths: literal-with-spaces'
+                'Cleanup: finally-on-every-exit'
+                'Cases: success-failure-cancel') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'absent environment state lost rejected'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: restore-value-only'
+                'Workspace: unique-owned-directory'
+                'Paths: literal-with-spaces'
+                'Cleanup: finally-on-every-exit'
+                'Cases: success-failure-cancel') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'filesystem cleanup only on success rejected'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: restore-present-and-absent'
+                'Workspace: unique-owned-directory'
+                'Paths: literal-with-spaces'
+                'Cleanup: success-only'
+                'Cases: success-failure-cancel') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'spaced path omitted rejected'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: restore-present-and-absent'
+                'Workspace: unique-owned-directory'
+                'Paths: ordinary-only'
+                'Cleanup: finally-on-every-exit'
+                'Cases: success-failure-cancel') -join "`n"
             Expected = $false
         }
     ) {
