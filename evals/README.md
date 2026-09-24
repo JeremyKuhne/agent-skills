@@ -90,8 +90,9 @@ to a maintained parser, routes application performance to `performance-testing`,
 leaves mechanical Pester 5-to-6 migration to upstream `pester-migration` guidance. Two
 cases distinguish a preserved command contract from an explicit parameter, output-schema,
 and exit-code break. Two more preserve JSON Boolean and array states; the Pester cases
-require an independent input/output oracle, a failing negative control, and positive
-test discovery before interpreting a zero-failure receipt as success. All ten cases are
+require an independent oracle, a failing negative control, and positive discovery with
+separate passed, failed, skipped, not-run, and inconclusive counts. Failed blocks,
+containers, and infrastructure errors also reject a passing receipt. All ten cases are
 read-only and use exact labeled outputs. It is not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an

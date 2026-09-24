@@ -47,8 +47,11 @@ one. A minimum-version declaration is not an exact CI execution lock.
 
 - Require positive discovery for the intended component. Zero failed tests
   with zero discovered tests is not a passing behavior check.
-- Keep discovered, passed, failed, skipped, not-run, and infrastructure failures
-  distinct; do not make skipped or missing work look like passed tests.
+- Reconcile `TotalCount` with `PassedCount`, `FailedCount`, `SkippedCount`,
+  `NotRunCount`, and `InconclusiveCount`. Never count skipped work as passed.
+- Require zero `FailedCount`, `FailedBlocksCount`, `FailedContainersCount`,
+  `NotRunCount`, `InconclusiveCount`, and infrastructure failures for a passing
+  receipt. Report intentional skips separately.
 - Run the narrow failing control first and the component suite after repair.
   Exercise real process, host, or platform boundaries in their owning lanes.
 - Report the hosts and gates that actually ran. A single current-host Pester
