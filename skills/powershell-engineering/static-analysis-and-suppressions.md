@@ -15,7 +15,7 @@ actually decide it.
 | Does an external language or workflow satisfy its semantics? | That format's maintained parser or typed policy, not a PowerShell regex |
 | Does an API work on the minimum supported host? | Execution on that host; a parse-only check is not runtime evidence |
 
-Use a curated correctness profile for accepted defects such as undefined
+Use a curated correctness profile to detect specified risks such as undefined
 variables, unsafe property access, positional binding, native exit handling,
 unrestored environment changes, or unsupported host constructs when an
 available rule or bounded AST check can establish them. Record the exact
