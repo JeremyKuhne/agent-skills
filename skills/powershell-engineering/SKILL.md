@@ -67,6 +67,9 @@ When changing a generator, template, checked-in generated PowerShell script,
 or packaged generated counterpart, read [generated-scripts.md](generated-scripts.md)
 before editing.
 
+When reviewing a PowerShell change or its validation evidence, read
+[review-and-evidence.md](review-and-evidence.md) before calling it ready.
+
 ## Workflow
 
 1. **Read local bindings.** Gather supported hosts, exact commands, generated-file

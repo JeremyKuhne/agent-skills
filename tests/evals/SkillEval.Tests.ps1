@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 20
+        $powerShellEngineeringScenarios.Count | Should -Be 21
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -181,6 +181,8 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-prevents-generated-script-drift'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-routes-packaged-generated-counterpart'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-rejects-stale-review-receipt'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -190,7 +192,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 104
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 105
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -1053,6 +1055,72 @@ Describe 'Skill evaluation scenario contract' {
                 'Source: generator-and-inputs'
                 'Artifact: packaged-counterpart'
                 'Check: compare-isolated-output-only') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'review uses final-tree owning evidence'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: public-error-and-exit'
+                'Receipt: stale-prior-revision'
+                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Host: minimum-supported-host-runtime-test'
+                'Claim: unverified-until-owning-lanes-run') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'implementation-only review rejected'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: internal-refactor-only'
+                'Receipt: stale-prior-revision'
+                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Host: minimum-supported-host-runtime-test'
+                'Claim: unverified-until-owning-lanes-run') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'prior revision receipt reused rejected'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: public-error-and-exit'
+                'Receipt: valid-for-final-tree'
+                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Host: minimum-supported-host-runtime-test'
+                'Claim: unverified-until-owning-lanes-run') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'managed policy lane substituted for PowerShell rejected'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: public-error-and-exit'
+                'Receipt: stale-prior-revision'
+                'Next: rerun-managed-policy-only'
+                'Host: minimum-supported-host-runtime-test'
+                'Claim: unverified-until-owning-lanes-run') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'newer host substituted for minimum host rejected'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: public-error-and-exit'
+                'Receipt: stale-prior-revision'
+                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Host: current-newer-host-only'
+                'Claim: unverified-until-owning-lanes-run') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'unverified PR claim treated as verified rejected'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: public-error-and-exit'
+                'Receipt: stale-prior-revision'
+                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Host: minimum-supported-host-runtime-test'
+                'Claim: verified-by-old-receipt') -join "`n"
             Expected = $false
         }
     ) {
