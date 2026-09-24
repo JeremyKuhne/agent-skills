@@ -83,16 +83,19 @@ routing application runtime performance to `performance-testing`. Both cases use
 labeled outputs so affirmative plans and explicit refusals cannot satisfy the same
 keyword patterns. It is not part of the default release matrix.
 
-`scenarios/powershell-engineering.json` is an opt-in eight-case implementation-boundary,
-API-compatibility, and structured-data suite. It retains PowerShell for PowerShell-owned
-child-process behavior, routes YAML semantics to a maintained parser, routes application
-performance to `performance-testing`, and leaves mechanical Pester 5-to-6 migration to
-upstream `pester-migration` guidance. Two cases distinguish a preserved command contract
-from an explicit parameter, output-schema, and exit-code break. Two more cases keep a
-JSON Boolean false distinct from missing, null, zero, and string substitutes, and keep
-empty and singleton arrays from collapsing through PowerShell expression output. All
-eight cases are read-only and use exact labeled outputs. It is not part of the default
-release matrix.
+`scenarios/powershell-engineering.json` is an opt-in ten-case suite covering
+implementation boundaries, API compatibility, structured data, and Pester 6 test design.
+It retains PowerShell for PowerShell-owned child-process behavior, routes YAML semantics
+to a maintained parser, routes application performance to `performance-testing`, and
+leaves mechanical Pester 5-to-6 migration to upstream `pester-migration` guidance. Two
+cases distinguish a preserved command contract from an explicit parameter, output-schema,
+and exit-code break. Two more preserve JSON Boolean and array states; the Pester cases
+require an independent oracle, a failing negative control, and positive discovery with
+separate passed, failed, skipped, not-run, and inconclusive counts. A passing receipt
+also requires a passed result from a completed worker with exit code 0 and no failed
+blocks, containers, or infrastructure errors. A skip-only receipt does not prove the
+skipped behavior ran. All ten cases are read-only and use exact labeled outputs. It is
+not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,

@@ -137,6 +137,40 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-designs-pester-contract-tests",
+      "skill": "powershell-engineering",
+      "category": "pester-test-design",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Design tests without running commands for a PowerShell module function that processes pipeline items. The independent contract sends valid items to the success stream and rejects invalid items without putting them on that stream. Existing Pester tests only assert that some output is nonempty, so letting an invalid item through would still pass. Choose the owning harness, oracle, cases, and a reversible negative control. Return exactly four labeled lines with no other prose: `Harness: Pester-6`, `Oracle: independent-input-output-table`, `Cases: valid-and-invalid-pipeline-items`, and `Negative-control: invalid-item-on-success-must-fail`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Harness:\\s*Pester-6\\s*\\r?\\nOracle:\\s*independent-input-output-table\\s*\\r?\\nCases:\\s*valid-and-invalid-pipeline-items\\s*\\r?\\nNegative-control:\\s*invalid-item-on-success-must-fail\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-rejects-empty-pester-discovery",
+      "skill": "powershell-engineering",
+      "category": "pester-test-design",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a PowerShell component's Pester 6 validation without running commands. A test filter selects no cases, the test process exits 0, and a summary treats zero failures as a passing check. It also counts skipped tests as passed and ignores inconclusive tests, failed blocks or containers, and infrastructure failures. A result marked Failed, an incomplete worker, or a nonzero exit code must not count as a pass even when the counts appear valid. Decide the execution lane, status and process gates, discovery gate, count accounting, failure checks, and negative control needed before reporting validation. Return exactly seven labeled lines with no other prose: `Run: isolated-Pester-6`, `Result: require-Passed`, `Worker: complete-with-exit-zero`, `Discovery: require-positive-count`, `Counts: reconcile-passed-failed-skipped-not-run-inconclusive`, `Failures: reject-failed-blocks-containers-and-infrastructure`, and `Negative-control: empty-selection-must-fail`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Run:\\s*isolated-Pester-6\\s*\\r?\\nResult:\\s*require-Passed\\s*\\r?\\nWorker:\\s*complete-with-exit-zero\\s*\\r?\\nDiscovery:\\s*require-positive-count\\s*\\r?\\nCounts:\\s*reconcile-passed-failed-skipped-not-run-inconclusive\\s*\\r?\\nFailures:\\s*reject-failed-blocks-containers-and-infrastructure\\s*\\r?\\nNegative-control:\\s*empty-selection-must-fail\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }
