@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 18
+        $powerShellEngineeringScenarios.Count | Should -Be 20
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -177,6 +177,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-separates-static-analysis-gates'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-rejects-broad-analyzer-suppression'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-prevents-generated-script-drift'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-routes-packaged-generated-counterpart'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -186,7 +190,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 102
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 104
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -943,6 +947,112 @@ Describe 'Skill evaluation scenario contract' {
                 'Exception: exact-rule-and-site-if-justified'
                 'Oracle: native-exit-behavior-test'
                 'Control: no-negative-test') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'generated source and counterparts verified'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: generator-and-inputs'
+                'Change: edit-source-then-regenerate'
+                'Drift: compare-all-outputs-without-overwrite'
+                'Control: stale-counterpart-must-fail'
+                'Behavior: execute-generated-entry-point') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'hand-edited output treated as source rejected'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: release-copy'
+                'Change: edit-source-then-regenerate'
+                'Drift: compare-all-outputs-without-overwrite'
+                'Control: stale-counterpart-must-fail'
+                'Behavior: execute-generated-entry-point') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'hand-editing output rejected'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: generator-and-inputs'
+                'Change: hand-edit-release-copy'
+                'Drift: compare-all-outputs-without-overwrite'
+                'Control: stale-counterpart-must-fail'
+                'Behavior: execute-generated-entry-point') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'overwriting stale output before comparison rejected'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: generator-and-inputs'
+                'Change: edit-source-then-regenerate'
+                'Drift: overwrite-then-compare'
+                'Control: stale-counterpart-must-fail'
+                'Behavior: execute-generated-entry-point') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'missing drift negative control rejected'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: generator-and-inputs'
+                'Change: edit-source-then-regenerate'
+                'Drift: compare-all-outputs-without-overwrite'
+                'Control: no-stale-test'
+                'Behavior: execute-generated-entry-point') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'template test substituted for emitted behavior rejected'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: generator-and-inputs'
+                'Change: edit-source-then-regenerate'
+                'Drift: compare-all-outputs-without-overwrite'
+                'Control: stale-counterpart-must-fail'
+                'Behavior: test-template-only') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'packaged generated counterpart routed'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: generated-artifact-review'
+                'Source: generator-and-inputs'
+                'Artifact: packaged-counterpart'
+                'Check: compare-isolated-output-and-test-packaged-entry-point') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'packaging routed to generic checklist rejected'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: generic-PR-checklist-only'
+                'Source: generator-and-inputs'
+                'Artifact: packaged-counterpart'
+                'Check: compare-isolated-output-and-test-packaged-entry-point') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'packaged output ignored rejected'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: generated-artifact-review'
+                'Source: generator-and-inputs'
+                'Artifact: checked-in-only'
+                'Check: compare-isolated-output-and-test-packaged-entry-point') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'packaged behavior not exercised rejected'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: generated-artifact-review'
+                'Source: generator-and-inputs'
+                'Artifact: packaged-counterpart'
+                'Check: compare-isolated-output-only') -join "`n"
             Expected = $false
         }
     ) {

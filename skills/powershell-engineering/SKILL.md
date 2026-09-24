@@ -63,6 +63,10 @@ When changing PowerShell static-analysis gates or suppressions, read
 [static-analysis-and-suppressions.md](static-analysis-and-suppressions.md)
 before editing.
 
+When changing a generator, template, checked-in generated PowerShell script,
+or packaged generated counterpart, read [generated-scripts.md](generated-scripts.md)
+before editing.
+
 ## Workflow
 
 1. **Read local bindings.** Gather supported hosts, exact commands, generated-file

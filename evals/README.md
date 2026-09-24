@@ -83,10 +83,10 @@ routing application runtime performance to `performance-testing`. Both cases use
 labeled outputs so affirmative plans and explicit refusals cannot satisfy the same
 keyword patterns. It is not part of the default release matrix.
 
-`scenarios/powershell-engineering.json` is an opt-in eighteen-case suite covering
+`scenarios/powershell-engineering.json` is an opt-in twenty-case suite covering
 implementation boundaries, API compatibility, structured data, Pester 6 test design,
 native process/filesystem contracts, minimum-host and platform evidence, coverage
-ownership, and static analysis.
+ownership, static analysis, and generated scripts.
 It retains PowerShell for PowerShell-owned child-process behavior, routes YAML semantics
 to a maintained parser, routes application performance to `performance-testing`, and
 leaves mechanical Pester 5-to-6 migration to upstream `pester-migration` guidance. Two
@@ -104,8 +104,11 @@ filesystem behavior. Two coverage cases require child-process instrumentation an
 separate managed and PowerShell reports, and keep platform-only exceptions visible
 until their owning behavior lane runs. Two static-analysis cases distinguish a globally clean
 curated correctness profile from visible legacy default diagnostics and reject broad
-suppressions that hide a native-exit defect. All eighteen cases are read-only and use
-exact labeled outputs. It is not part of the default release matrix.
+suppressions that hide a native-exit defect. The generated-script case rejects
+hand-edited outputs and overwrite-before-comparison drift checks, requires a stale-copy
+control, and tests the emitted entry point. A second case routes packaged generated
+counterparts even when no checked-in script changes. All twenty cases are read-only
+and use exact labeled outputs. It is not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
