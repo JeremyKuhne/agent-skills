@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 8
+        $powerShellEngineeringScenarios.Count | Should -Be 10
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -157,6 +157,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-preserves-json-boolean-states'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-preserves-parsed-array-shape'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-designs-pester-contract-tests'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-rejects-empty-pester-discovery'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -166,7 +170,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 92
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 94
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -419,6 +423,66 @@ Describe 'Skill evaluation scenario contract' {
                 'Retrieval: direct-array-reference'
                 'Output: avoid-pipeline-enumeration'
                 'Cases: missing-empty-single-multiple') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester contract accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester-6'
+                'Oracle: independent-input-output-table'
+                'Cases: valid-and-invalid-pipeline-items'
+                'Negative-control: invalid-item-on-success-must-fail') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester implementation-derived oracle rejected'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester-6'
+                'Oracle: current-implementation-output'
+                'Cases: valid-and-invalid-pipeline-items'
+                'Negative-control: invalid-item-on-success-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester missing negative control rejected'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester-6'
+                'Oracle: independent-input-output-table'
+                'Cases: valid-and-invalid-pipeline-items'
+                'Negative-control: not-needed') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester empty run rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: isolated-Pester-6'
+                'Discovery: require-positive-count'
+                'Receipt: reject-not-run-and-infrastructure'
+                'Negative-control: empty-selection-must-fail') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester zero-failures-only check rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: isolated-Pester-6'
+                'Discovery: allow-zero-count'
+                'Receipt: accept-zero-failures'
+                'Negative-control: empty-selection-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester empty selection untested rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: isolated-Pester-6'
+                'Discovery: require-positive-count'
+                'Receipt: reject-not-run-and-infrastructure'
+                'Negative-control: no-empty-selection-test') -join "`n"
             Expected = $false
         }
     ) {
