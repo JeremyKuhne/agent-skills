@@ -460,6 +460,8 @@ Describe 'Skill evaluation scenario contract' {
             ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
             Response = @(
                 'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: complete-with-exit-zero'
                 'Discovery: require-positive-count'
                 'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
                 'Failures: reject-failed-blocks-containers-and-infrastructure'
@@ -467,10 +469,51 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'Pester failed result rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: isolated-Pester-6'
+                'Result: accept-Failed'
+                'Worker: complete-with-exit-zero'
+                'Discovery: require-positive-count'
+                'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
+                'Failures: reject-failed-blocks-containers-and-infrastructure'
+                'Negative-control: empty-selection-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester incomplete worker rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: accept-incomplete-worker'
+                'Discovery: require-positive-count'
+                'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
+                'Failures: reject-failed-blocks-containers-and-infrastructure'
+                'Negative-control: empty-selection-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester nonzero exit rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: complete-with-nonzero-exit'
+                'Discovery: require-positive-count'
+                'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
+                'Failures: reject-failed-blocks-containers-and-infrastructure'
+                'Negative-control: empty-selection-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'Pester zero discovery rejected'
             ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
             Response = @(
                 'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: complete-with-exit-zero'
                 'Discovery: allow-zero-count'
                 'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
                 'Failures: reject-failed-blocks-containers-and-infrastructure'
@@ -482,6 +525,8 @@ Describe 'Skill evaluation scenario contract' {
             ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
             Response = @(
                 'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: complete-with-exit-zero'
                 'Discovery: require-positive-count'
                 'Counts: accept-zero-failures'
                 'Failures: reject-failed-blocks-containers-and-infrastructure'
@@ -493,6 +538,8 @@ Describe 'Skill evaluation scenario contract' {
             ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
             Response = @(
                 'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: complete-with-exit-zero'
                 'Discovery: require-positive-count'
                 'Counts: count-skipped-as-passed'
                 'Failures: reject-failed-blocks-containers-and-infrastructure'
@@ -504,6 +551,8 @@ Describe 'Skill evaluation scenario contract' {
             ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
             Response = @(
                 'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: complete-with-exit-zero'
                 'Discovery: require-positive-count'
                 'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
                 'Failures: ignore-failed-blocks-containers-and-infrastructure'
@@ -515,6 +564,8 @@ Describe 'Skill evaluation scenario contract' {
             ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
             Response = @(
                 'Run: isolated-Pester-6'
+                'Result: require-Passed'
+                'Worker: complete-with-exit-zero'
                 'Discovery: require-positive-count'
                 'Counts: reconcile-passed-failed-skipped-not-run-inconclusive'
                 'Failures: reject-failed-blocks-containers-and-infrastructure'

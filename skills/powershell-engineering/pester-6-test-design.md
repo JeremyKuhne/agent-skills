@@ -46,7 +46,11 @@ the consuming repository's exact-version, isolated entry point when it has
 one. A minimum-version declaration is not an exact CI execution lock.
 
 - Require positive discovery for the intended component. Zero failed tests
-  with zero discovered tests is not a passing behavior check.
+  with zero discovered tests is not a passing behavior check. An intentional
+  skip-only shard can be structurally complete but is not evidence that the
+  skipped behavior ran; report it separately from executed behavior.
+- Require `Result = Passed` from a completed worker with no timeout or worker
+  error and a process exit code of 0 before accepting a passing receipt.
 - Reconcile `TotalCount` with `PassedCount`, `FailedCount`, `SkippedCount`,
   `NotRunCount`, and `InconclusiveCount`. Never count skipped work as passed.
 - Require zero `FailedCount`, `FailedBlocksCount`, `FailedContainersCount`,

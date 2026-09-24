@@ -91,9 +91,11 @@ leaves mechanical Pester 5-to-6 migration to upstream `pester-migration` guidanc
 cases distinguish a preserved command contract from an explicit parameter, output-schema,
 and exit-code break. Two more preserve JSON Boolean and array states; the Pester cases
 require an independent oracle, a failing negative control, and positive discovery with
-separate passed, failed, skipped, not-run, and inconclusive counts. Failed blocks,
-containers, and infrastructure errors also reject a passing receipt. All ten cases are
-read-only and use exact labeled outputs. It is not part of the default release matrix.
+separate passed, failed, skipped, not-run, and inconclusive counts. A passing receipt
+also requires a passed result from a completed worker with exit code 0 and no failed
+blocks, containers, or infrastructure errors. A skip-only receipt does not prove the
+skipped behavior ran. All ten cases are read-only and use exact labeled outputs. It is
+not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
