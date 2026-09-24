@@ -239,6 +239,40 @@
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-separates-child-and-managed-coverage",
+      "skill": "powershell-engineering",
+      "category": "coverage-ownership",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review coverage for a PowerShell wrapper without running commands. Its Pester shard launches a child PowerShell script but collects coverage only in the parent process; the child is not instrumented. Managed tests separately report high coverage, and someone proposes combining the two percentages to claim an 80% gate. No component baselines have been approved. Decide the child owner, collector, report boundary, gate, and claim. Return exactly five labeled lines with no other prose: `Owner: child-PowerShell-script`, `Collector: instrument-child-execution`, `Reports: separate-PowerShell-and-managed`, `Gate: report-only-until-baselined`, and `Claim: reject-cross-domain-percentage`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Owner:\\s*child-PowerShell-script\\s*\\r?\\nCollector:\\s*instrument-child-execution\\s*\\r?\\nReports:\\s*separate-PowerShell-and-managed\\s*\\r?\\nGate:\\s*report-only-until-baselined\\s*\\r?\\nClaim:\\s*reject-cross-domain-percentage\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
+    },
+    {
+      "id": "powershell-engineering-maps-platform-coverage-exceptions",
+      "skill": "powershell-engineering",
+      "category": "coverage-ownership",
+      "evidenceKind": "direct-invocation",
+      "profile": "clean-feature",
+      "prompt": "Review a proposed PowerShell coverage exception without running commands. A Windows-only module has a critical error-state branch. Its Windows behavior job was skipped, while managed tests passed elsewhere. The proposal removes the module from the coverage inventory and claims the branch is covered. Decide the exception, owning test, visibility, skip status, and critical-path check. Return exactly five labeled lines with no other prose: `Exception: reviewed-platform-source`, `Evidence: owning-Windows-behavior-test`, `Visibility: keep-source-in-report`, `Skip: uncovered-until-host-runs`, and `Critical: enumerate-error-state-tests`, one per line.",
+      "runCount": 3,
+      "expectSkillInvocation": true,
+      "allowedTools": ["view", "glob"],
+      "deniedTools": ["write", "web", "shell"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Exception:\\s*reviewed-platform-source\\s*\\r?\\nEvidence:\\s*owning-Windows-behavior-test\\s*\\r?\\nVisibility:\\s*keep-source-in-report\\s*\\r?\\nSkip:\\s*uncovered-until-host-runs\\s*\\r?\\nCritical:\\s*enumerate-error-state-tests\\s*\\z"],
+      "forbiddenResponsePatterns": [],
+      "requiredCommandPatterns": [],
+      "forbiddenCommandPatterns": [],
+      "requireUnchangedWorktree": true
     }
   ]
 }

@@ -138,7 +138,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'roslyn-analyzers-routing-code-fix-fix-all'
         $roslynAnalyzersScenarios.id |
             Should -Contain 'roslyn-analyzers-routing-runtime-performance-near-miss'
-        $powerShellEngineeringScenarios.Count | Should -Be 14
+        $powerShellEngineeringScenarios.Count | Should -Be 16
         @($powerShellEngineeringScenarios |
                 Where-Object skill -ne 'powershell-engineering').Count | Should -Be 0
         $powerShellEngineeringScenarios.id |
@@ -169,6 +169,10 @@ Describe 'Skill evaluation scenario contract' {
             Should -Contain 'powershell-engineering-proves-minimum-host-compatibility'
         $powerShellEngineeringScenarios.id |
             Should -Contain 'powershell-engineering-requires-owning-platform-evidence'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-separates-child-and-managed-coverage'
+        $powerShellEngineeringScenarios.id |
+            Should -Contain 'powershell-engineering-maps-platform-coverage-exceptions'
         $performanceNearMiss = @($powerShellEngineeringScenarios |
             Where-Object id -eq 'powershell-engineering-routing-application-performance-near-miss')[0]
         $performanceNearMiss.expectSkillInvocation | Should -BeFalse
@@ -178,7 +182,7 @@ Describe 'Skill evaluation scenario contract' {
         $migrationNearMiss.expectSkillInvocation | Should -BeFalse
         $migrationNearMiss.PSObject.Properties['requiredSkillInvocations'] |
             Should -BeNullOrEmpty
-        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 98
+        @($scenarios.id | Sort-Object -Unique).Count | Should -Be 100
         @($scenarios | Where-Object evidenceKind -ne 'direct-invocation').Count | Should -Be 0
         @($manageSkillsScenarios |
                 Where-Object id -eq 'manage-skills-pinned-local-drift')[0].prompt |
@@ -746,6 +750,105 @@ Describe 'Skill evaluation scenario contract' {
                 'Lane: Windows-behavior-test'
                 'Evidence: no-cross-host-inference'
                 'Skips: treat-as-pass') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'component coverage accepted'
+            ScenarioId = 'powershell-engineering-separates-child-and-managed-coverage'
+            Response = @(
+                'Owner: child-PowerShell-script'
+                'Collector: instrument-child-execution'
+                'Reports: separate-PowerShell-and-managed'
+                'Gate: report-only-until-baselined'
+                'Claim: reject-cross-domain-percentage') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'parent coverage substituted for child rejected'
+            ScenarioId = 'powershell-engineering-separates-child-and-managed-coverage'
+            Response = @(
+                'Owner: child-PowerShell-script'
+                'Collector: parent-only'
+                'Reports: separate-PowerShell-and-managed'
+                'Gate: report-only-until-baselined'
+                'Claim: reject-cross-domain-percentage') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'combined coverage report rejected'
+            ScenarioId = 'powershell-engineering-separates-child-and-managed-coverage'
+            Response = @(
+                'Owner: child-PowerShell-script'
+                'Collector: instrument-child-execution'
+                'Reports: combined'
+                'Gate: report-only-until-baselined'
+                'Claim: reject-cross-domain-percentage') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'premature aggregate coverage gate rejected'
+            ScenarioId = 'powershell-engineering-separates-child-and-managed-coverage'
+            Response = @(
+                'Owner: child-PowerShell-script'
+                'Collector: instrument-child-execution'
+                'Reports: separate-PowerShell-and-managed'
+                'Gate: enforce-eighty-percent-now'
+                'Claim: accept-cross-domain-percentage') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'platform coverage exception accepted'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: reviewed-platform-source'
+                'Evidence: owning-Windows-behavior-test'
+                'Visibility: keep-source-in-report'
+                'Skip: uncovered-until-host-runs'
+                'Critical: enumerate-error-state-tests') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'blanket coverage exclusion rejected'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: blanket-exclusion'
+                'Evidence: owning-Windows-behavior-test'
+                'Visibility: keep-source-in-report'
+                'Skip: uncovered-until-host-runs'
+                'Critical: enumerate-error-state-tests') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'managed tests substituted for owning host rejected'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: reviewed-platform-source'
+                'Evidence: managed-tests-only'
+                'Visibility: keep-source-in-report'
+                'Skip: uncovered-until-host-runs'
+                'Critical: enumerate-error-state-tests') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'platform source hidden from report rejected'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: reviewed-platform-source'
+                'Evidence: owning-Windows-behavior-test'
+                'Visibility: remove-source'
+                'Skip: uncovered-until-host-runs'
+                'Critical: enumerate-error-state-tests') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'skipped platform claimed covered rejected'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: reviewed-platform-source'
+                'Evidence: owning-Windows-behavior-test'
+                'Visibility: keep-source-in-report'
+                'Skip: treat-as-covered'
+                'Critical: enumerate-error-state-tests') -join "`n"
             Expected = $false
         }
     ) {
