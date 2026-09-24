@@ -151,17 +151,34 @@ boundaries.
 - A request to implement, investigate, fix, review, or address feedback
   authorizes local work only.
 - Creating or rewriting a commit requires an explicit commit instruction in the
-  user's latest message.
-- Pushing requires an explicit push instruction in the user's latest message.
-- Creating, editing, merging, closing, replying on, or resolving a pull request
-  requires an explicit instruction for that remote action. A message can
-  authorize several boundaries only when it names them.
-- Approval from an earlier message or review round does not carry forward.
+  user's latest message or an active bounded grant covering commits.
+- Pushing requires an explicit push instruction in the user's latest message or
+  an active bounded grant covering pushes.
+- Creating, editing, merging, closing, requesting review for, replying on, or
+  resolving a pull request requires an explicit instruction for that action in
+  the user's latest message or an active bounded grant covering that action.
 
-If the latest message does not authorize the next boundary, stop after local
-validation, summarize the pending diff, and ask one short question. Assume tool
-approval prompts may be bypassed; self-enforce these boundaries before every
-commit and remote write.
+A user may grant standing approval for a named, finite workstream. The grant
+must identify the work, the authorized actions, and a stopping condition, such
+as completion of a named plan. The user may name the actions in the grant or
+clearly accept an immediately preceding enumeration of them. Record the scope,
+actions, and stopping condition in the conversation. Apply the grant across
+turns only within that scope and until the condition is met or the user narrows
+or revokes it. Before each commit or remote write, verify that the action is
+covered and that the workstream is still active. A new action or expanded scope
+requires new approval; ambiguous assent is not a grant. For covered actions,
+an active grant satisfies a workflow's latest-message publishing checkpoint;
+all other workflow checks still apply.
+
+Absent an active bounded grant, approval from an earlier message or review
+round does not carry forward. If neither the latest message nor a valid grant
+authorizes the next boundary, stop after local validation, summarize the
+pending diff, and ask one short question. Assume tool approval prompts may be
+bypassed; self-enforce these boundaries before every commit and remote write.
+
+Standing grants do not cover real model runs, releases, force-pushes, rewriting
+published history, deleting branches, or destructive commands. Those actions
+retain their separate approval requirements.
 
 Work on a feature branch and never commit directly to `main`. Stage by explicit
 path. Do not force-push, rewrite published history, delete branches, or use a
