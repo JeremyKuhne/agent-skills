@@ -200,6 +200,7 @@ Body.
         $overlayPath = Join-Path $installed 'overlay.md'
         $pin = '4cb6038943c3f66164717d011b8b7b7ac5e6d3c2'
         $provenance = Get-SkillArtifactProvenance (Join-Path $installed 'SKILL.md')
+        @($provenance.Keys) | Should -Be @('github-path', 'github-pinned', 'github-ref', 'github-repo', 'github-tree-sha')
         $provenance['github-pinned'] | Should -Be $pin
         $provenance['github-ref'] | Should -Be $pin
         $provenance['github-tree-sha'] | Should -Be '05d07587360f25752a14d01b26aafabdd746dfe5'
@@ -237,16 +238,20 @@ Body.
         [Array]::Sort($coreNames, [StringComparer]::Ordinal)
         $fileHashes = @(foreach ($name in $coreNames) {
                 $filePath = Join-Path $installed $name
-                $content = if ($name -ceq 'SKILL.md') {
+            $relativePath = ".agents/skills/powershell-engineering/$name"
+            $eol = & git -C $script:RepoRoot check-attr eol -- $relativePath
+            $LASTEXITCODE | Should -Be 0
+            $eol | Should -Be "${relativePath}: eol: lf"
+                $hash = if ($name -ceq 'SKILL.md') {
                     [string[]] $frontmatter = @(Get-SkillArtifactCanonicalFrontmatter $filePath)
                     [Array]::Sort($frontmatter, [StringComparer]::Ordinal)
-                    ($frontmatter -join "`n") + "`n" + (Get-SkillArtifactDocument $filePath).Body
+                    $content = ($frontmatter -join "`n") + "`n" + (Get-SkillArtifactDocument $filePath).Body
+                    [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+                            [Text.Encoding]::UTF8.GetBytes($content)))
                 }
                 else {
-                    [IO.File]::ReadAllText($filePath).Replace("`r`n", "`n")
+                    (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash
                 }
-                $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-                        [Text.Encoding]::UTF8.GetBytes($content)))
                 "${name}:$hash"
             })
         $coreDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
