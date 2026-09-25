@@ -118,8 +118,10 @@ development-calibrated repetition one scored 20/21 per model; frozen repetitions
 two and three scored 25/42 Sol and 31/42 Luna. Routing passed 60/63 Sol and
 62/63 Luna attempts; every attempt passed safety and infrastructure checks.
 First-repetition rescoring verified 38 saved outputs without new model calls;
-the frozen rubric was not adjusted. These exact-label scores do not establish
-independently reviewed usefulness or portfolio qualification. The
+the campaign's frozen rubric was not adjusted. Subsequent review-driven
+negation controls have a new scenario revision and no fresh model evidence.
+These exact-label scores do not establish independently reviewed usefulness or
+portfolio qualification. The
 [PowerShell engineering plan](../docs/powershell-engineering-plan.md#p3a-paired-diagnostic)
 records the identity and normalized-token receipts; raw outputs stay private.
 

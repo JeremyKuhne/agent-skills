@@ -112,6 +112,13 @@ transcripts remain private under the OS temporary directory at
 discovery, adjudicate the response rubrics, and approve a fresh frozen cohort;
 keep PR #114 draft in the meantime.
 
+After this campaign, PR #114's review follow-up added Sol/Luna-specific client
+preflight and three negation controls for API breaks, array presence, and native
+exit handling. Those controls have a new scenario revision; they have not been
+applied retroactively to the saved outputs or evaluated in another model run.
+The counts above remain tied to the frozen revision, not to a qualification of
+the post-review rubric.
+
 PR #90 is closed unmerged; retain its parity receipt as compatibility evidence
 without inheriting its universal-Pester premise. Do not start P1b until P0r is
 accepted and P1c establishes the managed boundary. P1c proves one ownership

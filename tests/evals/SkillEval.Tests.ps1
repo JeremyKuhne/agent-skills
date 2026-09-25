@@ -740,6 +740,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'breaking API explicitly called non-breaking rejected'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Not a breaking change.'
+                'Parameters: Positional binding and default change for callers.'
+                'Result: Configuration property and failure exit code change.'
+                'Action: Update callers or provide a compatibility transition.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'JSON Boolean states accepted'
             ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
             Response = @(
@@ -830,6 +840,24 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'JSON Boolean valid states in reversed order accepted'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json -AsHashtable.'
+                'Validation: Check key presence with Contains and value type with bool.'
+                'Cases: missing, null, 0, empty text, and string false are invalid; false is valid.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'JSON Boolean inverted states in reversed order rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json -AsHashtable.'
+                'Validation: Check key presence with Contains and value type with bool.'
+                'Cases: missing, null, 0, empty text, and string false are valid; false is invalid.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'parsed array shape accepted'
             ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
             Response = @(
@@ -914,6 +942,16 @@ Describe 'Skill evaluation scenario contract' {
             ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
             Response = @(
                 'Presence: assume presence.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing rejects; zero, one, and many elements retain array shape.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'array presence check explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Do not check whether the required key exists.'
                 'Retrieval: Retain a direct reference to the parsed array.'
                 'Output: Use Write-Output -NoEnumerate to preserve shape.'
                 'Cases: missing rejects; zero, one, and many elements retain array shape.') -join "`n"
@@ -1486,6 +1524,17 @@ Describe 'Skill evaluation scenario contract' {
                 'Streams: stdout-stderr-separate'
                 'Exit: ignore-nonzero'
                 'Negative-control: valid-output-exit-seven-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'nonzero exit explicitly called non-failure rejected'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: Exercise the public wrapper with a real fixture child.'
+                'Arguments: Preserve a path with spaces as one exact argument.'
+                'Streams: Capture stdout and stderr separately.'
+                'Exit: nonzero is not a failure.'
+                'Negative-control: A valid stdout response despite a nonzero exit must fail the test.') -join "`n"
             Expected = $false
         }
         @{
@@ -3170,6 +3219,28 @@ Describe 'Skill evaluation scenario contract' {
                     Get-SkillEvalValidatedCopilotVersion -Output $output
                 } ([string]$case.output)
             } | Should -Throw ([string]$case.error) -Because ([string]$case.name)
+        }
+    }
+
+    It 'requires Copilot CLI 1.0.83 for Sol and Luna usage capture' {
+        $module = Get-Module SkillEval
+
+        foreach ($model in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+            foreach ($version in @('1.0.63', '1.0.82')) {
+                {
+                    & $module {
+                        param($output, $modelId)
+                        Get-SkillEvalValidatedCopilotVersion -Output $output -Model $modelId
+                    } "GitHub Copilot CLI $version." $model
+                } | Should -Throw '*Copilot CLI 1.0.83 or later*'
+            }
+
+            & $module {
+                param($modelId)
+                Get-SkillEvalValidatedCopilotVersion `
+                    -Output 'GitHub Copilot CLI 1.0.83.' `
+                    -Model $modelId
+            } $model | Should -BeExactly 'GitHub Copilot CLI 1.0.83.'
         }
     }
 

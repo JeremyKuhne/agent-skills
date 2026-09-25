@@ -34,6 +34,7 @@ if ([string]::IsNullOrWhiteSpace($Model)) {
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 Import-Module (Join-Path $PSScriptRoot 'SkillEval.psm1') -Force
 $resolvedCopilotPath = Resolve-SkillEvalCopilotPath -CopilotPath $CopilotPath
+Get-SkillEvalCopilotVersion -CopilotPath $resolvedCopilotPath -Model $Model | Out-Null
 $resolvedScenarioPaths = @($ScenarioPath | ForEach-Object {
         $path = if ([System.IO.Path]::IsPathRooted($_)) {
             $_

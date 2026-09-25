@@ -222,15 +222,21 @@ function Get-SkillEvalValidatedCopilotVersion {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string] $Output
+        [string] $Output,
+
+        [string] $Model
     )
 
     $version = $Output.Trim()
     $reportedVersion = ConvertFrom-SkillEvalCopilotVersion -Output $version
+    $minimumVersionString = if ($Model -in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+        '1.0.83'
+    }
+    else { '1.0.63' }
     $minimumVersion = [System.Management.Automation.SemanticVersion]::Parse(
-        '1.0.63')
+        $minimumVersionString)
     if ($reportedVersion -lt $minimumVersion) {
-        throw "Copilot CLI 1.0.63 or later is required; selected executable reported: $version"
+        throw "Copilot CLI $minimumVersionString or later is required; selected executable reported: $version"
     }
     return $version
 }
@@ -328,7 +334,7 @@ function New-SkillEvalCopilotStartInfo {
     return $startInfo
 }
 
-function Get-SkillEvalCopilotVersion ([string] $CopilotPath) {
+function Get-SkillEvalCopilotVersion ([string] $CopilotPath, [string] $Model) {
     $startInfo = New-SkillEvalCopilotStartInfo -CopilotPath $CopilotPath
     $startInfo.Environment['COPILOT_AUTO_UPDATE'] = 'false'
     $startInfo.ArgumentList.Add('--version')
@@ -349,7 +355,7 @@ function Get-SkillEvalCopilotVersion ([string] $CopilotPath) {
         if ($process.ExitCode -ne 0) {
             throw "Copilot CLI version query exited with code $($process.ExitCode):`n$output"
         }
-        return Get-SkillEvalValidatedCopilotVersion -Output $output
+        return Get-SkillEvalValidatedCopilotVersion -Output $output -Model $Model
     }
     finally { $process.Dispose() }
 }
@@ -1564,7 +1570,7 @@ function Invoke-SkillEvalSuite {
     $copilotVersion = if ($Executor) {
         'fake-executor'
     }
-    else { Get-SkillEvalCopilotVersion -CopilotPath $resolvedCopilotPath }
+    else { Get-SkillEvalCopilotVersion -CopilotPath $resolvedCopilotPath -Model $Model }
     if (-not $Executor) {
         Assert-SkillEvalCopilotExecutableHash `
             -CopilotPath $resolvedCopilotPath `
