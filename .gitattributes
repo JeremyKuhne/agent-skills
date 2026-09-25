@@ -5,3 +5,4 @@
 # Shell scripts must stay LF so they remain executable on Unix even when edited
 # on Windows.
 *.sh text eol=lf
+.agents/skills/powershell-engineering/*.md text eol=lf
