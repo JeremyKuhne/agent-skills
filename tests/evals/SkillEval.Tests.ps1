@@ -274,6 +274,26 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'independent child-process receipt accepted as oracle'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell public command boundary for native process behavior.'
+                'Owner: The PowerShell command owns its launch and exit semantics.'
+                'Oracle: An independently controlled child-process receipt verifying separate streams, exit, environment state, and cleanup.'
+                'Test: Focused Pester fresh-process behavior tests.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'mocked child receipt rejected as oracle'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell public command boundary for native process behavior.'
+                'Owner: The PowerShell command owns its launch and exit semantics.'
+                'Oracle: An independently mocked child-process receipt verifying separate streams, exit, environment state, and cleanup.'
+                'Test: Focused Pester fresh-process behavior tests.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'PowerShell boundary negated'
             ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
             Response = @(
@@ -2518,7 +2538,8 @@ Describe 'Skill evaluation scenario contract' {
             allowedTools = @('read', 'shell(git:*)')
             deniedTools = @('write', 'web')
         }
-        $arguments = @(New-SkillEvalArguments -Scenario $scenario -PluginDirectory $TestDrive -Model 'test-model' -TranscriptPath (Join-Path $TestDrive 'transcript.md'))
+        $usagePath = Join-Path $TestDrive 'usage.json'
+        $arguments = @(New-SkillEvalArguments -Scenario $scenario -PluginDirectory $TestDrive -Model 'test-model' -TranscriptPath (Join-Path $TestDrive 'transcript.md') -UsageOutputPath $usagePath)
 
         @($arguments | Where-Object { $_ -eq '--allow-tool=read' }).Count | Should -Be 1
         @($arguments | Where-Object { $_ -eq '--allow-tool=shell(git:*)' }).Count | Should -Be 1
@@ -2532,8 +2553,107 @@ Describe 'Skill evaluation scenario contract' {
         $effortIndex = [Array]::IndexOf($arguments, '--reasoning-effort')
         $effortIndex | Should -BeGreaterThan -1
         $arguments[$effortIndex + 1] | Should -Be 'medium'
+        $usageIndex = [Array]::IndexOf($arguments, '--usage-output-file')
+        $usageIndex | Should -BeGreaterThan -1
+        $arguments[$usageIndex + 1] | Should -Be $usagePath
+        $arguments | Should -Contain '--excluded-tools=task'
         @($arguments | Where-Object { $_ -like '--secret-env-vars=*COPILOT_GITHUB_TOKEN*' }).Count | Should -Be 1
         ($arguments -join ' ') | Should -Not -Match 'TOKEN='
+    }
+
+    It 'includes per-run usage and telemetry evidence in the model-output revision' {
+        $directory = Join-Path $TestDrive 'usage-revision'
+        New-Item -ItemType Directory -Path $directory | Out-Null
+        $before = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $legacyManifest = @(
+            'stdout.jsonl:MISSING'
+            'stderr.txt:MISSING'
+            'transcript.md:MISSING'
+            'shim.log:MISSING') -join "`n"
+        $legacyRevision = [Convert]::ToHexString(
+            [System.Security.Cryptography.SHA256]::HashData(
+                [System.Text.Encoding]::UTF8.GetBytes($legacyManifest)))
+        $before | Should -Be $legacyRevision
+        Set-Content -LiteralPath (Join-Path $directory 'usage.json') -Value '{"model":"gpt-5.6-sol","inputTokens":1,"outputTokens":1}'
+        $after = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $after | Should -Not -Be $before
+        Set-Content -LiteralPath (Join-Path $directory 'telemetry.jsonl') -Value '{"gen_ai.response.model":"gpt-5.6-sol"}'
+        $withTelemetry = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $withTelemetry | Should -Not -Be $after
+        $extendedManifest = @(
+            'stdout.jsonl:MISSING'
+            'stderr.txt:MISSING'
+            'transcript.md:MISSING'
+            "usage.json:$((Get-FileHash -LiteralPath (Join-Path $directory 'usage.json') -Algorithm SHA256).Hash)"
+            "telemetry.jsonl:$((Get-FileHash -LiteralPath (Join-Path $directory 'telemetry.jsonl') -Algorithm SHA256).Hash)"
+            'shim.log:MISSING') -join "`n"
+        $extendedRevision = [Convert]::ToHexString(
+            [System.Security.Cryptography.SHA256]::HashData(
+                [System.Text.Encoding]::UTF8.GetBytes($extendedManifest)))
+        $withTelemetry | Should -Be $extendedRevision
+        Remove-Item -LiteralPath (Join-Path $directory 'usage.json')
+        $withoutUsage = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $withoutUsage | Should -Not -Be $withTelemetry
+    }
+
+    It 'rejects a usage receipt without matching model inference: <CaseName>' -ForEach @(
+        @{ CaseName = 'empty requests'; Requests = 0; Model = 'gpt-5.6-sol'; Valid = $false }
+        @{ CaseName = 'missing model metrics'; Requests = 1; Model = $null; Valid = $false }
+        @{ CaseName = 'wrong model'; Requests = 1; Model = 'gpt-5.6-luna'; Valid = $false }
+        @{ CaseName = 'wrong served model'; Requests = 1; Model = 'gpt-5.6-sol'; Served = 'gpt-5.6-luna'; Valid = $false }
+        @{ CaseName = 'wrong reasoning effort'; Requests = 1; Model = 'gpt-5.6-sol'; Effort = 'low'; Valid = $false }
+        @{ CaseName = 'missing telemetry'; Requests = 1; Model = 'gpt-5.6-sol'; NoTelemetry = $true; Valid = $false }
+        @{ CaseName = 'token totals differ'; Requests = 1; Model = 'gpt-5.6-sol'; InputTokens = 11; Valid = $false }
+        @{ CaseName = 'missing per-call input tokens'; Requests = 1; Model = 'gpt-5.6-sol'; NoInput = $true; Reason = '*missing input or output tokens*'; Valid = $false }
+        @{ CaseName = 'missing per-call output tokens'; Requests = 1; Model = 'gpt-5.6-sol'; NoOutput = $true; Reason = '*missing input or output tokens*'; Valid = $false }
+        @{ CaseName = 'missing per-call status'; Requests = 1; Model = 'gpt-5.6-sol'; NoStatus = $true; Reason = '*missing status code*'; Valid = $false }
+        @{ CaseName = 'matched model'; Requests = 1; Model = 'gpt-5.6-sol'; Valid = $true }
+    ) {
+        $path = Join-Path $TestDrive "$CaseName-usage.json"
+        $telemetryPath = Join-Path $TestDrive "$CaseName-telemetry.jsonl"
+        $modelMetrics = @{}
+        if ($Model) {
+            $modelMetrics[$Model] = @{
+                requests = @{ count = 1 }
+                usage = @{ inputTokens = $(if ($InputTokens) { $InputTokens } else { 12 }); outputTokens = 4 }
+            }
+        }
+        @{ totalUserRequests = $Requests; modelMetrics = $modelMetrics } |
+            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path
+        if (-not $NoTelemetry) {
+            @{ type = 'log'; body = 'session started' } |
+                ConvertTo-Json -Compress | Set-Content -LiteralPath $telemetryPath
+            $span = @{
+                type = 'span'
+                name = 'chat gpt-5.6-sol'
+                attributes = @{
+                    'gen_ai.operation.name' = 'chat'
+                    'gen_ai.request.model' = 'gpt-5.6-sol'
+                    'gen_ai.response.model' = $(if ($Served) { $Served } else { 'gpt-5.6-sol' })
+                    'gen_ai.request.reasoning.level' = $(if ($Effort) { $Effort } else { 'medium' })
+                    'gen_ai.usage.input_tokens' = 12
+                    'gen_ai.usage.output_tokens' = 4
+                }
+            }
+            if (-not $NoStatus) { $span.status = @{ code = 0 } }
+            if ($NoInput) { $span.attributes.Remove('gen_ai.usage.input_tokens') }
+            if ($NoOutput) { $span.attributes.Remove('gen_ai.usage.output_tokens') }
+            $span | ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath $telemetryPath
+        }
+        $assert = { & (Get-Module SkillEval) { param($receiptPath, $spanPath)
+                Assert-SkillEvalUsageReceipt -Path $receiptPath -TelemetryPath $spanPath -ExpectedModel 'gpt-5.6-sol'
+            } $path $telemetryPath }
+        if ($Valid) { $assert | Should -Not -Throw }
+        elseif ($Reason) { $assert | Should -Throw $Reason }
+        else { $assert | Should -Throw }
     }
 
     It 'resolves native Copilot deterministically: <CaseName>' -ForEach @(

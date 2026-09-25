@@ -12,8 +12,8 @@
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?is)\\A\\s*Boundary:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Owner:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Oracle:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Test:[^\\r\\n]+\\s*\\z", "(?im)^Boundary:\\s*PowerShell\\b[^\\r\\n]*$", "(?im)^Owner:(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\b(?:command|entry|process)\\b)[^\\r\\n]+$", "(?im)^Oracle:[^\\r\\n]*(?:\\bfresh-process-receipt\\b|(?=[^\\r\\n]*\\b(?:fresh|real)\\b)(?=[^\\r\\n]*\\b(?:child|process)\\b)(?=[^\\r\\n]*\\b(?:report\\w*|observ\\w*|stdout|stderr|environment)\\b)[^\\r\\n]+)$", "(?im)^Test:(?=[^\\r\\n]*\\bPester\\b)(?=[^\\r\\n]*\\b(?:state[- ]table|fresh[- ]process|behavior)\\b)[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": ["(?im)^(?:Boundary|Owner):[^\\r\\n]*\\bPowerShell\\b[^\\r\\n]*\\b(?:is|does|should|must)\\s+not\\b[^\\r\\n]*\\b(?:implement\\w*|boundar\\w*|own\\w*|responsib\\w*)\\b"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Boundary:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Owner:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Oracle:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Test:[^\\r\\n]+\\s*\\z", "(?im)^Boundary:\\s*PowerShell\\b[^\\r\\n]*$", "(?im)^Owner:(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\b(?:command|entry|process)\\b)[^\\r\\n]+$", "(?im)^Oracle:[^\\r\\n]*(?:\\bfresh-process-receipt\\b|(?=[^\\r\\n]*\\b(?:fresh|real|independent\\w*)\\b)(?=[^\\r\\n]*\\b(?:child|process)\\b)(?=[^\\r\\n]*\\b(?:receipt|report\\w*|observ\\w*|stdout|stderr|environment)\\b)[^\\r\\n]+)$", "(?im)^Test:(?=[^\\r\\n]*\\bPester\\b)(?=[^\\r\\n]*\\b(?:state[- ]table|fresh[- ]process|behavior)\\b)[^\\r\\n]+$"],
+      "forbiddenResponsePatterns": ["(?im)^(?:Boundary|Owner):[^\\r\\n]*\\bPowerShell\\b[^\\r\\n]*\\b(?:is|does|should|must)\\s+not\\b[^\\r\\n]*\\b(?:implement\\w*|boundar\\w*|own\\w*|responsib\\w*)\\b", "(?im)^Oracle:[^\\r\\n]*\\b(?:mocked|simulated|synthetic)\\b[^\\r\\n]*\\b(?:child|process|receipt)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true

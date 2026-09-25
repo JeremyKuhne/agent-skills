@@ -155,7 +155,8 @@ credentials are unavailable. Built-in and plugin MCP servers are disabled.
 ## Run locally
 
 Real runs require Copilot CLI 1.0.63 or later and an authenticated Copilot
-session or `COPILOT_GITHUB_TOKEN`. Every run uses a fresh isolated
+session or `COPILOT_GITHUB_TOKEN`. Sol/Luna runs require CLI 1.0.83 or later
+for usage capture and per-call model evidence. Every run uses a fresh isolated
 `COPILOT_HOME` by default so personal skills, plugins, and client state cannot
 affect public-plugin evidence. OS-backed Copilot authentication may remain
 available; otherwise supply a token through the environment. Use
@@ -169,6 +170,13 @@ matrix resolves it once and gives the same binary to every document worker.
 Reports record the version and SHA-256 from that selected executable, and version
 checks run with auto-update disabled. A missing or incompatible binary blocks a
 real run before any scenario is scheduled.
+
+Sol/Luna runs also retain `usage.json` and `telemetry.jsonl` inside the private
+run directory. The suite requires nonempty usage and reconciles every chat
+span's requested and served model, medium effort, and input/output tokens with
+the final usage receipt. Content capture is disabled for telemetry; do not
+publish raw run artifacts by default. A mismatched or missing receipt counts
+as infrastructure failure.
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `

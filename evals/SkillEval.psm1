@@ -77,6 +77,8 @@ function New-SkillEvalArguments {
         [Parameter(Mandatory)]
         [string] $TranscriptPath,
 
+        [string] $UsageOutputPath,
+
         [string[]] $SecretEnvironmentNames = @(
             'COPILOT_GITHUB_TOKEN',
             'GH_TOKEN',
@@ -114,6 +116,11 @@ function New-SkillEvalArguments {
     }
     foreach ($tool in @($Scenario.deniedTools)) {
         $arguments.Add("--deny-tool=$tool")
+    }
+    if (-not [string]::IsNullOrWhiteSpace($UsageOutputPath)) {
+        $arguments.Add('--usage-output-file')
+        $arguments.Add($UsageOutputPath)
+        $arguments.Add('--excluded-tools=task')
     }
 
     return $arguments.ToArray()
@@ -431,11 +438,14 @@ function Get-SkillEvalRunArtifactRevision {
         [string] $RunDirectory
     )
 
-    $manifest = @(foreach ($fileName in @(
-                'stdout.jsonl',
-                'stderr.txt',
-                'transcript.md',
-                'shim.log')) {
+    $fileNames = @('stdout.jsonl', 'stderr.txt', 'transcript.md')
+    foreach ($fileName in @('usage.json', 'telemetry.jsonl')) {
+        if (Test-Path -LiteralPath (Join-Path $RunDirectory $fileName) -PathType Leaf) {
+            $fileNames += $fileName
+        }
+    }
+    $fileNames += 'shim.log'
+    $manifest = @(foreach ($fileName in $fileNames) {
             $path = Join-Path $RunDirectory $fileName
             if (Test-Path -LiteralPath $path -PathType Leaf) {
                 "$fileName`:$((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash)"
@@ -447,6 +457,79 @@ function Get-SkillEvalRunArtifactRevision {
     return [Convert]::ToHexString(
         [System.Security.Cryptography.SHA256]::HashData(
             [System.Text.Encoding]::UTF8.GetBytes($manifest)))
+}
+
+function Assert-SkillEvalUsageReceipt {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path,
+
+        [Parameter(Mandatory)]
+        [string] $TelemetryPath,
+
+        [Parameter(Mandatory)]
+        [string] $ExpectedModel
+    )
+
+    $receipt = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop |
+        ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    if ($receipt -isnot [System.Collections.IDictionary] -or
+        -not $receipt.Contains('totalUserRequests') -or
+        [long]$receipt.totalUserRequests -lt 1 -or
+        $receipt.modelMetrics -isnot [System.Collections.IDictionary] -or
+        $receipt.modelMetrics.Count -eq 0) {
+        throw 'The model usage receipt has no completed inference.'
+    }
+    foreach ($modelId in $receipt.modelMetrics.Keys) {
+        if ([string]$modelId -cne $ExpectedModel) {
+            throw "The usage receipt reports model '$modelId', not '$ExpectedModel'."
+        }
+    }
+    $metrics = $receipt.modelMetrics[$ExpectedModel]
+    if ($metrics -isnot [System.Collections.IDictionary] -or
+        [long]$metrics.requests.count -lt 1 -or
+        [long]$metrics.usage.inputTokens -lt 1 -or
+        [long]$metrics.usage.outputTokens -lt 1) {
+        throw 'The model usage receipt has incomplete token counts.'
+    }
+
+    $chatCount = 0
+    $inputTokens = 0L
+    $outputTokens = 0L
+    foreach ($line in (Get-Content -LiteralPath $TelemetryPath -ErrorAction Stop)) {
+        $span = $line | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        if ($span -isnot [System.Collections.IDictionary] -or
+            $span['type'] -ne 'span' -or
+            $span['attributes'] -isnot [System.Collections.IDictionary]) {
+            continue
+        }
+        $attributes = $span['attributes']
+        if ($attributes.'gen_ai.operation.name' -ne 'chat') { continue }
+        if ($attributes.'gen_ai.request.model' -cne $ExpectedModel -or
+            $attributes.'gen_ai.response.model' -cne $ExpectedModel -or
+            $attributes.'gen_ai.request.reasoning.level' -cne 'medium') {
+            throw 'A model call did not use the requested model and medium effort.'
+        }
+        if ($span['status'] -isnot [System.Collections.IDictionary] -or
+            -not $span['status'].Contains('code')) {
+            throw 'A model call is missing status code evidence.'
+        }
+        if ([int]$span['status']['code'] -ne 0) {
+            throw 'A model call reported a failing status code.'
+        }
+        if (-not $attributes.Contains('gen_ai.usage.input_tokens') -or
+            -not $attributes.Contains('gen_ai.usage.output_tokens')) {
+            throw 'A model call is missing input or output tokens.'
+        }
+        $chatCount++
+        $inputTokens += [long]$attributes.'gen_ai.usage.input_tokens'
+        $outputTokens += [long]$attributes.'gen_ai.usage.output_tokens'
+    }
+    if ($chatCount -ne [long]$metrics.requests.count -or
+        $inputTokens -ne [long]$metrics.usage.inputTokens -or
+        $outputTokens -ne [long]$metrics.usage.outputTokens) {
+        throw 'Per-call model usage does not reconcile with the final receipt.'
+    }
 }
 
 function Get-SkillEvalPathRevision {
@@ -1089,6 +1172,10 @@ function Invoke-SkillEvalProcess {
     $transcriptPath = Join-Path $Context.RunDirectory 'transcript.md'
     $standardOutputPath = Join-Path $Context.RunDirectory 'stdout.jsonl'
     $standardErrorPath = Join-Path $Context.RunDirectory 'stderr.txt'
+    $usageOutputPath = if (-not $Executor -and $Model -in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+        Join-Path $Context.RunDirectory 'usage.json'
+    }
+    else { $null }
     $secretEnvironmentNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($environmentName in @(
             'COPILOT_GITHUB_TOKEN',
@@ -1109,6 +1196,7 @@ function Invoke-SkillEvalProcess {
         -PluginDirectory $Context.PluginDirectory `
         -Model $Model `
         -TranscriptPath $transcriptPath `
+        -UsageOutputPath $usageOutputPath `
         -SecretEnvironmentNames @($secretEnvironmentNames)
     $effectiveCopilotHomeIsolation = $IsolateCopilotHome -or
         $Context.HasPersonalSkillFixture
@@ -1122,6 +1210,7 @@ function Invoke-SkillEvalProcess {
         TranscriptPath = $transcriptPath
         StandardOutputPath = $standardOutputPath
         StandardErrorPath = $standardErrorPath
+        UsageOutputPath = $usageOutputPath
         ShimLogPath = $Context.ShimLogPath
     }
     $invocation | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $Context.RunDirectory 'invocation.json')
@@ -1139,6 +1228,7 @@ function Invoke-SkillEvalProcess {
             TranscriptPath = $transcriptPath
             StandardOutputPath = $standardOutputPath
             StandardErrorPath = $standardErrorPath
+            UsageOutputPath = $usageOutputPath
             Arguments = $arguments
         }
     }
@@ -1160,6 +1250,10 @@ function Invoke-SkillEvalProcess {
     $startInfo.Environment['CI'] = 'true'
     $startInfo.Environment['NO_COLOR'] = '1'
     $startInfo.Environment['COPILOT_AUTO_UPDATE'] = 'false'
+    if ($usageOutputPath) {
+        $startInfo.Environment['COPILOT_OTEL_FILE_EXPORTER_PATH'] = Join-Path $Context.RunDirectory 'telemetry.jsonl'
+        $startInfo.Environment['OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT'] = 'false'
+    }
     $sandboxHome = $Context.SandboxHome
     $startInfo.Environment['HOME'] = $sandboxHome
     $startInfo.Environment['USERPROFILE'] = $sandboxHome
@@ -1206,6 +1300,7 @@ function Invoke-SkillEvalProcess {
         TranscriptPath = $transcriptPath
         StandardOutputPath = $standardOutputPath
         StandardErrorPath = $standardErrorPath
+        UsageOutputPath = $usageOutputPath
         Arguments = $arguments
     }
 }
@@ -1334,6 +1429,13 @@ function Invoke-SkillEvalWorkItem {
             -Executor $Executor `
             -IsolateCopilotHome:$IsolateCopilotHome
         $processMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
+        if ($processResult.PSObject.Properties['UsageOutputPath'] -and
+            $processResult.UsageOutputPath) {
+            Assert-SkillEvalUsageReceipt `
+                -Path $processResult.UsageOutputPath `
+                -TelemetryPath (Join-Path $runDirectory 'telemetry.jsonl') `
+                -ExpectedModel $Model
+        }
 
         if ([bool]$Scenario.requireUnchangedWorktree) {
             $finalWorktree = Get-SkillEvalWorktreeSnapshot `

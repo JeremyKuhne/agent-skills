@@ -43,6 +43,21 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P7 | Evaluation infrastructure extraction | Not started | P6 | Shared process, timeout, hash, result-schema, and aggregation logic moves from `SkillEval.psm1` into the typed core without changing the PowerShell entry-point contracts; focused and full parity suites pass. |
 | P8 | Breaking release and effectiveness decision | Not started | P1b, P3a, P4-P7 | Migration guidance and release notes are complete; all seeded defects fail before their fixes and pass after; two consecutive substantive PowerShell pull requests have zero valid post-publication reviewer findings; the maintainer records release and follow-up decisions. |
 
+The P3a Sol/Luna preflight on 2026-09-25 used the same implicit process-boundary
+scenario once per model at medium effort, with isolated Copilot CLI 1.0.83
+(`D3F3BB7B8BBF68357AD29F514A179D09F76135483D8BFB643131B8600F671EE2`).
+The first Sol startup lacked authentication and made zero requests. An
+authenticated Sol run passed directly; Luna invoked the intended skill but
+initially missed an overly narrow oracle wording check. An independent
+child-process receipt was accepted after a positive control reproduced the
+miss and a mocked-receipt control remained negative. Hash-verified rescoring
+passed both saved attempts (1/1 per model; zero safety or infrastructure
+failures). Per-call telemetry verified three requests on each requested and
+served model, medium effort, and token totals matching the final usage files.
+The prompts, candidate, scenario, fixtures, scorer, and client hash matched.
+Raw transcripts and usage remain local under the OS temporary directory. This
+single paired scenario is a preflight, not full P3a or portfolio qualification.
+
 PR #90 is closed unmerged; retain its parity receipt as compatibility evidence
 without inheriting its universal-Pester premise. Do not start P1b until P0r is
 accepted and P1c establishes the managed boundary. P1c proves one ownership
