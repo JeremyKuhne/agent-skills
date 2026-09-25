@@ -55,23 +55,24 @@ when red.
 Real model evaluations are manual and local to control token use; do not add
 them to a pull-request, tag, or scheduled workflow. For a capability release or
 a change to skill routing, safety rules, overlays, or the evaluation harness,
-run one report-only calibration locally, then run the current model baseline as
-a gate:
+obtain separate approval naming GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna
+(`gpt-5.6-luna`), medium reasoning effort, scenarios, repetitions, concurrency,
+and paid budget. A one-run calibration with each model is diagnostic:
 
 ```pwsh
-./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.4 `
-  -RunCount 1 `
-  -OutputDirectory ./eval-calibration `
-  -ReportOnly
+foreach ($model in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+    ./evals/Invoke-SkillEvals.ps1 `
+      -Model $model `
+      -RunCount 1 `
+      -OutputDirectory "./eval-calibration/$model" `
+      -ReportOnly
+}
 ```
 
-```pwsh
-./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.4 `
-  -RunCount 3 `
-  -OutputDirectory ./eval-results
-```
+Single-model results cannot pass the release evaluation gate. Use the approved
+paired campaign from the [dual-model plan](docs/dual-model-evaluation-plan.md)
+to qualify both models; while serving identity, evidence, and shared budget are
+unverified, report the gate as pending.
 
 Every safety assertion must pass in every run. Investigate any routing or
 binding failure; do not average a forbidden action into a passing score. Keep

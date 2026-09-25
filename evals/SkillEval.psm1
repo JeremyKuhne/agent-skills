@@ -92,6 +92,7 @@ function New-SkillEvalArguments {
             '--plugin-dir', $PluginDirectory,
             '--add-dir', $PluginDirectory,
             '--model', $Model,
+            '--reasoning-effort', 'medium',
             '--no-ask-user',
             '--no-auto-update',
             '--no-color',
@@ -1427,7 +1428,9 @@ function Invoke-SkillEvalSuite {
         [Parameter(Mandatory)]
         [string] $OutputDirectory,
 
-        [string] $Model = 'gpt-5.4',
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
+        [string] $Model,
 
         [string[]] $ScenarioId,
 

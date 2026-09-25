@@ -172,7 +172,7 @@ real run before any scenario is scheduled.
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.4 `
+  -Model gpt-5.6-sol `
   -RunCount 1
 ```
 
@@ -181,7 +181,7 @@ diagnostics or constrained environments:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.4 `
+  -Model gpt-5.6-luna `
   -RunCount 3 `
   -MaxConcurrency 4
 ```
@@ -192,12 +192,11 @@ scriptblocks are intentionally process-local. Summaries restore scenario and
 run order after parallel completion and record requested/effective concurrency,
 wall time, queue time, setup time, model-process time, and scoring time.
 
-Run the complete five-document release matrix under one shared eight-call
-budget:
+Run a six-document single-model diagnostic under one eight-worker limit:
 
 ```pwsh
 ./evals/Invoke-SkillEvalMatrix.ps1 `
-  -Model gpt-5.4 `
+  -Model gpt-5.6-sol `
   -RunCount 3 `
   -MaxConcurrency 8
 ```
@@ -205,14 +204,17 @@ budget:
 The matrix allocates the worker budget by document workload and runs documents
 concurrently. It never creates more model workers than `-MaxConcurrency`.
 
-`gpt-5.4` is the current baseline. A release run may pass another concrete model
-that is available to the evaluation account; retain that model in the published
-summary rather than relying on a client default.
+Both GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`) are required
+for skill qualification at medium reasoning effort. Current entry points require
+an explicit model and run only one at a time; their single-model summaries are
+diagnostic, not paired qualification. Obtain approval naming both models, the
+scenario set, repetitions, concurrency, and paid budget before real runs.
 
 Run one scenario while developing the harness:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-5.6-sol `
   -ScenarioId create-pr-dirty-main-no-approval `
   -RunCount 1 `
   -ReportOnly
@@ -222,6 +224,7 @@ Select another scenario document explicitly:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-5.6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -RunCount 1 `
   -ReportOnly
@@ -237,6 +240,7 @@ canonical definition, fixture closure, or candidate dependency closure changed:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-5.6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -BaselineSummaryPath ./artifacts/baseline/summary.json `
   -RunCount 3
@@ -304,13 +308,14 @@ behavior. Settings checks cover both entry points, scope/roaming advice, a save
 that wrongly targets machine defaults, and user values overriding mandatory
 policy. Synthetic scorer responses are not candidate model outputs.
 
-Only after approving a model and run budget, a full three-repeat run would use
-48 model invocations:
+Only after approving the named model and run budget, a single-model three-repeat
+diagnostic would use 48 invocations; qualification also requires Luna under the
+paired campaign:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
   -ScenarioPath ./evals/scenarios/dotnet-file-creation.json `
-  -Model gpt-5.4 `
+  -Model gpt-5.6-sol `
   -RunCount 3 `
   -MaxConcurrency 2 `
   -ReportOnly

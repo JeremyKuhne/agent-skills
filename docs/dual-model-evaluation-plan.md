@@ -310,7 +310,7 @@ one concrete next action. Keep the existing budget and publication boundaries.
 
 ## Decision and boundaries
 
-Replace the single-model `gpt-5.4` evaluation baseline with a matched Sol/Luna
+Replace the legacy single-model evaluation baseline with a matched Sol/Luna
 matrix. Measure whether each model selects the right skill, observes safety and
 approval rules, and produces a useful, correct outcome. Prefer Luna only if its
 absolute quality and safety pass and its successful outcomes cost materially
@@ -353,8 +353,9 @@ of that entry gate; this avoids a circular dependency between the plans.
 
 The [matrix entry point](../evals/Invoke-SkillEvalMatrix.ps1),
 [single-suite runner](../evals/Invoke-SkillEvals.ps1), and
-[suite implementation](../evals/SkillEval.psm1) accept one `Model` and default to
-`gpt-5.4`. The matrix selects six scenario documents. The suite records requested
+[suite implementation](../evals/SkillEval.psm1) accept one `Model` each. They
+previously selected a legacy model by default; all now require explicit model
+selection. The matrix selects six scenario documents. The suite records requested
 model, revisions, durations, and outcomes, but does not aggregate inference-token
 usage or verify the serving model in its summary.
 
@@ -749,7 +750,7 @@ sections supply the detailed experiment and operating rules.
 Use one model roster containing both exact IDs, effort, and cost weights. Extend
 the existing matrix rather than running two unrestricted matrices or adding a
 runner stack. A single-suite `-Model` diagnostic can remain, but cannot claim
-dual-model qualification; remove implicit `gpt-5.4` execution defaults.
+dual-model qualification; do not restore implicit execution defaults.
 
 Schedule model/scenario/repetition tuples under one shared concurrency limit.
 The current matrix requires at least as many workers as documents; adapt its
@@ -760,7 +761,7 @@ one absent model, or an empty model selection must not produce a green report.
 Include model ID, effort, client/settings, fixture/candidate/scenario revisions,
 effective compiler/language and PowerShell versions, rubric/judge version, and
 usage/cost schema in evidence identities. The affected-
-scenario selector must not reuse a `gpt-5.4` or Luna result as Sol evidence just
+scenario selector must not reuse a different-model result as Sol evidence just
 because files are unchanged. A changed price policy may recompute cost from
 immutable usage; changed model/effort needs fresh calls. Rescoring never invents
 missing usage or overwrites captured outputs.
@@ -783,7 +784,7 @@ Synthetic CI tests must prove that exhausted or unavailable budgets prevent
 new live work and that a replay cannot claim fresh candidate-model coverage.
 
 Update [evals/README.md](../evals/README.md), release guidance, commands, and
-synthetic test expectations with implementation. Keep historical `gpt-5.4`
+synthetic test expectations with implementation. Keep historical single-model
 measurements labeled as historical. Both models become mandatory for the
 qualification matrix and authorized affected-scenario qualification runs, not
 every local lint run or every PR. The optional CI subset has a different, labeled

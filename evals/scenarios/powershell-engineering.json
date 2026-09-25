@@ -13,7 +13,7 @@
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?is)\\A\\s*Boundary:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Owner:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Oracle:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Test:[^\\r\\n]+\\s*\\z", "(?im)^Boundary:\\s*PowerShell\\b[^\\r\\n]*$", "(?im)^Owner:(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\b(?:command|entry|process)\\b)[^\\r\\n]+$", "(?im)^Oracle:[^\\r\\n]*(?:\\bfresh-process-receipt\\b|(?=[^\\r\\n]*\\b(?:fresh|real)\\b)(?=[^\\r\\n]*\\b(?:child|process)\\b)(?=[^\\r\\n]*\\b(?:report\\w*|observ\\w*|stdout|stderr|environment)\\b)[^\\r\\n]+)$", "(?im)^Test:(?=[^\\r\\n]*\\bPester\\b)(?=[^\\r\\n]*\\b(?:state[- ]table|fresh[- ]process|behavior)\\b)[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": [],
+      "forbiddenResponsePatterns": ["(?im)^(?:Boundary|Owner):[^\\r\\n]*\\bPowerShell\\b[^\\r\\n]*\\b(?:is|does|should|must)\\s+not\\b[^\\r\\n]*\\b(?:implement\\w*|boundar\\w*|own\\w*|responsib\\w*)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
@@ -30,7 +30,7 @@
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?is)\\A\\s*Boundary:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*PowerShell-role:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Oracle:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Test:[^\\r\\n]+\\s*\\z", "(?im)^Boundary:[^\\r\\n]*\\bYAML\\b[^\\r\\n]*\\b(?:parser|library|AST|API)\\b", "(?im)^PowerShell-role:[^\\r\\n]*\\b(?:orchestrat\\w*|invok\\w*)\\b", "(?im)^Oracle:[^\\r\\n]*(?:\\bindependent\\b|\\bspec\\b|\\bmaintained\\b[^\\r\\n]*\\bparser\\b|parser[\\s-]*DOM)", "(?im)^Test:(?=[^\\r\\n]*(?:duplicate[\\s-]*key|\\bmutat\\w*\\b|\\b(?:same|repeated)\\b[^\\r\\n]*\\b(?:mapping|key)\\b|\\bmapping\\b[^\\r\\n]*\\brepeats\\b[^\\r\\n]*\\bkey\\b))(?=[^\\r\\n]*(?:\\bfail\\w*\\b|\\breject\\w*\\b|\\bbefore\\b))[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": ["(?i)PowerShell-(?:regex|line)-parser"],
+      "forbiddenResponsePatterns": ["(?i)PowerShell-(?:regex|line)-parser", "(?im)^Boundary:[^\\r\\n]*\\bYAML\\b[^\\r\\n]*\\b(?:parser|library|AST|API)\\b[^\\r\\n]*\\b(?:does|is|should|must)\\s+not\\b[^\\r\\n]*\\b(?:own\\w*|interpret\\w*|implement\\w*|boundar\\w*)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
@@ -116,7 +116,7 @@
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?is)\\A\\s*Parser:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Validation:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Cases:[^\\r\\n]+\\s*\\z", "(?im)^Parser:[^\\r\\n]*(?:ConvertFrom-Json|structured[ -]?JSON|\\bJSON\\b[^\\r\\n]*\\bparser\\b)", "(?im)^Validation:(?=[^\\r\\n]*(?:\\bpresen\\w*\\b|\\bContains\\b|\\bkey\\b))(?=[^\\r\\n]*\\b(?:bool|Boolean|type)\\w*\\b)[^\\r\\n]+$", "(?im)^Cases:(?=[^\\r\\n]*\\bfalse\\b)(?=[^\\r\\n]*(?:\\bdistinct\\b|\\bvalid\\b|\\bpositive\\b|\\baccept\\w*\\b))(?=[^\\r\\n]*(?:\\bdistinct\\b|\\binvalid\\b|\\bnegative\\b|\\breject\\w*\\b))(?=[^\\r\\n]*(?:\\bmissing\\b|\\babsen\\w*\\b|\\{\\s*\\}))(?=[^\\r\\n]*\\bnull\\b)(?=[^\\r\\n]*(?:\\bzero\\b|\\b0\\b))(?=[^\\r\\n]*(?:\\bempty\\b|\"\"))(?=[^\\r\\n]*(?:\\bstring\\b|\"false\"))[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": [],
+      "forbiddenResponsePatterns": ["(?im)^Cases:\\s*false\\b[^;\\r\\n]*\\b(?:invalid|reject\\w*|negative)\\b", "(?im)^Cases:[^\\r\\n]*\\b(?:missing|null|empty|zero|string\\s+false)\\b[^;\\r\\n]*\\b(?:valid|accept\\w*|positive)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
@@ -133,7 +133,7 @@
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?is)\\A\\s*Presence:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Retrieval:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Output:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Cases:[^\\r\\n]+\\s*\\z", "(?im)^Presence:(?=[^\\r\\n]*\\b(?:key|Contains|membership|missing|exists|presen\\w*)\\b)(?=[^\\r\\n]*\\b(?:check|validat\\w*|requir\\w*|reject\\w*|test|verify|own\\w*)\\b)[^\\r\\n]+$", "(?im)^Retrieval:[^\\r\\n]*(?:\\bdirect\\w*\\b|\\barray\\b|@\\()[^\\r\\n]+$", "(?im)^Output:[^\\r\\n]*(?:\\bavoid[^\\r\\n]*enumerat\\w*\\b|\\bwithout\\s+enumerat\\w*\\b|\\bNoEnumerate\\b|\\bpreserv\\w*[^\\r\\n]*\\bshape\\b|return\\s*,)[^\\r\\n]*$", "(?im)^Cases:(?=[^\\r\\n]*\\bmissing\\b)(?=[^\\r\\n]*(?:\\bempty\\b|\\bzero\\b|\\[\\]|count\\s*0))(?=[^\\r\\n]*(?:\\bsingle\\b|\\bone\\b|\\bone[- ]item\\b|count\\s*1|\\[\\s*[^,\\]\\s]+\\s*\\]))(?=[^\\r\\n]*(?:\\bmultiple\\b|\\bmulti\\b|\\bmany\\b|count\\s*2|\\[\\s*[^,\\]\\s]+\\s*,\\s*[^,\\]\\s]+(?:\\s*,\\s*\\.\\.\\.)?\\s*\\]))[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": [],
+      "forbiddenResponsePatterns": ["(?im)^Cases:[^\\r\\n]*\\bmissing\\b[^;\\r\\n]*\\b(?:valid|accept\\w*|positive)\\b", "(?im)^Cases:[^\\r\\n]*(?:\\b(?:empty|zero)\\b|\\[\\])[^;\\r\\n]*\\b(?:invalid|reject\\w*|fail\\w*)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
@@ -166,8 +166,8 @@
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?is)\\A\\s*Run:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Result:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Worker:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Discovery:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Counts:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Failures:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Negative-control:[^\\r\\n]+\\s*\\z", "(?im)^Run:[^\\r\\n]*(?:(?=[^\\r\\n]*\\bPester\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)|(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)(?=[^\\r\\n]*\\bshard\\b))[^\\r\\n]+$", "(?im)^Result:[^\\r\\n]*(?:\\bPassed\\b[^\\r\\n]*\\b(?:exit|result|status)\\b|\\brequire-Passed\\b)", "(?im)^Worker:(?=[^\\r\\n]*\\bcomplet\\w*\\b)(?=[^\\r\\n]*(?:\\bexit\\b|\\btimeout\\b|\\bworker\\b))[^\\r\\n]+$", "(?im)^Discovery:[^\\r\\n]*(?:\\bpositive\\b|\\bnonzero\\b|\\bgreater\\b[^\\r\\n]*\\bzero\\b)", "(?im)^Counts:(?=[^\\r\\n]*(?:\\breconcil\\w*\\b|\\bTotalCount\\b))(?=[^\\r\\n]*\\bskipp\\w*\\b)(?=[^\\r\\n]*(?:\\bnot[- ]run\\b|\\bNotRunCount\\b))(?=[^\\r\\n]*\\binconclusive\\w*\\b)[^\\r\\n]+$", "(?im)^Failures:(?=[^\\r\\n]*(?:\\bblocks?\\b|\\bFailedBlocksCount\\b))(?=[^\\r\\n]*(?:\\bcontainers?\\b|\\bFailedContainersCount\\b))(?=[^\\r\\n]*\\binfrastructure\\b)[^\\r\\n]+$", "(?im)^Negative-control:(?=[^\\r\\n]*(?:\\bempty\\b|\\bno\\b[^\\r\\n]*\\btest\\w*\\b|\\bfilter\\b[^\\r\\n]*\\bmatch nothing\\b))(?=[^\\r\\n]*(?:\\bfail\\w*\\b|\\breject\\w*\\b|\\bnon[- ]passing\\b))[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": ["(?im)^Result:[^\\r\\n]*(?:\\bdo not require\\b[^\\r\\n]*\\bPassed\\b|\\bPassed\\b[^\\r\\n]*\\b(?:not required|optional)\\b|\\bexit\\b[^\\r\\n]*\\b(?:ignored|optional|not required)\\b)", "(?im)^Worker:[^\\r\\n]*(?:\\bcomplete-with-nonzero-exit\\b|\\b(?:accept|allow|permit)\\s+(?:a\\s+)?(?:non[- ]?zero|incomplete)\\b)", "(?im)^Discovery:[^\\r\\n]*\\b(?:positive|nonzero)\\b[^\\r\\n]*\\b(?:not required|optional)\\b", "(?im)^Failures:[^\\r\\n]*\\bignore\\b"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Run:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Result:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Worker:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Discovery:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Counts:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Failures:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Negative-control:[^\\r\\n]+\\s*\\z", "(?im)^Run:[^\\r\\n]*(?:(?=[^\\r\\n]*\\bPester\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)|(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)(?=[^\\r\\n]*\\bshard\\b))[^\\r\\n]+$", "(?im)^Result:[^\\r\\n]*(?:\\bPassed\\b[^\\r\\n]*\\b(?:exit|result|status)\\b|\\brequire-Passed\\b)", "(?im)^Worker:(?=[^\\r\\n]*\\bcomplet\\w*\\b)(?=[^\\r\\n]*\\bexit[- ]+(?:code[- ]+)?(?:0|zero)\\b)[^\\r\\n]+$", "(?im)^Discovery:[^\\r\\n]*(?:\\bpositive\\b|\\bnonzero\\b|\\bgreater\\b[^\\r\\n]*\\bzero\\b)", "(?im)^Counts:(?=[^\\r\\n]*(?:\\breconcil\\w*\\b|\\bTotalCount\\b))(?=[^\\r\\n]*\\bskipp\\w*\\b)(?=[^\\r\\n]*(?:\\bnot[- ]run\\b|\\bNotRunCount\\b))(?=[^\\r\\n]*\\binconclusive\\w*\\b)[^\\r\\n]+$", "(?im)^Failures:(?=[^\\r\\n]*(?:\\bblocks?\\b|\\bFailedBlocksCount\\b))(?=[^\\r\\n]*(?:\\bcontainers?\\b|\\bFailedContainersCount\\b))(?=[^\\r\\n]*\\binfrastructure\\b)[^\\r\\n]+$", "(?im)^Negative-control:(?=[^\\r\\n]*(?:\\bempty\\b|\\bno\\b[^\\r\\n]*\\btest\\w*\\b|\\bfilter\\b[^\\r\\n]*\\bmatch nothing\\b))(?=[^\\r\\n]*(?:\\bfail\\w*\\b|\\breject\\w*\\b|\\bnon[- ]passing\\b))[^\\r\\n]+$"],
+      "forbiddenResponsePatterns": ["(?im)^Result:[^\\r\\n]*(?:\\bdo not require\\b[^\\r\\n]*\\bPassed\\b|\\bPassed\\b[^\\r\\n]*\\b(?:not required|optional)\\b|\\bexit\\b[^\\r\\n]*\\b(?:ignored|optional|not required)\\b)", "(?im)^Worker:[^\\r\\n]*(?:\\bcomplete-with-nonzero-exit\\b|\\b(?:accept|allow|permit)\\s+(?:a\\s+)?(?:non[- ]?zero|incomplete)\\b|\\b(?:exit|status)\\b[^\\r\\n]*\\b(?:not checked|unchecked|ignored|optional|not required)\\b)", "(?im)^Discovery:[^\\r\\n]*\\b(?:positive|nonzero)\\b[^\\r\\n]*\\b(?:not required|optional)\\b", "(?im)^Failures:[^\\r\\n]*\\bignore\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
@@ -218,7 +218,7 @@
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?is)\\A\\s*Floor:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Probe:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Evidence:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Decision:[^\\r\\n]+\\s*\\z", "(?im)^Floor:[^\\r\\n]*\\bPowerShell\\b[^\\r\\n]*\\b7\\.4\\b", "(?im)^Probe:(?=[^\\r\\n]*\\b(?:execute|run|behavior)\\b)(?=[^\\r\\n]*(?:\\bminimum\\b|\\b7\\.4\\b))(?=[^\\r\\n]*\\b(?:host|PowerShell|entry)\\b)[^\\r\\n]+$", "(?im)^Evidence:(?=[^\\r\\n]*\\b(?:incompatible|unverified|unsupported|contradicted)\\b)(?=[^\\r\\n]*\\b(?:tested|repair\\w*|7\\.4|minimum|newer)\\b)[^\\r\\n]+$", "(?im)^Decision:(?=[^\\r\\n]*\\b(?:replace|avoid|change|fix|remov)\\w*\\b)(?=[^\\r\\n]*\\b(?:API|code|implementation|dependency)\\b)(?=[^\\r\\n]*\\b(?:break|raise|correct|document|name|floor)\\w*\\b)[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": [],
+      "forbiddenResponsePatterns": ["(?im)^Floor:[^\\r\\n]*\\bPowerShell\\b[^\\r\\n]*\\b7\\.4\\b[^\\r\\n]*\\b(?:not\\s+(?:supported|the\\s+(?:documented|supported)\\s+(?:minimum|floor))|unsupported)\\b", "(?im)^Floor:\\s*(?:not|never)\\s+PowerShell\\b[^\\r\\n]*\\b7\\.4\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true
@@ -285,8 +285,8 @@
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?is)\\A\\s*Profile:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Legacy:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Changed:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Syntax:[^\\r\\n]+\\s*\\z", "(?im)^Profile:(?=[^\\r\\n]*\\bcurated\\b)(?=[^\\r\\n]*\\bcorrectness\\b)(?=[^\\r\\n]*\\bglobal\\w*\\b)[^\\r\\n]+$", "(?im)^Legacy:(?=[^\\r\\n]*\\b(?:keep|report|preserv\\w*)\\b)(?=[^\\r\\n]*\\b(?:existing|legacy)\\b)(?=[^\\r\\n]*\\bdefault\\b)(?=[^\\r\\n]*\\bdiagnostics\\b)[^\\r\\n]+$", "(?im)^Changed:(?=[^\\r\\n]*\\b(?:reject|fail)\\w*\\b)(?=[^\\r\\n]*\\bnew\\b)(?=[^\\r\\n]*\\bdefault\\b)(?=[^\\r\\n]*\\b(?:diagnostic|warning)\\w*\\b)[^\\r\\n]+$", "(?im)^Syntax:(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\bparser\\b)(?=[^\\r\\n]*\\bregex\\b)(?=[^\\r\\n]*\\b(?:not|avoid|never)\\b)[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": [],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Profile:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Legacy:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Changed:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Syntax:[^\\r\\n]+\\s*\\z", "(?im)^Profile:(?=[^\\r\\n]*\\bcurated\\b)(?=[^\\r\\n]*\\bcorrectness\\b)(?=[^\\r\\n]*\\bglobal\\w*\\b)[^\\r\\n]+$", "(?im)^Legacy:(?=[^\\r\\n]*\\b(?:keep|report|preserv\\w*)\\b)(?=[^\\r\\n]*\\b(?:existing|legacy)\\b)(?=[^\\r\\n]*\\bdefault\\b)(?=[^\\r\\n]*\\bdiagnostics\\b)[^\\r\\n]+$", "(?im)^Changed:(?=[^\\r\\n]*\\b(?:reject|fail)\\w*\\b)(?=[^\\r\\n]*\\bnew\\b)(?=[^\\r\\n]*\\bdefault\\b)(?=[^\\r\\n]*\\b(?:diagnostic|warning)\\w*\\b)(?=[^\\r\\n]*\\bchanged[- ]lines?\\b)[^\\r\\n]+$", "(?im)^Syntax:(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\bparser\\b)(?=[^\\r\\n]*\\bregex\\b)(?=[^\\r\\n]*\\b(?:not|avoid|never)\\b)[^\\r\\n]+$"],
+      "forbiddenResponsePatterns": ["(?im)^Changed:[^\\r\\n]*(?:\\bonly\\s+on\\s+unchanged\\s+lines?\\b|\\b(?:not|never)\\s+(?:on\\s+)?changed[- ]lines?\\b)"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true

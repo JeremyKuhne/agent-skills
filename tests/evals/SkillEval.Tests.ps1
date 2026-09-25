@@ -284,6 +284,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'PowerShell implementation boundary explicitly negated'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell is not the implementation boundary.'
+                'Owner: The PowerShell process entry point owns the child.'
+                'Oracle: fresh-process-receipt'
+                'Test: Pester-state-table') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'YAML parser boundary accepted'
             ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
             Response = @(
@@ -372,6 +382,16 @@ Describe 'Skill evaluation scenario contract' {
                 'PowerShell-role: implementation'
                 'Oracle: parser-output'
                 'Test: happy-path-after-fix') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'YAML parser ownership explicitly negated'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser does not own the workflow syntax.'
+                'PowerShell-role: Invoke the parser and map diagnostics.'
+                'Oracle: Independent parser specification fixtures.'
+                'Test: Duplicate keys must fail before implementation.') -join "`n"
             Expected = $false
         }
         @{
@@ -664,6 +684,15 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'JSON Boolean validity inverted rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: structured-JSON'
+                'Validation: presence-and-Boolean-type'
+                'Cases: false is invalid; missing, null, 0, empty text, and string false are valid.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'parsed array shape accepted'
             ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
             Response = @(
@@ -761,6 +790,16 @@ Describe 'Skill evaluation scenario contract' {
                 'Retrieval: direct-array-reference'
                 'Output: avoid-pipeline-enumeration'
                 'Cases: missing-empty-single-multiple') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'parsed array accepted states inverted rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing is valid; [] invalid, [one] invalid, and [one,two] invalid.') -join "`n"
             Expected = $false
         }
         @{
@@ -902,7 +941,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Run: Isolated Pester execution for the PowerShell component.'
                 'Result: Require Passed result and exit code zero.'
-                'Worker: Completed worker without timeout.'
+                'Worker: Completed worker without timeout and with exit code zero.'
                 'Discovery: Positive test discovery, never zero.'
                 'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
                 'Failures: Reject failed blocks, containers, and infrastructure errors.'
@@ -928,7 +967,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Run: Owning PowerShell behavior lane through its isolated shard runner.'
                 'Result: Require Passed result and exit code zero.'
-                'Worker: Require completed workers; reject incomplete or nonzero exit.'
+                'Worker: Require completed workers with exit code zero; reject incomplete or nonzero exit.'
                 'Discovery: Require positive count.'
                 'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
                 'Failures: Reject failed blocks, containers, and infrastructure errors.'
@@ -955,6 +994,32 @@ Describe 'Skill evaluation scenario contract' {
                 'Run: Isolated Pester suite.'
                 'Result: Require Passed result and exit code zero.'
                 'Worker: Accept a nonzero exit as a completed worker.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester worker exit status unchecked rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Completed worker; exit status was not checked.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester worker nonzero exit called complete rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Completed worker with nonzero exit.'
                 'Discovery: Require positive count.'
                 'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
                 'Failures: Reject failed blocks, containers, and infrastructure errors.'
@@ -1297,6 +1362,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'documented PowerShell floor explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell 7.4 is not supported.'
+                'Probe: Run the public entry point on the minimum PowerShell 7.4 host.'
+                'Evidence: Unverified until minimum-host behavior is tested.'
+                'Decision: Remove the newer-only API dependency or document the compatibility break and raised floor.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'newer host substituted rejected'
             ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
             Response = @(
@@ -1546,7 +1621,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Profile: curated-correctness-global'
                 'Legacy: report-existing-default-diagnostics'
-                'Changed: reject-new-default-diagnostics'
+                'Changed: reject-new-default-diagnostics-on-changed-lines'
                 'Syntax: PowerShell-parser-not-regex') -join "`n"
             Expected = $true
         }
@@ -1608,6 +1683,16 @@ Describe 'Skill evaluation scenario contract' {
                 'Legacy: report-existing-default-diagnostics'
                 'Changed: allow-new-default-diagnostics'
                 'Syntax: PowerShell-parser-not-regex') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'unchanged-line warning gate rejected'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: Curated correctness profile kept globally clean.'
+                'Legacy: Keep legacy default diagnostics visible in a baseline.'
+                'Changed: Fail new default warnings only on unchanged lines.'
+                'Syntax: Use the PowerShell parser, not regex.') -join "`n"
             Expected = $false
         }
         @{
@@ -2444,6 +2529,9 @@ Describe 'Skill evaluation scenario contract' {
         $addDirectoryIndex = [Array]::IndexOf($arguments, '--add-dir')
         $addDirectoryIndex | Should -BeGreaterThan -1
         $arguments[$addDirectoryIndex + 1] | Should -Be $TestDrive
+        $effortIndex = [Array]::IndexOf($arguments, '--reasoning-effort')
+        $effortIndex | Should -BeGreaterThan -1
+        $arguments[$effortIndex + 1] | Should -Be 'medium'
         @($arguments | Where-Object { $_ -like '--secret-env-vars=*COPILOT_GITHUB_TOKEN*' }).Count | Should -Be 1
         ($arguments -join ' ') | Should -Not -Match 'TOKEN='
     }
@@ -2606,7 +2694,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Throw '*changed during the test*'
     }
 
-    It 'exposes explicit native client selection through both evaluation entry points' {
+    It 'requires an explicit model and native client selection through both evaluation entry points' {
         $singleRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvals.ps1'
         $matrixRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvalMatrix.ps1'
         $parseErrors = $null
@@ -2644,6 +2732,14 @@ Describe 'Skill evaluation scenario contract' {
             'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'ScenarioId',
             'RunCount', 'TimeoutMinutes', 'MaxConcurrency', 'Executor',
             'IsolateCopilotHome', 'CopilotPath')
+        foreach ($modelParameter in @(
+                @($singleAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0],
+                @($matrixAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0],
+                @($suiteFunction.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0])) {
+            $modelParameter.DefaultValue | Should -BeNullOrEmpty
+        }
+        { & $singleRunner -Model '' } | Should -Throw '*Specify -Model*'
+        { & $matrixRunner -Model '' } | Should -Throw '*Specify -Model*'
         $matrixContent | Should -Match 'Resolve-SkillEvalCopilotPath -CopilotPath \$CopilotPath'
         $forwardingText = "'-CopilotPath', " + '$using:resolvedCopilotPath'
         $matrixContent | Should -Match ([regex]::Escape($forwardingText))

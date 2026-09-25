@@ -11,7 +11,7 @@ param(
         'evals/scenarios/create-skill-repo.json'
     ),
     [string] $OutputDirectory = (Join-Path ([System.IO.Path]::GetTempPath()) "agent-skills-matrix-$([guid]::NewGuid().ToString('N'))"),
-    [string] $Model = 'gpt-5.4',
+    [string] $Model,
     [ValidateRange(0, 100)]
     [int] $RunCount = 0,
     [ValidateRange(1, 60)]
@@ -26,6 +26,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($Model)) {
+    throw 'Specify -Model with an approved model ID before running evaluations.'
+}
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 Import-Module (Join-Path $PSScriptRoot 'SkillEval.psm1') -Force
