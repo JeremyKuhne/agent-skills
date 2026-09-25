@@ -221,6 +221,8 @@ Body.
                 '../../../docs/powershell-engineering-plan.md',
                 '../../../RELEASING.md')) {
             $overlayContent.Contains("]($target)") | Should -BeTrue -Because "$target is a required repository link"
+            $resolvedTarget = [IO.Path]::GetFullPath((Join-Path $installed $target))
+            Test-Path -LiteralPath $resolvedTarget -PathType Leaf | Should -BeTrue -Because "$target must resolve from the installed overlay"
         }
 
         $validatorOutput = & pwsh -NoProfile -File $script:ValidatorPath $installed -RequirePortfolioMetadata -Quiet 2>&1
@@ -228,7 +230,7 @@ Body.
         $linkOutput = & pwsh -NoProfile -File (Join-Path $script:RepoRoot 'tools/Test-AgentFileLinks.ps1') -RepoRoot $script:RepoRoot 2>&1
         $LASTEXITCODE | Should -Be 0 -Because "the installed overlay links must resolve: $($linkOutput -join "`n")"
 
-        $installedFiles = @(Get-ChildItem -LiteralPath $installed -File -Recurse)
+        $installedFiles = @(Get-ChildItem -LiteralPath $installed -File -Recurse -Force)
         $installedFiles.Count | Should -Be 12
         [string[]] $coreNames = @($installedFiles | Where-Object Name -ne 'overlay.md' | ForEach-Object Name)
         $coreNames.Count | Should -Be 11
