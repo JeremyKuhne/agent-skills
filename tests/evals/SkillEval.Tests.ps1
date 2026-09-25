@@ -962,6 +962,32 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'Pester Passed result and exit optional rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Do not require Passed; exit code can be ignored.'
+                'Worker: Complete with exit zero.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester positive discovery made optional rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Complete with exit zero.'
+                'Discovery: Positive count is not required.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'Pester failed result rejected'
             ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
             Response = @(
