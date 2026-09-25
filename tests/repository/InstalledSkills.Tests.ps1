@@ -225,6 +225,14 @@ Body.
             $resolvedTarget = [IO.Path]::GetFullPath((Join-Path $installed $target))
             Test-Path -LiteralPath $resolvedTarget -PathType Leaf | Should -BeTrue -Because "$target must resolve from the installed overlay"
         }
+        foreach ($command in @(
+                './tests/Invoke-PesterShards.ps1 -Path ./tests',
+                'dotnet restore ./tests/powershell-toolchain/PowerShellToolchain.Tests.csproj --locked-mode',
+                'dotnet test --project ./tests/powershell-toolchain/PowerShellToolchain.Tests.csproj --configuration Release --no-restore',
+                './tools/Validate-AgentFiles.ps1 -Fix',
+                './tools/Update-SkillCatalog.ps1 -Apply')) {
+            $overlayContent.Contains('`' + $command + '`') | Should -BeTrue -Because "$command is a required repository command"
+        }
 
         $validatorOutput = & pwsh -NoProfile -File $script:ValidatorPath $installed -RequirePortfolioMetadata -Quiet 2>&1
         $LASTEXITCODE | Should -Be 0 -Because "the installed overlay must validate: $($validatorOutput -join "`n")"
