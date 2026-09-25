@@ -1063,7 +1063,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Contract: public-error-and-exit'
                 'Receipt: stale-prior-revision'
-                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Next: rerun-Pester-fresh-process-and-required-full-on-final-tree'
                 'Host: minimum-supported-host-runtime-test'
                 'Claim: unverified-until-owning-lanes-run') -join "`n"
             Expected = $true
@@ -1074,7 +1074,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Contract: internal-refactor-only'
                 'Receipt: stale-prior-revision'
-                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Next: rerun-Pester-fresh-process-and-required-full-on-final-tree'
                 'Host: minimum-supported-host-runtime-test'
                 'Claim: unverified-until-owning-lanes-run') -join "`n"
             Expected = $false
@@ -1085,6 +1085,17 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Contract: public-error-and-exit'
                 'Receipt: valid-for-final-tree'
+                'Next: rerun-Pester-fresh-process-and-required-full-on-final-tree'
+                'Host: minimum-supported-host-runtime-test'
+                'Claim: unverified-until-owning-lanes-run') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'unrelated focused and full lanes rejected'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: public-error-and-exit'
+                'Receipt: stale-prior-revision'
                 'Next: rerun-focused-and-required-full-on-final-tree'
                 'Host: minimum-supported-host-runtime-test'
                 'Claim: unverified-until-owning-lanes-run') -join "`n"
@@ -1107,7 +1118,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Contract: public-error-and-exit'
                 'Receipt: stale-prior-revision'
-                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Next: rerun-Pester-fresh-process-and-required-full-on-final-tree'
                 'Host: current-newer-host-only'
                 'Claim: unverified-until-owning-lanes-run') -join "`n"
             Expected = $false
@@ -1118,7 +1129,7 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Contract: public-error-and-exit'
                 'Receipt: stale-prior-revision'
-                'Next: rerun-focused-and-required-full-on-final-tree'
+                'Next: rerun-Pester-fresh-process-and-required-full-on-final-tree'
                 'Host: minimum-supported-host-runtime-test'
                 'Claim: verified-by-old-receipt') -join "`n"
             Expected = $false

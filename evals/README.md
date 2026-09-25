@@ -108,8 +108,9 @@ suppressions that hide a native-exit defect. The generated-script case rejects
 hand-edited outputs and overwrite-before-comparison drift checks, requires a stale-copy
 control, and tests the emitted entry point. A second case routes packaged generated
 counterparts even when no checked-in script changes. The review case rejects receipts
-from an earlier revision as proof of changed PowerShell behavior or minimum-host
-compatibility. All twenty-one cases are read-only and use exact labeled outputs.
+from an earlier revision and requires Pester fresh-process evidence for changed
+PowerShell behavior, plus minimum-host runtime evidence for compatibility. All
+twenty-one cases are read-only and use exact labeled outputs.
 It is not part of the default release matrix.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
