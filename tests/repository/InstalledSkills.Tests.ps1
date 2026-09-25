@@ -195,6 +195,63 @@ Body.
         $brokenLinks[0] | Should -Match 'escapes installed artifact'
     }
 
+    It 'keeps the project PowerShell skill pinned with local bindings' {
+        $installed = Join-Path $script:RepoRoot '.agents/skills/powershell-engineering'
+        $overlayPath = Join-Path $installed 'overlay.md'
+        $pin = '4cb6038943c3f66164717d011b8b7b7ac5e6d3c2'
+        $provenance = Get-SkillArtifactProvenance (Join-Path $installed 'SKILL.md')
+        $provenance['github-pinned'] | Should -Be $pin
+        $provenance['github-ref'] | Should -Be $pin
+        $provenance['github-tree-sha'] | Should -Be '05d07587360f25752a14d01b26aafabdd746dfe5'
+        $provenance['github-path'] | Should -Be 'skills/powershell-engineering'
+        $provenance['github-repo'] | Should -Be 'https://github.com/JeremyKuhne/agent-skills'
+
+        $overlayHeader = @(Get-Content -LiteralPath $overlayPath -TotalCount 3)
+        $overlayHeader | Should -Be @('---', 'core: powershell-engineering', "core-pin: $pin")
+        $overlayContent = Get-Content -LiteralPath $overlayPath -Raw
+        foreach ($target in @(
+                '../../../tools/powershell-toolchain.json',
+                '../../../tests/Invoke-PesterShards.ps1',
+                '../../../tests/powershell-toolchain/PowerShellToolchain.Tests.csproj',
+                '../../../.github/workflows/ci.yml',
+                '../../../AGENTS.md',
+                '../../../.github/copilot-instructions.md',
+                '../../../skills/README.md',
+                '../../../docs/powershell-test-ownership-inventory.md',
+                '../../../docs/powershell-engineering-plan.md',
+                '../../../RELEASING.md')) {
+            $overlayContent.Contains("]($target)") | Should -BeTrue -Because "$target is a required repository link"
+        }
+
+        $validatorOutput = & pwsh -NoProfile -File $script:ValidatorPath $installed -RequirePortfolioMetadata -Quiet 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because "the installed overlay must validate: $($validatorOutput -join "`n")"
+        $linkOutput = & pwsh -NoProfile -File (Join-Path $script:RepoRoot 'tools/Test-AgentFileLinks.ps1') -RepoRoot $script:RepoRoot 2>&1
+        $LASTEXITCODE | Should -Be 0 -Because "the installed overlay links must resolve: $($linkOutput -join "`n")"
+
+        $installedFiles = @(Get-ChildItem -LiteralPath $installed -File -Recurse)
+        $installedFiles.Count | Should -Be 12
+        [string[]] $coreNames = @($installedFiles | Where-Object Name -ne 'overlay.md' | ForEach-Object Name)
+        $coreNames.Count | Should -Be 11
+        [Array]::Sort($coreNames, [StringComparer]::Ordinal)
+        $fileHashes = @(foreach ($name in $coreNames) {
+                $filePath = Join-Path $installed $name
+                $content = if ($name -ceq 'SKILL.md') {
+                    [string[]] $frontmatter = @(Get-SkillArtifactCanonicalFrontmatter $filePath)
+                    [Array]::Sort($frontmatter, [StringComparer]::Ordinal)
+                    ($frontmatter -join "`n") + "`n" + (Get-SkillArtifactDocument $filePath).Body
+                }
+                else {
+                    [IO.File]::ReadAllText($filePath).Replace("`r`n", "`n")
+                }
+                $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+                        [Text.Encoding]::UTF8.GetBytes($content)))
+                "${name}:$hash"
+            })
+        $coreDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+                [Text.Encoding]::UTF8.GetBytes(($fileHashes -join "`n"))))
+        $coreDigest | Should -Be 'A63036B860EC14055B9DBC8F1F4A3EEF7CF671D0BA8509F580E8F17988ECD778'
+    }
+
     It 'installs every core with only declared requirements and keeps it self-contained' {
         Get-Command gh -ErrorAction Stop | Should -Not -BeNullOrEmpty
         & gh skill --help *> $null
