@@ -113,6 +113,16 @@ PowerShell behavior, plus minimum-host runtime evidence for compatibility. All
 twenty-one cases are read-only and use exact labeled outputs.
 It is not part of the default release matrix.
 
+The 2026-09-25 paired P3a diagnostic completed 126 original Sol/Luna attempts:
+development-calibrated repetition one scored 20/21 per model; frozen repetitions
+two and three scored 25/42 Sol and 31/42 Luna. Routing passed 60/63 Sol and
+62/63 Luna attempts; every attempt passed safety and infrastructure checks.
+First-repetition rescoring verified 38 saved outputs without new model calls;
+the frozen rubric was not adjusted. These exact-label scores do not establish
+independently reviewed usefulness or portfolio qualification. The
+[PowerShell engineering plan](../docs/powershell-engineering-plan.md#p3a-paired-diagnostic)
+records the identity and normalized-token receipts; raw outputs stay private.
+
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
 public versus credential caches, privileged consumption of user AppData, mixed
