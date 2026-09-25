@@ -299,12 +299,29 @@ function Get-SkillEvalClientIdentity {
     }
 }
 
-function Get-SkillEvalCopilotVersion ([string] $CopilotPath) {
+function New-SkillEvalCopilotStartInfo {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $CopilotPath,
+
+        [string] $WorkingDirectory
+    )
+
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $CopilotPath
+    if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    $startInfo.StandardOutputEncoding = $encoding
+    $startInfo.StandardErrorEncoding = $encoding
+    return $startInfo
+}
+
+function Get-SkillEvalCopilotVersion ([string] $CopilotPath) {
+    $startInfo = New-SkillEvalCopilotStartInfo -CopilotPath $CopilotPath
     $startInfo.Environment['COPILOT_AUTO_UPDATE'] = 'false'
     $startInfo.ArgumentList.Add('--version')
     $process = [System.Diagnostics.Process]::new()
@@ -1128,12 +1145,8 @@ function Invoke-SkillEvalProcess {
     if ([string]::IsNullOrWhiteSpace($CopilotPath)) {
         throw 'A resolved native Copilot CLI path is required for a real evaluation.'
     }
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $CopilotPath
-    $startInfo.WorkingDirectory = $Context.Workspace
-    $startInfo.UseShellExecute = $false
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
+    $startInfo = New-SkillEvalCopilotStartInfo `
+        -CopilotPath $CopilotPath -WorkingDirectory $Context.Workspace
     foreach ($argument in $arguments) { $startInfo.ArgumentList.Add($argument) }
 
     $pathSeparator = [System.IO.Path]::PathSeparator
