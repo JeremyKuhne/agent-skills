@@ -82,7 +82,7 @@
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
       "requiredResponsePatterns": ["(?is)\\A\\s*Compatibility:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Parameters:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Result:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Migration:[^\\r\\n]+\\s*\\z", "(?im)^Compatibility:[^\\r\\n]*(?:\\bpreserv\\w*\\b|\\bnon[ -]?breaking\\b)", "(?im)^Parameters:(?=[^\\r\\n]*(?:\\bunchanged\\b|\\bsame\\b|\\bpreserv\\w*\\b|\\bstill matches\\b[^\\r\\n]*\\bdocumented\\b|\\bverify\\b[^\\r\\n]*\\b(?:binding|parameter\\w*)\\b[^\\r\\n]*\\b(?:names|defaults|documented)\\b))(?=[^\\r\\n]*\\b(?:parameter\\w*|binding|snapshot)\\b)[^\\r\\n]+$", "(?im)^Result:(?=[^\\r\\n]*(?:\\bunchanged\\b|\\bsame\\b|\\bpreserv\\w*\\b|\\bverify\\b[^\\r\\n]*\\bdocumented\\b[^\\r\\n]*\\b(?:property|schema|error)\\b))(?=[^\\r\\n]*\\b(?:result|output|invocation|property|error|schema)\\b)[^\\r\\n]+$", "(?im)^Migration:[^\\r\\n]*(?:\\bnone\\b|\\bno\\b[^\\r\\n]*\\b(?:migration|caller|change)\\b)"],
-      "forbiddenResponsePatterns": ["(?im)^(?:Parameters|Result):[^\\r\\n]*\\b(?:may|can|should)\\s+chang\\w*\\b"],
+      "forbiddenResponsePatterns": ["(?im)^Compatibility:[^\\r\\n]*\\b(?:do\\s+not|don't|never|should\\s+not|must\\s+not)\\s+preserv\\w*\\b", "(?im)^(?:Parameters|Result):[^\\r\\n]*\\b(?:may|can|should)\\s+chang\\w*\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
       "requireUnchangedWorktree": true

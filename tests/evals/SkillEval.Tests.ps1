@@ -620,6 +620,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'preserved API rejects breaking change while preserving contract'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Do not break the existing public API; preserve its contract.'
+                'Parameters: Verify the same parameter names, binding, and defaults.'
+                'Result: Keep output and error behavior unchanged.'
+                'Migration: None; callers do not need changes.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'preserved API metadata still matches documentation'
             ScenarioId = 'powershell-engineering-preserves-public-api-contract'
             Response = @(
@@ -647,6 +657,16 @@ Describe 'Skill evaluation scenario contract' {
                 'Parameters: Verify documented parameter names may change.'
                 'Result: Verify the documented output schema may change.'
                 'Migration: None; callers require no changes.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'preserved API contract explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Do not preserve the public contract.'
+                'Parameters: Verify the same parameter names, binding, and defaults.'
+                'Result: Keep output and error behavior unchanged.'
+                'Migration: None; callers do not need changes.') -join "`n"
             Expected = $false
         }
         @{
