@@ -40,7 +40,7 @@ function Test-SkillEvalEvidence {
             }
         }
     }
-    $response = $responseParts -join "`n"
+    $response = if ($responseParts.Count -gt 0) { $responseParts[$responseParts.Count - 1] } else { '' }
     $skillInvoked = $invokedSkills.Contains([string]$Scenario.skill)
     $commandLog = if (Test-Path -LiteralPath $Context.ShimLogPath -PathType Leaf) {
         [string](Get-Content -LiteralPath $Context.ShimLogPath -Raw) -replace "\r\n?", "`n"

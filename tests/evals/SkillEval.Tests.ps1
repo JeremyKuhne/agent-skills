@@ -264,11 +264,61 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'PowerShell real process boundary accepted'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell public command boundary for native process behavior.'
+                'Owner: The PowerShell command owns its launch and exit semantics.'
+                'Oracle: A fresh real child process reports environment and stream evidence.'
+                'Test: Focused Pester fresh-process behavior tests.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'thin PowerShell process adapter remains the boundary'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: Keep a thin PowerShell process adapter; do not introduce managed supervision.'
+                'Owner: The PowerShell public command owns result conversion and restoration.'
+                'Oracle: A fresh real child process reports environment and stream evidence.'
+                'Test: Focused Pester fresh-process behavior tests.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'independent child-process receipt accepted as oracle'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell public command boundary for native process behavior.'
+                'Owner: The PowerShell command owns its launch and exit semantics.'
+                'Oracle: An independently controlled child-process receipt verifying separate streams, exit, environment state, and cleanup.'
+                'Test: Focused Pester fresh-process behavior tests.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'mocked child receipt rejected as oracle'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell public command boundary for native process behavior.'
+                'Owner: The PowerShell command owns its launch and exit semantics.'
+                'Oracle: An independently mocked child-process receipt verifying separate streams, exit, environment state, and cleanup.'
+                'Test: Focused Pester fresh-process behavior tests.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'PowerShell boundary negated'
             ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
             Response = @(
                 'Boundary: not-PowerShell'
                 'Owner: PowerShell-process-entry-point'
+                'Oracle: fresh-process-receipt'
+                'Test: Pester-state-table') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'PowerShell implementation boundary explicitly negated'
+            ScenarioId = 'powershell-engineering-keeps-powershell-native-process-contract'
+            Response = @(
+                'Boundary: PowerShell is not the implementation boundary.'
+                'Owner: The PowerShell process entry point owns the child.'
                 'Oracle: fresh-process-receipt'
                 'Test: Pester-state-table') -join "`n"
             Expected = $false
@@ -284,6 +334,117 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'YAML parser reasoning accepted without rubric tokens'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser interprets the workflow document.'
+                'PowerShell-role: Orchestration of the parser CLI only.'
+                'Oracle: Independent specification-derived YAML fixtures.'
+                'Test: A duplicate-key mapping must fail before implementation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'PowerShell invokes YAML parser as wrapper'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Invokes the parser and maps diagnostics.'
+                'Oracle: Independent specification-derived YAML fixtures.'
+                'Test: A duplicate-key mapping must fail before implementation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'PowerShell rejects own YAML parsing while invoking parser'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Do not implement YAML parsing in PowerShell; invoke the maintained parser.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: Duplicate keys must fail before implementation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'YAML labeled paragraphs accepted'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser interprets the workflow document.'
+                'PowerShell-role: Orchestration of the parser CLI only.'
+                'Oracle: Independent specification-derived YAML fixtures.'
+                'Test: A duplicate-key mapping must fail before implementation.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'YAML parser diagnostics and repeated mapping key accepted'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow semantics.'
+                'PowerShell-role: Invoke the parser and translate diagnostics.'
+                'Oracle: The maintained parser node diagnostics, not wrapper output.'
+                'Test: The same mapping key repeated must fail first.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'YAML duplicate mapping keys rejected by failing control'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Invoke the parser and map diagnostics.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: First add a failing control where a folded scalar contains mapping-like text and an anchored mapping is aliased; only actual duplicate mapping keys must be rejected.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'YAML folded scalar stays scalar in first control'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Invoke the parser and map diagnostics.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: First require a folded scalar containing an indented policy-like line to remain scalar content rather than being misclassified as a mapping entry.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'YAML folded scalar misclassification required rejected'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Invoke the parser and map diagnostics.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: First require a folded scalar to be misclassified as a mapping entry rather than remain scalar.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'YAML intervening narrative rejected'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser interprets the workflow document.'
+                'This is an unrelated explanation.'
+                'PowerShell-role: Orchestration of the parser CLI only.'
+                'Oracle: Independent specification-derived YAML fixtures.'
+                'Test: A duplicate-key mapping must fail before implementation.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'YAML implementation-derived oracle rejected'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: maintained-YAML-parser'
+                'PowerShell-role: orchestration-only'
+                'Oracle: current-wrapper-output'
+                'Test: mutation-before-fix') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'YAML repeated key without failing control rejected'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: maintained-YAML-parser'
+                'PowerShell-role: orchestration-only'
+                'Oracle: independent parser diagnostics'
+                'Test: The same mapping key repeated is accepted.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'YAML parser boundary negated'
             ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
             Response = @(
@@ -291,6 +452,26 @@ Describe 'Skill evaluation scenario contract' {
                 'PowerShell-role: implementation'
                 'Oracle: parser-output'
                 'Test: happy-path-after-fix') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'YAML parser ownership explicitly negated'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser does not own the workflow syntax.'
+                'PowerShell-role: Invoke the parser and map diagnostics.'
+                'Oracle: Independent parser specification fixtures.'
+                'Test: Duplicate keys must fail before implementation.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'PowerShell parser invocation explicitly negated'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Do not invoke the parser; implement the YAML syntax in PowerShell.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: Duplicate keys must fail before implementation.') -join "`n"
             Expected = $false
         }
         @{
@@ -302,6 +483,66 @@ Describe 'Skill evaluation scenario contract' {
                 'Correctness: validate-output'
                 'Uncertainty: report') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'performance evidence with child-process limitations accepted'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Measure allocated bytes per request against a baseline.'
+                'Process-state: Fresh child startup and a matched input denominator.'
+                'Correctness: Compare the same output and exit behavior.'
+                'Uncertainty: Host allocations do not prove total child-process memory.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'benchmark allocated bytes with a baseline accepted'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Benchmark per-request Allocated bytes against a baseline arm.'
+                'Process-state: Matched warm application state with separate fresh-process check.'
+                'Correctness: Validate the same observable result for each request.'
+                'Uncertainty: Report limits of measuring only managed process allocations.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'inconclusive performance comparison accepted'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Benchmark per-request Allocated bytes against a baseline arm.'
+                'Process-state: Match cache state and request corpus.'
+                'Correctness: Validate the same observable result for each request.'
+                'Uncertainty: Tiny differences inside the measurement error are inconclusive.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'child-process allocation uncertainty accepted'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Benchmark per-request Allocated bytes against a baseline arm.'
+                'Process-state: Match cache state and request corpus.'
+                'Correctness: Validate the same observable result for each request.'
+                'Uncertainty: Managed Allocated is incomplete for child-process memory.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance claim without output comparison rejected'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Measure allocated bytes against a baseline.'
+                'Process-state: matched'
+                'Correctness: assume-output'
+                'Uncertainty: report') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance measurement without baseline rejected'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: skip-baseline'
+                'Process-state: matched'
+                'Correctness: validate-output'
+                'Uncertainty: report') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'performance route negated'
@@ -320,6 +561,33 @@ Describe 'Skill evaluation scenario contract' {
                 'Route: upstream-pester-migration'
                 'Scope: mechanical-v5-to-v6'
                 'Redesign: not-requested') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'mechanical Pester migration guidance accepted'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: Dedicated Pester 5-to-6 migration guidance, not PowerShell engineering.'
+                'Scope: Mechanically convert the Pester 5 suite to Pester 6 syntax.'
+                'Redesign: No; production behavior redesign is out of scope.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'assigned dedicated migration without skill accepted'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: Dedicated migration workflow.'
+                'Scope: Syntax-only Pester 5 to Pester 6 conversion.'
+                'Redesign: No.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'existing Pester suite syntax-only migration accepted'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: Dedicated migration workflow.'
+                'Scope: Syntax-only Pester 6 conversion of the existing test suite.'
+                'Redesign: No.') -join "`n"
             Expected = $true
         }
         @{
@@ -342,6 +610,76 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'preserved API with public evidence accepted'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Non-breaking internal change; preserve the public contract.'
+                'Parameters: Verify the same parameter names, binding, and defaults.'
+                'Result: Keep one output object and its terminating error behavior unchanged.'
+                'Migration: None; callers do not need changes.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'preserved API rejects breaking change while preserving contract'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Do not break the existing public API; preserve its contract.'
+                'Parameters: Verify the same parameter names, binding, and defaults.'
+                'Result: Keep output and error behavior unchanged.'
+                'Migration: None; callers do not need changes.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'preserved API metadata still matches documentation'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Preserve the public contract.'
+                'Parameters: Verify parameter metadata still matches the documented contract.'
+                'Result: Keep output and error behavior unchanged.'
+                'Migration: None; callers do not need changes.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'preserved API verifies documented parameter and result contracts'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Preserve the public API contract; treat the refactor as non-breaking.'
+                'Parameters: Verify named-only binding, parameter names, types, sets, mandatory status, validation, and defaults.'
+                'Result: Verify exactly one success-stream object with the documented property schema and terminating-error contract.'
+                'Migration: None; callers require no changes.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'preserved API permits changed parameters and result rejected'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Preserve the public contract.'
+                'Parameters: Verify documented parameter names may change.'
+                'Result: Verify the documented output schema may change.'
+                'Migration: None; callers require no changes.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'preserved API contract explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: Do not preserve the public contract.'
+                'Parameters: Verify the same parameter names, binding, and defaults.'
+                'Result: Keep output and error behavior unchanged.'
+                'Migration: None; callers do not need changes.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'preserved API with changed output rejected'
+            ScenarioId = 'powershell-engineering-preserves-public-api-contract'
+            Response = @(
+                'Compatibility: preserve'
+                'Parameters: snapshot-unchanged'
+                'Result: property schema changed'
+                'Migration: none') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'preserved API negated'
             ScenarioId = 'powershell-engineering-preserves-public-api-contract'
             Response = @(
@@ -362,6 +700,76 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'breaking API with caller migration accepted'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Breaking public API change.'
+                'Parameters: Positional binding and the default change for callers.'
+                'Result: The Configuration property and failure exit code change.'
+                'Action: Update callers or provide a compatibility transition.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'breaking API old name and output field accepted'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Breaking public API change.'
+                'Parameters: Positional callers using the old parameter name must pass the desired value explicitly.'
+                'Result: A different output field and previous failure exit code require updates.'
+                'Action: Update callers or provide a compatibility transition.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'breaking API new field name and failure code accepted'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Breaking public API change.'
+                'Parameters: Positional binding and the default change for callers.'
+                'Result: Consumers must adopt the new field name and new nonzero failure code.'
+                'Action: Update callers or provide a compatibility transition.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'breaking API omitted values select Release'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Intentional breaking public-contract change.'
+                'Parameters: Positional and -Configuration invocations cease to work; callers must use -Mode, and omitted values now select Release.'
+                'Result: Consumers must read Mode instead of Configuration; invalid input now exits 1 instead of 2.'
+                'Action: Update every caller, schema assertion, and exit-code check.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'breaking API defaulting and output object accepted'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Intentional breaking change.'
+                'Parameters: Use named-only -Mode, defaulting to Release; positional -Configuration invocations are no longer supported.'
+                'Result: Output objects expose Path and Mode; invalid input returns exit code 1 instead of 2.'
+                'Action: Update every caller, test, and automation script for Mode and exit code 1.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'breaking API incorrectly retains Debug default rejected'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Intentional breaking change.'
+                'Parameters: Positional -Configuration invocations change; omitted values still select Debug, not Release.'
+                'Result: Output objects expose Path and Mode; invalid input returns exit code 1.'
+                'Action: Update every caller for the new result schema and exit code.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'breaking API without caller action rejected'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: breaking-change'
+                'Parameters: binding-name-and-default-changed'
+                'Result: schema-and-exit-changed'
+                'Action: no caller work needed') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'breaking API negated'
             ScenarioId = 'powershell-engineering-names-public-api-break'
             Response = @(
@@ -372,12 +780,58 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'breaking API explicitly called non-breaking rejected'
+            ScenarioId = 'powershell-engineering-names-public-api-break'
+            Response = @(
+                'Compatibility: Not a breaking change.'
+                'Parameters: Positional binding and default change for callers.'
+                'Result: Configuration property and failure exit code change.'
+                'Action: Update callers or provide a compatibility transition.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'JSON Boolean states accepted'
             ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
             Response = @(
                 'Parser: structured-JSON'
                 'Validation: presence-and-Boolean-type'
                 'Cases: false-distinct-from-missing-null-zero-empty-and-string') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'JSON Boolean presence and type checks accepted'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json -AsHashtable; never parse JSON with regex.'
+                'Validation: Check key presence with Contains and value type with bool.'
+                'Cases: false is valid; missing, null, 0, empty text, and string false are invalid.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'JSON Boolean empty-object missing control accepted'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json -AsHashtable; never parse JSON with regex.'
+                'Validation: Check key presence with Contains and value type with bool.'
+                'Cases: Positive true and false; negative {}, null, 0, "", and "false".') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'JSON Boolean PSObject property presence accepted'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json parses the JSON receipt.'
+                'Validation: Require $receipt.PSObject.Properties[''passed''] and $receipt.passed -is [bool]; accept true and false.'
+                'Cases: Accept true and false; reject missing, null, 0, empty text, and string "false".') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'JSON Boolean property must exist accepted'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json parses the JSON receipt.'
+                'Validation: Require the passed property to exist and its value to be exactly a [bool].'
+                'Cases: Positive true and false; negative {}, null, 0, "", and "false".') -join "`n"
             Expected = $true
         }
         @{
@@ -399,12 +853,48 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'JSON Boolean property treated as optional rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: structured-JSON'
+                'Validation: The passed property is optional; its bool type may be ignored.'
+                'Cases: false-distinct-from-missing-null-zero-empty-and-string') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'JSON missing conflated with false rejected'
             ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
             Response = @(
                 'Parser: structured-JSON'
                 'Validation: presence-and-Boolean-type'
                 'Cases: false-equivalent-to-missing-null-zero-empty-and-string') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'JSON Boolean validity inverted rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: structured-JSON'
+                'Validation: presence-and-Boolean-type'
+                'Cases: false is invalid; missing, null, 0, empty text, and string false are valid.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'JSON Boolean valid states in reversed order accepted'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json -AsHashtable.'
+                'Validation: Check key presence with Contains and value type with bool.'
+                'Cases: missing, null, 0, empty text, and string false are invalid; false is valid.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'JSON Boolean inverted states in reversed order rejected'
+            ScenarioId = 'powershell-engineering-preserves-json-boolean-states'
+            Response = @(
+                'Parser: ConvertFrom-Json -AsHashtable.'
+                'Validation: Check key presence with Contains and value type with bool.'
+                'Cases: missing, null, 0, empty text, and string false are valid; false is invalid.') -join "`n"
             Expected = $false
         }
         @{
@@ -416,6 +906,96 @@ Describe 'Skill evaluation scenario contract' {
                 'Output: avoid-pipeline-enumeration'
                 'Cases: missing-empty-single-multiple') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'parsed array wrapper and cardinality accepted'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check Contains before accessing the required key.'
+                'Retrieval: Wrap the parsed array in @($doc["items"]).'
+                'Output: Return without enumeration to preserve shape.'
+                'Cases: missing errors; [] count 0, singleton count 1, multiple count 2.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'parsed array zero one many controls accepted'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing rejects; zero, one, and many elements retain array shape.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'public PowerShell presence ownership accepted'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: PowerShell owns required-array presence and type validation.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing rejects; zero, one, and many elements retain array shape.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'parsed array two-item literal accepted'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing and null fail; [] stays empty, [one] stays one, and [one,two] stays an array.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'parsed array direct read and concrete array states accepted'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Read directly from $doc["items"], not through an if expression.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: Reject missing; accept [], [x], and [x,y,...] with exact cardinality.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'array state table retains accepted cardinalities'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: Missing: reject, Null: reject, WrongType: reject, EmptyArray: accept/count 0, OneItemArray: accept/count 1, MultiItemArray: accept/count 2.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'array size controls preserve zero one many'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: Reject missing, null, and non-array items; accept arrays of size 0, 1, and 2+ with exact cardinality.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'array presence without check rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: assume presence.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing rejects; zero, one, and many elements retain array shape.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'array presence check explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Do not check whether the required key exists.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing rejects; zero, one, and many elements retain array shape.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'array shape lost in expression rejected'
@@ -448,6 +1028,36 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'parsed array accepted states inverted rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: missing is valid; [] invalid, [one] invalid, and [one,two] invalid.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'array comma-separated missing state accepted rejected'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: Missing: accept, Null: reject, EmptyArray: accept/count 0, OneItemArray: accept/count 1, MultiItemArray: accept/count 2.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'array empty state rejected despite other accepted sizes'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: Check the required key before reading it.'
+                'Retrieval: Retain a direct reference to the parsed array.'
+                'Output: Use Write-Output -NoEnumerate to preserve shape.'
+                'Cases: Missing: reject, EmptyArray: reject, OneItemArray: accept/count 1, MultiItemArray: accept/count 2.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'Pester contract accepted'
             ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
             Response = @(
@@ -456,6 +1066,126 @@ Describe 'Skill evaluation scenario contract' {
                 'Cases: valid-and-invalid-pipeline-items'
                 'Negative-control: invalid-item-on-success-must-fail') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'Pester pipeline fixtures accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Hand-authored fixtures specify expected success output.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester documented contract not current implementation accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Derive exact success objects and error expectations from the documented public contract, not the helper or current implementation.'
+                'Cases: Cover valid and invalid pipeline sequences.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester rejection classes with success-stream control accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Derive expected results independently from the public contract.'
+                'Cases: Cover ordinary valid items and valid boundaries, plus each contracted rejection class.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester invalid item classes left untested rejected'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Derive expected results independently from the public contract.'
+                'Cases: Cover valid items; invalid rejection classes are never tested.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester pipeline owner oracle accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Expected results from the published contract and owner API, checked separately from the implementation.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester pipeline independently checked oracle accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Expected success output checked independently of the implementation.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester pipeline contract table oracle accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Table-driven contract oracle expects exact success output from the public contract and helper spec, not from current implementation.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester public contract defined table accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: A contract-defined table of expected output derived from the public contract rather than current implementation.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester table from published contract rather than wrapper accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: A table of expected output from the published contract rather than the current wrapper.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester table from public contract not implementation accepted'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: A table of expected output from the public contract, not from the current implementation.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester pipeline copied table oracle rejected'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Table-driven contract oracle expects exact output copied from the current implementation.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester pipeline implementation contract rejected'
+            ScenarioId = 'powershell-engineering-designs-pester-contract-tests'
+            Response = @(
+                'Harness: Pester tests the exported PowerShell module.'
+                'Oracle: Expected results from the current implementation contract output.'
+                'Cases: Mixed pipeline with valid and invalid items.'
+                'Negative-control: An invalid item on success must make the suite fail.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'Pester implementation-derived oracle rejected'
@@ -489,6 +1219,149 @@ Describe 'Skill evaluation scenario contract' {
                 'Failures: reject-failed-blocks-containers-and-infrastructure'
                 'Negative-control: empty-selection-must-fail') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'Pester receipt evidence accepted'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester execution for the PowerShell component.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Completed worker without timeout and with exit code zero.'
+                'Discovery: Positive test discovery, never zero.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty filtered selection must fail.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester receipt count properties accepted'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Complete with exit zero.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Require FailedBlocksCount = 0, FailedContainersCount = 0, and no infrastructure failures.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester completed worker exit code quoted accepted'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Require every worker to complete with Passed, exit `0`, and no timeout.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester quoted nonzero worker exit accepted rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Completed worker with exit `7` accepted as success.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester isolated shard rejects incomplete worker'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Owning PowerShell behavior lane through its isolated shard runner.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Require completed workers with exit code zero; reject incomplete or nonzero exit.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester no-match filter must be rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Complete with exit zero.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: A filter guaranteed to match nothing must be rejected as non-passing.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester worker accepts nonzero exit rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Accept a nonzero exit as a completed worker.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester worker exit status unchecked rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Completed worker; exit status was not checked.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester worker nonzero exit called complete rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Completed worker with nonzero exit.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester Passed result and exit optional rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Do not require Passed; exit code can be ignored.'
+                'Worker: Complete with exit zero.'
+                'Discovery: Require positive count.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'Pester positive discovery made optional rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Isolated Pester suite.'
+                'Result: Require Passed result and exit code zero.'
+                'Worker: Complete with exit zero.'
+                'Discovery: Positive count is not required.'
+                'Counts: Reconcile TotalCount, passed, skipped, not-run and inconclusive.'
+                'Failures: Reject failed blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'Pester failed result rejected'
@@ -606,6 +1479,39 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'real native child evidence accepted'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: Exercise the public wrapper with a real fixture child.'
+                'Arguments: Preserve a path with spaces as one exact argument.'
+                'Streams: Capture stdout and stderr separately.'
+                'Exit: Valid JSON and exit 7 must fail.'
+                'Negative-control: A valid stdout response despite a nonzero exit must fail the test.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'native child exits seven accepted as failure'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: Exercise the public wrapper with a real fixture child.'
+                'Arguments: Preserve a path with spaces as one exact argument.'
+                'Streams: Capture stdout and stderr separately.'
+                'Exit: Valid JSON when the child exits 7 must fail.'
+                'Negative-control: A valid stdout response when the child exits 7 must fail the test.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'real converter with independent streams accepted'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: Use a fresh-process integration test with the real converter.'
+                'Arguments: Preserve a path with spaces as one exact argument.'
+                'Streams: Capture stdout and stderr independently and parse only stdout as JSON.'
+                'Exit: Valid JSON with a nonzero exit must fail.'
+                'Negative-control: A valid stdout response despite a nonzero exit must fail the test.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'mocked native child rejected'
             ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
             Response = @(
@@ -614,6 +1520,17 @@ Describe 'Skill evaluation scenario contract' {
                 'Streams: stdout-stderr-separate'
                 'Exit: nonzero-is-failure'
                 'Negative-control: valid-output-exit-seven-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'mocked converter framed as real rejected'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: Use a fresh-process integration test with a mocked converter.'
+                'Arguments: Preserve a path with spaces as one exact argument.'
+                'Streams: Capture stdout and stderr independently.'
+                'Exit: Valid JSON with a nonzero exit must fail.'
+                'Negative-control: A valid stdout response despite a nonzero exit must fail the test.') -join "`n"
             Expected = $false
         }
         @{
@@ -628,6 +1545,17 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'independent capture then merging native streams rejected'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: Use a fresh process with a real child.'
+                'Arguments: Preserve a path with spaces as one exact argument.'
+                'Streams: Capture stdout and stderr independently but merge stderr into stdout before parsing.'
+                'Exit: Valid JSON with a nonzero exit must fail.'
+                'Negative-control: A valid stdout response despite a nonzero exit must fail the test.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'valid output accepted despite failure rejected'
             ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
             Response = @(
@@ -636,6 +1564,17 @@ Describe 'Skill evaluation scenario contract' {
                 'Streams: stdout-stderr-separate'
                 'Exit: ignore-nonzero'
                 'Negative-control: valid-output-exit-seven-must-fail') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'nonzero exit explicitly called non-failure rejected'
+            ScenarioId = 'powershell-engineering-rejects-valid-output-with-failed-child'
+            Response = @(
+                'Probe: Exercise the public wrapper with a real fixture child.'
+                'Arguments: Preserve a path with spaces as one exact argument.'
+                'Streams: Capture stdout and stderr separately.'
+                'Exit: nonzero is not a failure.'
+                'Negative-control: A valid stdout response despite a nonzero exit must fail the test.') -join "`n"
             Expected = $false
         }
         @{
@@ -648,6 +1587,83 @@ Describe 'Skill evaluation scenario contract' {
                 'Cleanup: finally-on-every-exit'
                 'Cases: success-failure-cancel') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'native environment and scratch evidence accepted'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Restore the prior value when present or remove the variable if absent.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Use a literal input path containing spaces.'
+                'Cleanup: Finally restores the environment and removes scratch after nonzero exit.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'native environment original existence accepted'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Restore the original value when it existed or remove the variable if absent.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Use a literal input path containing spaces.'
+                'Cleanup: Finally restores the environment and removes scratch after nonzero exit.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'native environment original presence accepted'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Record original presence and exact value, then restore it or remove the variable if absent.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Use a literal input path containing spaces.'
+                'Cleanup: Finally restores the environment and removes scratch after nonzero exit.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'unconditional scratch cleanup on failure accepted'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Restore the original value if it existed or remove the variable if absent in finally.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Use a literal input path containing spaces.'
+                'Cleanup: Unconditional cleanup of only the owned scratch directory on nonzero exit and cancellation.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'native environment removal on nonexistence accepted'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Restore the original value if it existed, otherwise remove the variable.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Use a literal input path containing spaces.'
+                'Cleanup: Finally restores the environment and removes scratch after nonzero exit.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'native environment restores absence for spaced path'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Restore the original value if it existed, or restore absence otherwise.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Pass the spaced input path as one literal argument.'
+                'Cleanup: Finally restores the environment and removes scratch after nonzero exit.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'native environment newly introduced value left set rejected'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Restore the original value if it existed but leave a new variable set.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Use a literal input path containing spaces.'
+                'Cleanup: Finally restores the environment and removes scratch after nonzero exit.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'absent environment state lost rejected'
@@ -693,6 +1709,56 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'minimum host behavior decision accepted'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell 7.4 remains the documented support promise.'
+                'Probe: Run the public entry point on the minimum PowerShell 7.4 host.'
+                'Evidence: Unverified until minimum-host behavior is tested.'
+                'Decision: Remove the newer-only API dependency or document the compatibility break and raised floor.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'minimum host dependency removal accepted'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell 7.4 remains the documented support promise.'
+                'Probe: Run the public entry point on the minimum PowerShell 7.4 host.'
+                'Evidence: Unverified until minimum-host behavior is tested.'
+                'Decision: Pass the 7.4 behavior lane after removing the 7.5-only dependency, or explicitly correct the documented floor.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'minimum host release blocked until compatible implementation'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell 7.4 remains the documented support promise.'
+                'Probe: Run the public entry point on an actual PowerShell 7.4 host.'
+                'Evidence: Unverified; local 7.6 and newer CI do not prove minimum-host behavior.'
+                'Decision: Block release; replace the newer API with a 7.4-compatible implementation and add the PowerShell 7.4 behavior lane.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'effective newer host substituted for documented floor rejected'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell 7.5 is the effective floor.'
+                'Probe: Run the public entry point on the minimum PowerShell 7.4 host.'
+                'Evidence: Unverified until minimum-host behavior is tested.'
+                'Decision: Remove the newer-only API dependency or document the compatibility break and raised floor.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'documented PowerShell floor explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
+            Response = @(
+                'Floor: PowerShell 7.4 is not supported.'
+                'Probe: Run the public entry point on the minimum PowerShell 7.4 host.'
+                'Evidence: Unverified until minimum-host behavior is tested.'
+                'Decision: Remove the newer-only API dependency or document the compatibility break and raised floor.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'newer host substituted rejected'
             ScenarioId = 'powershell-engineering-proves-minimum-host-compatibility'
             Response = @(
@@ -730,6 +1796,36 @@ Describe 'Skill evaluation scenario contract' {
                 'Lane: Windows-behavior-test'
                 'Evidence: no-cross-host-inference'
                 'Skips: report-not-pass') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'one host cannot prove another host accepted'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows file ACL behavior.'
+                'Lane: Run the Windows behavior test.'
+                'Evidence: One host cannot prove another host''s platform-specific filesystem behavior.'
+                'Skips: Report the Windows job as skipped and unverified, not passed.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'owning platform skip reported accepted'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows owns file access-control behavior.'
+                'Lane: Run the Windows behavior test job for ACLs.'
+                'Evidence: A Unix result does not validate Windows filesystem behavior.'
+                'Skips: Report the Windows job as skipped and the claim unverified, not a pass.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'one host does not prove the other platform'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows owns file access-control behavior.'
+                'Lane: Run the Windows behavior test job for ACLs.'
+                'Evidence: A Unix pass proves Unix modes only; one host does not prove the other.'
+                'Skips: Report the Windows job as skipped and the claim unverified, not a pass.') -join "`n"
             Expected = $true
         }
         @{
@@ -774,6 +1870,28 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'child process coverage evidence accepted'
+            ScenarioId = 'powershell-engineering-separates-child-and-managed-coverage'
+            Response = @(
+                'Owner: The child PowerShell script owns the uncovered execution.'
+                'Collector: Collect coverage inside the child process.'
+                'Reports: Publish separate PowerShell and managed reports.'
+                'Gate: Do not enforce a gate until baselines are approved.'
+                'Claim: The combined percentage does not prove coverage.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'combined component percentages cannot prove coverage'
+            ScenarioId = 'powershell-engineering-separates-child-and-managed-coverage'
+            Response = @(
+                'Owner: The child PowerShell script owns the uncovered execution.'
+                'Collector: Collect coverage inside the child process.'
+                'Reports: Publish separate PowerShell and managed reports.'
+                'Gate: Do not enforce a gate until baselines are approved.'
+                'Claim: Combining percentages across components cannot prove coverage or compensate for missing child evidence.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'parent coverage substituted for child rejected'
             ScenarioId = 'powershell-engineering-separates-child-and-managed-coverage'
             Response = @(
@@ -815,6 +1933,61 @@ Describe 'Skill evaluation scenario contract' {
                 'Visibility: keep-source-in-report'
                 'Skip: uncovered-until-host-runs'
                 'Critical: enumerate-error-state-tests') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'platform coverage skip kept visible accepted'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: Not justified until a platform-only exception has a specific owner.'
+                'Evidence: The Windows behavior test owns evidence for this module.'
+                'Visibility: Keep the module in the coverage inventory and report.'
+                'Skip: The skipped Windows host leaves coverage unverified.'
+                'Critical: Test the error-state branch with a reversible fault check.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'skipped Windows lane cannot justify platform exception'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: Not justified; the skipped Windows lane provides no coverage evidence.'
+                'Evidence: The Windows behavior test owns evidence for this module.'
+                'Visibility: Keep the module in the coverage inventory and report.'
+                'Skip: The skipped Windows host leaves coverage unverified.'
+                'Critical: Test the error-state branch with a reversible fault check.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'critical platform fault validated with negative control'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: Not justified until a platform-only exception has a specific owner.'
+                'Evidence: The Windows behavior test owns evidence for this module.'
+                'Visibility: Keep the module in the coverage inventory and report.'
+                'Skip: The skipped Windows host leaves coverage unverified.'
+                'Critical: Validate the critical error state with a focused Windows negative control.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Windows-only blanket coverage exception rejected'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: Not justified to exclude the Windows-only module after a skipped test.'
+                'Evidence: The Windows behavior test owns evidence for this module.'
+                'Visibility: Keep the module in the coverage inventory and report.'
+                'Skip: The skipped Windows host leaves coverage unverified.'
+                'Critical: Test the error-state branch with a reversible fault check.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'coverage reporting retains Windows-only module'
+            ScenarioId = 'powershell-engineering-maps-platform-coverage-exceptions'
+            Response = @(
+                'Exception: Not justified to exclude the Windows-only module after a skipped test.'
+                'Evidence: The Windows behavior test owns evidence for this module.'
+                'Visibility: Keep the module in coverage reporting.'
+                'Skip: The skipped Windows host leaves coverage unverified.'
+                'Critical: Test the error-state branch with a reversible fault check.') -join "`n"
             Expected = $true
         }
         @{
@@ -867,8 +2040,38 @@ Describe 'Skill evaluation scenario contract' {
             Response = @(
                 'Profile: curated-correctness-global'
                 'Legacy: report-existing-default-diagnostics'
-                'Changed: reject-new-default-diagnostics'
+                'Changed: reject-new-default-diagnostics-on-changed-lines'
                 'Syntax: PowerShell-parser-not-regex') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'static analysis profile and baseline accepted'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: Curated correctness profile kept globally clean.'
+                'Legacy: Keep legacy default diagnostics visible in a baseline.'
+                'Changed: Fail new default diagnostics on changed lines.'
+                'Syntax: Use the PowerShell parser, not regex.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'new default diagnostic singular rejected on changed line'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: Curated correctness profile kept globally clean.'
+                'Legacy: Keep legacy default diagnostics visible in a baseline.'
+                'Changed: Fail any new default diagnostic on changed lines.'
+                'Syntax: Use the PowerShell parser, not regex.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'new default warning rejected on changed line'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: Curated correctness profile kept globally clean.'
+                'Legacy: Keep legacy default diagnostics visible in a baseline.'
+                'Changed: Reject any new default warning on changed lines.'
+                'Syntax: Use the PowerShell parser, not regex.') -join "`n"
             Expected = $true
         }
         @{
@@ -902,6 +2105,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'unchanged-line warning gate rejected'
+            ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
+            Response = @(
+                'Profile: Curated correctness profile kept globally clean.'
+                'Legacy: Keep legacy default diagnostics visible in a baseline.'
+                'Changed: Fail new default warnings only on unchanged lines.'
+                'Syntax: Use the PowerShell parser, not regex.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'regex syntax parser rejected'
             ScenarioId = 'powershell-engineering-separates-static-analysis-gates'
             Response = @(
@@ -919,6 +2132,46 @@ Describe 'Skill evaluation scenario contract' {
                 'Exception: exact-rule-and-site-if-justified'
                 'Oracle: native-exit-behavior-test'
                 'Control: missing-exit-check-must-fail') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'narrow analyzer rule and child oracle accepted'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: Reject global suppression of the native-exit rule.'
+                'Exception: Exact rule and site-specific helper with a concrete reason.'
+                'Oracle: Real native child exit behavior test.'
+                'Control: Removing the exit check must make the focused test fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'real child that exits nonzero accepted as oracle'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: Reject global suppression of the native-exit rule.'
+                'Exception: Exact rule and site-specific helper with a concrete reason.'
+                'Oracle: A real child process exits nonzero in the independent oracle check.'
+                'Control: Removing the exit check must make the focused test fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'real child failure reported by wrapper accepted'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: Reject global suppression of the native-exit rule.'
+                'Exception: Exact rule and site-specific helper with a concrete reason.'
+                'Oracle: A real child emits valid stdout but exits nonzero; the wrapper must report failure.'
+                'Control: Removing the exit check must make the focused test fail.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'helper-local documented exception accepted'
+            ScenarioId = 'powershell-engineering-rejects-broad-analyzer-suppression'
+            Response = @(
+                'Suppression: Reject global suppression of the native-exit rule.'
+                'Exception: Permit only a helper-local suppression with a specific documented contract reason.'
+                'Oracle: A real child exits nonzero and its behavior test requires wrapper failure.'
+                'Control: Removing the exit check must make the focused test fail.') -join "`n"
             Expected = $true
         }
         @{
@@ -960,6 +2213,50 @@ Describe 'Skill evaluation scenario contract' {
                 'Drift: compare-all-outputs-without-overwrite'
                 'Control: stale-counterpart-must-fail'
                 'Behavior: execute-generated-entry-point') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'generated outputs compared in isolation accepted'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: The generator and template inputs own the change.'
+                'Change: Fix the template and regenerate both outputs.'
+                'Drift: Compare fresh runtime and release outputs in isolation against checked-in copies without overwriting them.'
+                'Control: Make one counterpart stale and ensure the comparison fails.'
+                'Behavior: Exercise the generated entry point in its public lane.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'generated source patch and isolated diff accepted'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: The generator and template inputs own the change.'
+                'Change: Patch the template and regenerate both outputs.'
+                'Drift: Diff fresh runtime and release artifacts in isolation against checked-in copies without overwriting them.'
+                'Control: Make one counterpart stale and ensure the comparison fails.'
+                'Behavior: Exercise the generated entry point in its public lane.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'alter and restore generated copy catches drift'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: The generator and template inputs own the change.'
+                'Change: Patch the template and regenerate both outputs.'
+                'Drift: Diff fresh runtime and release artifacts in isolation against checked-in copies without overwriting them.'
+                'Control: Alter one checked-in generated copy, confirm the drift gate fails, then restore it.'
+                'Behavior: Exercise the generated entry point in its public lane.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'change and restore generated output catches drift'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: The generator and template inputs own the change.'
+                'Change: Patch the template and regenerate both outputs.'
+                'Drift: Diff fresh runtime and release artifacts in isolation against checked-in copies without overwriting them.'
+                'Control: Change one checked-in output, prove the isolated comparison fails, then restore it.'
+                'Behavior: Exercise the generated entry point in its public lane.') -join "`n"
             Expected = $true
         }
         @{
@@ -1028,6 +2325,36 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'packaged generated entry point exercised accepted'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: Generated PowerShell artifact review workflow.'
+                'Source: The generator and template inputs are authoritative.'
+                'Artifact: Distributable packaged script in the archive.'
+                'Check: Render fresh output in isolation, compare it with the packaged script and execute its entry point.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'packaged generated scripts workflow accepted'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: Generated-scripts workflow owns packaged output drift.'
+                'Source: The generator and template inputs are authoritative.'
+                'Artifact: Distributable packaged script in the archive.'
+                'Check: Render fresh output in isolation, compare it with the packaged script and execute its entry point.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'packaged copy compared and tested in isolation'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: Generated PowerShell artifact review workflow.'
+                'Source: The generator and template inputs are authoritative.'
+                'Artifact: Distributable packaged script in the archive.'
+                'Check: Regenerate in isolation, compare exact archive bytes, and verify the packaged copy through independent process behavior tests.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'packaging routed to generic checklist rejected'
             ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
             Response = @(
@@ -1066,6 +2393,83 @@ Describe 'Skill evaluation scenario contract' {
                 'Next: rerun-Pester-fresh-process-and-required-full-on-final-tree'
                 'Host: minimum-supported-host-runtime-test'
                 'Claim: unverified-until-owning-lanes-run') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'review ties public failure evidence to final tree'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: Exported public native-child failure behavior changed.'
+                'Receipt: Prior revision A test receipts are stale for B.'
+                'Next: Rerun the affected PowerShell shard with a fresh-process case on B, then the required full gates.'
+                'Host: Execute the entry point on the minimum PowerShell 7.4 host.'
+                'Claim: Unverified until owning tests and the host lane run.') -join "`n`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'review identifies A receipts and focused reruns'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: Public native-child failure and exit behavior changed.'
+                'Receipt: A receipts became stale when B changed the failure contract.'
+                'Next: Focused reruns on B include the Pester shard and a fresh-process check, followed by required full final-tree gates.'
+                'Host: Execute the entry point on the minimum PowerShell 7.4 host.'
+                'Claim: Unverified until owning tests and the host lane run.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'review isolated shard and final B snapshot accepted'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: Public native-child failure and exit behavior changed.'
+                'Receipt: A receipts became stale when B changed the failure contract.'
+                'Next: Rerun the PowerShell isolated shard on the final B snapshot, then required full gates.'
+                'Host: Execute the entry point on the minimum PowerShell 7.4 host.'
+                'Claim: Not yet verified on B until owning tests run.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'review fresh process-visible final snapshot accepted'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: Public native-child failure and exit behavior changed.'
+                'Receipt: A receipts became stale when B changed the failure contract.'
+                'Next: Rerun the Pester shard in a fresh/process-visible lane, then required broader final-snapshot gates.'
+                'Host: Execute the entry point on the minimum PowerShell 7.4 host.'
+                'Claim: Unverified until owning tests and the host lane run.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'review named Pester shard runner on final tree accepted'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: Public native-child failure and exit behavior changed.'
+                'Receipt: A receipts became stale when B changed the failure contract.'
+                'Next: Rerun the owning isolated shard with Invoke-PesterShards.ps1 and then the required full final-tree gates.'
+                'Host: Execute the entry point on the minimum PowerShell 7.4 host.'
+                'Claim: Unverified until owning tests and the host lane run.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'run fresh process and full gates on published B head'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: Public native-child failure and exit behavior changed.'
+                'Receipt: Prior revision A receipts are stale for B.'
+                'Next: On B, run the focused public-entry-point fresh-process test, then the full PowerShell suite on the final published head.'
+                'Host: Execute the entry point on the minimum PowerShell 7.4 host.'
+                'Claim: Unverified until owning tests and the host lane run.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'run Pester shard and full suite on B'
+            ScenarioId = 'powershell-engineering-rejects-stale-review-receipt'
+            Response = @(
+                'Contract: Public native-child failure and exit behavior changed.'
+                'Receipt: Prior revision A receipts are stale for B.'
+                'Next: On B, run the affected Pester shard with a fresh-process case, then the full Pester suite and required managed gates.'
+                'Host: Execute the entry point on the minimum PowerShell 7.4 host.'
+                'Claim: Unverified until owning tests and the host lane run.') -join "`n"
             Expected = $true
         }
         @{
@@ -1607,7 +3011,8 @@ Describe 'Skill evaluation scenario contract' {
             allowedTools = @('read', 'shell(git:*)')
             deniedTools = @('write', 'web')
         }
-        $arguments = @(New-SkillEvalArguments -Scenario $scenario -PluginDirectory $TestDrive -Model 'test-model' -TranscriptPath (Join-Path $TestDrive 'transcript.md'))
+        $usagePath = Join-Path $TestDrive 'usage.json'
+        $arguments = @(New-SkillEvalArguments -Scenario $scenario -PluginDirectory $TestDrive -Model 'test-model' -TranscriptPath (Join-Path $TestDrive 'transcript.md') -UsageOutputPath $usagePath)
 
         @($arguments | Where-Object { $_ -eq '--allow-tool=read' }).Count | Should -Be 1
         @($arguments | Where-Object { $_ -eq '--allow-tool=shell(git:*)' }).Count | Should -Be 1
@@ -1618,8 +3023,110 @@ Describe 'Skill evaluation scenario contract' {
         $addDirectoryIndex = [Array]::IndexOf($arguments, '--add-dir')
         $addDirectoryIndex | Should -BeGreaterThan -1
         $arguments[$addDirectoryIndex + 1] | Should -Be $TestDrive
+        $effortIndex = [Array]::IndexOf($arguments, '--reasoning-effort')
+        $effortIndex | Should -BeGreaterThan -1
+        $arguments[$effortIndex + 1] | Should -Be 'medium'
+        $usageIndex = [Array]::IndexOf($arguments, '--usage-output-file')
+        $usageIndex | Should -BeGreaterThan -1
+        $arguments[$usageIndex + 1] | Should -Be $usagePath
+        $arguments | Should -Contain '--excluded-tools=task'
         @($arguments | Where-Object { $_ -like '--secret-env-vars=*COPILOT_GITHUB_TOKEN*' }).Count | Should -Be 1
         ($arguments -join ' ') | Should -Not -Match 'TOKEN='
+    }
+
+    It 'includes per-run usage and telemetry evidence in the model-output revision' {
+        $directory = Join-Path $TestDrive 'usage-revision'
+        New-Item -ItemType Directory -Path $directory | Out-Null
+        $before = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $legacyManifest = @(
+            'stdout.jsonl:MISSING'
+            'stderr.txt:MISSING'
+            'transcript.md:MISSING'
+            'shim.log:MISSING') -join "`n"
+        $legacyRevision = [Convert]::ToHexString(
+            [System.Security.Cryptography.SHA256]::HashData(
+                [System.Text.Encoding]::UTF8.GetBytes($legacyManifest)))
+        $before | Should -Be $legacyRevision
+        Set-Content -LiteralPath (Join-Path $directory 'usage.json') -Value '{"model":"gpt-5.6-sol","inputTokens":1,"outputTokens":1}'
+        $after = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $after | Should -Not -Be $before
+        Set-Content -LiteralPath (Join-Path $directory 'telemetry.jsonl') -Value '{"gen_ai.response.model":"gpt-5.6-sol"}'
+        $withTelemetry = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $withTelemetry | Should -Not -Be $after
+        $extendedManifest = @(
+            'stdout.jsonl:MISSING'
+            'stderr.txt:MISSING'
+            'transcript.md:MISSING'
+            "usage.json:$((Get-FileHash -LiteralPath (Join-Path $directory 'usage.json') -Algorithm SHA256).Hash)"
+            "telemetry.jsonl:$((Get-FileHash -LiteralPath (Join-Path $directory 'telemetry.jsonl') -Algorithm SHA256).Hash)"
+            'shim.log:MISSING') -join "`n"
+        $extendedRevision = [Convert]::ToHexString(
+            [System.Security.Cryptography.SHA256]::HashData(
+                [System.Text.Encoding]::UTF8.GetBytes($extendedManifest)))
+        $withTelemetry | Should -Be $extendedRevision
+        Remove-Item -LiteralPath (Join-Path $directory 'usage.json')
+        $withoutUsage = & (Get-Module SkillEval) { param($runDirectory)
+            Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory
+        } $directory
+        $withoutUsage | Should -Not -Be $withTelemetry
+    }
+
+    It 'rejects a usage receipt without matching model inference: <CaseName>' -ForEach @(
+        @{ CaseName = 'empty requests'; Requests = 0; Model = 'gpt-5.6-sol'; Valid = $false }
+        @{ CaseName = 'missing model metrics'; Requests = 1; Model = $null; Valid = $false }
+        @{ CaseName = 'wrong model'; Requests = 1; Model = 'gpt-5.6-luna'; Valid = $false }
+        @{ CaseName = 'wrong served model'; Requests = 1; Model = 'gpt-5.6-sol'; Served = 'gpt-5.6-luna'; Valid = $false }
+        @{ CaseName = 'wrong reasoning effort'; Requests = 1; Model = 'gpt-5.6-sol'; Effort = 'low'; Valid = $false }
+        @{ CaseName = 'missing telemetry'; Requests = 1; Model = 'gpt-5.6-sol'; NoTelemetry = $true; Valid = $false }
+        @{ CaseName = 'token totals differ'; Requests = 1; Model = 'gpt-5.6-sol'; InputTokens = 11; Valid = $false }
+        @{ CaseName = 'missing per-call input tokens'; Requests = 1; Model = 'gpt-5.6-sol'; NoInput = $true; Reason = '*missing input or output tokens*'; Valid = $false }
+        @{ CaseName = 'missing per-call output tokens'; Requests = 1; Model = 'gpt-5.6-sol'; NoOutput = $true; Reason = '*missing input or output tokens*'; Valid = $false }
+        @{ CaseName = 'missing per-call status'; Requests = 1; Model = 'gpt-5.6-sol'; NoStatus = $true; Reason = '*missing status code*'; Valid = $false }
+        @{ CaseName = 'matched model'; Requests = 1; Model = 'gpt-5.6-sol'; Valid = $true }
+    ) {
+        $path = Join-Path $TestDrive "$CaseName-usage.json"
+        $telemetryPath = Join-Path $TestDrive "$CaseName-telemetry.jsonl"
+        $modelMetrics = @{}
+        if ($Model) {
+            $modelMetrics[$Model] = @{
+                requests = @{ count = 1 }
+                usage = @{ inputTokens = $(if ($InputTokens) { $InputTokens } else { 12 }); outputTokens = 4 }
+            }
+        }
+        @{ totalUserRequests = $Requests; modelMetrics = $modelMetrics } |
+            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path
+        if (-not $NoTelemetry) {
+            @{ type = 'log'; body = 'session started' } |
+                ConvertTo-Json -Compress | Set-Content -LiteralPath $telemetryPath
+            $span = @{
+                type = 'span'
+                name = 'chat gpt-5.6-sol'
+                attributes = @{
+                    'gen_ai.operation.name' = 'chat'
+                    'gen_ai.request.model' = 'gpt-5.6-sol'
+                    'gen_ai.response.model' = $(if ($Served) { $Served } else { 'gpt-5.6-sol' })
+                    'gen_ai.request.reasoning.level' = $(if ($Effort) { $Effort } else { 'medium' })
+                    'gen_ai.usage.input_tokens' = 12
+                    'gen_ai.usage.output_tokens' = 4
+                }
+            }
+            if (-not $NoStatus) { $span.status = @{ code = 0 } }
+            if ($NoInput) { $span.attributes.Remove('gen_ai.usage.input_tokens') }
+            if ($NoOutput) { $span.attributes.Remove('gen_ai.usage.output_tokens') }
+            $span | ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath $telemetryPath
+        }
+        $assert = { & (Get-Module SkillEval) { param($receiptPath, $spanPath)
+                Assert-SkillEvalUsageReceipt -Path $receiptPath -TelemetryPath $spanPath -ExpectedModel 'gpt-5.6-sol'
+            } $path $telemetryPath }
+        if ($Valid) { $assert | Should -Not -Throw }
+        elseif ($Reason) { $assert | Should -Throw $Reason }
+        else { $assert | Should -Throw }
     }
 
     It 'resolves native Copilot deterministically: <CaseName>' -ForEach @(
@@ -1703,6 +3210,39 @@ Describe 'Skill evaluation scenario contract' {
         }
     }
 
+    It 'decodes redirected native output and error streams as UTF-8' {
+        $module = Get-Module SkillEval
+        $startInfo = & $module {
+            param($path)
+            New-SkillEvalCopilotStartInfo -CopilotPath $path
+        } $script:PwshPath
+        $startInfo.ArgumentList.Add('-NoProfile')
+        $startInfo.ArgumentList.Add('-NonInteractive')
+        $startInfo.ArgumentList.Add('-Command')
+        $startInfo.ArgumentList.Add(
+            '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); [Console]::Out.Write([char]0x2019); [Console]::Error.Write([char]0x2019)')
+        $process = [System.Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        $started = $false
+        try {
+            $started = $process.Start()
+            $started | Should -BeTrue
+            $standardOutput = $process.StandardOutput.ReadToEndAsync()
+            $standardError = $process.StandardError.ReadToEndAsync()
+            $process.WaitForExit(30 * 1000) | Should -BeTrue
+            $process.ExitCode | Should -Be 0
+            $standardOutput.GetAwaiter().GetResult() | Should -BeExactly ([string][char]0x2019)
+            $standardError.GetAwaiter().GetResult() | Should -BeExactly ([string][char]0x2019)
+        }
+        finally {
+            if ($started -and -not $process.HasExited) {
+                $process.Kill($true)
+                $process.WaitForExit()
+            }
+            $process.Dispose()
+        }
+    }
+
     It 'requires Copilot CLI 1.0.63 or later' {
         $module = Get-Module SkillEval
 
@@ -1719,6 +3259,28 @@ Describe 'Skill evaluation scenario contract' {
                     Get-SkillEvalValidatedCopilotVersion -Output $output
                 } ([string]$case.output)
             } | Should -Throw ([string]$case.error) -Because ([string]$case.name)
+        }
+    }
+
+    It 'requires Copilot CLI 1.0.83 for Sol and Luna usage capture' {
+        $module = Get-Module SkillEval
+
+        foreach ($model in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+            foreach ($version in @('1.0.63', '1.0.82')) {
+                {
+                    & $module {
+                        param($output, $modelId)
+                        Get-SkillEvalValidatedCopilotVersion -Output $output -Model $modelId
+                    } "GitHub Copilot CLI $version." $model
+                } | Should -Throw '*Copilot CLI 1.0.83 or later*'
+            }
+
+            & $module {
+                param($modelId)
+                Get-SkillEvalValidatedCopilotVersion `
+                    -Output 'GitHub Copilot CLI 1.0.83.' `
+                    -Model $modelId
+            } $model | Should -BeExactly 'GitHub Copilot CLI 1.0.83.'
         }
     }
 
@@ -1747,7 +3309,7 @@ Describe 'Skill evaluation scenario contract' {
             Should -Throw '*changed during the test*'
     }
 
-    It 'exposes explicit native client selection through both evaluation entry points' {
+    It 'requires an explicit model and native client selection through both evaluation entry points' {
         $singleRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvals.ps1'
         $matrixRunner = Join-Path $script:RepoRoot 'evals/Invoke-SkillEvalMatrix.ps1'
         $parseErrors = $null
@@ -1785,6 +3347,14 @@ Describe 'Skill evaluation scenario contract' {
             'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'ScenarioId',
             'RunCount', 'TimeoutMinutes', 'MaxConcurrency', 'Executor',
             'IsolateCopilotHome', 'CopilotPath')
+        foreach ($modelParameter in @(
+                @($singleAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0],
+                @($matrixAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0],
+                @($suiteFunction.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0])) {
+            $modelParameter.DefaultValue | Should -BeNullOrEmpty
+        }
+        { & $singleRunner -Model '' } | Should -Throw '*Specify -Model*'
+        { & $matrixRunner -Model '' } | Should -Throw '*Specify -Model*'
         $matrixContent | Should -Match 'Resolve-SkillEvalCopilotPath -CopilotPath \$CopilotPath'
         $forwardingText = "'-CopilotPath', " + '$using:resolvedCopilotPath'
         $matrixContent | Should -Match ([regex]::Escape($forwardingText))
@@ -2542,6 +4112,54 @@ Describe 'Skill evaluation evidence scoring' {
         $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
 
         $assessment.Passed | Should -BeTrue
+    }
+
+    It 'scores the final assistant answer while retaining earlier skill calls' {
+        $standardOutputPath = Join-Path $TestDrive 'final-answer-stdout.jsonl'
+        $shimLogPath = Join-Path $TestDrive 'final-answer-shim.log'
+        Set-Content -LiteralPath $shimLogPath -Value @()
+        $scenario = [pscustomobject]@{
+            skill = 'powershell-engineering'
+            expectSkillInvocation = $true
+            requiredResponsePatterns = @('(?s)\AResult: final\z')
+            forbiddenResponsePatterns = @('(?i)obsolete')
+            requiredCommandPatterns = @()
+            forbiddenCommandPatterns = @()
+            requireUnchangedWorktree = $true
+        }
+        $messages = @(
+            @{ type = 'assistant.message'; data = @{
+                    content = 'Checking the skill.'
+                    toolRequests = @(@{ name = 'skill'; arguments = @{ skill = 'powershell-engineering' } })
+                } }
+            @{ type = 'assistant.message'; data = @{
+                    content = 'Result: final'
+                    toolRequests = @()
+                } }
+        )
+        $processResult = [pscustomobject]@{
+            ExitCode = 0
+            TimedOut = $false
+            StandardOutputPath = $standardOutputPath
+        }
+        $context = [pscustomobject]@{
+            ShimLogPath = $shimLogPath
+            BaselineWorktree = 'same'
+            FinalWorktree = 'same'
+        }
+
+        $messages | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress } |
+            Set-Content -LiteralPath $standardOutputPath
+        $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
+        $assessment.Passed | Should -BeTrue
+        $assessment.InvokedSkills | Should -Contain 'powershell-engineering'
+
+        $messages[0].data.content = 'Result: final'
+        $messages[1].data.content = 'Result: obsolete'
+        $messages | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress } |
+            Set-Content -LiteralPath $standardOutputPath
+        $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
+        $assessment.Passed | Should -BeFalse
     }
 
     It 'records and requires companion skill invocations' {
