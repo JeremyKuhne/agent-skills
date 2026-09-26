@@ -354,6 +354,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'PowerShell rejects own YAML parsing while invoking parser'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Do not implement YAML parsing in PowerShell; invoke the maintained parser.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: Duplicate keys must fail before implementation.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'YAML labeled paragraphs accepted'
             ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
             Response = @(
@@ -451,6 +461,16 @@ Describe 'Skill evaluation scenario contract' {
                 'Boundary: A maintained YAML parser does not own the workflow syntax.'
                 'PowerShell-role: Invoke the parser and map diagnostics.'
                 'Oracle: Independent parser specification fixtures.'
+                'Test: Duplicate keys must fail before implementation.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'PowerShell parser invocation explicitly negated'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Do not invoke the parser; implement the YAML syntax in PowerShell.'
+                'Oracle: Independent YAML parser fixtures.'
                 'Test: Duplicate keys must fail before implementation.') -join "`n"
             Expected = $false
         }

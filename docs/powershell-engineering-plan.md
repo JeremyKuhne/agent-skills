@@ -113,8 +113,9 @@ discovery, adjudicate the response rubrics, and approve a fresh frozen cohort;
 keep PR #114 draft in the meantime.
 
 After this campaign, PR #114's review follow-up added Sol/Luna-specific client
-preflight and three negation controls for API breaks, array presence, and native
-exit handling. Those controls have a new scenario revision; they have not been
+preflight and four negation controls for API breaks, array presence, native
+exit handling, and YAML parser delegation. Those controls have a new scenario
+revision; they have not been
 applied retroactively to the saved outputs or evaluated in another model run.
 The counts above remain tied to the frozen revision, not to a qualification of
 the post-review rubric.
