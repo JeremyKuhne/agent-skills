@@ -16,7 +16,8 @@
       "forbiddenResponsePatterns": ["(?im)^(?:Boundary|Owner):[^\\r\\n]*\\bPowerShell\\b[^\\r\\n]*\\b(?:is|does|should|must)\\s+not\\b[^\\r\\n]*\\b(?:implement\\w*|boundar\\w*|own\\w*|responsib\\w*)\\b", "(?im)^Oracle:[^\\r\\n]*\\b(?:mocked|simulated|synthetic)\\b[^\\r\\n]*\\b(?:child|process|receipt)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Keep the public PowerShell command responsible for child arguments, streams, exit status, environment, and cleanup rather than moving its shell contract to an unrelated owner.", "Use an independently controlled real child and focused Pester or fresh-process tests for success, nonzero exit, malformed output, restoration, and cleanup; mocks alone are not an oracle."]
     },
     {
       "id": "powershell-engineering-routes-yaml-policy-to-maintained-parser",
@@ -33,7 +34,8 @@
       "forbiddenResponsePatterns": ["(?i)PowerShell-(?:regex|line)-parser", "(?im)^Boundary:[^\\r\\n]*\\bYAML\\b[^\\r\\n]*\\b(?:parser|library|AST|API)\\b[^\\r\\n]*\\b(?:does|is|should|must)\\s+not\\b[^\\r\\n]*\\b(?:own\\w*|interpret\\w*|implement\\w*|boundar\\w*)\\b", "(?im)^PowerShell-role:[^\\r\\n]*\\b(?:do\\s+not|don't|never|should\\s+not|must\\s+not)\\s+(?:invok\\w*|orchestrat\\w*)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Delegate YAML structure and duplicate-key semantics to a maintained parser; PowerShell may invoke it and translate diagnostics but must not implement YAML with regex or line scanning.", "Use independent specification or parser fixtures and a failing control that distinguishes a duplicate mapping key from folded scalar content, comments, anchors, or aliases."]
     },
     {
       "id": "powershell-engineering-routing-application-performance-near-miss",
@@ -51,7 +53,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Route application-level allocation measurement to performance-testing, not PowerShell API engineering; establish a representative baseline with matched inputs and process or cache state.", "Compare the command's observable output and failure behavior across arms and report unmeasured child-process allocations or inconclusive differences honestly."]
     },
     {
       "id": "powershell-engineering-routing-pester-migration-near-miss",
@@ -64,11 +67,12 @@
       "expectSkillInvocation": false,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?is)\\A\\s*Route:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Scope:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Redesign:[^\\r\\n]+\\s*\\z", "(?im)^Route:[^\\r\\n]*(?:\\bupstream-pester-migration\\b|(?=[^\\r\\n]*\\b(?:dedicated|upstream)\\b)(?=[^\\r\\n]*\\bmigration\\b)(?=[^\\r\\n]*\\b(?:guidance|workflow)\\b)[^\\r\\n]+)$", "(?im)^Scope:(?=[^\\r\\n]*(?:\\bmechanic\\w*\\b|\\bsyntax[- ]only\\b|\\bconvert\\w*\\b[^\\r\\n]*\\bsyntax\\b))(?=[^\\r\\n]*\\b(?:v?5|existing)\\b)(?=[^\\r\\n]*\\b(?:v?6)\\b)[^\\r\\n]+$", "(?im)^Redesign:[^\\r\\n]*(?:\\bnot[- ]requested\\b|\\bno\\b|\\bout of scope\\b)[^\\r\\n]*$"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Route:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Scope:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Redesign:[^\\r\\n]+\\s*\\z", "(?im)^Route:[^\\r\\n]*(?:\\bupstream-pester-migration\\b|(?=[^\\r\\n]*\\b(?:dedicated|upstream)\\b)(?=[^\\r\\n]*\\bmigration\\b)(?=[^\\r\\n]*\\b(?:guidance|workflow)\\b)[^\\r\\n]+)$", "(?im)^(?:Route|Scope):[^\\r\\n]*\\bv?6\\b", "(?im)^Scope:(?=[^\\r\\n]*(?:\\bmechanic\\w*\\b|\\bsyntax[- ]only\\b|\\bconvert\\w*\\b[^\\r\\n]*\\bsyntax\\b))(?=[^\\r\\n]*(?:\\b(?:v?5|existing)\\b|\\bpreserv\\w*\\b[^\\r\\n]*\\btest intent\\b))[^\\r\\n]+$", "(?im)^Redesign:[^\\r\\n]*(?:\\bnot[- ]requested\\b|\\bno\\b|\\bout of scope\\b)[^\\r\\n]*$"],
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Do not invoke powershell-engineering for an assigned syntax-only Pester 5-to-6 conversion; route to the dedicated migration workflow even if no migration skill is installed.", "Preserve test intent without redesigning production behavior, test ownership, or process semantics outside the request."]
     },
     {
       "id": "powershell-engineering-preserves-public-api-contract",
@@ -85,7 +89,8 @@
       "forbiddenResponsePatterns": ["(?im)^Compatibility:[^\\r\\n]*\\b(?:do\\s+not|don't|never|should\\s+not|must\\s+not)\\s+preserv\\w*\\b", "(?im)^(?:Parameters|Result):[^\\r\\n]*\\b(?:may|can|should)\\s+chang\\w*\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Preserve the documented public parameter and named-only binding contract, output schema and cardinality, terminating errors, and supported host while changing only private implementation.", "Treat the refactor as compatible without a caller migration; verify consumer-visible behavior rather than incidental implementation text."]
     },
     {
       "id": "powershell-engineering-names-public-api-break",
@@ -102,7 +107,8 @@
       "forbiddenResponsePatterns": ["(?im)^Compatibility:[^\\r\\n]*\\bnon[ -]?breaking\\b", "(?im)^Compatibility:[^\\r\\n]*\\b(?:not|never|no)\\s+(?:an?\\s+)?break(?:ing)?\\b", "(?im)^Parameters:[^\\r\\n]*\\bomitt\\w*\\b[^\\r\\n]*\\bstill\\b[^\\r\\n]*\\bDebug\\b", "(?im)^Result:[^\\r\\n]*\\b(?:still|only)\\b[^\\r\\n]*\\bConfiguration\\b[^\\r\\n]*\\b(?:exit|fail)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Name the intentional break: positional binding ends, Configuration becomes Mode, and the omitted-value default changes from Debug to Release.", "Callers must migrate the output property from Configuration to Mode and the invalid-input exit code from 2 to 1; this is not compatibility-preserving cleanup."]
     },
     {
       "id": "powershell-engineering-preserves-json-boolean-states",
@@ -119,7 +125,8 @@
       "forbiddenResponsePatterns": ["(?im)^Cases:\\s*false\\b[^;\\r\\n]*\\b(?:invalid|reject\\w*|negative)\\b", "(?im)^Cases:[^\\r\\n]*\\b(?:missing|null|empty|zero|string\\s+false)\\b[^;\\r\\n]*\\b(?:valid|accept\\w*|positive)\\b", "(?im)^Validation:[^\\r\\n]*\\b(?:property|Properties|passed)\\b[^\\r\\n]*\\b(?:optional|ignored|not required)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Use a structured JSON parser and require a present Boolean passed field; false is valid failure evidence, not a missing or falsey field to reject.", "Independently reject missing, null, numeric zero, empty text, and string false without coercion or a regex over JSON source text."]
     },
     {
       "id": "powershell-engineering-preserves-parsed-array-shape",
@@ -132,11 +139,12 @@
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?is)\\A\\s*Presence:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Retrieval:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Output:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Cases:[^\\r\\n]+\\s*\\z", "(?im)^Presence:(?=[^\\r\\n]*\\b(?:key|Contains|membership|missing|exists|presen\\w*)\\b)(?=[^\\r\\n]*\\b(?:check|validat\\w*|requir\\w*|reject\\w*|test|verify|own\\w*)\\b)[^\\r\\n]+$", "(?im)^Retrieval:[^\\r\\n]*(?:\\bdirect\\w*\\b|\\barray\\b|@\\()[^\\r\\n]+$", "(?im)^Output:[^\\r\\n]*(?:\\bavoid[^\\r\\n]*enumerat\\w*\\b|\\bwithout\\s+enumerat\\w*\\b|\\bNoEnumerate\\b|\\bpreserv\\w*[^\\r\\n]*\\bshape\\b|return\\s*,)[^\\r\\n]*$", "(?im)^Cases:(?=[^\\r\\n]*\\bmissing\\b)(?=[^\\r\\n]*(?:\\bempty\\b|\\bzero\\b|\\[\\]|count\\s*0|\\bEmptyArray\\b|\\bsize\\s*0\\b))(?=[^\\r\\n]*(?:\\bsingle\\b|\\bone\\b|\\bone[- ]item\\b|count\\s*1|\\[\\s*[^,\\]\\s]+\\s*\\]|\\bOneItemArray\\b|\\bsize\\s*0\\s*,\\s*1\\b))(?=[^\\r\\n]*(?:\\bmultiple\\b|\\bmulti\\b|\\bmany\\b|count\\s*2|\\[\\s*[^,\\]\\s]+\\s*,\\s*[^,\\]\\s]+(?:\\s*,\\s*\\.\\.\\.)?\\s*\\]|\\bMultiItemArray\\b|\\bsize\\s*0\\s*,\\s*1\\s*,\\s*(?:and\\s+)?2\\+))[^\\r\\n]+$"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Presence:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Retrieval:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Output:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Cases:[^\\r\\n]+\\s*\\z", "(?im)^Presence:(?=[^\\r\\n]*\\b(?:key|Contains|membership|missing|exists|presen\\w*)\\b)(?=[^\\r\\n]*\\b(?:check|validat\\w*|requir\\w*|reject\\w*|test|verify|own\\w*)\\b)[^\\r\\n]+$", "(?im)^Retrieval:[^\\r\\n]*(?:\\bdirect\\w*\\b|\\barray\\b|@\\()[^\\r\\n]+$", "(?im)^Output:[^\\r\\n]*(?:\\bavoid[^\\r\\n]*enumerat\\w*\\b|\\bwithout\\s+enumerat\\w*\\b|\\bNoEnumerate\\b|\\bpreserv\\w*[^\\r\\n]*\\bshape\\b|return\\s*,)[^\\r\\n]*$", "(?im)^Cases:(?=[^\\r\\n]*\\bmissing\\b)(?=[^\\r\\n]*(?:\\bempty\\b|\\bzero\\b|\\[\\]|count\\s*0|\\bEmptyArray\\b|\\bsize\\s*0\\b))(?=[^\\r\\n]*(?:\\bsingle\\b|\\bone\\b|\\bone[- ]item\\b|count\\s*1|\\[\\s*[^,\\]\\s]+\\s*\\]|\\bOneItemArray\\b|\\bsize\\s*0\\s*,\\s*1\\b))(?=[^\\r\\n]*(?:\\bmultiple\\b|\\bmulti\\b|\\bmany\\b|count\\s*2|\\[\\s*[^,\\]\\s]+\\s*,\\s*[^,\\]\\s]+(?:\\s*,\\s*\\.\\.\\.)?\\s*\\]|\\bMultiItemArray\\b|\\bsize\\s*0\\s*,\\s*1\\s*,\\s*(?:and\\s+)?2\\+|\\bfull\\s+item\\s+count\\b))[^\\r\\n]+$"],
       "forbiddenResponsePatterns": ["(?im)^Presence:[^\\r\\n]*\\b(?:do\\s+not|don't|never)\\s+(?:check|validat\\w*|requir\\w*|verif\\w*)\\b[^\\r\\n]*\\b(?:key|presence|exists)\\b", "(?im)^Cases:[^\\r\\n]*\\bmissing\\b[^,;\\r\\n]*\\b(?:valid|accept\\w*|positive)\\b", "(?im)^Cases:[^\\r\\n]*(?:\\b(?:empty|zero|EmptyArray)\\b|\\[\\])[^,;\\r\\n]*\\b(?:invalid|reject\\w*|fail\\w*)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["The public PowerShell wrapper and generated command own required-key and array-type validation; leave the shared managed parser alone and avoid conditional-pipeline collapse or wrapping unrelated pipeline output.", "Reject missing, null, and wrong-type items; accept zero-, one-, and multi-item arrays with the exact array shape and cardinality at the generated entry point."]
     },
     {
       "id": "powershell-engineering-designs-pester-contract-tests",
@@ -153,7 +161,8 @@
       "forbiddenResponsePatterns": ["(?im)^Cases:[^\\r\\n]*\\b(?:invalid|rejection|reject\\w*)\\b[^\\r\\n]*\\b(?:ignored|untested|never\\s+tested|optional|not\\s+required)\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Pester owns the exported PowerShell command's pipeline and stream contract; managed helper tests or a mock of the exported function do not substitute for public behavior.", "Use expected valid and invalid results from the documented contract and a reversible mutation that makes an invalid item appear on the success stream and fails the test."]
     },
     {
       "id": "powershell-engineering-rejects-empty-pester-discovery",
@@ -166,11 +175,12 @@
       "expectSkillInvocation": true,
       "allowedTools": ["view", "glob"],
       "deniedTools": ["write", "web", "shell"],
-      "requiredResponsePatterns": ["(?is)\\A\\s*Run:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Result:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Worker:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Discovery:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Counts:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Failures:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Negative-control:[^\\r\\n]+\\s*\\z", "(?im)^Run:[^\\r\\n]*(?:(?=[^\\r\\n]*\\bPester\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)|(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)(?=[^\\r\\n]*\\bshard\\b))[^\\r\\n]+$", "(?im)^Result:[^\\r\\n]*(?:\\bPassed\\b[^\\r\\n]*\\b(?:exit|result|status)\\b|\\brequire-Passed\\b)", "(?im)^Worker:(?=[^\\r\\n]*\\bcomplet\\w*\\b)(?=[^\\r\\n]*\\bexit[- ]+(?:code[- ]+)?`?(?:0|zero)\\b)[^\\r\\n]+$", "(?im)^Discovery:[^\\r\\n]*(?:\\bpositive\\b|\\bnonzero\\b|\\bgreater\\b[^\\r\\n]*\\bzero\\b)", "(?im)^Counts:(?=[^\\r\\n]*(?:\\breconcil\\w*\\b|\\bTotalCount\\b))(?=[^\\r\\n]*\\bskipp\\w*\\b)(?=[^\\r\\n]*(?:\\bnot[- ]run\\b|\\bNotRunCount\\b))(?=[^\\r\\n]*\\binconclusive\\w*\\b)[^\\r\\n]+$", "(?im)^Failures:(?=[^\\r\\n]*(?:\\bblocks?\\b|\\bFailedBlocksCount\\b))(?=[^\\r\\n]*(?:\\bcontainers?\\b|\\bFailedContainersCount\\b))(?=[^\\r\\n]*\\binfrastructure\\b)[^\\r\\n]+$", "(?im)^Negative-control:(?=[^\\r\\n]*(?:\\bempty\\b|\\bno\\b[^\\r\\n]*\\btest\\w*\\b|\\bfilter\\b[^\\r\\n]*\\bmatch nothing\\b))(?=[^\\r\\n]*(?:\\bfail\\w*\\b|\\breject\\w*\\b|\\bnon[- ]passing\\b))[^\\r\\n]+$"],
-      "forbiddenResponsePatterns": ["(?im)^Result:[^\\r\\n]*(?:\\bdo not require\\b[^\\r\\n]*\\bPassed\\b|\\bPassed\\b[^\\r\\n]*\\b(?:not required|optional)\\b|\\bexit\\b[^\\r\\n]*\\b(?:ignored|optional|not required)\\b)", "(?im)^Worker:[^\\r\\n]*(?:\\bcomplete-with-nonzero-exit\\b|\\b(?:accept|allow|permit)\\s+(?:a\\s+)?(?:non[- ]?zero|incomplete)\\b|\\b(?:exit|status)\\b[^\\r\\n]*\\b(?:not checked|unchecked|ignored|optional|not required)\\b|\\bexit[- ]+(?:code[- ]+)?`?[1-9][0-9]*\\b[^\\r\\n]*\\b(?:accept\\w*|success)\\b)", "(?im)^Discovery:[^\\r\\n]*\\b(?:positive|nonzero)\\b[^\\r\\n]*\\b(?:not required|optional)\\b", "(?im)^Failures:[^\\r\\n]*\\bignore\\b"],
+      "requiredResponsePatterns": ["(?is)\\A\\s*Run:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Result:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Worker:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Discovery:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Counts:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Failures:[^\\r\\n]+\\r?\\n(?:[ \\t]*\\r?\\n)*Negative-control:[^\\r\\n]+\\s*\\z", "(?im)^Run:[^\\r\\n]*(?:(?=[^\\r\\n]*\\bPester\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)|(?=[^\\r\\n]*\\bPowerShell\\b)(?=[^\\r\\n]*\\bisolat\\w*\\b)(?=[^\\r\\n]*\\bshard\\b))[^\\r\\n]+$", "(?im)^Result:[^\\r\\n]*(?:\\bPassed\\b[^\\r\\n]*\\b(?:exit|result|status)\\b|\\brequire-Passed\\b)", "(?im)^Worker:(?=[^\\r\\n]*\\bcomplet\\w*\\b)(?=[^\\r\\n]*(?:\\bexit[- ]+(?:code[- ]+)?`?(?:0|zero)\\b|(?=[^\\r\\n]*\\breject\\w*\\b)(?=[^\\r\\n]*\\bnon[- ]?zero\\b[^\\r\\n]*\\bexits?\\b)))[^\\r\\n]+$", "(?im)^Discovery:[^\\r\\n]*(?:\\bpositive\\b|\\bnonzero\\b|\\bgreater\\b[^\\r\\n]*\\bzero\\b|(?=[^\\r\\n]*\\bat least one\\b)(?=[^\\r\\n]*\\btest\\w*\\b))", "(?im)^Counts:(?=[^\\r\\n]*(?:\\breconcil\\w*\\b|\\bTotalCount\\b))(?=[^\\r\\n]*\\bskipp\\w*\\b)(?=[^\\r\\n]*(?:\\bnot[- ]run\\b|\\bNotRunCount\\b))(?=[^\\r\\n]*\\binconclusive\\w*\\b)[^\\r\\n]+$", "(?im)^Failures:(?=[^\\r\\n]*(?:\\bblocks?\\b|\\bFailedBlocksCount\\b))(?=[^\\r\\n]*(?:\\bcontainers?\\b|\\bFailedContainersCount\\b))(?=[^\\r\\n]*\\binfrastructure\\b)[^\\r\\n]+$", "(?im)^Negative-control:(?=[^\\r\\n]*(?:\\bempty\\b|\\bno\\b[^\\r\\n]*\\btest\\w*\\b|\\bfilter\\b[^\\r\\n]*\\bmatch nothing\\b|\\bzero[- ]discover\\w*\\b|\\bunmatched\\b|\\bno[- ]match\\b))(?=[^\\r\\n]*(?:\\bfail\\w*\\b|\\breject\\w*\\b|\\bnon[- ]passing\\b))[^\\r\\n]+$"],
+      "forbiddenResponsePatterns": ["(?im)^Result:[^\\r\\n]*(?:\\bdo not require\\b[^\\r\\n]*\\bPassed\\b|\\bPassed\\b[^\\r\\n]*\\b(?:not required|optional)\\b|\\bexit\\b[^\\r\\n]*\\b(?:ignored|optional|not required)\\b)", "(?im)^Worker:[^\\r\\n]*(?:\\bcomplete-with-nonzero-exit\\b|\\b(?:accept|allow|permit)\\s+(?:a\\s+)?(?:non[- ]?zero|incomplete)\\b|\\b(?:exit|status)\\b[^\\r\\n]*\\b(?:not checked|unchecked|ignored|optional|not required)\\b|\\bexit[- ]+(?:code[- ]+)?`?[1-9][0-9]*\\b[^\\r\\n]*\\b(?:accept\\w*|success)\\b)", "(?im)^Discovery:[^\\r\\n]*\\b(?:positive|nonzero|at least one)\\b[^\\r\\n]*\\b(?:not required|optional)\\b", "(?im)^Failures:[^\\r\\n]*\\bignore\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Accept a receipt only with Result = Passed, a completed worker with exit code zero, positive intended discovery, separately reconciled passed, failed, skipped, not-run, and inconclusive counts, and no failed blocks, containers, or infrastructure work.", "An unmatched filter must make the owning isolated Pester lane fail; exit zero, zero failures, or a skip-only receipt never proves the component ran."]
     },
     {
       "id": "powershell-engineering-rejects-valid-output-with-failed-child",
@@ -187,7 +197,8 @@
       "forbiddenResponsePatterns": ["(?im)^Probe:[^\\r\\n]*\\b(?:mocked|simulated)\\b[^\\r\\n]*\\b(?:converter|child)\\b", "(?im)^Streams:[^\\r\\n]*\\b(?:but|then|and)\\s+merge\\b[^\\r\\n]*\\bstderr\\b[^\\r\\n]*\\bstdout\\b", "(?im)^Exit:[^\\r\\n]*(?:\\bnonzero\\b|\\bexits?[- ]?(?:7|seven)\\b)[^\\r\\n]*\\b(?:not|never)\\s+(?:a\\s+)?fail\\w*\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Run a controlled real child with the spaced input path as one exact argument, capture stdout and stderr separately, and require both valid JSON and exit zero for success.", "The exit-seven fixture with parseable stdout must fail, and a reversible control that accepts stdout despite nonzero exit must cause the integration check to fail."]
     },
     {
       "id": "powershell-engineering-restores-environment-and-scratch",
@@ -204,7 +215,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Record both the prior value and presence of TOOL_MODE, then restore either that value or absence on every exit path.", "Use one uniquely owned scratch directory and literal paths; test input paths with spaces and cleanup across child success, nonzero exit, and cancellation without deleting caller-owned state."]
     },
     {
       "id": "powershell-engineering-proves-minimum-host-compatibility",
@@ -221,7 +233,8 @@
       "forbiddenResponsePatterns": ["(?im)^Floor:[^\\r\\n]*\\bPowerShell\\b[^\\r\\n]*\\b7\\.4\\b[^\\r\\n]*\\b(?:not\\s+(?:supported|the\\s+(?:documented|supported)\\s+(?:minimum|floor))|unsupported)\\b", "(?im)^Floor:\\s*(?:not|never)\\s+PowerShell\\b[^\\r\\n]*\\b7\\.4\\b"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Keep the documented PowerShell 7.4 minimum distinct from newer test-host pins; a successful 7.6 run does not verify behavior on 7.4.", "Run the affected public entry point on a real 7.4 host and replace the 7.5-only API or explicitly approve a breaking support-floor change before claiming compatibility."]
     },
     {
       "id": "powershell-engineering-requires-owning-platform-evidence",
@@ -238,7 +251,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Windows behavior tests own Windows file ACL evidence, while Unix file-mode results prove only Unix behavior; neither host's pass proves the other's contract.", "Run the skipped Windows lane before claiming cross-platform validation and report skips as missing or unverified behavior rather than green evidence."]
     },
     {
       "id": "powershell-engineering-separates-child-and-managed-coverage",
@@ -255,7 +269,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Instrument the child PowerShell script in its own process and retain separate managed and PowerShell component reports; parent-only coverage is not child-script evidence.", "Reject a combined 80-percent coverage claim and defer component gates until ownership and report-only baselines are approved."]
     },
     {
       "id": "powershell-engineering-maps-platform-coverage-exceptions",
@@ -272,7 +287,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["A skipped Windows behavior lane cannot justify removing the module from the source inventory or treating the critical branch as covered; managed tests are not its owner.", "Keep the exception and skip visible, and exercise the exact Windows error state with an independent fault or mutation control before accepting coverage evidence."]
     },
     {
       "id": "powershell-engineering-separates-static-analysis-gates",
@@ -289,7 +305,8 @@
       "forbiddenResponsePatterns": ["(?im)^Changed:[^\\r\\n]*(?:\\bonly\\s+on\\s+unchanged\\s+lines?\\b|\\b(?:not|never)\\s+(?:on\\s+)?changed[- ]lines?\\b)"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Require a globally clean curated correctness profile while keeping legacy default diagnostics visible; fail only new default findings on changed lines.", "Use the parser or AST for PowerShell syntax rather than regex and do not globally suppress default warnings to hide the new finding."]
     },
     {
       "id": "powershell-engineering-rejects-broad-analyzer-suppression",
@@ -306,7 +323,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Reject global suppression of the native-exit correctness rule; a genuine exception must be scoped to the exact helper or site and justified against its contract.", "Use real child-exit behavior as an oracle and a reversible missing-exit-check control that demonstrably fails before accepting any suppression."]
     },
     {
       "id": "powershell-engineering-prevents-generated-script-drift",
@@ -323,7 +341,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Change the generator template or inputs, then regenerate both runtime and release copies; editing only an emitted script is not a durable fix.", "Render fresh output separately and compare before overwriting checked-in artifacts; a deliberately stale copy must fail, and tests must execute the emitted entry point."]
     },
     {
       "id": "powershell-engineering-routes-packaged-generated-counterpart",
@@ -340,7 +359,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["Route the package-only change through generated-artifact validation even with no checked-in generated script diff; the template and generator inputs remain authoritative.", "Compare a fresh isolated render against the script extracted from the installable archive, prove a stale-copy control fails, and test the packaged entry point's behavior."]
     },
     {
       "id": "powershell-engineering-rejects-stale-review-receipt",
@@ -357,7 +377,8 @@
       "forbiddenResponsePatterns": [],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": [],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": ["A changed native-child failure contract makes revision A Pester and managed receipts stale for revision B; do not claim the B behavior is verified from A.", "Require a fresh-process focused PowerShell check, final-tree broader Pester and managed lanes, and actual minimum PowerShell 7.4 host evidence before asserting compatibility or release readiness."]
     }
   ]
 }

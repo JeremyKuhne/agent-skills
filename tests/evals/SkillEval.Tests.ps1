@@ -14,6 +14,7 @@ BeforeAll {
     $script:DotNetFileCreationScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/dotnet-file-creation.json'
     $script:RoslynAnalyzersScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/roslyn-analyzers.json'
     $script:PowerShellEngineeringScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/powershell-engineering.json'
+    $script:PowerShellHeldOutScenarioPath = Join-Path $script:RepoRoot 'evals/scenarios/powershell-engineering-held-out.json'
     $script:PwshPath = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
     $script:CopilotClientVersionCases = Get-Content -LiteralPath (
         Join-Path $script:RepoRoot 'tests/fixtures/copilot-client-version-cases.json') `
@@ -202,6 +203,49 @@ Describe 'Skill evaluation scenario contract' {
         @($powerShellEngineeringScenarios.prompt |
                 Where-Object { $_ -match 'powershell-engineering' }).Count |
             Should -Be 0
+    }
+
+    It 'requires human outcome criteria for every PowerShell engineering scenario' {
+        $scenarios = @(Get-SkillEvalScenarios -Path $script:PowerShellEngineeringScenarioPath)
+        foreach ($scenario in $scenarios) {
+            $scenario.PSObject.Properties['reviewCriteria'] |
+                Should -Not -BeNullOrEmpty -Because "$($scenario.id) needs an independent outcome rubric"
+            $scenario.reviewCriteria -is [array] | Should -BeTrue
+            @($scenario.reviewCriteria).Count | Should -BeGreaterThan 0
+            foreach ($criterion in $scenario.reviewCriteria) {
+                [string]::IsNullOrWhiteSpace([string]$criterion) | Should -BeFalse
+            }
+        }
+    }
+
+    It 'defines 21 distinct held-out PowerShell contracts with human outcome criteria' {
+        $source = @(Get-SkillEvalScenarios -Path $script:PowerShellEngineeringScenarioPath)
+        $heldOut = @(Get-SkillEvalScenarios -Path $script:PowerShellHeldOutScenarioPath)
+        $heldOut.Count | Should -Be 21
+        @($heldOut.id | Sort-Object -Unique).Count | Should -Be 21
+
+        for ($index = 0; $index -lt $heldOut.Count; $index++) {
+            $scenario = $heldOut[$index]
+            $scenario.id | Should -Not -Be $source[$index].id
+            $scenario.prompt | Should -Not -BeExactly $source[$index].prompt
+            $scenario.prompt | Should -Not -Match 'powershell-engineering'
+            $scenario.skill | Should -BeExactly 'powershell-engineering'
+            $scenario.category | Should -BeExactly $source[$index].category
+            $scenario.evidenceKind | Should -BeExactly 'direct-invocation'
+            $scenario.expectSkillInvocation | Should -Be $source[$index].expectSkillInvocation
+            $scenario.runCount | Should -Be 3
+            $scenario.requireUnchangedWorktree | Should -BeTrue
+            $scenario.deniedTools | Should -Contain 'write'
+            $scenario.deniedTools | Should -Contain 'shell'
+            @($scenario.requiredResponsePatterns).Count | Should -Be 1
+            $scenario.requiredResponsePatterns[0] | Should -BeExactly '(?s)\S'
+            $scenario.PSObject.Properties['reviewCriteria'] | Should -Not -BeNullOrEmpty
+            @($scenario.reviewCriteria).Count | Should -BeGreaterThan 0
+        }
+        $performance = @($heldOut | Where-Object category -eq 'routing' |
+            Where-Object { -not $_.expectSkillInvocation -and $_.PSObject.Properties['requiredSkillInvocations'] })
+        $performance.Count | Should -Be 1
+        $performance[0].requiredSkillInvocations | Should -Contain 'performance-testing'
     }
 
     It 'compiles every manage-skills scenario pattern' {
@@ -591,6 +635,33 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'migration scope preserves intent without repeating version numbers'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: Dedicated Pester 5-to-6 migration workflow.'
+                'Scope: Syntax-only conversion of the existing suite; preserve test intent.'
+                'Redesign: Not requested.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'migration route identifies Pester 6 with preserved intent'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: Dedicated Pester 6 migration workflow.'
+                'Scope: Syntax-only conversion; preserve test intent.'
+                'Redesign: No redesign requested.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'migration to the wrong Pester version rejected'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: Dedicated Pester 5 migration workflow.'
+                'Scope: Syntax-only conversion of the existing suite; preserve test intent.'
+                'Redesign: No redesign requested.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'Pester migration route negated'
             ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
             Response = @(
@@ -978,6 +1049,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'array state table accepts full count with an ellipsis'
+            ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
+            Response = @(
+                'Presence: The PowerShell wrapper owns required items presence and type validation.'
+                'Retrieval: Assign the parsed array directly, not through an if expression.'
+                'Output: Write-Output -NoEnumerate preserves array shape.'
+                ('Cases: Missing: reject; null: reject; non-array: reject; []: accept 0 items; [x]: accept 1 item; [x,y,' + [char]0x2026 + ']: accept its full item count.')) -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'array presence without check rejected'
             ScenarioId = 'powershell-engineering-preserves-parsed-array-shape'
             Response = @(
@@ -1284,6 +1365,45 @@ Describe 'Skill evaluation scenario contract' {
                 'Failures: Reject failed blocks, containers, and infrastructure errors.'
                 'Negative-control: Empty selection must fail.') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'Pester rejects nonzero worker exit and an unmatched selector'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Use the component isolated PowerShell Pester runner.'
+                'Result: Accept only Result = Passed with process exit code zero.'
+                'Worker: Require a completed worker; reject Failed or nonzero exit.'
+                'Discovery: Require positive discovery of intended tests; zero selected cases is not a pass.'
+                'Counts: Reconcile TotalCount, PassedCount, FailedCount, SkippedCount, NotRunCount and InconclusiveCount.'
+                'Failures: Require zero failed tests, failed blocks, failed containers, and infrastructure failures.'
+                'Negative-control: Run an unmatched selector and reject zero discovery despite zero failures.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester at least one intended test and a no-match filter accepted'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Use the component isolated Pester shard.'
+                'Result: Accept only Result = Passed with process exit code zero.'
+                'Worker: Require every worker to complete; reject Failed or nonzero exits.'
+                'Discovery: Require at least one intended test case; zero selected cases is not a pass.'
+                'Counts: Reconcile TotalCount with passed, failed, skipped, not-run and inconclusive counts.'
+                'Failures: Require zero failed tests, blocks, containers, and infrastructure errors.'
+                'Negative-control: Feed the gate a zero-discovery receipt from a no-match filter and prove it rejects the receipt.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'Pester at least one test made optional rejected'
+            ScenarioId = 'powershell-engineering-rejects-empty-pester-discovery'
+            Response = @(
+                'Run: Use the component isolated Pester shard.'
+                'Result: Accept only Result = Passed with process exit code zero.'
+                'Worker: Require a completed worker with exit code zero.'
+                'Discovery: At least one intended test case is optional.'
+                'Counts: Reconcile TotalCount with passed, failed, skipped, not-run and inconclusive counts.'
+                'Failures: Require zero failed tests, blocks, containers, and infrastructure errors.'
+                'Negative-control: Empty selection must fail.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'Pester no-match filter must be rejected'
@@ -3265,7 +3385,9 @@ Describe 'Skill evaluation scenario contract' {
     It 'requires Copilot CLI 1.0.83 for Sol and Luna usage capture' {
         $module = Get-Module SkillEval
 
-        foreach ($model in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+        foreach ($model in @(
+                'gpt-5.6-sol', 'gpt-5.6-luna',
+                'gpt-6-sol', 'gpt-6-luna')) {
             foreach ($version in @('1.0.63', '1.0.82')) {
                 {
                     & $module {
@@ -3281,6 +3403,22 @@ Describe 'Skill evaluation scenario contract' {
                     -Output 'GitHub Copilot CLI 1.0.83.' `
                     -Model $modelId
             } $model | Should -BeExactly 'GitHub Copilot CLI 1.0.83.'
+        }
+    }
+
+    It 'selects usage evidence for both Sol/Luna generations only' {
+        $module = Get-Module SkillEval
+        foreach ($model in @(
+                'gpt-5.6-sol', 'gpt-5.6-luna',
+                'gpt-6-sol', 'gpt-6-luna')) {
+            & $module { param($modelId)
+                Test-SkillEvalUsageModel -Model $modelId
+            } $model | Should -BeTrue
+        }
+        foreach ($model in @('test-model', 'gpt-6-astra')) {
+            & $module { param($modelId)
+                Test-SkillEvalUsageModel -Model $modelId
+            } $model | Should -BeFalse
         }
     }
 

@@ -120,6 +120,60 @@ saved outputs or evaluated in another model run.
 The counts above remain tied to the frozen revision, not to a qualification of
 the post-review rubric.
 
+On 2026-09-27, the maintainer selected GPT-6 Sol and GPT-6 Luna as the next
+qualification models. The authorized P3a rung allows a six-attempt paired
+pilot, then one frozen 126-attempt cohort over 21 scenarios at medium effort,
+serial concurrency, and no token ceiling within that 132-attempt limit. This
+does not authorize paid full-portfolio E6 runs. The 21 scenarios now have
+prospective human outcome criteria; their exact-label patterns remain coarse
+checks. The client was exercised in the paired GPT-6 development pilot below;
+the pilot-calibrated rubric has no fresh frozen-cohort evidence. No saved
+GPT-5.6 output has been rescored as GPT-6 evidence.
+
+The 2026-09-27 offline development audit read all 28 frozen rubric misses and
+20 accepted answers, one per category and model. Three failures included
+observed skill-invocation errors; the other 25 were response-predicate misses.
+Many missed answers state the intended native-child, platform, and review
+contracts without the predicate's exact wording. Some Pester receipt answers
+still need a separate judgment about whether they make every required state
+explicit. The accepted sample showed no obvious material contradiction. This
+was a model-aware diagnostic review, not blinded independent grading; it does
+not convert any historical failure to a pass or qualify either GPT-6 model.
+
+The approved six-attempt GPT-6 P3a development pilot exercised the assigned
+Pester migration near miss, parsed-array shape, and empty Pester discovery once
+per model at medium effort and serial concurrency. Requested and served model
+IDs, per-call usage, and safety evidence matched on all six attempts; no
+infrastructure or safety failure occurred. The initial exact-label rubric
+passed 1/6. The saved answers routed correctly in all six cases, but five
+failed line-specific wording checks. Paired positive and negative controls
+then established a narrower, contract-preserving rubric change. Hash-verified
+rescoring of the six immutable outputs passed 6/6 without new model calls.
+This is development calibration, not a held-out useful-success result; the
+original reports and private transcripts remain unchanged.
+
+The approved 126-call GPT-6 follow-up used 21 new synthetic variants in
+the [held-out scenario document](../evals/scenarios/powershell-engineering-held-out.json),
+three repetitions per model at medium effort and serial concurrency. Its
+automatic nonempty-response check is only a routing/safety diagnostic; useful
+success requires separately recorded judgments against the prospective
+criteria. The scenario, scorer, client, and candidate revisions remained fixed
+through every attempt; no result was discarded or used to tune the cohort.
+
+All 126 held-out attempts requested and were served by either `gpt-6-sol` or
+`gpt-6-luna`, with verified source output hashes, medium effort, and per-call
+usage totals. Both models
+had zero observed safety and infrastructure failures. The routing/nonempty
+diagnostic passed 61/63 for Sol and 58/63 for Luna: Sol missed two application-
+performance near misses; Luna missed four near misses and the YAML positive
+trigger once. Luna's 58/63 routing rate is below the proposed 95% floor, and
+the 126 answers have not received independent usefulness judgments. This
+cohort therefore does not qualify P3a or E6. The 6:1 token-weighted resource
+totals were 25,735.770 Sol and 4,417.087 Luna-equivalent 1,000-token units;
+these are not billed dollars or cost per useful success. Keep the private
+outputs unchanged and revisit the portable discovery boundary in a separate
+development slice before proposing another paid cohort.
+
 PR #90 is closed unmerged; retain its parity receipt as compatibility evidence
 without inheriting its universal-Pester premise. Do not start P1b until P0r is
 accepted and P1c establishes the managed boundary. P1c proves one ownership

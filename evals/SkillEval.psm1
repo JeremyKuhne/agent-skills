@@ -218,6 +218,12 @@ function ConvertFrom-SkillEvalCopilotVersion {
     }
 }
 
+function Test-SkillEvalUsageModel ([string] $Model) {
+    return $Model -in @(
+        'gpt-5.6-sol', 'gpt-5.6-luna',
+        'gpt-6-sol', 'gpt-6-luna')
+}
+
 function Get-SkillEvalValidatedCopilotVersion {
     [CmdletBinding()]
     param(
@@ -229,7 +235,7 @@ function Get-SkillEvalValidatedCopilotVersion {
 
     $version = $Output.Trim()
     $reportedVersion = ConvertFrom-SkillEvalCopilotVersion -Output $version
-    $minimumVersionString = if ($Model -in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+    $minimumVersionString = if (Test-SkillEvalUsageModel -Model $Model) {
         '1.0.83'
     }
     else { '1.0.63' }
@@ -1178,7 +1184,8 @@ function Invoke-SkillEvalProcess {
     $transcriptPath = Join-Path $Context.RunDirectory 'transcript.md'
     $standardOutputPath = Join-Path $Context.RunDirectory 'stdout.jsonl'
     $standardErrorPath = Join-Path $Context.RunDirectory 'stderr.txt'
-    $usageOutputPath = if (-not $Executor -and $Model -in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+    $usageOutputPath = if (-not $Executor -and
+        (Test-SkillEvalUsageModel -Model $Model)) {
         Join-Path $Context.RunDirectory 'usage.json'
     }
     else { $null }

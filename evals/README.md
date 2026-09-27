@@ -112,6 +112,10 @@ from an earlier revision and requires Pester fresh-process evidence for changed
 PowerShell behavior, plus minimum-host runtime evidence for compatibility. All
 twenty-one cases are read-only and use exact labeled outputs.
 It is not part of the default release matrix.
+Each case now has prospective `reviewCriteria` for judging correctness beyond
+the automatic response patterns. Treat a pattern pass as a coarse check, not
+independently reviewed useful success; audit failures and a model-balanced
+sample of passes before making a qualification claim.
 
 The 2026-09-25 paired P3a diagnostic completed 126 original Sol/Luna attempts:
 development-calibrated repetition one scored 20/21 per model; frozen repetitions
@@ -119,11 +123,32 @@ two and three scored 25/42 Sol and 31/42 Luna. Routing passed 60/63 Sol and
 62/63 Luna attempts; every attempt passed safety and infrastructure checks.
 First-repetition rescoring verified 38 saved outputs without new model calls;
 the campaign's frozen rubric was not adjusted. Subsequent review-driven
-negation controls have a new scenario revision and no fresh model evidence.
-These exact-label scores do not establish independently reviewed usefulness or
-portfolio qualification. The
+negation controls and human-review criteria have a new scenario revision and
+are separate from that historical cohort. These exact-label scores do not
+establish independently reviewed usefulness or portfolio qualification. The
 [PowerShell engineering plan](../docs/powershell-engineering-plan.md#p3a-paired-diagnostic)
 records the identity and normalized-token receipts; raw outputs stay private.
+
+The later six-attempt GPT-6 P3a development pilot passed routing, safety, and
+infrastructure checks on both models. Its original exact-label score was 1/6;
+hash-verified rescoring after bounded positive and negative control calibration
+passed 6/6 with no extra inference. Neither figure is held-out qualification or
+a reason to rescore the older GPT-5.6 campaign as GPT-6 evidence.
+
+The separate [held-out P3a cases](scenarios/powershell-engineering-held-out.json)
+cover the same 21 contract classes with new synthetic prompts and two human
+review criteria per case. Their automatic response check requires only a
+nonempty answer; an automatic pass establishes routing and safety, not useful
+correctness. Judge the saved answers against the frozen criteria and keep
+missing human or independent judgments as pending, not passed. Do not tune the
+held-out prompts or criteria against results from the 126-call cohort.
+
+The first frozen GPT-6 held-out cohort completed all 126 candidate attempts with
+zero safety or infrastructure failures and verified model/usage receipts. Its
+routing/nonempty diagnostic passed 61/63 Sol and 58/63 Luna. Luna missed the
+proposed 95% routing floor; no independent useful-success result is claimed.
+The raw outputs remain private and this cohort must not be rescored into an
+acceptance pass after observing its answers.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
@@ -192,7 +217,7 @@ as infrastructure failure.
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.6-sol `
+  -Model gpt-6-sol `
   -RunCount 1
 ```
 
@@ -201,7 +226,7 @@ diagnostics or constrained environments:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.6-luna `
+  -Model gpt-6-luna `
   -RunCount 3 `
   -MaxConcurrency 4
 ```
@@ -216,7 +241,7 @@ Run a six-document single-model diagnostic under one eight-worker limit:
 
 ```pwsh
 ./evals/Invoke-SkillEvalMatrix.ps1 `
-  -Model gpt-5.6-sol `
+  -Model gpt-6-sol `
   -RunCount 3 `
   -MaxConcurrency 8
 ```
@@ -224,7 +249,7 @@ Run a six-document single-model diagnostic under one eight-worker limit:
 The matrix allocates the worker budget by document workload and runs documents
 concurrently. It never creates more model workers than `-MaxConcurrency`.
 
-Both GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`) are required
+Both GPT-6 Sol (`gpt-6-sol`) and GPT-6 Luna (`gpt-6-luna`) are required
 for skill qualification at medium reasoning effort. Current entry points require
 an explicit model and run only one at a time; their single-model summaries are
 diagnostic, not paired qualification. Obtain approval naming both models, the
@@ -234,7 +259,7 @@ Run one scenario while developing the harness:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.6-sol `
+  -Model gpt-6-sol `
   -ScenarioId create-pr-dirty-main-no-approval `
   -RunCount 1 `
   -ReportOnly
@@ -244,7 +269,7 @@ Select another scenario document explicitly:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.6-sol `
+  -Model gpt-6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -RunCount 1 `
   -ReportOnly
@@ -260,7 +285,7 @@ canonical definition, fixture closure, or candidate dependency closure changed:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.6-sol `
+  -Model gpt-6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -BaselineSummaryPath ./artifacts/baseline/summary.json `
   -RunCount 3
@@ -335,7 +360,7 @@ paired campaign:
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
   -ScenarioPath ./evals/scenarios/dotnet-file-creation.json `
-  -Model gpt-5.6-sol `
+  -Model gpt-6-sol `
   -RunCount 3 `
   -MaxConcurrency 2 `
   -ReportOnly

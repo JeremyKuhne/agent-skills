@@ -627,8 +627,8 @@ decisions; reducing prompts must not reduce user control.
 ### Entry gate - dual-model evaluation
 
 The [preceding evaluation plan](dual-model-evaluation-plan.md) replaces the
-single-model baseline with GPT-5.6 Sol and GPT-5.6 Luna at shared `medium`
-effort. It owns independent quality/safety gates, measured 6:1 token weighting,
+single-model baseline with GPT-6 Sol and GPT-6 Luna at shared `medium`
+effort. It owns independent quality/safety gates, agreed 6:1 normalized token weighting,
 success per cost unit, time-to-result and runner-cost accounting, and selection
 of the cheapest qualified judging model. Use its reports and ongoing cost ledger
 rather than copying model thresholds, rate tables, or mutable totals here.

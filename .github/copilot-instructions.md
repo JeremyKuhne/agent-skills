@@ -143,8 +143,8 @@ Real model evaluations are manual and may consume paid capacity. Before asking
 permission, explicitly name every model ID, reasoning effort, scenario set,
 repetitions, concurrency, and paid budget. Wait for approval of those exact
 terms before starting any model run or trace; generic test approval is not model
-approval. Skill qualification requires both GPT-5.6 Sol (`gpt-5.6-sol`) and
-GPT-5.6 Luna (`gpt-5.6-luna`) at medium reasoning effort; a single-model run is
+approval. Skill qualification requires both GPT-6 Sol (`gpt-6-sol`) and
+GPT-6 Luna (`gpt-6-luna`) at medium reasoning effort; a single-model run is
 diagnostic only. Never add real model invocations to GitHub Actions, and do not
 publish raw prompts or transcripts by default. The deterministic evaluation
 harness tests remain part of ordinary Pester runs.

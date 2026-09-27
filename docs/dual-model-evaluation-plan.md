@@ -5,7 +5,7 @@
    separate decisions.
 - Assessment date: 2026-09-13
 - Repository baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`
-- Target models: GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`)
+- Target models: GPT-6 Sol (`gpt-6-sol`) and GPT-6 Luna (`gpt-6-luna`)
 - Reasoning effort: `medium` for both models
 - Scope: every published skill, including missing scenarios; retain existing
   repository-local workflow evaluations as a separately reported cohort
@@ -31,7 +31,7 @@ been authorized. Status last reviewed: 2026-09-13.
 | E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
-| E5 | Full portfolio coverage ready | Not started | E3 | All four coverage obligations mapped for all 25 skills, including nullability remediation; fixtures, held-out variants, C# 14 checks, and reviewed outcome rubrics ready. Existing 10-of-25 primary targeting is not a validation pass. |
+| E5 | Full portfolio coverage ready | Not started | E3 | All four coverage obligations mapped for every published skill (26 as of 2026-09-27), including nullability remediation; fixtures, held-out variants, C# 14 checks, and reviewed outcome rubrics ready. The earlier 10-of-25 primary targeting is not a validation pass. |
 | E6 | Both-model qualification and Luna decision | Not started | E4 and E5; qualification budget/analysis approval | Frozen campaign assessed against absolute gates for each model, quality margin, and cost advantage; report validated, failed, or inconclusive and separately whether Luna is preferred. |
 | E7 | Constrained CI mode and host decision | Not started | E4; hosted experiment approval | Replay/live alternatives and compatible hosts compared for the whole-job time/cost target; select/rework/defer recorded. Live CI and recurring spend retain their separate policy/security/budget gates. |
 
@@ -39,6 +39,33 @@ E5 preparation can proceed while E4 awaits a paid-run decision. After E4, E5/E6,
 E7, and the PR-effectiveness workstream need not wait for each other unless a
 specific safety or evidence dependency requires it. Ongoing cost tracking starts
 with E1's first recorded checks; it does not wait for E6 or a metrics service.
+
+On 2026-09-27, the maintainer changed the qualification roster to GPT-6 Sol and
+GPT-6 Luna. The approved P3a rung is a six-attempt paired pilot followed by at
+most one frozen 126-attempt cohort across its 21 scenarios, at medium effort and
+serial concurrency with no token ceiling within that 132-attempt limit. The
+dated GPT-5.6 diagnostic remains historical evidence, not GPT-6 qualification.
+Full E6 portfolio model runs require their own predeclared scenario coverage,
+sample size, and paid approval; the P3a allowance does not cover them.
+The 2026-09-27 structured inventory found 26 published skills, with primary
+scenarios for 11 and none for the other 15. Primary targeting alone does not
+satisfy the four E5 evidence obligations; the seven local-only scenarios remain
+outside the published-skill denominator.
+
+Independent judging is not included in the approved 132 P3a candidate calls.
+A prospective calibration would use eight synthetic, maintainer-labeled
+correct/defective packets with two repetitions on each GPT-6 judge (32 grading
+calls). If one meets the stated accuracy and safety requirements, grading the
+126 held-out P3a candidate answers would require up to 126 additional calls on
+that selected judge, plus a model-balanced human audit. The 32-call calibration
+and 126-call grading allowances are proposals, not authorizations; obtain a
+separate exact-model, effort, concurrency, token-budget, and scenario approval
+before any judge inference. Full E6 portfolio runs require another plan.
+The frozen GPT-6 P3a cohort completed 126 of 126 candidate attempts with no
+observed safety or infrastructure failures, but Luna routed only 58/63 cases,
+below the proposed 95% floor. Useful outcomes remain unjudged and E5 still
+lacks primary scenarios for 15 published skills. P3a and E6 therefore remain
+unqualified; no portfolio or judge inference was authorized by this rung.
 
 ### Completed work item: E1.1
 
