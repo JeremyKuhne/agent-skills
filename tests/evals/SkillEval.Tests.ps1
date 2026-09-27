@@ -240,7 +240,11 @@ Describe 'Skill evaluation scenario contract' {
             @($scenario.requiredResponsePatterns).Count | Should -Be 1
             $scenario.requiredResponsePatterns[0] | Should -BeExactly '(?s)\S'
             $scenario.PSObject.Properties['reviewCriteria'] | Should -Not -BeNullOrEmpty
-            @($scenario.reviewCriteria).Count | Should -BeGreaterThan 0
+            $scenario.reviewCriteria -is [array] | Should -BeTrue
+            @($scenario.reviewCriteria).Count | Should -BeGreaterThan 1
+            foreach ($criterion in $scenario.reviewCriteria) {
+                [string]::IsNullOrWhiteSpace([string]$criterion) | Should -BeFalse
+            }
         }
         $performance = @($heldOut | Where-Object category -eq 'routing' |
             Where-Object { -not $_.expectSkillInvocation -and $_.PSObject.Properties['requiredSkillInvocations'] })

@@ -55,12 +55,12 @@ when red.
 Real model evaluations are manual and local to control token use; do not add
 them to a pull-request, tag, or scheduled workflow. For a capability release or
 a change to skill routing, safety rules, overlays, or the evaluation harness,
-obtain separate approval naming GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna
-(`gpt-5.6-luna`), medium reasoning effort, scenarios, repetitions, concurrency,
+obtain separate approval naming GPT-6 Sol (`gpt-6-sol`) and GPT-6 Luna
+(`gpt-6-luna`), medium reasoning effort, scenarios, repetitions, concurrency,
 and paid budget. A one-run calibration with each model is diagnostic:
 
 ```pwsh
-foreach ($model in @('gpt-5.6-sol', 'gpt-5.6-luna')) {
+foreach ($model in @('gpt-6-sol', 'gpt-6-luna')) {
     ./evals/Invoke-SkillEvals.ps1 `
       -Model $model `
       -RunCount 1 `
