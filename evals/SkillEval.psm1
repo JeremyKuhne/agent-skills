@@ -235,7 +235,7 @@ function Get-SkillEvalValidatedCopilotVersion {
 
     $version = $Output.Trim()
     $reportedVersion = ConvertFrom-SkillEvalCopilotVersion -Output $version
-    $minimumVersionString = if (Test-SkillEvalUsageModel -Model $Model) {
+    $minimumVersionString = if (-not [string]::IsNullOrWhiteSpace($Model)) {
         '1.0.83'
     }
     else { '1.0.63' }

@@ -191,12 +191,14 @@ credentials are unavailable. Built-in and plugin MCP servers are disabled.
 
 ## Run locally
 
-Real runs require Copilot CLI 1.0.63 or later and an authenticated Copilot
-session or `COPILOT_GITHUB_TOKEN`. Sol/Luna runs require CLI 1.0.83 or later
-for usage capture and per-call model evidence. Every run uses a fresh isolated
-`COPILOT_HOME` by default so personal skills, plugins, and client state cannot
-affect public-plugin evidence. OS-backed Copilot authentication may remain
-available; otherwise supply a token through the environment. Use
+Real runs require Copilot CLI 1.0.83 or later for explicit medium reasoning
+effort, plus an authenticated Copilot session or `COPILOT_GITHUB_TOKEN`.
+Previously saved CLI 1.0.63 summaries remain valid for offline validation.
+Sol/Luna runs also capture usage and per-call model evidence. Every run uses
+a fresh isolated `COPILOT_HOME` by default so personal skills, plugins, and
+client state cannot affect public-plugin evidence. OS-backed Copilot
+authentication may remain available; otherwise supply a token through the
+environment. Use
 `-IsolateCopilotHome:$false` only for a deliberate local diagnostic, never for
 release evidence.
 

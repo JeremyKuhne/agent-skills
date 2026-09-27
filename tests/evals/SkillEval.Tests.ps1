@@ -3410,6 +3410,27 @@ Describe 'Skill evaluation scenario contract' {
         }
     }
 
+    It 'requires Copilot CLI 1.0.83 for any new medium-effort model invocation' {
+        $module = Get-Module SkillEval
+        foreach ($version in @('1.0.63', '1.0.82')) {
+            {
+                & $module {
+                    param($output)
+                    Get-SkillEvalValidatedCopilotVersion -Output $output -Model 'test-model'
+                } "GitHub Copilot CLI $version."
+            } | Should -Throw '*Copilot CLI 1.0.83 or later*'
+        }
+
+        & $module {
+            Get-SkillEvalValidatedCopilotVersion `
+                -Output 'GitHub Copilot CLI 1.0.83.' `
+                -Model 'test-model'
+        } | Should -BeExactly 'GitHub Copilot CLI 1.0.83.'
+        & $module {
+            Get-SkillEvalValidatedCopilotVersion -Output 'GitHub Copilot CLI 1.0.63.'
+        } | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
+    }
+
     It 'selects usage evidence for both Sol/Luna generations only' {
         $module = Get-Module SkillEval
         foreach ($model in @(
