@@ -409,8 +409,10 @@ The [matrix entry point](../evals/Invoke-SkillEvalMatrix.ps1),
 [suite implementation](../evals/SkillEval.psm1) accept one `Model` each. They
 previously selected a legacy model by default; all now require explicit model
 selection. The matrix selects six scenario documents. The suite records requested
-model, revisions, durations, and outcomes, but does not aggregate inference-token
-usage or verify the serving model in its summary.
+model, revisions, durations, and outcomes. Sol/Luna runs retain per-run usage
+and telemetry receipts, rejecting missing or mismatched requested/served model,
+medium-effort, and token evidence. The aggregate summary does not yet combine
+inference-token totals across runs.
 
 After rebasing onto current main on 2026-09-12, the existing scenario parser
 produced this inventory without invoking a model. The two main updates added the
