@@ -22,7 +22,7 @@ function Test-SkillEvalEvidence {
             })
     }
 
-    $responseParts = [System.Collections.Generic.List[string]]::new()
+    $response = ''
     $invokedSkills = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     if (Test-Path -LiteralPath $ProcessResult.StandardOutputPath -PathType Leaf) {
         foreach ($line in (Get-Content -LiteralPath $ProcessResult.StandardOutputPath)) {
@@ -31,8 +31,9 @@ function Test-SkillEvalEvidence {
             catch { continue }
             if ($event.type -ne 'assistant.message') { continue }
             if ($event.data.PSObject.Properties['content'] -and -not [string]::IsNullOrWhiteSpace([string]$event.data.content)) {
-                $responseParts.Add([string]$event.data.content)
+                $response = [string]$event.data.content
             }
+            else { $response = '' }
             foreach ($toolRequest in @($event.data.toolRequests)) {
                 if ($toolRequest.name -eq 'skill' -and -not [string]::IsNullOrWhiteSpace([string]$toolRequest.arguments.skill)) {
                     $invokedSkills.Add([string]$toolRequest.arguments.skill) | Out-Null
@@ -40,7 +41,6 @@ function Test-SkillEvalEvidence {
             }
         }
     }
-    $response = if ($responseParts.Count -gt 0) { $responseParts[$responseParts.Count - 1] } else { '' }
     $skillInvoked = $invokedSkills.Contains([string]$Scenario.skill)
     $commandLog = if (Test-Path -LiteralPath $Context.ShimLogPath -PathType Leaf) {
         [string](Get-Content -LiteralPath $Context.ShimLogPath -Raw) -replace "\r\n?", "`n"

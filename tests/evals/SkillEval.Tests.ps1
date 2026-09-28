@@ -4323,6 +4323,23 @@ Describe 'Skill evaluation evidence scoring' {
             Set-Content -LiteralPath $standardOutputPath
         $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
         $assessment.Passed | Should -BeFalse
+
+        $messages[1].data.content = ''
+        $messages | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress } |
+            Set-Content -LiteralPath $standardOutputPath
+        $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
+        $assessment.Passed | Should -BeFalse
+        ($assessment.Evidence | Where-Object Kind -eq 'required-response').Passed | Should -BeFalse
+        $assessment.InvokedSkills | Should -Contain 'powershell-engineering'
+
+        $messages[1].data.Remove('content')
+        $messages[1].data.toolRequests = @(@{ name = 'skill'; arguments = @{ skill = 'technical-writing' } })
+        $messages | ForEach-Object { $_ | ConvertTo-Json -Depth 10 -Compress } |
+            Set-Content -LiteralPath $standardOutputPath
+        $assessment = Test-SkillEvalEvidence -Scenario $scenario -ProcessResult $processResult -Context $context
+        $assessment.Passed | Should -BeFalse
+        ($assessment.Evidence | Where-Object Kind -eq 'required-response').Passed | Should -BeFalse
+        $assessment.InvokedSkills | Should -Contain 'technical-writing'
     }
 
     It 'records and requires companion skill invocations' {
