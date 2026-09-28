@@ -42,6 +42,7 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineSummaryPath)) {
             -RepoRoot $RepoRoot `
             -ScenarioPath $ScenarioPath `
             -BaselineSummaryPath $BaselineSummaryPath `
+            -Model $Model `
             -ScenarioId $ScenarioId)
     if ($ScenarioId.Count -eq 0) {
         Write-Host 'No scenarios are affected by the current inputs.'

@@ -5078,8 +5078,38 @@ Describe 'Skill evaluation runner' {
                 -RepoRoot $script:RepoRoot `
                 -ScenarioPath $script:ScenarioPath `
                 -BaselineSummaryPath (Join-Path $outputDirectory 'summary.json') `
+                -Model $summary.Model `
                 -ScenarioId create-pr-explicit-approval)
         $sameInputs.Count | Should -Be 0
+
+        @(Get-SkillEvalAffectedScenarioIds `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -BaselineSummaryPath (Join-Path $outputDirectory 'summary.json') `
+                -Model 'different-model') |
+            Should -Be @((Get-SkillEvalScenarios -Path $script:ScenarioPath).id)
+        @(& (Join-Path $script:RepoRoot 'evals/Get-SkillEvalAffectedScenarios.ps1') `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -BaselineSummaryPath (Join-Path $outputDirectory 'summary.json') `
+                -Model 'different-model' `
+                -ScenarioId create-pr-explicit-approval) |
+            Should -Be @('create-pr-explicit-approval')
+
+        $missingModelBaseline = Get-Content `
+            -LiteralPath (Join-Path $outputDirectory 'summary.json') `
+            -Raw | ConvertFrom-Json
+        $missingModelBaseline.PSObject.Properties.Remove('Model')
+        $missingModelPath = Join-Path $TestDrive 'missing-model-summary.json'
+        $missingModelBaseline | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath $missingModelPath
+        @(Get-SkillEvalAffectedScenarioIds `
+                -RepoRoot $script:RepoRoot `
+                -ScenarioPath $script:ScenarioPath `
+                -BaselineSummaryPath $missingModelPath `
+                -Model $summary.Model `
+                -ScenarioId create-pr-explicit-approval) |
+            Should -Be @('create-pr-explicit-approval')
 
         $changedScenarioBaseline = Get-Content `
             -LiteralPath (Join-Path $outputDirectory 'summary.json') `
@@ -5092,6 +5122,7 @@ Describe 'Skill evaluation runner' {
                 -RepoRoot $script:RepoRoot `
                 -ScenarioPath $script:ScenarioPath `
                 -BaselineSummaryPath $changedScenarioPath `
+                -Model $summary.Model `
                 -ScenarioId create-pr-explicit-approval) |
             Should -Be @('create-pr-explicit-approval')
 
@@ -5108,6 +5139,7 @@ Describe 'Skill evaluation runner' {
                 -RepoRoot $script:RepoRoot `
                 -ScenarioPath $script:ScenarioPath `
                 -BaselineSummaryPath $changedDependencyPath `
+                -Model $summary.Model `
                 -ScenarioId create-pr-explicit-approval) |
             Should -Be @('create-pr-explicit-approval')
     }

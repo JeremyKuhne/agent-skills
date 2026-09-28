@@ -283,7 +283,9 @@ for a capability release that changes skill management, `technical-writing`,
 workflow.
 
 For an incremental gate, use a prior summary to select only scenarios whose
-canonical definition, fixture closure, or candidate dependency closure changed:
+canonical definition, fixture closure, or candidate dependency closure changed.
+If its model is missing or differs from the requested model, run all selected
+scenarios instead:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
@@ -297,6 +299,7 @@ Inspect the affected identifiers without running the model:
 
 ```pwsh
 ./evals/Get-SkillEvalAffectedScenarios.ps1 `
+  -Model gpt-6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -BaselineSummaryPath ./artifacts/baseline/summary.json
 ```

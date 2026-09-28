@@ -785,6 +785,10 @@ function Get-SkillEvalAffectedScenarioIds {
         [Parameter(Mandatory)]
         [string] $BaselineSummaryPath,
 
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrWhiteSpace()]
+        [string] $Model,
+
         [string[]] $ScenarioId
     )
 
@@ -798,7 +802,9 @@ function Get-SkillEvalAffectedScenarioIds {
     if ($ScenarioId) {
         $scenarios = @($scenarios | Where-Object id -In $ScenarioId)
     }
-    if (-not $baseline.PSObject.Properties['ScenarioRevisions'] -or
+    if (-not $baseline.PSObject.Properties['Model'] -or
+        [string]$baseline.Model -cne $Model -or
+        -not $baseline.PSObject.Properties['ScenarioRevisions'] -or
         -not $baseline.PSObject.Properties['CandidateComponents']) {
         return @($scenarios.id)
     }
