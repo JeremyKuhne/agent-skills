@@ -36,7 +36,7 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
 | P1b | Parser-backed toolchain policy | Done | P0r, P1c | PRs #98 through #101 merged the bounded metadata, active-workflow, generated-output, and managed file-creation policies; PR #101 merged as `c9d7e15`. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
-| P3a | Portable PowerShell engineering skill | In progress | P0r, P1a, P1b | PRs #102 through #112 merged portable boundary, API, structured-data, Pester, native, platform, coverage, static-analysis, generated-script, and review guidance; PR #112 merged as `4cb6038`. This slice installs that 11-file core at `4cb6038943c3f66164717d011b8b7b7ac5e6d3c2` with a repository overlay for toolchain, test, platform, generated-file, coverage, and publication bindings. A deterministic repository contract guards the pin, core content, overlay bindings, and links; project discovery and source-to-pin blob checks pass. The initial three-trial evaluation scored 9/63; later single-model calibration reached 63/63 combined. That calibration is superseded by review findings and is not Sol/Luna acceptance evidence. The paired preflight passed both models; the subsequent 126-attempt diagnostic is recorded below. PR #114 remains draft pending exact-head checks and a decision on the observed misses, not an accepted qualification. |
+| P3a | Portable PowerShell engineering skill | In progress | P0r, P1a, P1b | PRs #102 through #112 merged portable boundary, API, structured-data, Pester, native, platform, coverage, static-analysis, generated-script, and review guidance; PR #112 merged as `4cb6038`. This slice installs that 11-file core at `4cb6038943c3f66164717d011b8b7b7ac5e6d3c2` with a repository overlay for toolchain, test, platform, generated-file, coverage, and publication bindings. A deterministic repository contract guards the pin, core content, overlay bindings, and links; project discovery and source-to-pin blob checks pass. The initial three-trial evaluation scored 9/63; later single-model calibration reached 63/63 combined. That calibration is superseded by review findings and is not Sol/Luna acceptance evidence. The paired preflight passed both models; the subsequent 126-attempt diagnostic is recorded below. PR #114 may merge as evaluator and failed-cohort evidence; P3a remains in progress pending separate discovery and qualification work. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
 | P5 | Static-analysis gate | Not started | P1a, P4 | A curated correctness profile is globally clean; other PSScriptAnalyzer diagnostics cannot be added on changed lines; suppressions are narrow, justified, and tested where behavioral risk remains. |
 | P6 | Typed test infrastructure and dual coverage gates | Not started | P1c, P2 | Managed repository contracts and process supervision live in C#; MSTest and Pester coverage are collected and gated separately; no aggregate percentage lets one domain hide another; reviewed exceptions map to behavioral evidence. |
@@ -110,7 +110,8 @@ original summaries, derived scores, usage, and raw
 transcripts remain private under the OS temporary directory at
 `p3a-campaign-b3f8cec`. Before accepting P3a, decide whether to revise skill
 discovery, adjudicate the response rubrics, and approve a fresh frozen cohort;
-keep PR #114 draft in the meantime.
+merging PR #114 as tooling and evidence does not accept P3a. A new candidate
+cohort and independent judgments require separate approval.
 
 After this campaign, PR #114's review follow-up added Sol/Luna-specific client
 preflight and five negation controls for API preservation and breaks, array
@@ -182,6 +183,32 @@ skill is backlog work and does not block P1a, P1c, or release. PR #88, PR #89,
 and PR #90 are evidence, not implementation bases; do not cherry-pick their
 implementation commits into a replacement. Do not combine the managed canary,
 PowerShell cutover, parser policy, or PowerShell skill into one pull request.
+
+### P3a follow-up: Luna routing and useful outcomes
+
+PR #114 delivers evaluator and failed-cohort evidence, not P3a qualification.
+Keep the frozen 126-attempt set and its receipts unchanged and separate from
+development work and any new qualification denominator.
+
+1. Audit the four Luna application-performance near-miss invocations and the
+   missed YAML positive trigger, plus Sol's two near-miss invocations. Use the
+   private receipts to separate discovery errors from response-scoring errors;
+   do not treat the frozen answers as post-change qualification evidence.
+2. In a separate portable-core development change, refine discovery guidance
+   only where the audit supports it. Add synthetic implicit YAML positives and
+   application-performance negatives alongside neighboring PowerShell positives;
+   check both missed and over-eager invocation. Keep consumer paths and examples
+   in the overlay.
+3. Freeze new synthetic held-out variants and prospective outcome criteria
+   before comparing a revised core. Propose a bounded paired GPT-6 Sol/Luna
+   campaign at medium effort with repetitions, serial concurrency, exact
+   candidate-call and token budgets, and model/usage receipts stated up front.
+   The exhausted 132-call allowance does not carry over.
+4. Assess each model against the proposed 95% routing floor (at least 60/63 if
+   the previous sample size is reused), with zero safety and infrastructure
+   failures. Obtain separate approval for judge calibration, independent grading,
+   and a model-balanced human audit of useful outcomes. Record a pass, failure,
+   or inconclusive result; better routing alone does not qualify P3a.
 
 ### P1 recovery decision
 

@@ -67,6 +67,32 @@ below the proposed 95% floor. Useful outcomes remain unjudged and E5 still
 lacks primary scenarios for 15 published skills. P3a and E6 therefore remain
 unqualified; no portfolio or judge inference was authorized by this rung.
 
+### E5 primary-scenario follow-up
+
+PR #114 can merge its evaluator and failed P3a evidence without advancing E5
+or qualifying E6. E5 starts from 11 of 26 published skills with primary
+scenarios; the other 15 are listed in the verified starting-point inventory
+below. Prepare coverage offline in the existing evaluation harness:
+
+1. Reconcile that inventory with the published skill catalog. For each of the
+   26 skills, record the primary scenario, owner, and any gaps in the four
+   obligations: implicit positive, near miss, observable useful outcome, and
+   failure or forbidden action. Exclude repository-local workflows.
+2. Add primary implicit-trigger scenarios for the 15 missing skills, with
+   synthetic fixtures, neighboring near misses, observable outcome checks, and
+   safety cases where the inventory shows gaps. Port nullability-remediation
+   cases into the existing harness and run C# 14 consumer checks for C# guidance.
+   One scenario may satisfy multiple obligations when its evidence supports it.
+3. Add deterministic coverage checks that fail if a published skill has no
+   primary scenario or an obligation lacks a check or reviewed rubric. Prepare
+   fresh held-out variants and prospective rubrics without tuning to the frozen
+   P3a answers. Run the local contracts before calling E5 ready; a primary name
+   alone does not satisfy all four obligations.
+4. After all 26 skills have reviewed coverage, obtain the E4 decision and a
+   separate, predeclared E6 candidate and judging budget before any paired
+   portfolio inference. Report both models against absolute success and safety
+   gates; the P3a candidate allowance cannot fund E6.
+
 ### Completed work item: E1.1
 
 - State: done; merged in
