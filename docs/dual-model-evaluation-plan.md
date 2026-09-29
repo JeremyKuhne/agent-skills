@@ -5,7 +5,7 @@
    separate decisions.
 - Assessment date: 2026-09-13
 - Repository baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`
-- Target models: GPT-5.6 Sol (`gpt-5.6-sol`) and GPT-5.6 Luna (`gpt-5.6-luna`)
+- Target models: GPT-6 Sol (`gpt-6-sol`) and GPT-6 Luna (`gpt-6-luna`)
 - Reasoning effort: `medium` for both models
 - Scope: every published skill, including missing scenarios; retain existing
   repository-local workflow evaluations as a separately reported cohort
@@ -31,7 +31,7 @@ been authorized. Status last reviewed: 2026-09-13.
 | E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
-| E5 | Full portfolio coverage ready | Not started | E3 | All four coverage obligations mapped for all 25 skills, including nullability remediation; fixtures, held-out variants, C# 14 checks, and reviewed outcome rubrics ready. Existing 10-of-25 primary targeting is not a validation pass. |
+| E5 | Full portfolio coverage ready | Not started | E3 | All four coverage obligations mapped for every published skill (26 as of 2026-09-27), including nullability remediation; fixtures, held-out variants, C# 14 checks, and reviewed outcome rubrics ready. The earlier 10-of-25 primary targeting is not a validation pass. |
 | E6 | Both-model qualification and Luna decision | Not started | E4 and E5; qualification budget/analysis approval | Frozen campaign assessed against absolute gates for each model, quality margin, and cost advantage; report validated, failed, or inconclusive and separately whether Luna is preferred. |
 | E7 | Constrained CI mode and host decision | Not started | E4; hosted experiment approval | Replay/live alternatives and compatible hosts compared for the whole-job time/cost target; select/rework/defer recorded. Live CI and recurring spend retain their separate policy/security/budget gates. |
 
@@ -39,6 +39,59 @@ E5 preparation can proceed while E4 awaits a paid-run decision. After E4, E5/E6,
 E7, and the PR-effectiveness workstream need not wait for each other unless a
 specific safety or evidence dependency requires it. Ongoing cost tracking starts
 with E1's first recorded checks; it does not wait for E6 or a metrics service.
+
+On 2026-09-27, the maintainer changed the qualification roster to GPT-6 Sol and
+GPT-6 Luna. The approved P3a rung is a six-attempt paired pilot followed by at
+most one frozen 126-attempt cohort across its 21 scenarios, at medium effort and
+serial concurrency with no token ceiling within that 132-attempt limit. The
+dated GPT-5.6 diagnostic remains historical evidence, not GPT-6 qualification.
+Full E6 portfolio model runs require their own predeclared scenario coverage,
+sample size, and paid approval; the P3a allowance does not cover them.
+The 2026-09-27 structured inventory found 26 published skills, with primary
+scenarios for 11 and none for the other 15. Primary targeting alone does not
+satisfy the four E5 evidence obligations; the seven local-only scenarios remain
+outside the published-skill denominator.
+
+Independent judging is not included in the approved 132 P3a candidate calls.
+A prospective calibration would use eight synthetic, maintainer-labeled
+correct/defective packets with two repetitions on each GPT-6 judge (32 grading
+calls). If one meets the stated accuracy and safety requirements, grading the
+126 held-out P3a candidate answers would require up to 126 additional calls on
+that selected judge, plus a model-balanced human audit. The 32-call calibration
+and 126-call grading allowances are proposals, not authorizations; obtain a
+separate exact-model, effort, concurrency, token-budget, and scenario approval
+before any judge inference. Full E6 portfolio runs require another plan.
+The frozen GPT-6 P3a cohort completed 126 of 126 candidate attempts with no
+observed safety or infrastructure failures, but Luna routed only 58/63 cases,
+below the proposed 95% floor. Useful outcomes remain unjudged and E5 still
+lacks primary scenarios for 15 published skills. P3a and E6 therefore remain
+unqualified; no portfolio or judge inference was authorized by this rung.
+
+### E5 primary-scenario follow-up
+
+PR #114 can merge its evaluator and failed P3a evidence without advancing E5
+or qualifying E6. E5 starts from 11 of 26 published skills with primary
+scenarios; the other 15 are listed in the verified starting-point inventory
+below. Prepare coverage offline in the existing evaluation harness:
+
+1. Reconcile that inventory with the published skill catalog. For each of the
+   26 skills, record the primary scenario, owner, and any gaps in the four
+   obligations: implicit positive, near miss, observable useful outcome, and
+   failure or forbidden action. Exclude repository-local workflows.
+2. Add primary implicit-trigger scenarios for the 15 missing skills, with
+   synthetic fixtures, neighboring near misses, observable outcome checks, and
+   safety cases where the inventory shows gaps. Port nullability-remediation
+   cases into the existing harness and run C# 14 consumer checks for C# guidance.
+   One scenario may satisfy multiple obligations when its evidence supports it.
+3. Add deterministic coverage checks that fail if a published skill has no
+   primary scenario or an obligation lacks a check or reviewed rubric. Prepare
+   fresh held-out variants and prospective rubrics without tuning to the frozen
+   P3a answers. Run the local contracts before calling E5 ready; a primary name
+   alone does not satisfy all four obligations.
+4. After all 26 skills have reviewed coverage, obtain the E4 decision and a
+   separate, predeclared E6 candidate and judging budget before any paired
+   portfolio inference. Report both models against absolute success and safety
+   gates; the P3a candidate allowance cannot fund E6.
 
 ### Completed work item: E1.1
 
@@ -310,7 +363,7 @@ one concrete next action. Keep the existing budget and publication boundaries.
 
 ## Decision and boundaries
 
-Replace the single-model `gpt-5.4` evaluation baseline with a matched Sol/Luna
+Replace the legacy single-model evaluation baseline with a matched Sol/Luna
 matrix. Measure whether each model selects the right skill, observes safety and
 approval rules, and produces a useful, correct outcome. Prefer Luna only if its
 absolute quality and safety pass and its successful outcomes cost materially
@@ -353,10 +406,13 @@ of that entry gate; this avoids a circular dependency between the plans.
 
 The [matrix entry point](../evals/Invoke-SkillEvalMatrix.ps1),
 [single-suite runner](../evals/Invoke-SkillEvals.ps1), and
-[suite implementation](../evals/SkillEval.psm1) accept one `Model` and default to
-`gpt-5.4`. The matrix selects six scenario documents. The suite records requested
-model, revisions, durations, and outcomes, but does not aggregate inference-token
-usage or verify the serving model in its summary.
+[suite implementation](../evals/SkillEval.psm1) accept one `Model` each. They
+previously selected a legacy model by default; all now require explicit model
+selection. The matrix selects six scenario documents. The suite records requested
+model, revisions, durations, and outcomes. Sol/Luna runs retain per-run usage
+and telemetry receipts, rejecting missing or mismatched requested/served model,
+medium-effort, and token evidence. The aggregate summary does not yet combine
+inference-token totals across runs.
 
 After rebasing onto current main on 2026-09-12, the existing scenario parser
 produced this inventory without invoking a model. The two main updates added the
@@ -749,7 +805,7 @@ sections supply the detailed experiment and operating rules.
 Use one model roster containing both exact IDs, effort, and cost weights. Extend
 the existing matrix rather than running two unrestricted matrices or adding a
 runner stack. A single-suite `-Model` diagnostic can remain, but cannot claim
-dual-model qualification; remove implicit `gpt-5.4` execution defaults.
+dual-model qualification; do not restore implicit execution defaults.
 
 Schedule model/scenario/repetition tuples under one shared concurrency limit.
 The current matrix requires at least as many workers as documents; adapt its
@@ -760,7 +816,7 @@ one absent model, or an empty model selection must not produce a green report.
 Include model ID, effort, client/settings, fixture/candidate/scenario revisions,
 effective compiler/language and PowerShell versions, rubric/judge version, and
 usage/cost schema in evidence identities. The affected-
-scenario selector must not reuse a `gpt-5.4` or Luna result as Sol evidence just
+scenario selector must not reuse a different-model result as Sol evidence just
 because files are unchanged. A changed price policy may recompute cost from
 immutable usage; changed model/effort needs fresh calls. Rescoring never invents
 missing usage or overwrites captured outputs.
@@ -783,7 +839,7 @@ Synthetic CI tests must prove that exhausted or unavailable budgets prevent
 new live work and that a replay cannot claim fresh candidate-model coverage.
 
 Update [evals/README.md](../evals/README.md), release guidance, commands, and
-synthetic test expectations with implementation. Keep historical `gpt-5.4`
+synthetic test expectations with implementation. Keep historical single-model
 measurements labeled as historical. Both models become mandatory for the
 qualification matrix and authorized affected-scenario qualification runs, not
 every local lint run or every PR. The optional CI subset has a different, labeled

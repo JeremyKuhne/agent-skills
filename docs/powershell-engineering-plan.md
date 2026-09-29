@@ -25,7 +25,7 @@ The implementation agent owns local work and evidence. The repository
 maintainer accepts milestone exits and separately authorizes commits, pushes,
 pull request writes, releases, and model runs. Use `Not started`, `Ready`, `In
 progress`, `Paused`, `Awaiting decision`, `Blocked`, and `Done`. Status last
-reviewed: 2026-09-24 UTC. `Ready` means the entry conditions are satisfied and the
+reviewed: 2026-09-25 UTC. `Ready` means the entry conditions are satisfied and the
 milestone is next to execute; it does not claim that exit evidence exists.
 
 | ID | Milestone | State | Depends on | Exit evidence and decision |
@@ -36,12 +36,144 @@ milestone is next to execute; it does not claim that exit evidence exists.
 | P1c | Managed test-ownership canary | Done | P0r | PR #93 moved the approved six-test `TrustedFileWrites` slice to MSTest, preserved deferred Pester facts, separated behavior portability from single-host coverage, and passed the accepted Windows/Linux evidence. |
 | P1b | Parser-backed toolchain policy | Done | P0r, P1c | PRs #98 through #101 merged the bounded metadata, active-workflow, generated-output, and managed file-creation policies; PR #101 merged as `c9d7e15`. |
 | P2 | Canonical isolated PowerShell execution | Done | P1a, P1c | PR #95 routed active repository and generated-consumer Pester invocations through the existing process-isolated runner, preserved independent managed test lanes, passed local parity and exact-head CI, received a clean exact-head review, and merged as `7e68d294300fbb9ddc649e90cbea4eefda35d621`. |
-| P3a | Portable PowerShell engineering skill | In progress | P0r, P1a, P1b | PRs #102 through #112 merged portable boundary, API, structured-data, Pester, native, platform, coverage, static-analysis, generated-script, and review guidance; PR #112 merged as `4cb6038`. This slice installs that 11-file core at `4cb6038943c3f66164717d011b8b7b7ac5e6d3c2` with a repository overlay for toolchain, test, platform, generated-file, coverage, and publication bindings. A deterministic repository contract guards the pin, core content, overlay bindings, and links; project discovery and source-to-pin blob checks pass. The 21 real-model scenarios remain unrun. |
+| P3a | Portable PowerShell engineering skill | In progress | P0r, P1a, P1b | PRs #102 through #112 merged portable boundary, API, structured-data, Pester, native, platform, coverage, static-analysis, generated-script, and review guidance; PR #112 merged as `4cb6038`. This slice installs that 11-file core at `4cb6038943c3f66164717d011b8b7b7ac5e6d3c2` with a repository overlay for toolchain, test, platform, generated-file, coverage, and publication bindings. A deterministic repository contract guards the pin, core content, overlay bindings, and links; project discovery and source-to-pin blob checks pass. The initial three-trial evaluation scored 9/63; later single-model calibration reached 63/63 combined. That calibration is superseded by review findings and is not Sol/Luna acceptance evidence. The paired preflight passed both models; the subsequent 126-attempt diagnostic is recorded below. PR #114 may merge as evaluator and failed-cohort evidence; P3a remains in progress pending separate discovery and qualification work. |
 | P4 | Breaking runtime and named-only API migration | Not started | P1a, P3a | All operational and shipped PowerShell scripts require PowerShell 7.4; explicit compatibility fixtures are the only exceptions; every parameterized script and advanced function disables positional binding; AST contracts and migration notes pass. |
 | P5 | Static-analysis gate | Not started | P1a, P4 | A curated correctness profile is globally clean; other PSScriptAnalyzer diagnostics cannot be added on changed lines; suppressions are narrow, justified, and tested where behavioral risk remains. |
 | P6 | Typed test infrastructure and dual coverage gates | Not started | P1c, P2 | Managed repository contracts and process supervision live in C#; MSTest and Pester coverage are collected and gated separately; no aggregate percentage lets one domain hide another; reviewed exceptions map to behavioral evidence. |
 | P7 | Evaluation infrastructure extraction | Not started | P6 | Shared process, timeout, hash, result-schema, and aggregation logic moves from `SkillEval.psm1` into the typed core without changing the PowerShell entry-point contracts; focused and full parity suites pass. |
 | P8 | Breaking release and effectiveness decision | Not started | P1b, P3a, P4-P7 | Migration guidance and release notes are complete; all seeded defects fail before their fixes and pass after; two consecutive substantive PowerShell pull requests have zero valid post-publication reviewer findings; the maintainer records release and follow-up decisions. |
+
+The P3a Sol/Luna preflight on 2026-09-25 used the same implicit process-boundary
+scenario once per model at medium effort, with isolated Copilot CLI 1.0.83
+(`D3F3BB7B8BBF68357AD29F514A179D09F76135483D8BFB643131B8600F671EE2`).
+The first Sol startup lacked authentication and made zero requests. An
+authenticated Sol run passed directly; Luna invoked the intended skill but
+initially missed an overly narrow oracle wording check. An independent
+child-process receipt was accepted after a positive control reproduced the
+miss and a mocked-receipt control remained negative. Hash-verified rescoring
+passed both saved attempts (1/1 per model; zero safety or infrastructure
+failures). Per-call telemetry verified three requests on each requested and
+served model, medium effort, and token totals matching the final usage files.
+The prompts, candidate, scenario, fixtures, scorer, and client hash matched.
+Raw transcripts and usage remain local under the OS temporary directory. This
+single paired scenario is a preflight, not full P3a or portfolio qualification.
+
+### P3a paired diagnostic
+
+At `b3f8cec` on 2026-09-25, the approved read-only campaign ran all 21
+PowerShell engineering scenarios three times on each of `gpt-5.6-sol` and
+`gpt-5.6-luna` at medium effort: 126 distinct original attempts, with no lost,
+timed-out, safety-failed, or infrastructure-failed attempts. The candidate hash
+was `5713463BA1C9E0561A38C2A563CDB68DCE21E190AEC9DE554DE53BEFC53EEC9F`;
+the scorer hash was `C3CC9B85D0592B44E302AA5CE25491FA75FB535E93ABA0C16DCAB40673C2DCCE`.
+The scenario document was frozen at
+`EEADAB61502136A60CA379F473E109F04C64F33FEF3055A7CBD97F5517C314FD`
+for repetitions two and three. First-repetition response predicates were
+calibrated during development; 38 original outputs were hash-verified and
+rescored without new inference, while four unchanged cases retained their
+original scores. No frozen response was used to change this cohort's rubric.
+
+| Cohort | Sol rubric passes | Luna rubric passes |
+| --- | ---: | ---: |
+| Development-calibrated repetition one (21 attempts per model) | 20 | 20 |
+| Frozen repetition two (21 attempts per model) | 11 | 16 |
+| Frozen repetition three (21 attempts per model) | 14 | 15 |
+| All 63 attempts per model | 45 | 51 |
+
+Routing evidence passed 60/63 Sol and 62/63 Luna attempts: each missed the
+PowerShell skill once for the parsed-array scenario, and Sol invoked it twice
+for the mechanical Pester-migration near miss. Positive-trigger routing passed
+56/57 per model; near-miss routing passed 4/6 for Sol and 6/6 for Luna. Paired
+rubric outcomes were 40 both-pass, seven both-fail, 11 Luna-only, and five
+Sol-only. In the frozen cohort alone Sol scored 25/42 and Luna 31/42. Several
+frozen rubric misses involve Pester receipt and native-child checks; some omit
+explicit gates, while others need separate semantic adjudication. A spot check
+also found an answer correctly calling an
+API refactor "backward-compatible" that failed an exact `preserve` or
+`non-breaking` response predicate. These are retained as frozen rubric misses,
+not retroactively converted to passes or treated as independently adjudicated
+useful outcomes.
+
+All 364 chat spans matched their requested and served model at medium effort;
+per-call token sums matched the final usage receipts. The selected native
+Copilot CLI 1.0.83 had SHA-256
+`D3F3BB7B8BBF68357AD29F514A179D09F76135483D8BFB643131B8600F671EE2`.
+At the agreed 6:1 Sol-to-Luna token weight, including failed attempts and all
+inference turns, Sol used 18,856.524 and Luna 3,287.404 normalized
+Luna-equivalent 1,000-token units; cost per rubric pass was 419.034 and
+64.459 units respectively (Luna/Sol ratio 0.154). These are resource
+comparisons, not cash charges or proof of model preference: both observed
+rubric rates fall below the proposed 90% useful-success threshold, but pattern
+checks do not establish the actual useful-success rate. This one-skill
+diagnostic has no held-out portfolio or independent usefulness judgment. The
+original summaries, derived scores, usage, and raw
+transcripts remain private under the OS temporary directory at
+`p3a-campaign-b3f8cec`. Before accepting P3a, decide whether to revise skill
+discovery, adjudicate the response rubrics, and approve a fresh frozen cohort;
+merging PR #114 as tooling and evidence does not accept P3a. A new candidate
+cohort and independent judgments require separate approval.
+
+After this campaign, PR #114's review follow-up added Sol/Luna-specific client
+preflight and five negation controls for API preservation and breaks, array
+presence, native exit handling, and YAML parser delegation. The corrected
+scenario has a new revision; the controls were not applied retroactively to
+saved outputs or evaluated in another model run.
+The counts above remain tied to the frozen revision, not to a qualification of
+the post-review rubric.
+
+On 2026-09-27, the maintainer selected GPT-6 Sol and GPT-6 Luna as the next
+qualification models. The authorized P3a rung allows a six-attempt paired
+pilot, then one frozen 126-attempt cohort over 21 scenarios at medium effort,
+serial concurrency, and no token ceiling within that 132-attempt limit. This
+does not authorize paid full-portfolio E6 runs. The 21 scenarios now have
+prospective human outcome criteria; their exact-label patterns remain coarse
+checks. The client was exercised in the paired GPT-6 development pilot below;
+the pilot-calibrated rubric has no fresh frozen-cohort evidence. No saved
+GPT-5.6 output has been rescored as GPT-6 evidence.
+
+The 2026-09-27 offline development audit read all 28 frozen rubric misses and
+20 accepted answers, one per category and model. Three failures included
+observed skill-invocation errors; the other 25 were response-predicate misses.
+Many missed answers state the intended native-child, platform, and review
+contracts without the predicate's exact wording. Some Pester receipt answers
+still need a separate judgment about whether they make every required state
+explicit. The accepted sample showed no obvious material contradiction. This
+was a model-aware diagnostic review, not blinded independent grading; it does
+not convert any historical failure to a pass or qualify either GPT-6 model.
+
+The approved six-attempt GPT-6 P3a development pilot exercised the assigned
+Pester migration near miss, parsed-array shape, and empty Pester discovery once
+per model at medium effort and serial concurrency. Requested and served model
+IDs, per-call usage, and safety evidence matched on all six attempts; no
+infrastructure or safety failure occurred. The initial exact-label rubric
+passed 1/6. The saved answers routed correctly in all six cases, but five
+failed line-specific wording checks. Paired positive and negative controls
+then established a narrower, contract-preserving rubric change. Hash-verified
+rescoring of the six immutable outputs passed 6/6 without new model calls.
+This is development calibration, not a held-out useful-success result; the
+original reports and private transcripts remain unchanged.
+
+The approved 126-call GPT-6 follow-up used 21 new synthetic variants in
+the [held-out scenario document](../evals/scenarios/powershell-engineering-held-out.json),
+three repetitions per model at medium effort and serial concurrency. Its
+automatic nonempty-response check is only a routing/safety diagnostic; useful
+success requires separately recorded judgments against the prospective
+criteria. The scenario, scorer, client, and candidate revisions remained fixed
+through every attempt; no result was discarded or used to tune the cohort.
+
+All 126 held-out attempts requested and were served by either `gpt-6-sol` or
+`gpt-6-luna`, with verified source output hashes, medium effort, and per-call
+usage totals. Both models
+had zero observed safety and infrastructure failures. The routing/nonempty
+diagnostic passed 61/63 for Sol and 58/63 for Luna: Sol missed two application-
+performance near misses; Luna missed four near misses and the YAML positive
+trigger once. Luna's 58/63 routing rate is below the proposed 95% floor, and
+the 126 answers have not received independent usefulness judgments. This
+cohort therefore does not qualify P3a or E6. The 6:1 token-weighted resource
+totals were 25,735.770 Sol and 4,417.087 Luna-equivalent 1,000-token units;
+these are not billed dollars or cost per useful success. Keep the private
+outputs unchanged and revisit the portable discovery boundary in a separate
+development slice before proposing another paid cohort.
 
 PR #90 is closed unmerged; retain its parity receipt as compatibility evidence
 without inheriting its universal-Pester premise. Do not start P1b until P0r is
@@ -51,6 +183,36 @@ skill is backlog work and does not block P1a, P1c, or release. PR #88, PR #89,
 and PR #90 are evidence, not implementation bases; do not cherry-pick their
 implementation commits into a replacement. Do not combine the managed canary,
 PowerShell cutover, parser policy, or PowerShell skill into one pull request.
+
+### P3a follow-up: Luna routing and useful outcomes
+
+PR #114 delivers evaluator and failed-cohort evidence, not P3a qualification.
+Keep the frozen 126-attempt set and its receipts unchanged and separate from
+development work and any new qualification denominator.
+
+1. Audit the four Luna application-performance near-miss invocations and the
+   missed YAML positive trigger, plus Sol's two near-miss invocations. Use the
+   private receipts to separate discovery errors from response-scoring errors;
+   do not treat the frozen answers as post-change qualification evidence.
+2. In a separate portable-core development change, refine discovery guidance
+   only where the audit supports it. Add synthetic implicit YAML positives and
+   application-performance negatives alongside neighboring PowerShell positives;
+   check both missed and over-eager invocation. Keep consumer paths and examples
+   in the overlay.
+3. Keep the seven corrected development-scenario `Test`, `Uncertainty`,
+   `Route`, `Environment`, `Owner`, `Control`, and `Check` predicates covered by
+   paired accepted and reversed-answer tests. This rubric revision does not
+   change the frozen held-out document or turn earlier answers into passes.
+4. Freeze new synthetic held-out variants and prospective outcome criteria
+   before comparing a revised core. Propose a bounded paired GPT-6 Sol/Luna
+   campaign at medium effort with repetitions, serial concurrency, exact
+   candidate-call and token budgets, and model/usage receipts stated up front.
+   The exhausted 132-call allowance does not carry over.
+5. Assess each model against the proposed 95% routing floor (at least 60/63 if
+   the previous sample size is reused), with zero safety and infrastructure
+   failures. Obtain separate approval for judge calibration, independent grading,
+   and a model-balanced human audit of useful outcomes. Record a pass, failure,
+   or inconclusive result; better routing alone does not qualify P3a.
 
 ### P1 recovery decision
 

@@ -112,6 +112,43 @@ from an earlier revision and requires Pester fresh-process evidence for changed
 PowerShell behavior, plus minimum-host runtime evidence for compatibility. All
 twenty-one cases are read-only and use exact labeled outputs.
 It is not part of the default release matrix.
+Each case now has prospective `reviewCriteria` for judging correctness beyond
+the automatic response patterns. Treat a pattern pass as a coarse check, not
+independently reviewed useful success; audit failures and a model-balanced
+sample of passes before making a qualification claim.
+
+The 2026-09-25 paired P3a diagnostic completed 126 original Sol/Luna attempts:
+development-calibrated repetition one scored 20/21 per model; frozen repetitions
+two and three scored 25/42 Sol and 31/42 Luna. Routing passed 60/63 Sol and
+62/63 Luna attempts; every attempt passed safety and infrastructure checks.
+First-repetition rescoring verified 38 saved outputs without new model calls;
+the campaign's frozen rubric was not adjusted. Subsequent review-driven
+negation controls and human-review criteria have a new scenario revision and
+are separate from that historical cohort. These exact-label scores do not
+establish independently reviewed usefulness or portfolio qualification. The
+[PowerShell engineering plan](../docs/powershell-engineering-plan.md#p3a-paired-diagnostic)
+records the identity and normalized-token receipts; raw outputs stay private.
+
+The later six-attempt GPT-6 P3a development pilot passed routing, safety, and
+infrastructure checks on both models. Its original exact-label score was 1/6;
+hash-verified rescoring after bounded positive and negative control calibration
+passed 6/6 with no extra inference. Neither figure is held-out qualification or
+a reason to rescore the older GPT-5.6 campaign as GPT-6 evidence.
+
+The separate [held-out P3a cases](scenarios/powershell-engineering-held-out.json)
+cover the same 21 contract classes with new synthetic prompts and two human
+review criteria per case. Their automatic response check requires only a
+nonempty answer; an automatic pass establishes routing and safety, not useful
+correctness. Judge the saved answers against the frozen criteria and keep
+missing human or independent judgments as pending, not passed. Do not tune the
+held-out prompts or criteria against results from the 126-call cohort.
+
+The first frozen GPT-6 held-out cohort completed all 126 candidate attempts with
+zero safety or infrastructure failures and verified model/usage receipts. Its
+routing/nonempty diagnostic passed 61/63 Sol and 58/63 Luna. Luna missed the
+proposed 95% routing floor; no independent useful-success result is claimed.
+The raw outputs remain private and this cohort must not be rescored into an
+acceptance pass after observing its answers.
 
 [scenarios/dotnet-file-creation.json](scenarios/dotnet-file-creation.json) is an
 opt-in 16-case filesystem suite. It covers ordinary preferences and scratch,
@@ -154,11 +191,14 @@ credentials are unavailable. Built-in and plugin MCP servers are disabled.
 
 ## Run locally
 
-Real runs require Copilot CLI 1.0.63 or later and an authenticated Copilot
-session or `COPILOT_GITHUB_TOKEN`. Every run uses a fresh isolated
-`COPILOT_HOME` by default so personal skills, plugins, and client state cannot
-affect public-plugin evidence. OS-backed Copilot authentication may remain
-available; otherwise supply a token through the environment. Use
+Real runs require Copilot CLI 1.0.83 or later for explicit medium reasoning
+effort, plus an authenticated Copilot session or `COPILOT_GITHUB_TOKEN`.
+Previously saved CLI 1.0.63 summaries remain valid for offline validation.
+Sol/Luna runs also capture usage and per-call model evidence. Every run uses
+a fresh isolated `COPILOT_HOME` by default so personal skills, plugins, and
+client state cannot affect public-plugin evidence. OS-backed Copilot
+authentication may remain available; otherwise supply a token through the
+environment. Use
 `-IsolateCopilotHome:$false` only for a deliberate local diagnostic, never for
 release evidence.
 
@@ -170,9 +210,16 @@ Reports record the version and SHA-256 from that selected executable, and versio
 checks run with auto-update disabled. A missing or incompatible binary blocks a
 real run before any scenario is scheduled.
 
+Sol/Luna runs also retain `usage.json` and `telemetry.jsonl` inside the private
+run directory. The suite requires nonempty usage and reconciles every chat
+span's requested and served model, medium effort, and input/output tokens with
+the final usage receipt. Content capture is disabled for telemetry; do not
+publish raw run artifacts by default. A mismatched or missing receipt counts
+as infrastructure failure.
+
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.4 `
+  -Model gpt-6-sol `
   -RunCount 1
 ```
 
@@ -181,7 +228,7 @@ diagnostics or constrained environments:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-5.4 `
+  -Model gpt-6-luna `
   -RunCount 3 `
   -MaxConcurrency 4
 ```
@@ -192,12 +239,11 @@ scriptblocks are intentionally process-local. Summaries restore scenario and
 run order after parallel completion and record requested/effective concurrency,
 wall time, queue time, setup time, model-process time, and scoring time.
 
-Run the complete five-document release matrix under one shared eight-call
-budget:
+Run a six-document single-model diagnostic under one eight-worker limit:
 
 ```pwsh
 ./evals/Invoke-SkillEvalMatrix.ps1 `
-  -Model gpt-5.4 `
+  -Model gpt-6-sol `
   -RunCount 3 `
   -MaxConcurrency 8
 ```
@@ -205,14 +251,17 @@ budget:
 The matrix allocates the worker budget by document workload and runs documents
 concurrently. It never creates more model workers than `-MaxConcurrency`.
 
-`gpt-5.4` is the current baseline. A release run may pass another concrete model
-that is available to the evaluation account; retain that model in the published
-summary rather than relying on a client default.
+Both GPT-6 Sol (`gpt-6-sol`) and GPT-6 Luna (`gpt-6-luna`) are required
+for skill qualification at medium reasoning effort. Current entry points require
+an explicit model and run only one at a time; their single-model summaries are
+diagnostic, not paired qualification. Obtain approval naming both models, the
+scenario set, repetitions, concurrency, and paid budget before real runs.
 
 Run one scenario while developing the harness:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-6-sol `
   -ScenarioId create-pr-dirty-main-no-approval `
   -RunCount 1 `
   -ReportOnly
@@ -222,6 +271,7 @@ Select another scenario document explicitly:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -RunCount 1 `
   -ReportOnly
@@ -233,10 +283,13 @@ for a capability release that changes skill management, `technical-writing`,
 workflow.
 
 For an incremental gate, use a prior summary to select only scenarios whose
-canonical definition, fixture closure, or candidate dependency closure changed:
+canonical definition, fixture closure, or candidate dependency closure changed.
+If its model is missing or differs from the requested model, run all selected
+scenarios instead:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
+  -Model gpt-6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -BaselineSummaryPath ./artifacts/baseline/summary.json `
   -RunCount 3
@@ -246,6 +299,7 @@ Inspect the affected identifiers without running the model:
 
 ```pwsh
 ./evals/Get-SkillEvalAffectedScenarios.ps1 `
+  -Model gpt-6-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -BaselineSummaryPath ./artifacts/baseline/summary.json
 ```
@@ -304,13 +358,14 @@ behavior. Settings checks cover both entry points, scope/roaming advice, a save
 that wrongly targets machine defaults, and user values overriding mandatory
 policy. Synthetic scorer responses are not candidate model outputs.
 
-Only after approving a model and run budget, a full three-repeat run would use
-48 model invocations:
+Only after approving the named model and run budget, a single-model three-repeat
+diagnostic would use 48 invocations; qualification also requires Luna under the
+paired campaign:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
   -ScenarioPath ./evals/scenarios/dotnet-file-creation.json `
-  -Model gpt-5.4 `
+  -Model gpt-6-sol `
   -RunCount 3 `
   -MaxConcurrency 2 `
   -ReportOnly

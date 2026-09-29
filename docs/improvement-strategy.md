@@ -19,8 +19,9 @@ marketplace versions.
 The principal assurance gap is now behavioral breadth. A Copilot CLI vertical
 slice invokes `create-pr` through five routing, binding, and publish-safety
 scenarios with isolated command shims and direct skill-invocation traces. The
-`gpt-5.4` baseline passed all 15 runs. The other 17 skills and substantive task
-outcomes remain unmeasured, so all 18 skills appropriately remain at
+historical single-model baseline passed all 15 runs; it is not paired-model
+qualification. The other 17 skills and substantive task outcomes remain
+unmeasured, so all 18 skills appropriately remain at
 `maturity: canary`.
 
 The portfolio grew from 15 to 18 cores after the previous assessment. The
@@ -65,7 +66,7 @@ catalog.
 | Plugin and marketplace version | `0.13.0` candidate, aligned; latest published release remains `v0.12.0` |
 | Core size | Median `SKILL.md` is 134 total lines; the largest are 214, 202, and 173 lines |
 | Source-skill validation | Bundled strict validator plus pinned `skills-ref@0.1.5`, blocking in CI |
-| Behavioral evaluations | Five `create-pr` scenarios; 15 of 15 `gpt-5.4` baseline runs passed with no safety failure |
+| Behavioral evaluations | Five `create-pr` scenarios; 15 of 15 historical single-model runs passed with no safety failure |
 | Consumer-shaped canaries | All 18 skills install locally and at an immutable pin with overlays, provenance, validators, and link checks |
 | Fleet verification | Madowaku's 16-core `v0.11.0` vendor-back and local-candidate agent/build/test gates are verified |
 
@@ -110,7 +111,7 @@ the GitHub release API, and the installed Copilot CLI help.
   `--deny-tool`, and `--share`.
 - GitHub reports `v0.12.0` as the latest release and marks it immutable.
 - Copilot CLI emitted direct `skill` tool traces. Five `create-pr` scenarios ran
-  three times with `gpt-5.4`; all 15 passed and no forbidden command or real
+  three times with a legacy model; all 15 passed and no forbidden command or real
   worktree change occurred.
 - The synthetic consumer passed with all 18 skills in both local-candidate mode
   and immutable `v0.12.0` mode, including overlays, provenance, both validators,
@@ -124,7 +125,7 @@ the GitHub release API, and the installed Copilot CLI help.
 - Madowaku's vendored catalog and CsWin32 provenance were checked at `v0.11.0`.
   With the local `create-pr` candidate installed, its agent validator, Markdown,
   links, Debug/Release builds, and both 611-test runs passed.
-- Behavioral evidence covers `create-pr` with `gpt-5.4`; it does not generalize
+- Historical single-model evidence covers `create-pr`; it does not generalize
   to the remaining skills, models, clients, or domain outcomes.
 - Real model evaluations are deliberately manual and local to control token
   use. Deterministic harness tests remain blocking in CI.
@@ -291,9 +292,9 @@ The first implementation is deliberately small but end to end:
 4. One overlay sentinel case that proves a local binding was observed.
 5. A deterministic fake-executor test for the runner and scorer themselves.
 
-The `gpt-5.4` baseline ran all five scenarios three times: 15 of 15 passed, with
-no safety failure. Real runs remain manual and local to control token use;
-safety and infrastructure failures return nonzero even during report-only
+The historical single-model baseline ran all five scenarios three times: 15 of
+15 passed, with no safety failure. Real runs remain manual and local to control
+token use; safety and infrastructure failures return nonzero even during report-only
 calibration.
 
 #### Portfolio routing baseline

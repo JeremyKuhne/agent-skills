@@ -5,6 +5,9 @@ param(
     [string] $ScenarioPath = (Join-Path $PSScriptRoot 'scenarios/create-pr.json'),
     [Parameter(Mandatory)]
     [string] $BaselineSummaryPath,
+    [Parameter(Mandatory)]
+    [ValidateNotNullOrWhiteSpace()]
+    [string] $Model,
     [string[]] $ScenarioId,
     [switch] $AsJson
 )
@@ -24,6 +27,7 @@ $affected = @(Get-SkillEvalAffectedScenarioIds `
         -RepoRoot $RepoRoot `
         -ScenarioPath $ScenarioPath `
         -BaselineSummaryPath $BaselineSummaryPath `
+    -Model $Model `
         -ScenarioId $ScenarioId)
 if ($AsJson) {
     ConvertTo-Json -InputObject $affected
