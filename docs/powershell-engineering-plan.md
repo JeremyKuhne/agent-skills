@@ -199,11 +199,10 @@ development work and any new qualification denominator.
    application-performance negatives alongside neighboring PowerShell positives;
    check both missed and over-eager invocation. Keep consumer paths and examples
    in the overlay.
-3. Reproduce and correct the seven reviewed polarity gaps in the development
-  scenario's `Test`, `Uncertainty`, `Route`, `Environment`, `Owner`, `Control`,
-  and `Check` predicates. Pair each reversed or negated answer with an accepted
-  affirmative control and version the revised rubric. Do not change the frozen
-  held-out document or treat earlier answers as post-change passes.
+3. Keep the seven corrected development-scenario `Test`, `Uncertainty`,
+   `Route`, `Environment`, `Owner`, `Control`, and `Check` predicates covered by
+   paired accepted and reversed-answer tests. This rubric revision does not
+   change the frozen held-out document or turn earlier answers into passes.
 4. Freeze new synthetic held-out variants and prospective outcome criteria
    before comparing a revised core. Propose a bounded paired GPT-6 Sol/Luna
    campaign at medium effort with repetitions, serial concurrency, exact

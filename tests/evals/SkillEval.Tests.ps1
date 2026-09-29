@@ -392,6 +392,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'YAML duplicate key control explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser interprets the workflow document.'
+                'PowerShell-role: Orchestration of the parser CLI only.'
+                'Oracle: Independent specification-derived YAML fixtures.'
+                'Test: A duplicate mapping key must not fail before implementation.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'PowerShell invokes YAML parser as wrapper'
             ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
             Response = @(
@@ -533,6 +543,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'performance uncertainty not applicable rejected'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: establish-baseline'
+                'Process-state: matched'
+                'Correctness: validate-output'
+                'Uncertainty: not applicable') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance evidence with child-process limitations accepted'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
@@ -610,6 +630,15 @@ Describe 'Skill evaluation scenario contract' {
                 'Scope: mechanical-v5-to-v6'
                 'Redesign: not-requested') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'assigned Pester migration explicitly declined rejected'
+            ScenarioId = 'powershell-engineering-routing-pester-migration-near-miss'
+            Response = @(
+                'Route: Do not use the dedicated migration workflow; use PowerShell engineering instead.'
+                'Scope: Syntax-only Pester 5 to Pester 6 conversion.'
+                'Redesign: No.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'mechanical Pester migration guidance accepted'
@@ -1724,6 +1753,17 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'environment restoration explicitly reversed rejected'
+            ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
+            Response = @(
+                'Environment: Do not restore the original value when present; leave the variable set instead of removing it when absent.'
+                'Workspace: Create a unique owned scratch directory.'
+                'Paths: Use a literal input path containing spaces.'
+                'Cleanup: Finally restores the environment and removes scratch after nonzero exit.'
+                'Cases: Cover success, failure, and cancellation.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'native environment original existence accepted'
             ScenarioId = 'powershell-engineering-restores-environment-and-scratch'
             Response = @(
@@ -1941,6 +1981,16 @@ Describe 'Skill evaluation scenario contract' {
                 'Evidence: A Unix result does not validate Windows filesystem behavior.'
                 'Skips: Report the Windows job as skipped and the claim unverified, not a pass.') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'Windows ACL ownership explicitly reversed rejected'
+            ScenarioId = 'powershell-engineering-requires-owning-platform-evidence'
+            Response = @(
+                'Owner: Windows does not own file access-control behavior; Unix owns it.'
+                'Lane: Run the Windows behavior test job for ACLs.'
+                'Evidence: A Unix result does not validate Windows filesystem behavior.'
+                'Skips: Report the Windows job as skipped and the claim unverified, not a pass.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'one host does not prove the other platform'
@@ -2340,6 +2390,17 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'stale generated counterpart failure explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
+            Response = @(
+                'Owner: generator-and-inputs'
+                'Change: edit-source-then-regenerate'
+                'Drift: compare-all-outputs-without-overwrite'
+                'Control: stale counterpart must not fail.'
+                'Behavior: execute-generated-entry-point') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'generated outputs compared in isolation accepted'
             ScenarioId = 'powershell-engineering-prevents-generated-script-drift'
             Response = @(
@@ -2447,6 +2508,16 @@ Describe 'Skill evaluation scenario contract' {
                 'Artifact: packaged-counterpart'
                 'Check: compare-isolated-output-and-test-packaged-entry-point') -join "`n"
             Expected = $true
+        }
+        @{
+            CaseName = 'packaged generated validation explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-routes-packaged-generated-counterpart'
+            Response = @(
+                'Route: generated-artifact-review'
+                'Source: generator-and-inputs'
+                'Artifact: packaged-counterpart'
+                'Check: Do not compare the fresh packaged archive or test its entry point.') -join "`n"
+            Expected = $false
         }
         @{
             CaseName = 'packaged generated entry point exercised accepted'
