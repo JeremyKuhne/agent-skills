@@ -462,6 +462,26 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'YAML folded scalar retention explicitly negated rejected'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Invoke the parser and map diagnostics.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: First ensure the folded scalar does not stay scalar rather than being misclassified.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'YAML folded scalar does not stay misclassified accepted'
+            ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
+            Response = @(
+                'Boundary: A maintained YAML parser owns workflow syntax.'
+                'PowerShell-role: Invoke the parser and map diagnostics.'
+                'Oracle: Independent YAML parser fixtures.'
+                'Test: First ensure the folded scalar does not stay misclassified as a mapping entry; it should remain scalar rather than be misclassified.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'YAML folded scalar misclassification required rejected'
             ScenarioId = 'powershell-engineering-routes-yaml-policy-to-maintained-parser'
             Response = @(
