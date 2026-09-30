@@ -573,6 +573,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'performance rejects skipping allocation measurement'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Skip measuring allocations against a baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance rejects unmatched process state'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
@@ -593,12 +603,32 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'performance rejects avoiding matched process state'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Establish an allocation baseline.'
+                'Process-state: Avoid matching inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance rejects negated output validation'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
                 'Measurement: Establish an allocation baseline.'
                 'Process-state: Match the inputs and cache state.'
                 'Correctness: Do not validate output or exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance rejects skipping output validation'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Establish an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Skip validating output and exit behavior.'
                 'Uncertainty: Report measurement limits.') -join "`n"
             Expected = $false
         }
@@ -613,12 +643,32 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'performance rejects all three skipped checks'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Skip measuring allocations against a baseline.'
+                'Process-state: Avoid matching inputs and cache state.'
+                'Correctness: Skip validating output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance accepts rejecting shortcuts while performing checks'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
                 'Measurement: Do not skip the allocation baseline; establish one.'
                 'Process-state: Do not use unmatched state; match inputs and caches.'
                 'Correctness: Do not assume output parity; validate output and exit behavior.'
+                'Uncertainty: Report child-process allocation limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance accepts later corrective clauses'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Reject skip measuring; measure allocations against a baseline instead.'
+                'Process-state: Reject avoid matching; match inputs and cache state instead.'
+                'Correctness: Reject skip validating; validate output and exit behavior instead.'
                 'Uncertainty: Report child-process allocation limits.') -join "`n"
             Expected = $true
         }
