@@ -583,6 +583,46 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'performance accepts establishing a baseline before benchmarking'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark without first establishing an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance accepts requiring an allocation baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark without an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance rejects refusing a benchmark against a baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark allocations against a baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance rejects contradicting the baseline prerequisite'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark without first establishing an allocation baseline; do not establish one.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance rejects unmatched process state'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
