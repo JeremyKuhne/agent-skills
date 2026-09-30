@@ -563,6 +563,56 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'performance rejects negated allocation baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Do not establish an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance rejects unmatched process state'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Establish an allocation baseline.'
+                'Process-state: Not matched.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance rejects negated output validation'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Establish an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Do not validate output or exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance rejects all three reversed decisions'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Do not establish an allocation baseline.'
+                'Process-state: Not matched.'
+                'Correctness: Do not validate output.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance accepts rejecting shortcuts while performing checks'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Do not skip the allocation baseline; establish one.'
+                'Process-state: Do not use unmatched state; match inputs and caches.'
+                'Correctness: Do not assume output parity; validate output and exit behavior.'
+                'Uncertainty: Report child-process allocation limits.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'performance uncertainty not applicable rejected'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
