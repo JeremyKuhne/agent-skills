@@ -583,6 +583,16 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'performance rejects delayed negation of matched state'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Establish an allocation baseline.'
+                'Process-state: The inputs and caches should not be matched.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance rejects negated output validation'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
