@@ -1,7 +1,14 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace PowerShellToolchain.Tests;
 
+/// <summary>
+///  Tests byte-for-byte shard-runner parity and generated team-CI and release-workflow policies.
+/// </summary>
 [TestClass]
 public sealed class GeneratedWorkflowPolicyTests
 {
@@ -58,6 +65,13 @@ public sealed class GeneratedWorkflowPolicyTests
                   GH_TOKEN: ${{ github.token }}
         """;
 
+    /// <summary>
+    ///  Provides skills-workflow mutations that must fail generated team-CI validation.
+    /// </summary>
+    /// <value>
+    ///  Rows containing a mutation name and skills-workflow YAML with an unresolved token, an invalid
+    ///  Pester bootstrap, a direct Pester call, or an incorrect shard-runner path or shell.
+    /// </value>
     public static IEnumerable<object[]> RejectedTeamWorkflows
     {
         get
@@ -66,9 +80,11 @@ public sealed class GeneratedWorkflowPolicyTests
             yield return ["unresolved-token", skillsWorkflow.Replace(
                 "name: Skills validation",
                 "name: '{{UNRESOLVED_NAME}}'")];
+
             yield return ["floating-bootstrap", skillsWorkflow.Replace(
                 "Install-Module Pester -RequiredVersion 6.2.0 -Force",
                 "Install-Module Pester -Force")];
+
             string laterBootstrap = skillsWorkflow.Replace(
                 "run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser",
                 "run: __runner_placeholder__",
@@ -79,29 +95,39 @@ public sealed class GeneratedWorkflowPolicyTests
                 "run: __runner_placeholder__",
                 "run: ./tests/Invoke-PesterShards.ps1 -Path ./tests",
                 StringComparison.Ordinal);
+
             yield return ["later-bootstrap", laterBootstrap];
             yield return ["direct-pester", skillsWorkflow.Replace(
                 "./tests/Invoke-PesterShards.ps1 -Path ./tests",
                 "Invoke-Pester -Path ./tests")];
+
             yield return ["wrong-runner-path", skillsWorkflow.Replace(
                 "./tests/Invoke-PesterShards.ps1 -Path ./tests",
                 "./tests/Invoke-PesterShards.ps1 -Path ./skills")];
+
             yield return ["wrong-runner-shell", skillsWorkflow.Replace(
                 "shell: pwsh\n        run: ./tests/Invoke-PesterShards.ps1",
                 "shell: bash\n        run: ./tests/Invoke-PesterShards.ps1")];
         }
     }
 
+    /// <summary>
+    ///  Verifies that a generated runner with bytes identical to the canonical runner is accepted.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedRunner_IdenticalBytes_Passes()
+    public void ValidateGeneratedRunnerIdenticalBytesPasses()
     {
         byte[] runner = [0x23, 0x20, 0x50, 0x65, 0x73, 0x74, 0x65, 0x72];
 
         PowerShellToolchainPolicy.ValidateGeneratedRunner(runner, runner.ToArray());
     }
 
+    /// <summary>
+    ///  Verifies that changing one generated-runner byte is rejected with
+    ///  <see cref="ToolchainPolicyException"/>.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedRunner_DivergentBytes_ThrowsPolicyException()
+    public void ValidateGeneratedRunnerDivergentBytesThrowsPolicyException()
     {
         Assert.ThrowsExactly<ToolchainPolicyException>(() =>
             PowerShellToolchainPolicy.ValidateGeneratedRunner(
@@ -109,16 +135,23 @@ public sealed class GeneratedWorkflowPolicyTests
                 [0x23, 0x20, 0x50, 0x65, 0x73, 0x74, 0x65, 0x64]));
     }
 
+    /// <summary>
+    ///  Verifies that skills validation with the pinned Pester bootstrap and shard runner is accepted
+    ///  alongside the skill-drift reporting workflow.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedTeamContinuousIntegration_AcceptedOutput_Passes()
+    public void ValidateGeneratedTeamContinuousIntegrationAcceptedOutputPasses()
     {
         PowerShellToolchainPolicy.ValidateGeneratedTeamContinuousIntegration(
             TeamWorkflows(),
             Manifest);
     }
 
+    /// <summary>
+    ///  Verifies that an anchor, merge key, and null job in the unrelated drift workflow are accepted.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedTeamContinuousIntegration_UnrelatedShapes_Pass()
+    public void ValidateGeneratedTeamContinuousIntegrationUnrelatedShapesPass()
     {
         Dictionary<string, string> workflows = TeamWorkflows();
         workflows[".github/workflows/skill-drift.yml"] = DriftWorkflow.Replace(
@@ -130,8 +163,11 @@ public sealed class GeneratedWorkflowPolicyTests
             Manifest);
     }
 
+    /// <summary>
+    ///  Verifies that the generated skills-validation job may be renamed and use a Windows host.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedTeamContinuousIntegration_RenamedJobAndHost_Passes()
+    public void ValidateGeneratedTeamContinuousIntegrationRenamedJobAndHostPasses()
     {
         Dictionary<string, string> workflows = TeamWorkflows();
         workflows[".github/workflows/skills.yml"] = SkillsWorkflow.Replace(
@@ -145,8 +181,12 @@ public sealed class GeneratedWorkflowPolicyTests
             Manifest);
     }
 
+    /// <summary>
+    ///  Verifies that supplying a template-suffixed path instead of the generated skills-workflow path
+    ///  is rejected with <see cref="ToolchainPolicyException"/>.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedTeamContinuousIntegration_RawTemplate_ThrowsPolicyException()
+    public void ValidateGeneratedTeamContinuousIntegrationRawTemplateThrowsPolicyException()
     {
         Dictionary<string, string> workflows = TeamWorkflows();
         workflows[".github/workflows/skills.yml.tmpl"] = workflows[".github/workflows/skills.yml"];
@@ -158,9 +198,15 @@ public sealed class GeneratedWorkflowPolicyTests
                 Manifest));
     }
 
+    /// <summary>
+    ///  Verifies that each rejected skills-workflow mutation changes the fixture and fails team-CI
+    ///  validation with <see cref="ToolchainPolicyException"/>.
+    /// </summary>
+    /// <param name="name">The mutation name used in the fixture-change and rejection assertions.</param>
+    /// <param name="skillsWorkflow">The mutated skills-workflow YAML paired with the drift fixture.</param>
     [TestMethod]
     [DynamicData(nameof(RejectedTeamWorkflows))]
-    public void ValidateGeneratedTeamContinuousIntegration_RejectedOutput_ThrowsPolicyException(
+    public void ValidateGeneratedTeamContinuousIntegrationRejectedOutputThrowsPolicyException(
         string name,
         string skillsWorkflow)
     {
@@ -171,6 +217,7 @@ public sealed class GeneratedWorkflowPolicyTests
             SkillsWorkflow.ReplaceLineEndings("\n"),
             skillsWorkflow,
             $"Mutation '{name}' must change the fixture.");
+
         Assert.ThrowsExactly<ToolchainPolicyException>(() =>
             PowerShellToolchainPolicy.ValidateGeneratedTeamContinuousIntegration(
                 workflows,
@@ -178,13 +225,18 @@ public sealed class GeneratedWorkflowPolicyTests
             name);
     }
 
+    /// <summary>
+    ///  Verifies that adding a shard-runner invocation changes the drift fixture and is rejected with
+    ///  <see cref="ToolchainPolicyException"/>.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedTeamContinuousIntegration_AdditionalRunner_ThrowsPolicyException()
+    public void ValidateGeneratedTeamContinuousIntegrationAdditionalRunnerThrowsPolicyException()
     {
         Dictionary<string, string> workflows = TeamWorkflows();
         string mutatedDrift = DriftWorkflow.Replace(
             "gh skill update --all --dry-run",
             "./tests/Invoke-PesterShards.ps1 -Path ./tests");
+
         Assert.AreNotEqual(DriftWorkflow, mutatedDrift);
         workflows[".github/workflows/skill-drift.yml"] = mutatedDrift;
 
@@ -194,8 +246,12 @@ public sealed class GeneratedWorkflowPolicyTests
                 Manifest));
     }
 
+    /// <summary>
+    ///  Verifies that the team workflows plus a release workflow with the pinned Pester bootstrap
+    ///  and isolated shard runner satisfy generated distribution policy.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedDistributionWorkflows_AcceptedOutput_Passes()
+    public void ValidateGeneratedDistributionWorkflowsAcceptedOutputPasses()
     {
         Dictionary<string, string> workflows = TeamWorkflows();
         workflows[".github/workflows/release.yml"] = ReleaseWorkflow;
@@ -203,8 +259,12 @@ public sealed class GeneratedWorkflowPolicyTests
         PowerShellToolchainPolicy.ValidateGeneratedDistributionWorkflows(workflows, Manifest);
     }
 
+    /// <summary>
+    ///  Verifies that team workflows without the required release workflow are rejected with
+    ///  <see cref="ToolchainPolicyException"/>.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedDistributionWorkflows_MissingRelease_ThrowsPolicyException()
+    public void ValidateGeneratedDistributionWorkflowsMissingReleaseThrowsPolicyException()
     {
         Assert.ThrowsExactly<ToolchainPolicyException>(() =>
             PowerShellToolchainPolicy.ValidateGeneratedDistributionWorkflows(
@@ -212,13 +272,18 @@ public sealed class GeneratedWorkflowPolicyTests
                 Manifest));
     }
 
+    /// <summary>
+    ///  Verifies that replacing the release shard runner with a direct Pester call changes the fixture
+    ///  and is rejected with <see cref="ToolchainPolicyException"/>.
+    /// </summary>
     [TestMethod]
-    public void ValidateGeneratedDistributionWorkflows_DirectPesterInRelease_ThrowsPolicyException()
+    public void ValidateGeneratedDistributionWorkflowsDirectPesterInReleaseThrowsPolicyException()
     {
         Dictionary<string, string> workflows = TeamWorkflows();
         string mutatedRelease = ReleaseWorkflow.Replace(
             "./tests/Invoke-PesterShards.ps1 -Path ./tests",
             "Invoke-Pester -Path ./tests");
+
         Assert.AreNotEqual(ReleaseWorkflow, mutatedRelease);
         workflows[".github/workflows/release.yml"] = mutatedRelease;
 

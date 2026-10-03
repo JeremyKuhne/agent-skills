@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <PackageReference Include="KlutzyNinja.Touki" Version="[0.10.0]" />
+    <PackageReference Include="KlutzyNinja.Touki.Analyzers" Version="[0.11.1]" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

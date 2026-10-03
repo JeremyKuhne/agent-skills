@@ -1,7 +1,14 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace PowerShellToolchain.Tests;
 
+/// <summary>
+///  Tests retained PowerShell test-script host and Pester minimum-version requirements.
+/// </summary>
 [TestClass]
 public sealed class PowerShellRequirementPolicyTests
 {
@@ -20,6 +27,14 @@ public sealed class PowerShellRequirementPolicyTests
         }
         """;
 
+    /// <summary>
+    ///  Provides scripts with missing, duplicated, mismatched, or nonliteral requirements and a
+    ///  PowerShell syntax-error fixture.
+    /// </summary>
+    /// <value>
+    ///  Rows containing a case name and script that violates the PowerShell 7.4 requirement,
+    ///  the Pester 6.2.0 module-version floor, or PowerShell syntax.
+    /// </value>
     public static IEnumerable<object[]> RejectedScripts
     {
         get
@@ -38,8 +53,12 @@ public sealed class PowerShellRequirementPolicyTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that PowerShell 7.4 and Pester 6.2.0 minimum requirements are accepted with canonical
+    ///  module fields and with reordered, double-quoted module fields.
+    /// </summary>
     [TestMethod]
-    public void ValidateTestRequirements_AcceptedRequirements_Passes()
+    public void ValidateTestRequirementsAcceptedRequirementsPasses()
     {
         PowerShellToolchainPolicy.ValidateTestRequirements(ValidScript, Manifest);
         PowerShellToolchainPolicy.ValidateTestRequirements(
@@ -49,9 +68,15 @@ public sealed class PowerShellRequirementPolicyTests
             Manifest);
     }
 
+    /// <summary>
+    ///  Verifies that each invalid requirement or syntax fixture is rejected with
+    ///  <see cref="ToolchainPolicyException"/>.
+    /// </summary>
+    /// <param name="name">The descriptive label identifying the rejected script fixture.</param>
+    /// <param name="script">The script with invalid requirements or PowerShell syntax to validate.</param>
     [TestMethod]
     [DynamicData(nameof(RejectedScripts))]
-    public void ValidateTestRequirements_RejectedRequirements_ThrowsPolicyException(
+    public void ValidateTestRequirementsRejectedRequirementsThrowsPolicyException(
         string name,
         string script)
     {

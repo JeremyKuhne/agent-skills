@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using System.Globalization;
 using System.Management.Automation.Language;
 using System.Xml.Linq;
@@ -20,16 +24,24 @@ internal static partial class PowerShellToolchainPolicy
     private const string TrustedFileWritesSuffix =
         "/skills/dotnet-file-creation/assets/TrustedFileWrites.cs";
 
+    /// <summary>
+    ///  Validates the managed file-creation CI host matrix, Release test commands, and coverage settings.
+    /// </summary>
+    /// <param name="continuousIntegration">The active CI workflow's YAML source.</param>
+    /// <param name="coverageSettings">The coverage configuration's XML source.</param>
+    /// <exception cref="ToolchainPolicyException">
+    ///  The workflow or coverage settings violate file-creation policy.
+    /// </exception>
     public static void ValidateManagedFileCreationWorkflow(
         string continuousIntegration,
         string coverageSettings)
     {
         ManagedWorkflow workflow = ParseManagedWorkflow(continuousIntegration);
-        if (workflow.Jobs is null ||
-            !workflow.Jobs.TryGetValue(ManagedFileCreationJob, out ManagedJob? job) ||
-            job?.Strategy?.Matrix?.Include is not { } rows ||
-            job.Steps is null ||
-            !string.Equals(job.RunsOn, "${{ matrix.os }}", StringComparison.Ordinal))
+        if (workflow.Jobs is null
+            || !workflow.Jobs.TryGetValue(ManagedFileCreationJob, out ManagedJob? job)
+            || job?.Strategy?.Matrix?.Include is not { } rows
+            || job.Steps is null
+            || !string.Equals(job.RunsOn, "${{ matrix.os }}", StringComparison.Ordinal))
         {
             throw new ToolchainPolicyException(
                 "ci.yml must define the accepted managed file-creation job and matrix.");
@@ -42,6 +54,7 @@ internal static partial class PowerShellToolchainPolicy
             .Where(step => step is not null && IsManagedTestCandidate(step))
             .Cast<ManagedStep>()
             .ToArray();
+
         if (candidates.Length != 2)
         {
             throw new ToolchainPolicyException(
@@ -51,31 +64,44 @@ internal static partial class PowerShellToolchainPolicy
         ValidateManagedCommand(
             FindManagedStep(candidates, "matrix.coverage == false"),
             expectsCoverage: false);
+
         ValidateManagedCommand(
             FindManagedStep(candidates, "matrix.coverage == true"),
             expectsCoverage: true);
+
         ValidateCoverageSettings(coverageSettings);
     }
 
+    /// <summary>
+    ///  Requires one production TrustedFileWrites class and at least one covered line in a Cobertura report.
+    /// </summary>
+    /// <param name="coverageReport">The emitted Cobertura report's XML source.</param>
+    /// <exception cref="ToolchainPolicyException">
+    ///  The report is malformed or lacks the required source coverage.
+    /// </exception>
     public static void ValidateManagedFileCreationCoverageReport(string coverageReport)
     {
         try
         {
             XDocument document = XDocument.Parse(coverageReport, LoadOptions.None);
             XElement? root = document.Root;
-            XElement[] classes = root?
-                .Element("packages")?
-                .Elements("package")
-                .SelectMany(package => package
-                    .Element("classes")?
-                    .Elements("class") ?? [])
+            XElement[] classes = root
+                ?.Element("packages")
+                ?.Elements("package")
+                .SelectMany(package =>
+                    package
+                        .Element("classes")
+                        ?.Elements("class")
+                            ?? [])
                 .Where(element => string.Equals(
                     (string?)element.Attribute("name"),
                     "TrustedFileWrites",
                     StringComparison.Ordinal))
-                .ToArray() ?? [];
-            if (!string.Equals(root?.Name.LocalName, "coverage", StringComparison.Ordinal) ||
-                classes.Length != 1)
+                .ToArray()
+                    ?? [];
+
+            if (!string.Equals(root?.Name.LocalName, "coverage", StringComparison.Ordinal)
+                || classes.Length != 1)
             {
                 throw new ToolchainPolicyException(
                     "Coverage must contain exactly one TrustedFileWrites class.");
@@ -83,6 +109,7 @@ internal static partial class PowerShellToolchainPolicy
 
             string source = ((string?)classes[0].Attribute("filename") ?? string.Empty)
                 .Replace('\\', '/');
+
             if (!source.EndsWith(
                     TrustedFileWritesSuffix,
                     StringComparison.OrdinalIgnoreCase))
@@ -92,16 +119,18 @@ internal static partial class PowerShellToolchainPolicy
             }
 
             XElement[] lines = classes[0]
-                .Element("lines")?
-                .Elements("line")
-                .ToArray() ?? [];
+                .Element("lines")
+                ?.Elements("line")
+                .ToArray()
+                    ?? [];
+
             if (lines.Length == 0 || !lines.Any(line =>
-                    int.TryParse(
-                        (string?)line.Attribute("hits"),
-                        NumberStyles.None,
-                        CultureInfo.InvariantCulture,
-                        out int hits) &&
-                    hits > 0))
+                int.TryParse(
+                    (string?)line.Attribute("hits"),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out int hits)
+                    && hits > 0))
             {
                 throw new ToolchainPolicyException(
                     "TrustedFileWrites coverage must contain a covered line.");
@@ -128,8 +157,8 @@ internal static partial class PowerShellToolchainPolicy
                 .WithAttemptingUnquotedStringTypeDeserialization()
                 .IgnoreUnmatchedProperties()
                 .Build()
-                .Deserialize<ManagedWorkflow>(yaml) ??
-                throw new ToolchainPolicyException("ci.yml must contain a workflow mapping.");
+                .Deserialize<ManagedWorkflow>(yaml)
+                ?? throw new ToolchainPolicyException("ci.yml must contain a workflow mapping.");
         }
         catch (ToolchainPolicyException)
         {
@@ -145,10 +174,10 @@ internal static partial class PowerShellToolchainPolicy
     {
         try
         {
-            YamlStream stream = new();
+            YamlStream stream = [];
             stream.Load(new StringReader(yaml));
-            if (stream.Documents.Count != 1 ||
-                stream.Documents[0].RootNode is not YamlMappingNode root)
+            if (stream.Documents.Count != 1
+                || stream.Documents[0].RootNode is not YamlMappingNode root)
             {
                 throw new ToolchainPolicyException("ci.yml must contain one mapping document.");
             }
@@ -156,6 +185,7 @@ internal static partial class PowerShellToolchainPolicy
             YamlMappingNode jobs = RequireMapping(
                 RequireNode(root, "jobs", "ci.yml"),
                 "ci.yml.jobs");
+
             YamlNode jobNode = RequireNode(jobs, ManagedFileCreationJob, "ci.yml.jobs");
             if (jobNode is not YamlMappingNode job || HasIndirection(jobNode))
             {
@@ -166,9 +196,11 @@ internal static partial class PowerShellToolchainPolicy
             YamlMappingNode strategy = RequireMapping(
                 RequireNode(job, "strategy", $"ci.yml.jobs.{ManagedFileCreationJob}"),
                 $"ci.yml.jobs.{ManagedFileCreationJob}.strategy");
+
             YamlMappingNode matrix = RequireMapping(
                 RequireNode(strategy, "matrix", $"ci.yml.jobs.{ManagedFileCreationJob}.strategy"),
                 $"ci.yml.jobs.{ManagedFileCreationJob}.strategy.matrix");
+
             if (matrix.Children.Count != 1 || !HasMappingKey(matrix, "include"))
             {
                 throw new ToolchainPolicyException(
@@ -178,12 +210,13 @@ internal static partial class PowerShellToolchainPolicy
             YamlSequenceNode include = RequireSequence(
                 RequireNode(matrix, "include", $"ci.yml.jobs.{ManagedFileCreationJob}.strategy.matrix"),
                 $"ci.yml.jobs.{ManagedFileCreationJob}.strategy.matrix.include");
+
             foreach (YamlNode rowNode in include)
             {
-                if (rowNode is not YamlMappingNode row ||
-                    row.Children.Count != 2 ||
-                    !HasMappingKey(row, "os") ||
-                    !HasMappingKey(row, "coverage"))
+                if (rowNode is not YamlMappingNode row
+                    || row.Children.Count != 2
+                    || !HasMappingKey(row, "os")
+                    || !HasMappingKey(row, "coverage"))
                 {
                     throw new ToolchainPolicyException(
                         "Managed file-creation matrix rows must contain only os and coverage.");
@@ -210,10 +243,14 @@ internal static partial class PowerShellToolchainPolicy
 
         ManagedMatrixRow?[] linux = rows.Where(row =>
             string.Equals(row?.OperatingSystem, "ubuntu-24.04-arm", StringComparison.Ordinal)).ToArray();
+
         ManagedMatrixRow?[] windows = rows.Where(row =>
             string.Equals(row?.OperatingSystem, "windows-latest", StringComparison.Ordinal)).ToArray();
-        if (linux.Length != 1 || windows.Length != 1 ||
-            linux[0]?.Coverage is not false || windows[0]?.Coverage is not true)
+
+        if (linux.Length != 1
+            || windows.Length != 1
+            || linux[0]?.Coverage is not false
+            || windows[0]?.Coverage is not true)
         {
             throw new ToolchainPolicyException(
                 "The managed file-creation matrix must pair Linux with no coverage and Windows with coverage.");
@@ -227,6 +264,7 @@ internal static partial class PowerShellToolchainPolicy
         ManagedStep[] matches = steps
             .Where(step => string.Equals(step.Condition, condition, StringComparison.Ordinal))
             .ToArray();
+
         return matches.Length == 1
             ? matches[0]
             : throw new ToolchainPolicyException(
@@ -244,20 +282,21 @@ internal static partial class PowerShellToolchainPolicy
             step.Run,
             out _,
             out ParseError[] errors);
+
         if (errors.Length != 0)
         {
             return false;
         }
 
         return FindPowerShellCommands(script).Any(command =>
-            IsDotNetTest(command) ||
-            Classify(command) is CommandKind.Runner or CommandKind.DirectPester);
+            IsDotNetTest(command)
+                || Classify(command) is CommandKind.Runner or CommandKind.DirectPester);
     }
 
     private static void ValidateManagedCommand(ManagedStep step, bool expectsCoverage)
     {
-        if (!string.Equals(step.Shell, "pwsh", StringComparison.Ordinal) ||
-            step.Run is null)
+        if (!string.Equals(step.Shell, "pwsh", StringComparison.Ordinal)
+            || step.Run is null)
         {
             throw new ToolchainPolicyException(
                 "Managed file-creation test steps must explicitly use pwsh.");
@@ -267,10 +306,10 @@ internal static partial class PowerShellToolchainPolicy
         CommandAst[] allCommands = FindPowerShellCommands(script);
         CommandAst[] dotnetTests = allCommands.Where(IsDotNetTest).ToArray();
         if (allCommands.Any(command =>
-                Classify(command) is CommandKind.Runner or CommandKind.DirectPester) ||
-            dotnetTests.Length != 1 ||
-            dotnetTests[0].InvocationOperator != TokenKind.Unknown ||
-            !IsTopLevelCommand(script, dotnetTests[0]))
+            Classify(command) is CommandKind.Runner or CommandKind.DirectPester)
+            || dotnetTests.Length != 1
+            || dotnetTests[0].InvocationOperator != TokenKind.Unknown
+            || !IsTopLevelCommand(script, dotnetTests[0]))
         {
             throw new ToolchainPolicyException(
                 "Managed file-creation steps must contain one top-level dotnet test command.");
@@ -289,9 +328,11 @@ internal static partial class PowerShellToolchainPolicy
                 "dotnet", "test", "--project", ManagedFileCreationProject,
                 "--configuration", "Release"
             ];
+
         string[] actual = dotnetTests[0].CommandElements
             .Select(CommandElementText)
             .ToArray();
+
         if (!actual.SequenceEqual(expected, StringComparer.Ordinal))
         {
             throw new ToolchainPolicyException(
@@ -307,18 +348,18 @@ internal static partial class PowerShellToolchainPolicy
 
     private static bool IsTopLevelCommand(ScriptBlockAst script, CommandAst command)
     {
-        return command.Parent is PipelineAst pipeline &&
-            pipeline.PipelineElements.Count == 1 &&
-            pipeline.PipelineElements[0] == command &&
-            script.EndBlock.Statements.Contains(pipeline);
+        return command.Parent is PipelineAst pipeline
+            && pipeline.PipelineElements.Count == 1
+            && pipeline.PipelineElements[0] == command
+            && script.EndBlock.Statements.Contains(pipeline);
     }
 
     private static bool IsDotNetTest(CommandAst command)
     {
-        return string.Equals(command.GetCommandName(), "dotnet", StringComparison.OrdinalIgnoreCase) &&
-            command.CommandElements.Count >= 2 &&
-            command.CommandElements[1] is StringConstantExpressionAst verb &&
-            string.Equals(verb.Value, "test", StringComparison.Ordinal);
+        return string.Equals(command.GetCommandName(), "dotnet", StringComparison.OrdinalIgnoreCase)
+            && command.CommandElements.Count >= 2
+            && command.CommandElements[1] is StringConstantExpressionAst verb
+            && string.Equals(verb.Value, "test", StringComparison.Ordinal);
     }
 
     private static string CommandElementText(CommandElementAst element)
@@ -337,16 +378,18 @@ internal static partial class PowerShellToolchainPolicy
         {
             XDocument document = XDocument.Parse(coverageSettings, LoadOptions.None);
             XElement? root = document.Root;
-            string[] sources = root?
-                .Element("CodeCoverage")?
-                .Element("Sources")?
-                .Element("Include")?
-                .Elements("Source")
+            string[] sources = root
+                ?.Element("CodeCoverage")
+                ?.Element("Sources")
+                ?.Element("Include")
+                ?.Elements("Source")
                 .Select(element => element.Value)
-                .ToArray() ?? [];
-            if (!string.Equals(root?.Name.LocalName, "Configuration", StringComparison.Ordinal) ||
-                sources.Length != 1 ||
-                !string.Equals(sources[0], TrustedFileWritesSource, StringComparison.Ordinal))
+                .ToArray()
+                    ?? [];
+
+            if (!string.Equals(root?.Name.LocalName, "Configuration", StringComparison.Ordinal)
+                || sources.Length != 1
+                || !string.Equals(sources[0], TrustedFileWritesSource, StringComparison.Ordinal))
             {
                 throw new ToolchainPolicyException(
                     "Coverage settings must include only the TrustedFileWrites production source.");
@@ -367,59 +410,8 @@ internal static partial class PowerShellToolchainPolicy
     private static bool HasMappingKey(YamlMappingNode mapping, string key)
     {
         return mapping.Children.Keys.Any(candidate =>
-            candidate is YamlScalarNode scalar &&
-            string.Equals(scalar.Value, key, StringComparison.Ordinal));
-    }
-
-    private sealed class ManagedWorkflow
-    {
-        [YamlMember(Alias = "jobs")]
-        public Dictionary<string, ManagedJob?>? Jobs { get; init; } = new(StringComparer.Ordinal);
-    }
-
-    private sealed class ManagedJob
-    {
-        [YamlMember(Alias = "runs-on")]
-        public string? RunsOn { get; init; }
-
-        [YamlMember(Alias = "strategy")]
-        public ManagedStrategy? Strategy { get; init; }
-
-        [YamlMember(Alias = "steps")]
-        public List<ManagedStep?>? Steps { get; init; }
-    }
-
-    private sealed class ManagedStrategy
-    {
-        [YamlMember(Alias = "matrix")]
-        public ManagedMatrix? Matrix { get; init; }
-    }
-
-    private sealed class ManagedMatrix
-    {
-        [YamlMember(Alias = "include")]
-        public List<ManagedMatrixRow?>? Include { get; init; }
-    }
-
-    private sealed class ManagedMatrixRow
-    {
-        [YamlMember(Alias = "os")]
-        public string? OperatingSystem { get; init; }
-
-        [YamlMember(Alias = "coverage")]
-        public object? Coverage { get; init; }
-    }
-
-    private sealed class ManagedStep
-    {
-        [YamlMember(Alias = "if")]
-        public string? Condition { get; init; }
-
-        [YamlMember(Alias = "shell")]
-        public string? Shell { get; init; }
-
-        [YamlMember(Alias = "run")]
-        public string? Run { get; init; }
+            candidate is YamlScalarNode scalar
+                && string.Equals(scalar.Value, key, StringComparison.Ordinal));
     }
 
 }
