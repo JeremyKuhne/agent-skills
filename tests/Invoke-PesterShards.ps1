@@ -345,6 +345,15 @@ else {
 Write-Host "Pester shard reports: $resolvedOutputDirectory"
 foreach ($shard in $failedShards) {
     Write-Host "Failed shard '$($shard.Path)': $($shard.Result). $($shard.Error) Log: $($shard.LogPath)"
+    if (Test-Path -LiteralPath $shard.LogPath -PathType Leaf) {
+        Write-Host 'Last 120 lines of the failed shard log:'
+        foreach ($line in Get-Content -LiteralPath $shard.LogPath -Tail 120) {
+            Write-Host $line
+        }
+    }
+    else {
+        Write-Host "Failed shard log is unavailable: $($shard.LogPath)"
+    }
 }
 foreach ($runnerError in $runnerErrors) { Write-Host "Pester runner error: $runnerError" }
 if ($failedShards.Count -gt 0 -or $runnerErrors.Count -gt 0) {

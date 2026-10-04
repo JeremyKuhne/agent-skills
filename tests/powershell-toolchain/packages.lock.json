@@ -2,6 +2,22 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
+      "KlutzyNinja.Touki": {
+        "type": "Direct",
+        "requested": "[0.10.0, 0.10.0]",
+        "resolved": "0.10.0",
+        "contentHash": "PEFKJaUA4+ufa8cSEyoNLeVNfnrfV2wvGUvORl2wdpbDN4QouSOpbSfTQEz22gdA53tGRWRBrKWj/ORBJCoIyg==",
+        "dependencies": {
+          "KlutzyNinja.Touki.Analyzers": "0.10.0",
+          "System.Formats.Nrbf": "10.0.9"
+        }
+      },
+      "KlutzyNinja.Touki.Analyzers": {
+        "type": "Direct",
+        "requested": "[0.11.1, 0.11.1]",
+        "resolved": "0.11.1",
+        "contentHash": "WWaCYHDgC6o6KyAgXQGTvoyppK4MA5bNAvyopuH7iaoognuiTkkFsb2WyoXJbgWKk26LWhuzqWZtrOr2Q5mBOg=="
+      },
       "Microsoft.Testing.Extensions.CodeCoverage": {
         "type": "Direct",
         "requested": "[18.5.2, )",
@@ -206,6 +222,11 @@
         "type": "Transitive",
         "resolved": "8.0.0",
         "contentHash": "7nit//efUTy1OsAKco2f02PMrwsR2S234N0dVVp84udC77YcvpOQDz5znAWMtgMWBzY1aRJvUW61jo/7vQRfXg=="
+      },
+      "System.Formats.Nrbf": {
+        "type": "Transitive",
+        "resolved": "10.0.9",
+        "contentHash": "5SYwGzBdCL65Ntz56LjHgiY8khvvucN89xW9TSD/KVPFKSSl/ugoyfdb1nR0yXPeGBXWd4Y+QwIW5uwOsec3Pg=="
       },
       "System.Management": {
         "type": "Transitive",

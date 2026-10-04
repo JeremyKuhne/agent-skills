@@ -1,10 +1,20 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DotNetFileCreation.Tests;
 
+/// <summary>
+///  Verifies trusted file creation, scratch-file lifetime, and replacement cleanup.
+/// </summary>
 [TestClass]
 public sealed class TrustedFileWritesTests
 {
+    /// <summary>
+    ///  Gets keys rejected by the flat lowercase-ASCII key contract.
+    /// </summary>
     public static IEnumerable<object[]> InvalidKeys
     {
         get
@@ -27,15 +37,20 @@ public sealed class TrustedFileWritesTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that invalid keys are rejected before a file is created.
+    /// </summary>
+    /// <param name="key">An invalid storage key.</param>
     [TestMethod]
     [DynamicData(nameof(InvalidKeys))]
-    public void CreateNew_InvalidKey_ThrowsBeforeCreatingFile(string key)
+    public void CreateNewInvalidKeyThrowsBeforeCreatingFile(string key)
     {
         string root = CreateTempRoot();
         try
         {
             Assert.ThrowsExactly<ArgumentException>(
                 () => TrustedFileWrites.CreateNew(root, key).Dispose());
+
             Assert.AreEqual(0, Directory.GetFileSystemEntries(root).Length);
         }
         finally
@@ -44,8 +59,11 @@ public sealed class TrustedFileWritesTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that relative and missing parents are rejected without creating directories.
+    /// </summary>
     [TestMethod]
-    public void GetPathAndCreateNew_InvalidParent_ThrowWithoutCreatingDirectory()
+    public void GetPathAndCreateNewInvalidParentThrowWithoutCreatingDirectory()
     {
         string root = CreateTempRoot();
         string missing = Path.Join(root, "missing-parent");
@@ -53,8 +71,10 @@ public sealed class TrustedFileWritesTests
         {
             Assert.ThrowsExactly<ArgumentException>(
                 () => TrustedFileWrites.GetPath("relative", "settings"));
+
             Assert.ThrowsExactly<DirectoryNotFoundException>(
                 () => TrustedFileWrites.CreateNew(missing, "settings").Dispose());
+
             Assert.IsFalse(Directory.Exists(missing));
         }
         finally
@@ -63,8 +83,11 @@ public sealed class TrustedFileWritesTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that a device-like key maps to a safe leaf and cannot overwrite an existing file.
+    /// </summary>
     [TestMethod]
-    public void CreateNew_DeviceLikeKey_MapsSafeLeafAndRefusesOverwrite()
+    public void CreateNewDeviceLikeKeyMapsSafeLeafAndRefusesOverwrite()
     {
         string root = CreateTempRoot();
         try
@@ -81,6 +104,7 @@ public sealed class TrustedFileWritesTests
 
             Assert.ThrowsExactly<IOException>(
                 () => TrustedFileWrites.CreateNew(root, "con").Dispose());
+
             CollectionAssert.AreEqual(new byte[] { 42 }, File.ReadAllBytes(path));
         }
         finally
@@ -89,8 +113,11 @@ public sealed class TrustedFileWritesTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that disposing a readable and writable scratch file removes it.
+    /// </summary>
     [TestMethod]
-    public void CreateScratch_Dispose_RemovesFile()
+    public void CreateScratchDisposeRemovesFile()
     {
         string root = CreateTempRoot();
         try
@@ -115,8 +142,11 @@ public sealed class TrustedFileWritesTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that replacement publishes the last payload without leaving staging files.
+    /// </summary>
     [TestMethod]
-    public void PublishLastWriterWins_ExistingDestination_ReplacesWithoutStagingFiles()
+    public void PublishLastWriterWinsExistingDestinationReplacesWithoutStagingFiles()
     {
         string root = CreateTempRoot();
         try
@@ -134,8 +164,11 @@ public sealed class TrustedFileWritesTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that failed replacement preserves the destination and removes the staging file.
+    /// </summary>
     [TestMethod]
-    public void PublishLastWriterWins_ReplacementFailure_CleansStagingFileAndPreservesDestination()
+    public void PublishLastWriterWinsReplacementFailureCleansStagingFileAndPreservesDestination()
     {
         string root = CreateTempRoot();
         try
@@ -147,6 +180,7 @@ public sealed class TrustedFileWritesTests
 
             Exception exception = Assert.Throws<Exception>(() =>
                 TrustedFileWrites.PublishLastWriterWins(root, "settings", [1, 2, 3]));
+
             Assert.IsTrue(
                 exception is IOException or UnauthorizedAccessException,
                 $"Unexpected exception type: {exception.GetType().FullName}");

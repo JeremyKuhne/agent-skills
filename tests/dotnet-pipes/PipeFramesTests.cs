@@ -1,14 +1,25 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using System.Buffers.Binary;
 using DotNetPipes.Sample;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DotNetPipes.Tests;
 
+/// <summary>
+///  Verifies frame encoding, fragmented reads, payload bounds, and end-of-stream handling.
+/// </summary>
 [TestClass]
-public sealed class PipeFramesTests
+public sealed partial class PipeFramesTests
 {
+    /// <summary>
+    ///  Verifies that writing a payload emits its big-endian length followed by the payload.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task WriteAsync_Payload_WritesBigEndianLengthAndPayload()
+    public async Task WriteAsyncPayloadWritesBigEndianLengthAndPayload()
     {
         byte[] payload = [0x10, 0x20, 0x30];
         await using MemoryStream stream = new();
@@ -20,8 +31,12 @@ public sealed class PipeFramesTests
             stream.ToArray());
     }
 
+    /// <summary>
+    ///  Verifies that one-byte reads reconstruct a complete payload.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task ReadAsync_OneByteReads_ReturnsCompletePayload()
+    public async Task ReadAsyncOneByteReadsReturnsCompletePayload()
     {
         byte[] expected = [0x10, 0x20, 0x30, 0x40];
         await using FragmentingReadStream stream = new(CreateFrame(expected.Length, expected));
@@ -31,8 +46,12 @@ public sealed class PipeFramesTests
         CollectionAssert.AreEqual(expected, actual);
     }
 
+    /// <summary>
+    ///  Verifies that clean end-of-stream between frames returns no payload.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task ReadAsync_CleanEndOfStreamBetweenFrames_ReturnsNull()
+    public async Task ReadAsyncCleanEndOfStreamBetweenFramesReturnsNull()
     {
         await using MemoryStream stream = new();
 
@@ -41,8 +60,12 @@ public sealed class PipeFramesTests
         Assert.IsNull(payload);
     }
 
+    /// <summary>
+    ///  Verifies that a truncated frame header reports end-of-stream.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task ReadAsync_TruncatedHeader_ThrowsEndOfStreamException()
+    public async Task ReadAsyncTruncatedHeaderThrowsEndOfStreamException()
     {
         await using MemoryStream stream = new([0x00, 0x00]);
 
@@ -50,8 +73,12 @@ public sealed class PipeFramesTests
             () => PipeFrames.ReadAsync(stream, CancellationToken.None).AsTask());
     }
 
+    /// <summary>
+    ///  Verifies that a truncated payload reports end-of-stream.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task ReadAsync_TruncatedPayload_ThrowsEndOfStreamException()
+    public async Task ReadAsyncTruncatedPayloadThrowsEndOfStreamException()
     {
         await using MemoryStream stream = new(CreateFrame(4, [0x10, 0x20]));
 
@@ -59,10 +86,15 @@ public sealed class PipeFramesTests
             () => PipeFrames.ReadAsync(stream, CancellationToken.None).AsTask());
     }
 
+    /// <summary>
+    ///  Verifies that negative and oversized frame lengths are rejected.
+    /// </summary>
+    /// <param name="length">An invalid encoded payload length.</param>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [DataRow(-1)]
     [DataRow(PipeFrames.MaxPayloadLength + 1)]
-    public async Task ReadAsync_InvalidLength_ThrowsInvalidDataException(int length)
+    public async Task ReadAsyncInvalidLengthThrowsInvalidDataException(int length)
     {
         await using MemoryStream stream = new(CreateFrame(length, []));
 
@@ -70,8 +102,12 @@ public sealed class PipeFramesTests
             () => PipeFrames.ReadAsync(stream, CancellationToken.None).AsTask());
     }
 
+    /// <summary>
+    ///  Verifies that a payload exactly at the size limit is returned intact.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task ReadAsync_MaximumPayload_ReturnsCompletePayload()
+    public async Task ReadAsyncMaximumPayloadReturnsCompletePayload()
     {
         byte[] expected = new byte[PipeFrames.MaxPayloadLength];
         Random.Shared.NextBytes(expected);
@@ -82,8 +118,12 @@ public sealed class PipeFramesTests
         CollectionAssert.AreEqual(expected, actual);
     }
 
+    /// <summary>
+    ///  Verifies that writing an oversized payload is rejected.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task WriteAsync_OversizedPayload_ThrowsArgumentOutOfRangeException()
+    public async Task WriteAsyncOversizedPayloadThrowsArgumentOutOfRangeException()
     {
         byte[] payload = new byte[PipeFrames.MaxPayloadLength + 1];
         await using MemoryStream stream = new();
@@ -100,72 +140,4 @@ public sealed class PipeFramesTests
         return frame;
     }
 
-    private sealed class FragmentingReadStream : Stream
-    {
-        private readonly MemoryStream _inner;
-
-        public FragmentingReadStream(byte[] data)
-        {
-            _inner = new MemoryStream(data);
-        }
-
-        public override bool CanRead => true;
-
-        public override bool CanSeek => false;
-
-        public override bool CanWrite => false;
-
-        public override long Length => _inner.Length;
-
-        public override long Position
-        {
-            get => _inner.Position;
-            set => throw new NotSupportedException();
-        }
-
-        public override void Flush()
-        {
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            return _inner.Read(buffer, offset, Math.Min(count, 1));
-        }
-
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            return _inner.ReadAsync(buffer[..Math.Min(buffer.Length, 1)], cancellationToken);
-        }
-
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            throw new NotSupportedException();
-        }
-
-        public override void SetLength(long value)
-        {
-            throw new NotSupportedException();
-        }
-
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            throw new NotSupportedException();
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                _inner.Dispose();
-            }
-
-            base.Dispose(disposing);
-        }
-
-        public override async ValueTask DisposeAsync()
-        {
-            await _inner.DisposeAsync();
-            await base.DisposeAsync();
-        }
-    }
 }

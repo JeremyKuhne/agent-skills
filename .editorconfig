@@ -1,0 +1,17 @@
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+file_header_template = Copyright (c) 2025 Jeremy W Kuhne\nSPDX-License-Identifier: MIT\nSee LICENSE file in the project root for full license information
+
+dotnet_diagnostic.IDE0073.severity = warning
+
+dotnet_diagnostic.TOUKI0005.severity = warning
+dotnet_diagnostic.TOUKI0012.severity = warning
+dotnet_diagnostic.TOUKI0022.severity = warning
+dotnet_diagnostic.TOUKI0024.severity = warning
+dotnet_diagnostic.TOUKI0027.severity = warning
+dotnet_diagnostic.TOUKI0028.severity = warning
+dotnet_diagnostic.TOUKI0029.severity = warning
+dotnet_diagnostic.TOUKI0041.severity = warning

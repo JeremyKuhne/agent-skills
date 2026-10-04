@@ -1,7 +1,14 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace PowerShellToolchain.Tests;
 
+/// <summary>
+///  Tests managed file-creation host and coverage routing, coverage settings, and Cobertura reports.
+/// </summary>
 [TestClass]
 public sealed class ManagedFileCreationPolicyTests
 {
@@ -71,6 +78,11 @@ public sealed class ManagedFileCreationPolicyTests
         </coverage>
         """;
 
+    /// <summary>
+    ///  Provides invalid YAML, job, matrix, command, and coverage-routing fixtures for managed
+    ///  file-creation validation.
+    /// </summary>
+    /// <value>Rows containing a case name and mutated workflow YAML that must be rejected.</value>
     public static IEnumerable<object[]> RejectedWorkflows
     {
         get
@@ -80,93 +92,124 @@ public sealed class ManagedFileCreationPolicyTests
             yield return ["missing-job", workflow.Replace(
                 "dotnet-file-creation:",
                 "renamed-file-creation:")];
+
             yield return ["null-jobs", "on:\n  pull_request:\njobs: null\n"];
             yield return ["external-alias", workflow
                 .Replace("jobs:", "defaults: &matrixHost '${{ matrix.os }}'\njobs:")
                 .Replace("runs-on: '${{ matrix.os }}'", "runs-on: *matrixHost")];
+
             yield return ["wrong-matrix-host", workflow.Replace(
                 "runs-on: '${{ matrix.os }}'",
                 "runs-on: windows-latest")];
+
             yield return ["missing-os", workflow.Replace(
                 "os: ubuntu-24.04-arm",
                 "omitted: ubuntu-24.04-arm")];
+
             yield return ["missing-coverage", workflow.Replace(
                 "coverage: false",
                 "omitted: false")];
+
             yield return ["null-coverage", workflow.Replace(
                 "coverage: false",
                 "coverage: null")];
+
             yield return ["string-coverage", workflow.Replace(
                 "coverage: false",
                 "coverage: 'false'")];
+
             yield return ["numeric-coverage", workflow.Replace(
                 "coverage: false",
                 "coverage: 0")];
+
             yield return ["duplicate-coverage", workflow.Replace(
                 "coverage: false",
                 "coverage: false\n        coverage: true")];
+
             yield return ["duplicate-host", workflow.Replace(
                 "os: windows-latest",
                 "os: ubuntu-24.04-arm")];
+
             yield return ["missing-host-row", workflow.Replace(
                 "          - os: windows-latest\n            coverage: true\n",
                 string.Empty)];
+
             yield return ["extra-row", workflow.Replace(
                 "          - os: windows-latest\n            coverage: true",
                 "          - os: windows-latest\n            coverage: true\n          - os: macos-latest\n            coverage: false")];
+
             yield return ["extra-matrix-key", workflow.Replace(
                 "coverage: false",
                 "coverage: false\n        architecture: arm64")];
+
             yield return ["extra-matrix-axis", workflow.Replace(
                 "    include:",
                 "    architecture: [x64, arm64]\n    include:")];
+
             yield return ["both-conditions-false", workflow.Replace(
                 "if: matrix.coverage == true",
                 "if: matrix.coverage == false")];
+
             yield return ["both-conditions-true", workflow.Replace(
                 "if: matrix.coverage == false",
                 "if: matrix.coverage == true")];
+
             yield return ["missing-condition", workflow.Replace(
                 "        if: matrix.coverage == false\n",
                 string.Empty)];
+
             yield return ["swapped-conditions", workflow
                 .Replace("matrix.coverage == false", "matrix.__swap__ == false")
                 .Replace("matrix.coverage == true", "matrix.coverage == false")
                 .Replace("matrix.__swap__ == false", "matrix.coverage == true")];
+
             yield return ["missing-shell", workflow.Replace(
                 "        shell: pwsh\n        run: >-",
                 "        run: >-")];
+
             yield return ["wrong-shell", workflow.Replace(
                 "shell: pwsh",
                 "shell: bash")];
+
             yield return ["wrong-project", workflow.Replace(
                 "./tests/dotnet-file-creation/DotNetFileCreation.Tests.csproj",
                 "./tests/dotnet-pipes/DotNetPipes.Tests.csproj")];
+
             yield return ["debug-configuration", workflow.Replace(
                 "--configuration Release",
                 "--configuration Debug")];
+
             yield return ["pester-wrapper", ReplaceFirst(
                 workflow,
                 "dotnet test",
                 "Invoke-Pester ./tests/dotnet-file-creation")];
+
             yield return ["missing-coverage-settings", workflow.Replace(
                 "    --coverage-settings ./tests/dotnet-file-creation/coverage.config.xml `\n",
                 string.Empty)];
+
             yield return ["wrong-coverage-settings", workflow.Replace(
                 "./tests/dotnet-file-creation/coverage.config.xml",
                 "./tests/coverage.config.xml")];
+
             yield return ["wrong-output-format", workflow.Replace(
                 "--coverage-output-format cobertura",
                 "--coverage-output-format xml")];
+
             yield return ["additional-pester", workflow.Replace(
                 "          Write-Host 'Report inspection remains a hosted runtime check.'",
                 "          Invoke-Pester ./tests/dotnet-file-creation\n          Write-Host 'Report inspection remains a hosted runtime check.'")];
+
             yield return ["slash-qualified-pester", workflow.Replace(
                 "          Write-Host 'Report inspection remains a hosted runtime check.'",
                 "          ./Invoke-Pester -Path ./tests/dotnet-file-creation\n          Write-Host 'Report inspection remains a hosted runtime check.'")];
         }
     }
 
+    /// <summary>
+    ///  Provides empty or malformed Cobertura reports and reports with the wrong source or no hits.
+    /// </summary>
+    /// <value>Rows containing a case name and invalid managed file-creation coverage-report XML.</value>
     public static IEnumerable<object[]> RejectedCoverageReports
     {
         get
@@ -175,25 +218,35 @@ public sealed class ManagedFileCreationPolicyTests
             yield return ["wrong-source", CoverageReport.Replace(
                 "skills\\dotnet-file-creation\\assets\\TrustedFileWrites.cs",
                 "tests\\dotnet-file-creation\\TrustedFileWritesTests.cs")];
+
             yield return ["no-covered-lines", CoverageReport.Replace("hits=\"1\"", "hits=\"0\"")];
             yield return ["malformed", "<coverage>"];
         }
     }
 
+    /// <summary>
+    ///  Verifies that the Linux ARM64 plain-test lane and Windows coverage lane accept Release
+    ///  commands and coverage settings restricted to <c>TrustedFileWrites.cs</c>.
+    /// </summary>
     [TestMethod]
-    public void ValidateManagedFileCreationWorkflow_AcceptedPolicy_Passes()
+    public void ValidateManagedFileCreationWorkflowAcceptedPolicyPasses()
     {
         PowerShellToolchainPolicy.ValidateManagedFileCreationWorkflow(
             Workflow,
             CoverageSettings);
     }
 
+    /// <summary>
+    ///  Verifies that the changed fixture still accepts unrelated conditional preparation steps with
+    ///  <c>dotnet test</c> only in comments and output strings.
+    /// </summary>
     [TestMethod]
-    public void ValidateManagedFileCreationWorkflow_UnrelatedConditionalStep_Passes()
+    public void ValidateManagedFileCreationWorkflowUnrelatedConditionalStepPasses()
     {
         string workflow = Workflow.Replace(
             "      - name: Run tests",
             "      - name: Prepare Linux test environment\n        if: matrix.coverage == false\n        shell: pwsh\n        run: |\n          # dotnet test in a comment is not a command.\n          Write-Host 'dotnet test is handled elsewhere'\n      - name: Run tests".ReplaceLineEndings());
+
         Assert.AreNotEqual(Workflow, workflow);
 
         PowerShellToolchainPolicy.ValidateManagedFileCreationWorkflow(
@@ -201,9 +254,15 @@ public sealed class ManagedFileCreationPolicyTests
             CoverageSettings);
     }
 
+    /// <summary>
+    ///  Verifies that each invalid workflow fixture differs from the accepted fixture and is rejected
+    ///  with <see cref="ToolchainPolicyException"/>.
+    /// </summary>
+    /// <param name="name">The case name included in the mutation and rejection assertions.</param>
+    /// <param name="workflow">The invalid workflow YAML validated with the accepted coverage settings.</param>
     [TestMethod]
     [DynamicData(nameof(RejectedWorkflows))]
-    public void ValidateManagedFileCreationWorkflow_RejectedMutation_ThrowsPolicyException(
+    public void ValidateManagedFileCreationWorkflowRejectedMutationThrowsPolicyException(
         string name,
         string workflow)
     {
@@ -215,12 +274,17 @@ public sealed class ManagedFileCreationPolicyTests
             name);
     }
 
+    /// <summary>
+    ///  Verifies that replacing the production-source coverage include with a test-source include
+    ///  changes the settings and is rejected with <see cref="ToolchainPolicyException"/>.
+    /// </summary>
     [TestMethod]
-    public void ValidateManagedFileCreationWorkflow_WrongCoverageSource_ThrowsPolicyException()
+    public void ValidateManagedFileCreationWorkflowWrongCoverageSourceThrowsPolicyException()
     {
         string settings = CoverageSettings.Replace(
             "skills[\\\\/]dotnet-file-creation[\\\\/]assets[\\\\/]TrustedFileWrites\\.cs",
             "tests[\\\\/]dotnet-file-creation[\\\\/]TrustedFileWritesTests\\.cs");
+
         Assert.AreNotEqual(CoverageSettings, settings);
 
         Assert.ThrowsExactly<ToolchainPolicyException>(() =>
@@ -229,8 +293,12 @@ public sealed class ManagedFileCreationPolicyTests
                 settings));
     }
 
+    /// <summary>
+    ///  Verifies that an unclosed coverage-settings XML element is rejected with
+    ///  <see cref="ToolchainPolicyException"/>.
+    /// </summary>
     [TestMethod]
-    public void ValidateManagedFileCreationWorkflow_MalformedCoverageSettings_ThrowsPolicyException()
+    public void ValidateManagedFileCreationWorkflowMalformedCoverageSettingsThrowsPolicyException()
     {
         Assert.ThrowsExactly<ToolchainPolicyException>(() =>
             PowerShellToolchainPolicy.ValidateManagedFileCreationWorkflow(
@@ -238,15 +306,24 @@ public sealed class ManagedFileCreationPolicyTests
                 "<Configuration>"));
     }
 
+    /// <summary>
+    ///  Verifies that a Cobertura report naming <c>TrustedFileWrites.cs</c> with a covered line is accepted.
+    /// </summary>
     [TestMethod]
-    public void ValidateManagedFileCreationCoverageReport_AcceptedReport_Passes()
+    public void ValidateManagedFileCreationCoverageReportAcceptedReportPasses()
     {
         PowerShellToolchainPolicy.ValidateManagedFileCreationCoverageReport(CoverageReport);
     }
 
+    /// <summary>
+    ///  Verifies that each invalid Cobertura fixture differs from the accepted report and is rejected
+    ///  with <see cref="ToolchainPolicyException"/>.
+    /// </summary>
+    /// <param name="name">The case name included in the report-mutation and rejection assertions.</param>
+    /// <param name="report">The invalid managed file-creation Cobertura XML to validate.</param>
     [TestMethod]
     [DynamicData(nameof(RejectedCoverageReports))]
-    public void ValidateManagedFileCreationCoverageReport_RejectedReport_ThrowsPolicyException(
+    public void ValidateManagedFileCreationCoverageReportRejectedReportThrowsPolicyException(
         string name,
         string report)
     {

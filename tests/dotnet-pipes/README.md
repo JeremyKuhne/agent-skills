@@ -34,7 +34,7 @@ The suite verifies:
 - anonymous-pipe EOF for empty, ordinary, and exact-limit input, and rejection of
   input just over the capture limit.
 
-The [anonymous child](anonymous-child/Program.cs) is a test-only executable with
+The [anonymous child](anonymous-child/AnonymousPipeChild.cs) is a test-only executable with
 a 64 KiB capture limit, not a command in the published echo sample. The parent
 test bounds its lifetime and kills and reaps it on timeout or failure. This does
 not claim native cancellation support for anonymous pipes.
