@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "datasetRole", "labelAuthority", "scenarios", "packets", "pairs"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "$ref": "#/$defs/id" },
+    "datasetRole": { "const": "development" },
+    "labelAuthority": { "const": "assistant-proposed" },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "prompt", "contentEvaluation"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "prompt": { "type": "string", "minLength": 1 },
+          "contentEvaluation": { "type": "object" }
+        }
+      }
+    },
+    "packets": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "scenarioId", "targetId", "artifactText", "artifactRevision", "expectedLiteralStatus", "proposedLabels", "groundingProbes"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "scenarioId": { "$ref": "#/$defs/id" },
+          "targetId": { "$ref": "#/$defs/id" },
+          "artifactText": { "type": "string", "minLength": 1 },
+          "artifactRevision": { "$ref": "#/$defs/revision" },
+          "expectedLiteralStatus": { "enum": ["passed", "failed"] },
+          "proposedLabels": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["itemId", "state", "rationale", "factRefs", "evidence"],
+              "properties": {
+                "itemId": { "$ref": "#/$defs/id" },
+                "state": { "enum": ["passed", "failed", "pending"] },
+                "rationale": { "type": "string", "minLength": 1 },
+                "factRefs": { "$ref": "#/$defs/factRefs" },
+                "evidence": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "$ref": "#/$defs/evidence" }
+                }
+              }
+            }
+          },
+          "groundingProbes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "claimQuote", "factRefs", "proposedRelation"],
+              "properties": {
+                "id": { "$ref": "#/$defs/id" },
+                "claimQuote": { "type": "string", "minLength": 1 },
+                "factRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "$ref": "#/$defs/id" }
+                },
+                "proposedRelation": { "enum": ["entailed", "contradicted", "neutral"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "pairs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "basePacketId", "twinPacketId", "defectKind", "changedItemIds", "edit"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "basePacketId": { "$ref": "#/$defs/id" },
+          "twinPacketId": { "$ref": "#/$defs/id" },
+          "defectKind": { "$ref": "#/$defs/id" },
+          "changedItemIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/id" }
+          },
+          "edit": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "afterText"],
+            "properties": {
+              "kind": { "enum": ["replace", "append"] },
+              "beforeQuote": { "type": "string", "minLength": 1 },
+              "afterText": { "type": "string" }
+            },
+            "allOf": [
+              {
+                "if": { "properties": { "kind": { "const": "replace" } } },
+                "then": { "required": ["beforeQuote"] },
+                "else": {
+                  "not": { "required": ["beforeQuote"] },
+                  "properties": { "afterText": { "minLength": 1 } }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "revision": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+    "factRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "length", "line"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "length": { "type": "integer", "minimum": 1 },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": { "enum": ["whole-artifact", "quote"] },
+        "quote": { "type": "string", "minLength": 1 },
+        "span": { "$ref": "#/$defs/span" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "scope": { "const": "quote" } } },
+          "then": { "required": ["quote"] },
+          "else": { "not": { "required": ["quote"] } }
+        }
+      ]
+    }
+  }
+}

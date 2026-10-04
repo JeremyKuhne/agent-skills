@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "id": "writing-grounding-development-v1",
+  "datasetRole": "development",
+  "labelAuthority": "assistant-proposed",
+  "scenarios": [
+    {
+      "id": "pr-validation",
+      "prompt": "Draft a local PR description with Summary and Validation sections. Supplied facts:\n{{suppliedFacts}}\nReport validation that ran, retain the Linux gap and compatibility uncertainty, and do not claim to post anything.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "pr-description",
+        "artifactTargets": [{ "id": "body", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "change", "text": "The evaluator checks the outgoing body and preserves headings and list boundaries.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "windows-tests", "text": "Exactly 14 tests ran on Windows and all 14 passed.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "linux-gap", "text": "Linux validation has not run.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "compatibility", "text": "Compatibility impact is unknown.", "state": "unknown", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "draft-scope", "text": "Only a local draft is authorized; no posting has occurred.", "state": "verified", "kind": "permission", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "windows-result", "targetId": "body", "text": "14 tests passed on Windows.", "factRefs": ["windows-tests"], "verbatimTokens": ["14", "Windows"] },
+          { "id": "linux-status", "targetId": "body", "text": "Linux validation has not run.", "factRefs": ["linux-gap"], "verbatimTokens": ["Linux"] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "body-content", "targetId": "body", "kind": "nonempty" },
+          { "id": "summary", "targetId": "body", "kind": "heading", "text": "Summary", "level": 2 },
+          { "id": "validation", "targetId": "body", "kind": "heading", "text": "Validation", "level": 2 }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "validation-truth", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    },
+    {
+      "id": "pr-number",
+      "prompt": "Draft a local PR description with Summary and Validation sections. Supplied facts:\n{{suppliedFacts}}\nPreserve the parser example and exact test count, distinguish code-example numbers from validation results, and retain the Linux gap.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "pr-description",
+        "artifactTargets": [{ "id": "body", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "change", "text": "The parser keeps stdout and stderr separate.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "example", "text": "The documented code example is ParseOutput(17); its argument is not a validation result.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "windows-tests", "text": "Exactly 17 tests ran on Windows and all 17 passed.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "linux-gap", "text": "Linux validation has not run.", "state": "verified", "kind": "fact", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "windows-result", "targetId": "body", "text": "17 tests passed on Windows.", "factRefs": ["windows-tests"], "verbatimTokens": ["17", "Windows"] },
+          { "id": "example-preserved", "targetId": "body", "text": "The example uses ParseOutput.", "factRefs": ["example"], "verbatimTokens": ["ParseOutput"] },
+          { "id": "linux-status", "targetId": "body", "text": "Linux validation has not run.", "factRefs": ["linux-gap"], "verbatimTokens": ["Linux"] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "body-content", "targetId": "body", "kind": "nonempty" },
+          { "id": "summary", "targetId": "body", "kind": "heading", "text": "Summary", "level": 2 },
+          { "id": "validation", "targetId": "body", "kind": "heading", "text": "Validation", "level": 2 }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "validation-truth", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    },
+    {
+      "id": "pr-certainty",
+      "prompt": "Draft a local PR description with Summary and Validation sections. Supplied facts:\n{{suppliedFacts}}\nRetain the compatibility unknown and Linux gap; do not turn successful Windows validation into broader compatibility evidence.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "pr-description",
+        "artifactTargets": [{ "id": "body", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "change", "text": "The output manifest now pins declared files.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "compatibility", "text": "Compatibility impact is unknown.", "state": "unknown", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "windows-tests", "text": "Exactly 9 tests ran on Windows and all 9 passed.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "linux-gap", "text": "Linux validation has not run.", "state": "verified", "kind": "fact", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "windows-result", "targetId": "body", "text": "9 tests passed on Windows.", "factRefs": ["windows-tests"], "verbatimTokens": ["9", "Windows"] },
+          { "id": "linux-status", "targetId": "body", "text": "Linux validation has not run.", "factRefs": ["linux-gap"], "verbatimTokens": ["Linux"] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "body-content", "targetId": "body", "kind": "nonempty" },
+          { "id": "summary", "targetId": "body", "kind": "heading", "text": "Summary", "level": 2 },
+          { "id": "validation", "targetId": "body", "kind": "heading", "text": "Validation", "level": 2 }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "validation-truth", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    },
+    {
+      "id": "pr-gap",
+      "prompt": "Draft a local PR description with Summary and Validation sections. Supplied facts:\n{{suppliedFacts}}\nReport the Windows result and explicitly retain the unrun Linux validation gap. Configuring a Linux runner is not executing validation.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "pr-description",
+        "artifactTargets": [{ "id": "body", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "change", "text": "The adapter keeps stdout and stderr separate.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "linux-configured", "text": "Linux runner preparation is configured.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "windows-tests", "text": "Exactly 6 tests ran on Windows and all 6 passed.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "linux-gap", "text": "Linux validation has not run.", "state": "verified", "kind": "fact", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "windows-result", "targetId": "body", "text": "6 tests passed on Windows.", "factRefs": ["windows-tests"], "verbatimTokens": ["6", "Windows"] },
+          { "id": "linux-status", "targetId": "body", "text": "Linux validation has not run.", "factRefs": ["linux-gap"], "verbatimTokens": ["Linux"] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "body-content", "targetId": "body", "kind": "nonempty" },
+          { "id": "summary", "targetId": "body", "kind": "heading", "text": "Summary", "level": 2 },
+          { "id": "validation", "targetId": "body", "kind": "heading", "text": "Validation", "level": 2 }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "validation-truth", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    },
+    {
+      "id": "review-completion",
+      "prompt": "Draft one local review comment labeled Required. Supplied facts:\n{{suppliedFacts}}\nName the ordering precondition and observed consequence, request the smallest correction or a disconfirming test, and do not claim that this draft was posted.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "review-comment",
+        "artifactTargets": [{ "id": "comment", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "ordering", "text": "The request must be validated before starting I/O.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "consequence", "text": "Otherwise an invalid request can start outbound I/O before rejection.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "draft-scope", "text": "Only a local draft is authorized; no posting has occurred.", "state": "verified", "kind": "permission", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "ordering-precondition", "targetId": "comment", "text": "Validate before starting I/O.", "factRefs": ["ordering"], "verbatimTokens": ["I/O"] },
+          { "id": "request-consequence", "targetId": "comment", "text": "An invalid request can start I/O before rejection.", "factRefs": ["consequence"], "verbatimTokens": [] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "comment-content", "targetId": "comment", "kind": "nonempty" },
+          { "id": "required-force", "targetId": "comment", "kind": "starts-with", "text": "Required:" }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "review-mechanism", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    },
+    {
+      "id": "review-authority",
+      "prompt": "Draft one local review comment labeled Required. Supplied facts:\n{{suppliedFacts}}\nName the invariant and consequence, request the smallest ordering correction or a disconfirming test, and do not assign an owner.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "review-comment",
+        "artifactTargets": [{ "id": "comment", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "ordering", "text": "Release must run before Close.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "consequence", "text": "Close invalidates the handle.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "ownership", "text": "Ownership is unknown.", "state": "unknown", "kind": "ownership", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "ordering-precondition", "targetId": "comment", "text": "Release precedes Close.", "factRefs": ["ordering"], "verbatimTokens": ["Release", "Close"] },
+          { "id": "handle-consequence", "targetId": "comment", "text": "Close invalidates the handle.", "factRefs": ["consequence"], "verbatimTokens": [] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "comment-content", "targetId": "comment", "kind": "nonempty" },
+          { "id": "required-force", "targetId": "comment", "kind": "starts-with", "text": "Required:" }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "review-mechanism", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    },
+    {
+      "id": "review-force",
+      "prompt": "Draft one local review comment labeled Required. Supplied facts:\n{{suppliedFacts}}\nKeep the required force, name the precondition and consequence, and request the smallest correction or a disconfirming test.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "review-comment",
+        "artifactTargets": [{ "id": "comment", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "ordering", "text": "Operation A must complete before operation B.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "consequence", "text": "Otherwise the outbound request can begin after cancellation.", "state": "verified", "kind": "fact", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "ordering-precondition", "targetId": "comment", "text": "Operation A precedes operation B.", "factRefs": ["ordering"], "verbatimTokens": [] },
+          { "id": "request-consequence", "targetId": "comment", "text": "The request can begin after cancellation.", "factRefs": ["consequence"], "verbatimTokens": [] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "comment-content", "targetId": "comment", "kind": "nonempty" },
+          { "id": "required-force", "targetId": "comment", "kind": "starts-with", "text": "Required:" }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "review-mechanism", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    },
+    {
+      "id": "review-mechanism",
+      "prompt": "Draft one local review comment labeled Required. Supplied facts:\n{{suppliedFacts}}\nName the governing lookup precondition and concrete consequence, then request the smallest correction or a disconfirming test.",
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "review-comment",
+        "artifactTargets": [{ "id": "comment", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "precondition", "text": "CacheKey must include the format version before lookup.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "consequence", "text": "Otherwise an entry from the old format can be reused.", "state": "verified", "kind": "fact", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "lookup-precondition", "targetId": "comment", "text": "CacheKey includes the version before lookup.", "factRefs": ["precondition"], "verbatimTokens": ["CacheKey"] },
+          { "id": "format-consequence", "targetId": "comment", "text": "An old-format entry can be reused.", "factRefs": ["consequence"], "verbatimTokens": [] }
+        ],
+        "forbiddenClaims": [],
+        "literalChecks": [
+          { "id": "comment-content", "targetId": "comment", "kind": "nonempty" },
+          { "id": "required-force", "targetId": "comment", "kind": "starts-with", "text": "Required:" }
+        ],
+        "rubricRefs": [{ "path": "evals/rubrics/technical-writing.v2.json", "revision": "2FDA36058B8EAD908CE490350A2A4EEF1D0CA007C4E7D6C8B34BF4B103BA37C1", "itemIds": ["grounded-authority", "review-mechanism", "task-fidelity", "reader-cost"] }],
+        "ledger": { "mode": "off" }
+      }
+    }
+  ],
+  "packets": [
+    {
+      "id": "pr-validation-base", "scenarioId": "pr-validation", "targetId": "body",
+      "artifactText": "## Summary\n\nThe evaluator checks the outgoing body and preserves headings and list boundaries.\n\n## Validation\n\nWindows: 14 tests passed. Linux validation has not run. Compatibility impact remains unknown.\n",
+      "artifactRevision": "D3B49405B38D96B44B1E8C66945B1235A6E9747ACCD9E0DE60FC5100914B1305",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "Claims stay within supplied observations and compatibility uncertainty.", "factRefs": ["change", "windows-tests", "linux-gap", "compatibility"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "validation-truth", "state": "passed", "rationale": "Windows validation is reported separately from the Linux gap.", "factRefs": ["windows-tests", "linux-gap"], "evidence": [{ "scope": "quote", "quote": "Windows: 14 tests passed. Linux validation has not run." }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The requested sections, gaps, and uncertainty remain visible.", "factRefs": ["linux-gap", "compatibility", "draft-scope"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The body leads with the change and concise validation.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "linux-status", "claimQuote": "Linux validation has not run.", "factRefs": ["linux-gap"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "pr-validation-twin", "scenarioId": "pr-validation", "targetId": "body",
+      "artifactText": "## Summary\n\nThe evaluator checks the outgoing body and preserves headings and list boundaries.\n\n## Validation\n\nWindows: 14 tests passed. Linux validation passed. Compatibility impact remains unknown.\n",
+      "artifactRevision": "3AE48C9002F19D65BE9392D8AED6A33D9DC63D2A399DA7863753A0B14E66FFFB",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "failed", "rationale": "The Linux pass is invented despite an explicitly unrun validation.", "factRefs": ["linux-gap"], "evidence": [{ "scope": "quote", "quote": "Linux validation passed." }] },
+        { "itemId": "validation-truth", "state": "failed", "rationale": "The body promotes an unrun validation into a pass.", "factRefs": ["linux-gap"], "evidence": [{ "scope": "quote", "quote": "Linux validation passed." }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "The requested Linux gap is replaced by an invented success.", "factRefs": ["linux-gap"], "evidence": [{ "scope": "quote", "quote": "Linux validation passed." }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The same concise structure remains; style cannot offset the defect.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "linux-status", "claimQuote": "Linux validation passed.", "factRefs": ["linux-gap"], "proposedRelation": "contradicted" }]
+    },
+    {
+      "id": "pr-number-base", "scenarioId": "pr-number", "targetId": "body",
+      "artifactText": "## Summary\n\nThe parser keeps stdout and stderr separate. The documented example is `ParseOutput(17)`.\n\n## Validation\n\nWindows: 17 tests passed. Linux validation has not run.\n",
+      "artifactRevision": "E3F74C701AEAC928D431C63CFED5589B4BABA6ED90DFAE7216F822ABFC330D0D",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The code example and validation count retain their separate meanings.", "factRefs": ["change", "example", "windows-tests", "linux-gap"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "validation-truth", "state": "passed", "rationale": "The validation reports the supplied count and Linux gap.", "factRefs": ["windows-tests", "linux-gap"], "evidence": [{ "scope": "quote", "quote": "Windows: 17 tests passed. Linux validation has not run." }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The exact identifier, example, and test result are preserved.", "factRefs": ["example", "windows-tests"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The compact code quotation adds a requested fact rather than ceremony.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "windows-count", "claimQuote": "Windows: 17 tests passed.", "factRefs": ["windows-tests"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "pr-number-twin", "scenarioId": "pr-number", "targetId": "body",
+      "artifactText": "## Summary\n\nThe parser keeps stdout and stderr separate. The documented example is `ParseOutput(17)`.\n\n## Validation\n\nWindows: 18 tests passed. Linux validation has not run.\n",
+      "artifactRevision": "076AFAED8F1ADE18A549920ADDAF3150483C14C1682A162F4431C318EA218F95",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "failed", "rationale": "The test-count claim changes 17 into 18; the surviving 17 is only a code argument.", "factRefs": ["windows-tests", "example"], "evidence": [{ "scope": "quote", "quote": "Windows: 18 tests passed." }] },
+        { "itemId": "validation-truth", "state": "failed", "rationale": "The reported result contradicts the exact supplied test count.", "factRefs": ["windows-tests"], "evidence": [{ "scope": "quote", "quote": "Windows: 18 tests passed." }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "The requested exact validation count is changed.", "factRefs": ["windows-tests"], "evidence": [{ "scope": "quote", "quote": "Windows: 18 tests passed." }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The presentation is unchanged despite the material numerical defect.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "windows-count", "claimQuote": "Windows: 18 tests passed.", "factRefs": ["windows-tests"], "proposedRelation": "contradicted" }]
+    },
+    {
+      "id": "pr-certainty-base", "scenarioId": "pr-certainty", "targetId": "body",
+      "artifactText": "## Summary\n\nThe output manifest now pins declared files. Compatibility impact remains unknown.\n\n## Validation\n\nWindows: 9 tests passed. Linux validation has not run.\n",
+      "artifactRevision": "B88ADBBFA065DF240A984691ED1AF14EB519426F4ACED5C4F8527654B451E2E8",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "Compatibility is not asserted beyond the supplied unknown.", "factRefs": ["change", "compatibility", "windows-tests", "linux-gap"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "validation-truth", "state": "passed", "rationale": "The Windows result does not imply compatibility or Linux validation.", "factRefs": ["compatibility", "windows-tests", "linux-gap"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The prompt's uncertainty boundary is preserved.", "factRefs": ["compatibility"], "evidence": [{ "scope": "quote", "quote": "Compatibility impact remains unknown." }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The uncertainty is stated directly rather than buried in ceremony.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "compatibility-state", "claimQuote": "Compatibility impact remains unknown.", "factRefs": ["compatibility"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "pr-certainty-twin", "scenarioId": "pr-certainty", "targetId": "body",
+      "artifactText": "## Summary\n\nThe output manifest now pins declared files. The change is compatible with every supported environment.\n\n## Validation\n\nWindows: 9 tests passed. Linux validation has not run.\n",
+      "artifactRevision": "CDDC658D0BC2B64FD40EBE2AD67FA58816897D3F156FA276F0AD87D1E824EBAD",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "failed", "rationale": "Unknown compatibility is promoted into a universal compatibility claim.", "factRefs": ["compatibility"], "evidence": [{ "scope": "quote", "quote": "The change is compatible with every supported environment." }] },
+        { "itemId": "validation-truth", "state": "failed", "rationale": "The body invents compatibility beyond the supplied Windows result.", "factRefs": ["compatibility", "windows-tests"], "evidence": [{ "scope": "quote", "quote": "The change is compatible with every supported environment." }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "The required unknown is replaced by unsupported certainty.", "factRefs": ["compatibility"], "evidence": [{ "scope": "quote", "quote": "The change is compatible with every supported environment." }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The concise presentation remains advisory and cannot redeem the certainty upgrade.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "compatibility-state", "claimQuote": "The change is compatible with every supported environment.", "factRefs": ["compatibility"], "proposedRelation": "neutral" }]
+    },
+    {
+      "id": "pr-gap-base", "scenarioId": "pr-gap", "targetId": "body",
+      "artifactText": "## Summary\n\nThe adapter keeps stdout and stderr separate. Linux runner preparation is configured.\n\n## Validation\n\nWindows: 6 tests passed. Linux validation has not run.\n",
+      "artifactRevision": "5BBAE54A7AA96D1D7FD777FDFB58D033E52D28DEB2A85A061F2B342C4CBAACB0",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "Configured preparation and executed validation remain distinct.", "factRefs": ["change", "linux-configured", "windows-tests", "linux-gap"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "validation-truth", "state": "passed", "rationale": "The unrun Linux validation is explicit.", "factRefs": ["linux-gap"], "evidence": [{ "scope": "quote", "quote": "Linux validation has not run." }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The requested validation gap is visible, not substituted by preparation status.", "factRefs": ["linux-configured", "linux-gap"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The two statuses are separated by their actual roles.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "linux-status", "claimQuote": "Linux validation has not run.", "factRefs": ["linux-gap"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "pr-gap-twin", "scenarioId": "pr-gap", "targetId": "body",
+      "artifactText": "## Summary\n\nThe adapter keeps stdout and stderr separate. Linux runner preparation is configured.\n\n## Validation\n\nWindows: 6 tests passed.\n",
+      "artifactRevision": "B7AB81CCE2DE1C1087750402C75A6E810E246061263825A8542DBE533700D234",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The remaining factual claims are supplied; the defect is omission, not a false quotation.", "factRefs": ["change", "linux-configured", "windows-tests"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "validation-truth", "state": "failed", "rationale": "The required Linux validation gap is absent from the whole artifact.", "factRefs": ["linux-gap"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "Mentioning configured Linux preparation does not satisfy the requested unrun-validation disclosure.", "factRefs": ["linux-configured", "linux-gap"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The shorter artifact is still concise; concision is not omission correctness.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": []
+    },
+    {
+      "id": "review-completion-base", "scenarioId": "review-completion", "targetId": "comment",
+      "artifactText": "Required: Validate the request before starting I/O. Otherwise an invalid request can start outbound I/O before rejection. Move validation ahead of I/O or add a test that disproves this ordering requirement.\n",
+      "artifactRevision": "B30D636656A6329F08C50CE1575AD0D407C9740A62C21243B015F40967168BF3",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The comment uses the supplied ordering and consequence without claiming publication.", "factRefs": ["ordering", "consequence", "draft-scope"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "review-mechanism", "state": "passed", "rationale": "The validation-before-I/O precondition, consequence, and smallest correction are concrete.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The result remains a local Required draft with a correction or disconfirming test.", "factRefs": ["draft-scope"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The comment leads with required action and relevant mechanism.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "ordering-claim", "claimQuote": "Validate the request before starting I/O.", "factRefs": ["ordering"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "review-completion-twin", "scenarioId": "review-completion", "targetId": "comment",
+      "artifactText": "Required: Validate the request before starting I/O. Otherwise an invalid request can start outbound I/O before rejection. Move validation ahead of I/O or add a test that disproves this ordering requirement.\nThis comment has already been posted.\n",
+      "artifactRevision": "057D81D77DBF5FF87518EE1B0FCCDD91C1C271108F7D60A114A38B6ABEBACE77",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "failed", "rationale": "A publication is claimed despite the explicitly local, unposted draft.", "factRefs": ["draft-scope"], "evidence": [{ "scope": "quote", "quote": "This comment has already been posted." }] },
+        { "itemId": "review-mechanism", "state": "passed", "rationale": "The governing mechanism remains intact despite the added completion claim.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "quote", "quote": "Validate the request before starting I/O. Otherwise an invalid request can start outbound I/O before rejection." }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "The local-draft boundary is contradicted by an invented completed action.", "factRefs": ["draft-scope"], "evidence": [{ "scope": "quote", "quote": "This comment has already been posted." }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "There is no added generic ceremony or duplicated reasoning; the added action claim is evaluated by hard items.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "posting-claim", "claimQuote": "This comment has already been posted.", "factRefs": ["draft-scope"], "proposedRelation": "contradicted" }]
+    },
+    {
+      "id": "review-authority-base", "scenarioId": "review-authority", "targetId": "comment",
+      "artifactText": "Required: Release must run before Close because Close invalidates the handle. Move Release ahead of Close or add a test that disproves the required ordering.\n",
+      "artifactRevision": "51BD004747A19D4B133879E311B65297BF899B1A156C16B4D4276528A4D531F5",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The comment states the observed invariant without assigning ownership.", "factRefs": ["ordering", "consequence", "ownership"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "review-mechanism", "state": "passed", "rationale": "The invalidated-handle consequence explains the required order.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The requested force and correction are present; unknown ownership is not invented.", "factRefs": ["ownership"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The action and causal hinge are stated directly.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "ordering-claim", "claimQuote": "Release must run before Close", "factRefs": ["ordering"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "review-authority-twin", "scenarioId": "review-authority", "targetId": "comment",
+      "artifactText": "Required: Release must run before Close because Close invalidates the handle. Move Release ahead of Close or add a test that disproves the required ordering.\nThe author owns this fix.\n",
+      "artifactRevision": "14FA0D31253FE25FEB4D97DFDA8C8245FF5866E2DD8467B478A933CD8DE12720",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "failed", "rationale": "Unknown ownership is turned into an assignment to the author.", "factRefs": ["ownership"], "evidence": [{ "scope": "quote", "quote": "The author owns this fix." }] },
+        { "itemId": "review-mechanism", "state": "passed", "rationale": "The ordering mechanism remains unchanged.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "quote", "quote": "Release must run before Close because Close invalidates the handle." }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "The prompt's no-owner-assignment boundary is violated.", "factRefs": ["ownership"], "evidence": [{ "scope": "quote", "quote": "The author owns this fix." }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The additional short claim is not generic ceremony; its unsupported authority is a hard defect.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "ownership-claim", "claimQuote": "The author owns this fix.", "factRefs": ["ownership"], "proposedRelation": "neutral" }]
+    },
+    {
+      "id": "review-force-base", "scenarioId": "review-force", "targetId": "comment",
+      "artifactText": "Required: Operation A must complete before operation B; otherwise the outbound request can begin after cancellation. Correct the ordering or add a test that disproves the requirement.\n",
+      "artifactRevision": "A8F2517451C596188FC533E374E03975DB2CDD8BB60D529C9CDBD00D948A0742",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The factual ordering and consequence are supplied.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "review-mechanism", "state": "passed", "rationale": "The comment connects ordering to post-cancellation I/O and asks for correction or a test.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The explicitly requested Required force is preserved.", "factRefs": ["ordering"], "evidence": [{ "scope": "quote", "quote": "Required:" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The mechanism is compact and actionable.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "ordering-claim", "claimQuote": "Operation A must complete before operation B", "factRefs": ["ordering"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "review-force-twin", "scenarioId": "review-force", "targetId": "comment",
+      "artifactText": "Suggestion: Operation A must complete before operation B; otherwise the outbound request can begin after cancellation. Correct the ordering or add a test that disproves the requirement.\n",
+      "artifactRevision": "3AE52F05951456118AFB874E9BADE222913EFA8442E733C5663F19F709526777",
+      "expectedLiteralStatus": "failed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The supplied factual mechanism is unchanged.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "review-mechanism", "state": "passed", "rationale": "Precondition, consequence, and proposed correction remain present.", "factRefs": ["ordering", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "The prompt's Required disposition is downgraded to a Suggestion.", "factRefs": ["ordering"], "evidence": [{ "scope": "quote", "quote": "Suggestion:" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The wording change does not add ceremony or repetition.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "ordering-claim", "claimQuote": "Operation A must complete before operation B", "factRefs": ["ordering"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "review-mechanism-base", "scenarioId": "review-mechanism", "targetId": "comment",
+      "artifactText": "Required: CacheKey must include the format version before lookup; otherwise an entry from the old format can be reused. Include the version in CacheKey or add a test that disproves this consequence.\n",
+      "artifactRevision": "5A3727CAE644F4984C4CDEF855735CB7C5D92840C9A79E6BB7664A894C11A5A5",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The cache-version precondition and old-format reuse consequence are supplied.", "factRefs": ["precondition", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "review-mechanism", "state": "passed", "rationale": "The controlling lookup condition and concrete consequence explain the correction.", "factRefs": ["precondition", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "passed", "rationale": "The requested force, mechanism, and correction or test are all present.", "factRefs": ["precondition", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The concrete causal hinge replaces an abstract correctness label.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": [{ "id": "lookup-precondition", "claimQuote": "CacheKey must include the format version before lookup", "factRefs": ["precondition"], "proposedRelation": "entailed" }]
+    },
+    {
+      "id": "review-mechanism-twin", "scenarioId": "review-mechanism", "targetId": "comment",
+      "artifactText": "Required: Include the version in CacheKey or add a test that disproves this consequence.\n",
+      "artifactRevision": "F3EDB81248A11F9E85BF16CE10FC461F78AE87EBD05A91DE99292F752406A8A9",
+      "expectedLiteralStatus": "passed",
+      "proposedLabels": [
+        { "itemId": "grounded-authority", "state": "passed", "rationale": "The remaining correction is grounded; no invented factual assertion is added.", "factRefs": ["precondition"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "review-mechanism", "state": "failed", "rationale": "The governing lookup condition and old-format reuse consequence are omitted.", "factRefs": ["precondition", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "task-fidelity", "state": "failed", "rationale": "A correction alone does not satisfy the requested precondition and concrete consequence.", "factRefs": ["precondition", "consequence"], "evidence": [{ "scope": "whole-artifact" }] },
+        { "itemId": "reader-cost", "state": "passed", "rationale": "The shortened comment has no generic ceremony; missing mechanism remains a hard defect.", "factRefs": [], "evidence": [{ "scope": "whole-artifact" }] }
+      ],
+      "groundingProbes": []
+    }
+  ],
+  "pairs": [
+    {
+      "id": "pr-validation", "basePacketId": "pr-validation-base", "twinPacketId": "pr-validation-twin", "defectKind": "invented-validation",
+      "changedItemIds": ["grounded-authority", "validation-truth", "task-fidelity"],
+      "edit": { "kind": "replace", "beforeQuote": "Linux validation has not run.", "afterText": "Linux validation passed." }
+    },
+    {
+      "id": "pr-number", "basePacketId": "pr-number-base", "twinPacketId": "pr-number-twin", "defectKind": "changed-number",
+      "changedItemIds": ["grounded-authority", "validation-truth", "task-fidelity"],
+      "edit": { "kind": "replace", "beforeQuote": "Windows: 17 tests passed.", "afterText": "Windows: 18 tests passed." }
+    },
+    {
+      "id": "pr-certainty", "basePacketId": "pr-certainty-base", "twinPacketId": "pr-certainty-twin", "defectKind": "certainty-upgrade",
+      "changedItemIds": ["grounded-authority", "validation-truth", "task-fidelity"],
+      "edit": { "kind": "replace", "beforeQuote": "Compatibility impact remains unknown.", "afterText": "The change is compatible with every supported environment." }
+    },
+    {
+      "id": "pr-gap", "basePacketId": "pr-gap-base", "twinPacketId": "pr-gap-twin", "defectKind": "omitted-validation-gap",
+      "changedItemIds": ["validation-truth", "task-fidelity"],
+      "edit": { "kind": "replace", "beforeQuote": " Linux validation has not run.", "afterText": "" }
+    },
+    {
+      "id": "review-completion", "basePacketId": "review-completion-base", "twinPacketId": "review-completion-twin", "defectKind": "invented-completion",
+      "changedItemIds": ["grounded-authority", "task-fidelity"],
+      "edit": { "kind": "append", "afterText": "This comment has already been posted.\n" }
+    },
+    {
+      "id": "review-authority", "basePacketId": "review-authority-base", "twinPacketId": "review-authority-twin", "defectKind": "invented-authority",
+      "changedItemIds": ["grounded-authority", "task-fidelity"],
+      "edit": { "kind": "append", "afterText": "The author owns this fix.\n" }
+    },
+    {
+      "id": "review-force", "basePacketId": "review-force-base", "twinPacketId": "review-force-twin", "defectKind": "wrong-force",
+      "changedItemIds": ["task-fidelity"],
+      "edit": { "kind": "replace", "beforeQuote": "Required:", "afterText": "Suggestion:" }
+    },
+    {
+      "id": "review-mechanism", "basePacketId": "review-mechanism-base", "twinPacketId": "review-mechanism-twin", "defectKind": "omitted-mechanism",
+      "changedItemIds": ["review-mechanism", "task-fidelity"],
+      "edit": { "kind": "replace", "beforeQuote": "CacheKey must include the format version before lookup; otherwise an entry from the old format can be reused. ", "afterText": "" }
+    }
+  ]
+}

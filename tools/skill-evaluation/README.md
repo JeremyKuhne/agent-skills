@@ -102,6 +102,12 @@ dotnet $cli lint-artifact --repo-root . --scenario .\evals\scenarios\technical-w
   Non-fake sources require a valid executable hash and the JSON Boolean
   `CopilotExecutableEvidenceVerified: true`. Missing, false, or mistyped
   verification is an infrastructure failure.
+- `validate-review-packets` validates development controls, pinned rubric
+  closure, exact evidence, declared literal results, and paired single edits.
+  Exit 0 means preparation is valid, not that proposed labels are human truth.
+- `export-review-packets` writes a separate JSON and Markdown review packet
+  with rendered inputs, applicable criteria, proposals, and UTF-16 source spans.
+  The source bank remains unchanged; an existing nonempty output is rejected.
 
 The PowerShell semantic entry point preserves CLI exits 0 through 3 for valid summaries.
 Setup and process failures, missing or malformed summaries, and unexpected
@@ -109,6 +115,56 @@ child exits write a diagnostic to stderr and exit 3 without success output.
 
 `ground` and generative judging are not implemented or silently simulated.
 They require the separately gated classifier/calibration work.
+
+## Development review packets
+
+The [packet bank](../../evals/fixtures/output-quality/review-packets.v1.json)
+contains eight distinct base scenarios, four per pilot family, and eight
+single-defect twins. Its [schema](../../evals/schemas/review-packets.v1.json)
+permits only development data with assistant-proposed labels. Human review and
+calibration remain pending; the public bank is not a sealed acceptance set.
+Nested profiles are validated from their original JSON, not reconstructed
+typed values. Missing required fields, invalid enum casing, and forbidden
+null properties are rejected rather than silently becoming verified facts
+or valid defaults.
+
+The new [rubric revision](../../evals/rubrics/technical-writing.v2.json) adds
+source-backed task fidelity. Existing capture scenarios still pin revision 1:
+no current pilot profile, historical criterion, or regex was rewritten.
+These eight development inputs are outside the scheduled scenario inventory.
+
+Controls cover invented validation and completion, changed test counts,
+certainty upgrades, omitted validation gaps, invented ownership, wrong force,
+and omitted mechanism. Seven defective twins still pass their literal checks.
+The changed-count control retains the original number inside a quoted code
+example; token presence alone cannot establish the reported result.
+
+```pwsh
+dotnet $cli validate-review-packets --repo-root . --packets .\evals\fixtures\output-quality\review-packets.v1.json
+$review = Join-Path ([IO.Path]::GetTempPath()) "skill-quality-review-$([guid]::NewGuid().ToString('N'))"
+dotnet $cli export-review-packets --repo-root . --packets .\evals\fixtures\output-quality\review-packets.v1.json --output-directory $review
+```
+
+The initial review is the plan's bounded 16-artifact, 30-60 minute session.
+Record actual minutes, corrections, source-backed reasons, and unresolved
+labels separately. A successful export records no human review and cannot
+promote a proposed pass to useful success.
+
+Exact unique quotations resolve to UTF-16 offsets and one-based lines;
+optional supplied spans must match. Omission evidence identifies the whole
+artifact instead of inventing a quote. Twins share unchanged inputs, belong to
+one base-case cluster, and reproduce exactly one declared edit. Their declared
+hard-item flips must match, with unrelated verdicts unchanged.
+
+Fourteen explicit claim/fact probes are proposed for a later approved CPU spike.
+They are not an exhaustive prose-grounding pass. Three-way proposals distinguish
+entailment, contradiction, and neutrality; support-only scores cannot be
+converted into contradiction verdicts.
+
+The export intentionally exposes proposed labels for human review. Do not feed
+it to a blinded judge or count it as reviewed held-out calibration. Source,
+profile, rubric, runtime, and engine-binary revisions bind the preparation
+receipt. It performs no classifier or judge inference.
 
 ## Immutable artifacts and revisions
 
