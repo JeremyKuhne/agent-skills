@@ -188,4 +188,42 @@ public sealed class ArtifactTests
         Assert.ThrowsExactly<EvaluationContractException>(() =>
             OwnedPaths.Resolve(workspace.Workspace, "body draft.md"));
     }
+
+    /// <summary>
+    ///  Verifies an ordinary root beneath a symbolic-link ancestor cannot resolve outside its owner.
+    /// </summary>
+    [TestMethod]
+    public void ResolveRejectsSymlinkedRootAncestors()
+    {
+        using TestWorkspace workspace = new();
+        string owner = Path.Join(workspace.Root, "owner");
+        string outside = Path.Join(workspace.Root, "outside");
+        Directory.CreateDirectory(owner);
+        Directory.CreateDirectory(Path.Join(outside, "subdir"));
+        File.WriteAllText(Path.Join(outside, "subdir", "payload.md"), Body);
+        string link = Path.Join(owner, "linked");
+        Exception? symlinkError = null;
+        try
+        {
+            Directory.CreateSymbolicLink(link, outside);
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+        {
+            symlinkError = error;
+        }
+
+        if (symlinkError is not null)
+        {
+            Assert.Inconclusive($"This host cannot create the symlink ancestor control: {symlinkError.Message}");
+            return;
+        }
+
+        string root = Path.Join(link, "subdir");
+        Assert.IsFalse((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0);
+        Assert.IsTrue(File.Exists(Path.Join(root, "payload.md")));
+        EvaluationContractException rejected = Assert.ThrowsExactly<EvaluationContractException>(() =>
+            OwnedPaths.Resolve(root, "payload.md"));
+
+        Assert.Contains("Links and reparse points", rejected.Message);
+    }
 }

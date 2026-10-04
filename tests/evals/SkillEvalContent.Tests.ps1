@@ -21,6 +21,17 @@ BeforeAll {
         )
     }
 
+    function Invoke-SemanticEntryPoint([string[]] $arguments, [string] $errorPath) {
+        $output = & $script:PwshPath -NoProfile -File (Join-Path $script:RepoRoot 'evals\Invoke-SkillEvalSemantic.ps1') `
+            @arguments 2> $errorPath
+        $exitCode = $LASTEXITCODE
+        return [pscustomobject]@{
+            ExitCode = $exitCode
+            StandardOutput = ($output -join "`n")
+            StandardError = [IO.File]::ReadAllText($errorPath)
+        }
+    }
+
     function New-FileScenario([string] $root) {
         $scenarioDirectory = Join-Path $root 'scenarios'
         New-Item -ItemType Directory -Path $scenarioDirectory, (Join-Path $root 'fixtures') | Out-Null
@@ -41,6 +52,21 @@ BeforeAll {
 }
 
 Describe 'Skill content evaluator process boundary' {
+    It 'selects one native dotnet executable when discovery returns multiple paths' {
+        $dotnetPath = [string]@(Get-Command dotnet -CommandType Application -All -ErrorAction Stop)[0].Source
+        $candidates = @(
+            [pscustomobject]@{ Source = $dotnetPath }
+            [pscustomobject]@{ Source = (Join-Path $TestDrive 'must-not-be-launched-dotnet') }
+        )
+        Mock Get-Command -ModuleName SkillEvalContent -ParameterFilter { $Name -eq 'dotnet' } `
+            -MockWith ({ $candidates }.GetNewClosure())
+        $receipt = Invoke-SkillEvalContentCli -Arguments @('arguments', 'selected-first') `
+            -CliPath $script:ProcessFixturePath
+        $receipt.ExitCode | Should -Be 0
+        (ConvertFrom-Json -InputObject $receipt.StandardOutput -NoEnumerate) |
+            Should -Be @('selected-first')
+    }
+
     It 'rejects a preparation that omits a declared profile before scheduling any attempt' {
         Mock Invoke-SkillEvalContentCli -ModuleName SkillEval -MockWith {
             [pscustomobject]@{ ExitCode = 0; StandardOutput = '[]'; StandardError = '' }
@@ -100,6 +126,59 @@ Describe 'Skill content evaluator process boundary' {
         $record = $receipt.StandardOutput | ConvertFrom-Json
         $record.literalStatus | Should -BeExactly 'passed'
         $record.usefulOutcome | Should -BeExactly 'pending'
+    }
+}
+
+Describe 'Semantic entry point exit contract' {
+    It 'reports infrastructure exit 3 with stderr and no success output: <Failure>' -ForEach @(
+        @{ Failure = 'missing source summary'; Mode = 'source'; ExpectedError = 'summary\.json' }
+        @{ Failure = 'missing evaluator'; Mode = 'missing-cli'; ExpectedError = 'Content evaluator is not built' }
+        @{ Failure = 'missing repository'; Mode = 'missing-repo'; ExpectedError = 'missing-repo' }
+        @{ Failure = 'empty successful stdout'; Mode = 'empty-summary'; ExpectedError = 'Content evaluation failed' }
+        @{ Failure = 'malformed stdout'; Mode = 'malformed-summary'; ExpectedError = 'summary' }
+        @{ Failure = 'null stdout'; Mode = 'null-summary'; ExpectedError = 'summary' }
+        @{ Failure = 'missing summary fields'; Mode = 'missing-fields'; ExpectedError = 'summary' }
+        @{ Failure = 'unexpected child exit'; Mode = '7'; ExpectedError = 'exit 7' }
+    ) {
+        $arguments = @(
+            '-RepoRoot', $script:RepoRoot,
+            '-InputDirectory', (Join-Path $TestDrive 'missing-source'),
+            '-OutputDirectory', (Join-Path $TestDrive 'must-not-be-created'),
+            '-ReportOnly'
+        )
+        if ($Mode -eq 'missing-cli') {
+            $arguments += @('-ContentCliPath', (Join-Path $TestDrive 'missing.dll'))
+        }
+        elseif ($Mode -eq 'missing-repo') {
+            $arguments[1] = Join-Path $TestDrive 'missing-repo'
+        }
+        elseif ($Mode -ne 'source') {
+            $arguments += @('-ContentCliPath', $script:ProcessFixturePath, '-ScenarioPath', "$Mode.json")
+        }
+        $receipt = Invoke-SemanticEntryPoint -arguments $arguments `
+            -errorPath (Join-Path $TestDrive 'wrapper-stderr.txt')
+        $receipt.ExitCode | Should -Be 3 -Because $receipt.StandardError
+        $receipt.StandardOutput | Should -BeNullOrEmpty
+        $receipt.StandardError | Should -Match $ExpectedError
+        Test-Path -LiteralPath (Join-Path $TestDrive 'must-not-be-created') | Should -BeFalse
+    }
+
+    It 'preserves classified child exit <ExitCode> with a valid summary' -ForEach @(
+        @{ ExitCode = 0 }
+        @{ ExitCode = 1 }
+        @{ ExitCode = 2 }
+        @{ ExitCode = 3 }
+    ) {
+        $receipt = Invoke-SemanticEntryPoint -arguments @(
+            '-RepoRoot', $script:RepoRoot,
+            '-InputDirectory', (Join-Path $TestDrive 'controlled-source'),
+            '-OutputDirectory', (Join-Path $TestDrive 'controlled-output'),
+            '-ContentCliPath', $script:ProcessFixturePath,
+            '-ScenarioPath', "$ExitCode.json"
+        ) -errorPath (Join-Path $TestDrive 'wrapper-stderr.txt')
+        $receipt.ExitCode | Should -Be $ExitCode -Because $receipt.StandardError
+        $receipt.StandardOutput | Should -Match 'Runs: 1; useful passes: 0; pending: 1'
+        $receipt.StandardError | Should -BeNullOrEmpty
     }
 }
 
@@ -323,5 +402,29 @@ Describe 'Skill content immutable capture and replay' {
         )
         $receipt.ExitCode | Should -Be 3
         $receipt.StandardError | Should -Match 'Links and reparse points'
+    }
+
+    It 'rejects an ordinary Windows artifact root beneath a junction ancestor' -Skip:(-not $IsWindows) {
+        $root = Join-Path $TestDrive 'ancestor-junction-root'
+        $outside = Join-Path $TestDrive 'ancestor-junction-outside'
+        $subdir = Join-Path $outside 'subdir'
+        New-Item -ItemType Directory -Path $root, $subdir | Out-Null
+        Set-Content -LiteralPath (Join-Path $subdir 'body with spaces.md') -Value 'Outside.'
+        New-Item -ItemType Junction -Path (Join-Path $root 'linked') -Target $outside | Out-Null
+        $workspace = Join-Path $root 'linked\subdir'
+        ([IO.File]::GetAttributes($workspace) -band [IO.FileAttributes]::ReparsePoint) | Should -Be 0
+        $receipt = Invoke-SkillEvalContentCli -Arguments @(
+            'capture',
+            '--repo-root', $script:RepoRoot,
+            '--scenario', (New-FileScenario -root (Join-Path $TestDrive 'ancestor-junction-evals')),
+            '--scenario-id', 'technical-writing-artifact-pull-request',
+            '--workspace', $workspace,
+            '--run-directory', $root,
+            '--run-number', '1',
+            '--scenario-revision', ('A' * 64)
+        )
+        $receipt.ExitCode | Should -Be 3
+        $receipt.StandardError | Should -Match 'Links and reparse points'
+        Test-Path -LiteralPath (Join-Path $root 'artifacts.json') | Should -BeFalse
     }
 }

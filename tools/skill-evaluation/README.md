@@ -36,6 +36,8 @@ dotnet test --project .\tests\skill-evaluation\SkillEvaluation.Tests.csproj --co
 Managed tests own profiles, schemas, Markdown, snapshots, and quality states.
 Pester owns the PowerShell/native-process boundary: exact arguments, separate
 streams, nonzero exits, timeout cleanup, capture integration, and replay.
+The adapter selects one native `dotnet` application in discovery order, including
+hosts where several PATH entries resolve the same command.
 CI exercises those lanes on Windows and Linux ARM64. A skipped platform control
 does not prove that behavior; Windows junction and Unix symlink controls remain
 separate.
@@ -97,6 +99,13 @@ dotnet $cli lint-artifact --repo-root . --scenario .\evals\scenarios\technical-w
 - `rescore` is the
   [semantic entry point's](../../evals/Invoke-SkillEvalSemantic.ps1) adapter.
   It verifies a single-suite source summary and writes a separate derived tree.
+  Non-fake sources require a valid executable hash and the JSON Boolean
+  `CopilotExecutableEvidenceVerified: true`. Missing, false, or mistyped
+  verification is an infrastructure failure.
+
+The PowerShell semantic entry point preserves CLI exits 0 through 3 for valid summaries.
+Setup and process failures, missing or malformed summaries, and unexpected
+child exits write a diagnostic to stderr and exit 3 without success output.
 
 `ground` and generative judging are not implemented or silently simulated.
 They require the separately gated classifier/calibration work.
@@ -107,6 +116,7 @@ The existing `ModelOutputRevision` algorithm is unchanged. File artifacts have
 their own capture-time manifest revision and byte hashes. File snapshots are
 UTF-8, optionally with a BOM; unsupported encodings fail explicitly. Paths
 must remain within the owned workspace and cannot traverse links/reparse points.
+The owned root, its ancestors, and each relative-path segment are checked.
 These checks are scoped artifact handling, not a hostile-script sandbox.
 
 The terminal `assistant.message` is the final assistant event, even if it is

@@ -14,12 +14,23 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'SkillEvalContent.psm1') -Force
-$RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
-foreach ($name in @('ScenarioPath', 'InputDirectory', 'OutputDirectory')) {
-    $value = Get-Variable -Name $name -ValueOnly
-    if (-not [System.IO.Path]::IsPathRooted($value)) {
-        Set-Variable -Name $name -Value (Join-Path $RepoRoot $value)
+try {
+    $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+    foreach ($name in @('ScenarioPath', 'InputDirectory', 'OutputDirectory')) {
+        $value = Get-Variable -Name $name -ValueOnly
+        if (-not [System.IO.Path]::IsPathRooted($value)) {
+            Set-Variable -Name $name -Value (Join-Path $RepoRoot $value)
+        }
     }
+}
+catch [System.Management.Automation.ItemNotFoundException],
+      [System.Management.Automation.DriveNotFoundException],
+      [System.Management.Automation.ProviderNotFoundException],
+      [System.UnauthorizedAccessException],
+      [System.ArgumentException],
+      [System.NotSupportedException] {
+    [Console]::Error.WriteLine("Content evaluation setup failed: $($_.Exception.Message)")
+    exit 3
 }
 $arguments = @(
     'rescore',
@@ -30,14 +41,39 @@ $arguments = @(
     '--report-only', $ReportOnly.IsPresent.ToString().ToLowerInvariant()
 )
 if ($ScenarioId) { $arguments += @('--scenario-ids', ($ScenarioId -join ',')) }
-$receipt = Invoke-SkillEvalContentCli -Arguments $arguments -CliPath $ContentCliPath
-if ([string]::IsNullOrWhiteSpace($receipt.StandardOutput)) {
-    throw "Content evaluation failed (exit $($receipt.ExitCode)): $($receipt.StandardError)"
+try {
+    $receipt = Invoke-SkillEvalContentCli -Arguments $arguments -CliPath $ContentCliPath
 }
-$summary = ConvertFrom-Json -InputObject $receipt.StandardOutput -ErrorAction Stop
+catch [System.Management.Automation.RuntimeException],
+      [System.ComponentModel.Win32Exception],
+      [System.IO.IOException],
+      [System.UnauthorizedAccessException],
+      [System.ArgumentException],
+      [System.InvalidOperationException] {
+    [Console]::Error.WriteLine("Content evaluation process failed: $($_.Exception.Message)")
+    exit 3
+}
 if ($receipt.ExitCode -notin @(0, 1, 2, 3)) {
-    throw "Unexpected content evaluator exit $($receipt.ExitCode): $($receipt.StandardError)"
+    [Console]::Error.WriteLine("Unexpected content evaluator exit $($receipt.ExitCode): $($receipt.StandardError)")
+    exit 3
+}
+if ([string]::IsNullOrWhiteSpace($receipt.StandardOutput)) {
+    [Console]::Error.WriteLine("Content evaluation failed (exit $($receipt.ExitCode)): $($receipt.StandardError)")
+    exit 3
+}
+try {
+    $summary = ConvertFrom-Json -InputObject $receipt.StandardOutput -NoEnumerate -ErrorAction Stop
+    if ($summary -isnot [pscustomobject]) {
+        [Console]::Error.WriteLine('Content evaluator summary must be a JSON object.')
+        exit 3
+    }
+    $description = "Runs: $($summary.runCount); useful passes: $($summary.usefulPassedCount); pending: $($summary.pendingCount); quality failures: $($summary.usefulFailedCount); safety failures: $($summary.safetyFailureCount); infrastructure failures: $($summary.infrastructureFailureCount)."
+}
+catch [System.ArgumentException],
+      [System.Management.Automation.PropertyNotFoundException] {
+    [Console]::Error.WriteLine("Invalid content evaluator summary: $($_.Exception.Message)")
+    exit 3
 }
 Write-Host "Content reports: $OutputDirectory"
-Write-Host "Runs: $($summary.runCount); useful passes: $($summary.usefulPassedCount); pending: $($summary.pendingCount); quality failures: $($summary.usefulFailedCount); safety failures: $($summary.safetyFailureCount); infrastructure failures: $($summary.infrastructureFailureCount)."
+Write-Host $description
 exit $receipt.ExitCode

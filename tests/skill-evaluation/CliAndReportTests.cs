@@ -228,6 +228,63 @@ public sealed class CliAndReportTests
     }
 
     /// <summary>
+    ///  Verifies real-client replay requires an explicitly verified executable even with a valid hash.
+    /// </summary>
+    /// <param name="verificationJson">The verification value as JSON, or null to omit the property.</param>
+    /// <param name="accepted">Whether the verification value establishes executable provenance.</param>
+    [TestMethod]
+    [DataRow(null, false)]
+    [DataRow("null", false)]
+    [DataRow("false", false)]
+    [DataRow("\"true\"", false)]
+    [DataRow("1", false)]
+    [DataRow("\"\"", false)]
+    [DataRow("[]", false)]
+    [DataRow("{}", false)]
+    [DataRow("true", true)]
+    public void RescoreRequiresVerifiedRealClientEvidence(string? verificationJson, bool accepted)
+    {
+        using TestWorkspace workspace = new();
+        ValidatedScenario scenario = workspace.Scenario();
+        workspace.WriteOutput("## Summary\n\nPreserve the body.\n\n## Validation\n\nWindows: 14 tests passed.\n");
+        CaptureReceipt receipt = ArtifactStore.Capture(
+            scenario, workspace.Workspace, workspace.RunDirectory, 1, TestWorkspace.ScenarioRevision);
+
+        workspace.WriteSummary(receipt);
+        string path = Path.Join(workspace.Root, "source", "summary.json");
+        JsonNode? sourceNode = JsonNode.Parse(File.ReadAllText(path));
+        Assert.IsNotNull(sourceNode);
+        JsonObject source = sourceNode.AsObject();
+        source["CopilotVersion"] = "GitHub Copilot CLI 1.0.83.";
+        source["CopilotExecutableSha256"] = TestWorkspace.ScenarioRevision;
+        if (verificationJson is not null)
+        {
+            source["CopilotExecutableEvidenceVerified"] = JsonNode.Parse(verificationJson);
+        }
+
+        File.WriteAllText(path, source.ToJsonString());
+        string destination = Path.Join(workspace.Root, "derived");
+        if (accepted)
+        {
+            SemanticSummary summary = DerivedReports.Rescore(
+                workspace.Root, workspace.ScenarioPath, Path.Join(workspace.Root, "source"), destination, []);
+
+            Assert.AreEqual(0, summary.InfrastructureFailureCount);
+            Assert.AreEqual(0, summary.UsefulPassedCount);
+            Assert.AreEqual(QualityState.Pending, summary.Runs[0].Content?.UsefulOutcome);
+        }
+        else
+        {
+            EvaluationContractException error = Assert.ThrowsExactly<EvaluationContractException>(() =>
+                DerivedReports.Rescore(
+                    workspace.Root, workspace.ScenarioPath, Path.Join(workspace.Root, "source"), destination, []));
+
+            Assert.Contains("Source client executable evidence is unverified.", error.Message);
+            Assert.IsFalse(Directory.Exists(destination));
+        }
+    }
+
+    /// <summary>
     ///  Verifies derived output cannot overwrite, nest within, or contain the source directory.
     /// </summary>
     /// <param name="relative">The workspace-relative destination that must be rejected.</param>

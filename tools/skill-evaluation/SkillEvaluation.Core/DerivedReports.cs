@@ -42,8 +42,8 @@ public static class DerivedReports
             ArtifactStore.RequireRevision(
                 ProfileValidator.RequiredString(source, "CopilotExecutableSha256"));
 
-            if (source.TryGetProperty("CopilotExecutableEvidenceVerified", out JsonElement verified)
-                && verified.ValueKind != JsonValueKind.True)
+            if (!source.TryGetProperty("CopilotExecutableEvidenceVerified", out JsonElement verified)
+                || verified.ValueKind != JsonValueKind.True)
             {
                 throw new EvaluationContractException("Source client executable evidence is unverified.");
             }

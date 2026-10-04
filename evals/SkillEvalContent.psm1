@@ -29,7 +29,7 @@ function Invoke-SkillEvalContentCli {
         Get-SkillEvalContentCliPath
     }
     else { Get-SkillEvalContentCliPath -CliPath $CliPath }
-    $dotnetPath = (Get-Command dotnet -CommandType Application -ErrorAction Stop).Source
+    $dotnetPath = [string]@(Get-Command dotnet -CommandType Application -All -ErrorAction Stop)[0].Source
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $dotnetPath
     $startInfo.UseShellExecute = $false

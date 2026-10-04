@@ -33,7 +33,7 @@ public static class OwnedPaths
         }
 
         string current = Path.GetFullPath(root);
-        RejectLink(current);
+        RejectLinkedAncestors(current);
         foreach (string segment in segments)
         {
             current = Path.Join(current, segment);
@@ -80,14 +80,23 @@ public static class OwnedPaths
             throw new EvaluationContractException("Derived output must not equal, contain, or be inside the source directory.");
         }
 
-        for (DirectoryInfo? directory = new(destination); directory is not null; directory = directory.Parent)
-        {
-            RejectLink(directory.FullName);
-        }
+        RejectLinkedAncestors(destination);
 
         if (Directory.Exists(destination) && Directory.EnumerateFileSystemEntries(destination).Any())
         {
             throw new EvaluationContractException("Derived output directory must be empty.");
+        }
+    }
+
+    /// <summary>
+    ///  Rejects links in a directory path and every ancestor that contributes to its physical location.
+    /// </summary>
+    /// <param name="path">The directory path whose ancestor chain must be ordinary directories.</param>
+    private static void RejectLinkedAncestors(string path)
+    {
+        for (DirectoryInfo? directory = new(path); directory is not null; directory = directory.Parent)
+        {
+            RejectLink(directory.FullName);
         }
     }
 }
