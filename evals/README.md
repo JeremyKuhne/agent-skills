@@ -469,7 +469,10 @@ count visible.
 report, not that the run passed. Missing or malformed reports leave aggregate
 test counts `null`; valid counts remain available on the individual shards.
 Process failures, timeouts, or unusable reports return failure with diagnostic
-log paths. A usable `Passed` report requires a completed worker, exit code zero,
+log paths. For each failed shard, the runner also prints the last 120 log lines
+so CI output includes discovery and setup exceptions without access to the
+runner's temporary directory. Successful shard logs remain file-only.
+A usable `Passed` report requires a completed worker, exit code zero,
 at least one test, and no failed/not-run/inconclusive work. A usable `Failed`
 report requires a completed worker, an actual nonzero exit, and failure evidence.
 Every other worker/report combination leaves aggregate counts unknown. Existing
