@@ -37,7 +37,7 @@ public static class Program
             if (args.Length == 0)
             {
                 throw new EvaluationContractException(
-                    "Specify prepare, validate-profile, capture, lint-artifact, check-ledger, or rescore.");
+                    "Specify prepare, validate-profile, capture, lint-artifact, check-ledger, rescore, validate-review-packets, or export-review-packets.");
             }
 
             Dictionary<string, string> options = ParseOptions(args[1..]);
@@ -161,6 +161,17 @@ public static class Program
 
                         exitCode = state == QualityState.Failed ? 1 : 0;
                     }
+
+                    break;
+                case "validate-review-packets":
+                case "export-review-packets":
+                    string packetRoot = Required("repo-root");
+                    string packetPath = Required("packets");
+                    string packetOutput = args[0] == "export-review-packets" ? Required("output-directory") : "";
+                    CompleteOptions();
+                    result = args[0] == "export-review-packets"
+                        ? ReviewPacketReports.Export(packetRoot, packetPath, packetOutput)
+                        : ReviewPackets.Load(packetRoot, packetPath).Summary;
 
                     break;
                 case "rescore":

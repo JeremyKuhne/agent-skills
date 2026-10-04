@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "technical-writing-v2",
+  "items": [
+    {
+      "id": "grounded-authority",
+      "passCondition": "Every material factual, ownership, commitment, permission, and completion claim is supported by the supplied evidence without increasing certainty.",
+      "failCondition": "The artifact invents a material claim or turns an inference, hypothesis, or unknown into verified fact.",
+      "hardGate": true,
+      "artifactKinds": ["pr-description", "review-comment"],
+      "sources": [
+        {
+          "path": "skills/technical-writing/SKILL.md",
+          "revision": "3BF89098D82AF182C43376F2B6A2984D58761A47FF1E7A95469D54B43F2A8C6D",
+          "quote": "Preserve meaningful uncertainty."
+        }
+      ]
+    },
+    {
+      "id": "validation-truth",
+      "passCondition": "The PR description distinguishes validation that ran from validation gaps and does not infer compatibility, issue resolution, or comprehensive testing.",
+      "failCondition": "The PR description invents a validation result, hides a required gap, or asserts completion or compatibility without evidence.",
+      "hardGate": true,
+      "artifactKinds": ["pr-description"],
+      "sources": [
+        {
+          "path": "skills/technical-writing/artifact-patterns.md",
+          "revision": "F35BFBE2FAA778213B42272319F8956419E8981904D8006F0D3C086C162D123A",
+          "quote": "report validation that\nactually ran and known gaps"
+        }
+      ]
+    },
+    {
+      "id": "review-mechanism",
+      "passCondition": "The comment names the controlling precondition, the concrete observed consequence, and the smallest required correction or a test that can change the disposition.",
+      "failCondition": "The comment replaces the mechanism with an abstract label, omits the governing precondition or consequence, or invents the author's intent.",
+      "hardGate": true,
+      "artifactKinds": ["review-comment"],
+      "sources": [
+        {
+          "path": "skills/technical-writing/artifact-patterns.md",
+          "revision": "F35BFBE2FAA778213B42272319F8956419E8981904D8006F0D3C086C162D123A",
+          "quote": "Name the concrete consequence,"
+        }
+      ]
+    },
+    {
+      "id": "task-fidelity",
+      "passCondition": "The artifact satisfies the applicable prompt's explicit content, force, and action boundaries without treating an example as a universal requirement.",
+      "failCondition": "The artifact omits required task content, changes explicitly requested force, or claims an action outside the supplied authority.",
+      "hardGate": true,
+      "artifactKinds": ["pr-description", "review-comment"],
+      "sources": [
+        {
+          "path": "skills/technical-writing/SKILL.md",
+          "revision": "3BF89098D82AF182C43376F2B6A2984D58761A47FF1E7A95469D54B43F2A8C6D",
+          "quote": "Grounding, authority, and task fidelity are\nhard gates."
+        }
+      ]
+    },
+    {
+      "id": "reader-cost",
+      "passCondition": "The artifact leads with useful payload and avoids unnecessary ceremony or repeated reasoning.",
+      "failCondition": "The artifact adds generic ceremony or repeated material that does not help the reader decide or act.",
+      "hardGate": false,
+      "artifactKinds": ["pr-description", "review-comment"],
+      "sources": [
+        {
+          "path": "skills/technical-writing/SKILL.md",
+          "revision": "3BF89098D82AF182C43376F2B6A2984D58761A47FF1E7A95469D54B43F2A8C6D",
+          "quote": "Remove reader cost."
+        }
+      ]
+    }
+  ]
+}

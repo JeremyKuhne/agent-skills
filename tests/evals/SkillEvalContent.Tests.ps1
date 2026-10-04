@@ -127,6 +127,37 @@ Describe 'Skill content evaluator process boundary' {
         $record.literalStatus | Should -BeExactly 'passed'
         $record.usefulOutcome | Should -BeExactly 'pending'
     }
+
+    It 'exports proposed review packets through the real CLI without promoting their labels' {
+        $bank = Join-Path $script:RepoRoot 'evals\fixtures\output-quality\review-packets.v1.json'
+        $before = (Get-FileHash -LiteralPath $bank -Algorithm SHA256).Hash
+        $destination = Join-Path $TestDrive 'proposed review packets'
+        $arguments = @(
+            'export-review-packets',
+            '--repo-root', $script:RepoRoot,
+            '--packets', $bank,
+            '--output-directory', $destination
+        )
+        $receipt = Invoke-SkillEvalContentCli -Arguments $arguments
+        $receipt.ExitCode | Should -Be 0 -Because $receipt.StandardError
+        $receipt.StandardError | Should -BeNullOrEmpty
+        $summary = $receipt.StandardOutput | ConvertFrom-Json
+        $summary.packetCount | Should -Be 16
+        $summary.clusterCount | Should -Be 8
+        $summary.humanReviewedCount | Should -Be 0
+        $summary.humanReviewStatus | Should -BeExactly 'pending'
+        $summary.calibrationStatus | Should -BeExactly 'pending'
+        $review = Get-Content -LiteralPath (Join-Path $destination 'review.json') -Raw | ConvertFrom-Json -Depth 100
+        $review.labelAuthority | Should -BeExactly 'assistant-proposed'
+        $review.packets.Count | Should -Be 16
+        (Get-Content -LiteralPath (Join-Path $destination 'review.md') -Raw) |
+            Should -Match 'not independent human ground truth'
+        (Get-FileHash -LiteralPath $bank -Algorithm SHA256).Hash | Should -BeExactly $before
+        $repeated = Invoke-SkillEvalContentCli -Arguments $arguments
+        $repeated.ExitCode | Should -Be 3
+        $repeated.StandardOutput | Should -BeNullOrEmpty
+        $repeated.StandardError | Should -Match 'Derived output directory must be empty'
+    }
 }
 
 Describe 'Semantic entry point exit contract' {
