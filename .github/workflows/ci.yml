@@ -157,6 +157,41 @@ jobs:
           --configuration Release
           --no-restore
 
+  skill-content-evaluation:
+    name: Deterministic skill content (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore content evaluator dependencies
+        shell: pwsh
+        run: dotnet restore ./tests/skill-evaluation/SkillEvaluation.Tests.csproj
+
+      - name: Run managed content contracts
+        shell: pwsh
+        run: >-
+          dotnet test
+          --project ./tests/skill-evaluation/SkillEvaluation.Tests.csproj
+          --configuration Release
+          --no-restore
+
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Run content adapter process contracts
+        shell: pwsh
+        run: ./tests/Invoke-PesterShards.ps1 -Path ./tests/evals/SkillEvalContent.Tests.ps1
+
   dotnet-file-creation:
     name: .NET file creation (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -260,6 +295,14 @@ jobs:
         id: dotnet
         with:
           dotnet-version: 10.0.x
+
+      - name: Build deterministic content evaluator prerequisites
+        shell: pwsh
+        run: |
+          dotnet restore ./tests/skill-evaluation/SkillEvaluation.Tests.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Content evaluator restore failed.' }
+          dotnet build ./tests/skill-evaluation/SkillEvaluation.Tests.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Content evaluator build failed.' }
 
       - name: Install Pester
         shell: pwsh

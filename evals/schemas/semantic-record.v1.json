@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evidenceMode", "scenarioId", "runNumber", "profileRevision", "sourceProfileRevision", "inputRevision", "semanticRevision", "modelOutputRevision", "artifactManifestRevision", "literalStatus", "semanticStatus", "usefulOutcome", "checks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "evidenceMode": { "const": "semantic" },
+    "scenarioId": { "type": "string", "minLength": 1 },
+    "runNumber": { "type": "integer", "minimum": 1 },
+    "profileRevision": { "$ref": "#/$defs/revision" },
+    "sourceProfileRevision": { "$ref": "#/$defs/revision" },
+    "inputRevision": { "$ref": "#/$defs/revision" },
+    "semanticRevision": { "$ref": "#/$defs/revision" },
+    "modelOutputRevision": { "$ref": "#/$defs/revision" },
+    "artifactManifestRevision": { "$ref": "#/$defs/revision" },
+    "literalStatus": { "$ref": "#/$defs/state" },
+    "semanticStatus": { "$ref": "#/$defs/state" },
+    "usefulOutcome": { "$ref": "#/$defs/state" },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "targetId", "dimension", "state", "hardGate", "detail", "span", "factRefs"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "targetId": { "type": "string", "minLength": 1 },
+          "dimension": { "enum": ["literal", "ledger", "required-claim", "forbidden-claim", "rubric"] },
+          "state": { "$ref": "#/$defs/state" },
+          "hardGate": { "type": "boolean" },
+          "detail": { "type": "string", "minLength": 1 },
+          "span": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["start", "length", "line"],
+                "properties": {
+                  "start": { "type": "integer", "minimum": 0 },
+                  "length": { "type": "integer", "minimum": 0 },
+                  "line": { "type": "integer", "minimum": 1 }
+                }
+              }
+            ]
+          },
+          "factRefs": { "type": ["array", "null"], "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "revision": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+    "state": { "enum": ["passed", "failed", "pending", "inconclusive", "not-applicable"] }
+  }
+}

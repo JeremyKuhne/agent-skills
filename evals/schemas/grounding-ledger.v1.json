@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "entries"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["factId", "state", "kind"],
+        "properties": {
+          "factId": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["verified", "inference", "hypothesis", "unknown"] },
+          "kind": { "enum": ["fact", "ownership", "commitment", "permission"] }
+        }
+      }
+    }
+  }
+}

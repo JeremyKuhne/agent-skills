@@ -41,7 +41,7 @@ public sealed partial class RepositoryPolicyTests
     }
 
     /// <summary>
-    ///  Verifies that exactly 16 Pester test files are discovered beneath the repository test directory
+    ///  Verifies that exactly 17 Pester test files are discovered beneath the repository test directory
     ///  and that each file's requirements match the checked-in manifest.
     /// </summary>
     [TestMethod]
@@ -53,7 +53,7 @@ public sealed partial class RepositoryPolicyTests
             "*.Tests.ps1",
             SearchOption.AllDirectories);
 
-        Assert.HasCount(16, testFiles);
+        Assert.HasCount(17, testFiles);
         foreach (string testFile in testFiles)
         {
             PowerShellToolchainPolicy.ValidateTestRequirements(

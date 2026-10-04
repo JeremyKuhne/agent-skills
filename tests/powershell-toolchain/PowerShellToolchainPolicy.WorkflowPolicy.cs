@@ -41,7 +41,7 @@ internal static partial class PowerShellToolchainPolicy
     }
 
     /// <summary>
-    ///  Validates the owned Pester jobs and rejects additional static Pester invocations.
+    ///  Validates the owned Pester jobs and content host matrix, and rejects additional static Pester invocations.
     /// </summary>
     /// <param name="workflows">Active workflow paths mapped to their YAML source.</param>
     /// <param name="manifest">The accepted Pester execution lock for bootstrap commands.</param>
@@ -69,6 +69,16 @@ internal static partial class PowerShellToolchainPolicy
         ValidateMode(
             continuous,
             continuousCommands,
+            "skill-content-evaluation",
+            "${{ matrix.os }}",
+            condition: null,
+            ["./tests/evals/SkillEvalContent.Tests.ps1"],
+            manifest);
+
+        ValidateContentHostMatrix(continuous);
+        ValidateMode(
+            continuous,
+            continuousCommands,
             "scaffold-windows",
             "windows-latest",
             WindowsCondition,
@@ -91,10 +101,10 @@ internal static partial class PowerShellToolchainPolicy
             .. fullCommands.Where(command => command.Kind == CommandKind.Runner)
         ];
 
-        if (expectedRunners.Length != 3)
+        if (expectedRunners.Length != 4)
         {
             throw new ToolchainPolicyException(
-                "Active workflows must contain exactly the three accepted static runner invocations.");
+                "Active workflows must contain exactly the four accepted static runner invocations.");
         }
 
         if (continuousCommands.Concat(fullCommands).Any(command =>
@@ -116,6 +126,31 @@ internal static partial class PowerShellToolchainPolicy
                 throw new ToolchainPolicyException(
                     $"{path} contains an unexpected static Pester invocation.");
             }
+        }
+    }
+
+    private static void ValidateContentHostMatrix(ParsedWorkflow workflow)
+    {
+        YamlMappingNode jobs = RequireMapping(
+            RequireNode(workflow.Root, "jobs", workflow.Path), $"{workflow.Path}.jobs");
+
+        string path = $"{workflow.Path}.jobs.skill-content-evaluation";
+        YamlMappingNode job = RequireMapping(
+            RequireNode(jobs, "skill-content-evaluation", path), path);
+
+        YamlMappingNode strategy = RequireMapping(RequireNode(job, "strategy", path), $"{path}.strategy");
+        YamlMappingNode matrix = RequireMapping(
+            RequireNode(strategy, "matrix", path), $"{path}.strategy.matrix");
+
+        YamlSequenceNode hosts = RequireSequence(
+            RequireNode(matrix, "os", path), $"{path}.strategy.matrix.os");
+
+        string?[] values = hosts.Children.OfType<YamlScalarNode>().Select(value => value.Value).ToArray();
+        if (matrix.Children.Count != 1
+            || values.Length != hosts.Children.Count
+            || !values.SequenceEqual(["ubuntu-24.04-arm", "windows-latest"], StringComparer.Ordinal))
+        {
+            throw new ToolchainPolicyException($"{path} must use exactly the accepted Linux ARM64 and Windows matrix.");
         }
     }
 
@@ -236,7 +271,7 @@ internal static partial class PowerShellToolchainPolicy
                 throw new ToolchainPolicyException($"{path} must define on and jobs mappings.");
             }
 
-            return new ParsedWorkflow(path, workflow);
+            return new ParsedWorkflow(path, workflow, root);
         }
         catch (ToolchainPolicyException)
         {
@@ -252,7 +287,7 @@ internal static partial class PowerShellToolchainPolicy
     {
         YamlMappingNode jobs = RequireMapping(RequireNode(root, "jobs", path), $"{path}.jobs");
         string[] ownedJobIds = string.Equals(path, CiPath, StringComparison.Ordinal)
-            ? ["scaffold-linux", "scaffold-windows"]
+            ? ["scaffold-linux", "scaffold-windows", "skill-content-evaluation"]
             : string.Equals(path, FullCiPath, StringComparison.Ordinal)
                 ? ["scaffold-windows"]
                 : [];
@@ -286,7 +321,8 @@ internal static partial class PowerShellToolchainPolicy
             ?
             [
                 RequireNode(jobs, "scaffold-linux", $"{path}.jobs"),
-                RequireNode(jobs, "scaffold-windows", $"{path}.jobs")
+                RequireNode(jobs, "scaffold-windows", $"{path}.jobs"),
+                RequireNode(jobs, "skill-content-evaluation", $"{path}.jobs")
             ]
             :
             [
