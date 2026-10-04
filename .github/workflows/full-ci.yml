@@ -73,6 +73,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Build deterministic content evaluator prerequisites
+        shell: pwsh
+        run: |
+          dotnet restore ./tests/skill-evaluation/SkillEvaluation.Tests.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Content evaluator restore failed.' }
+          dotnet build ./tests/skill-evaluation/SkillEvaluation.Tests.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Content evaluator build failed.' }
+
       - name: Install Pester
         shell: pwsh
         run: Install-Module Pester -RequiredVersion 6.2.0 -Force -Scope CurrentUser -SkipPublisherCheck

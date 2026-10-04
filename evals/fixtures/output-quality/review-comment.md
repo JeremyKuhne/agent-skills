@@ -1,0 +1,1 @@
+**Required:** Complete operation A before operation B. The outbound request can otherwise start after cancellation has already been observed. Enforce that ordering or add a test that disproves the requirement.

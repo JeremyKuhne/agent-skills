@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using System.Diagnostics;
 using System.IO.Pipes;
 using DotNetPipes.TestSupport;
@@ -5,11 +9,17 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DotNetPipes.Tests;
 
+/// <summary>
+///  Verifies anonymous-pipe direction, bounded capture, and end-of-stream behavior.
+/// </summary>
 [TestClass]
 public sealed class AnonymousPipeTests
 {
+    /// <summary>
+    ///  Verifies that an outgoing anonymous-pipe server exposes only write access.
+    /// </summary>
     [TestMethod]
-    public void Constructor_OutDirection_ExposesWriteOnlyServer()
+    public void ConstructorOutDirectionExposesWriteOnlyServer()
     {
         using AnonymousPipeServerStream server = new(PipeDirection.Out, HandleInheritability.None);
 
@@ -17,16 +27,22 @@ public sealed class AnonymousPipeTests
         Assert.IsFalse(server.CanRead);
     }
 
+    /// <summary>
+    ///  Verifies that closing the local client handle and server lets the child observe end-of-stream.
+    /// </summary>
+    /// <param name="payloadLength">The number of bytes sent to the child.</param>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
     [DataRow(0)]
     [DataRow(4)]
     [DataRow(AnonymousPipeChild.MaxCaptureLength)]
-    public async Task DisposeLocalCopyAndServer_Close_AllowsClientToObserveEndOfStream(int payloadLength)
+    public async Task DisposeLocalCopyAndServerCloseAllowsClientToObserveEndOfStream(int payloadLength)
     {
         await using AnonymousPipeServerStream server = new(
             PipeDirection.Out,
             HandleInheritability.Inheritable);
+
         using CancellationTokenSource testDeadline = new(TimeSpan.FromSeconds(8));
         using Process child = StartAnonymousChild(server.GetClientHandleAsString());
 
@@ -57,9 +73,13 @@ public sealed class AnonymousPipeTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that the child rejects input exceeding its capture limit.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task AnonymousChild_OversizedInput_IsRejected()
+    public async Task AnonymousChildOversizedInputIsRejected()
     {
         await using AnonymousPipeServerStream server = new(PipeDirection.Out, HandleInheritability.Inheritable);
         using CancellationTokenSource testDeadline = new(TimeSpan.FromSeconds(8));
@@ -105,6 +125,7 @@ public sealed class AnonymousPipeTests
             RedirectStandardError = true,
             UseShellExecute = false
         };
+
         startInfo.ArgumentList.Add(typeof(AnonymousPipeChild).Assembly.Location);
         startInfo.ArgumentList.Add(clientHandle);
 

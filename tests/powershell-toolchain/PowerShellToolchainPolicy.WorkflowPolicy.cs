@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using System.Management.Automation.Language;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
@@ -12,6 +16,16 @@ internal static partial class PowerShellToolchainPolicy
     private const string FullCiPath = ".github/workflows/full-ci.yml";
     private const string RunnerCommand = "./tests/Invoke-PesterShards.ps1";
     private const string WindowsCondition = "steps.windows-filesystem.outputs.affected == 'true'";
+
+    /// <summary>
+    ///  Validates the active CI and full-CI Pester jobs, hosts, bootstrap commands, and runner invocations.
+    /// </summary>
+    /// <param name="continuousIntegration">The active CI workflow's YAML source.</param>
+    /// <param name="fullContinuousIntegration">The full-CI workflow's YAML source.</param>
+    /// <param name="manifest">The accepted Pester execution lock for bootstrap commands.</param>
+    /// <exception cref="ToolchainPolicyException">
+    ///  Either workflow violates the active Pester execution policy.
+    /// </exception>
     public static void ValidateActivePesterWorkflows(
         string continuousIntegration,
         string fullContinuousIntegration,
@@ -26,6 +40,14 @@ internal static partial class PowerShellToolchainPolicy
             manifest);
     }
 
+    /// <summary>
+    ///  Validates the owned Pester jobs and content host matrix, and rejects additional static Pester invocations.
+    /// </summary>
+    /// <param name="workflows">Active workflow paths mapped to their YAML source.</param>
+    /// <param name="manifest">The accepted Pester execution lock for bootstrap commands.</param>
+    /// <exception cref="ToolchainPolicyException">
+    ///  The workflow set violates the active Pester execution policy.
+    /// </exception>
     public static void ValidateActivePesterWorkflows(
         IReadOnlyDictionary<string, string> workflows,
         ToolchainManifest manifest)
@@ -43,6 +65,17 @@ internal static partial class PowerShellToolchainPolicy
             condition: null,
             ["./tests"],
             manifest);
+
+        ValidateMode(
+            continuous,
+            continuousCommands,
+            "skill-content-evaluation",
+            "${{ matrix.os }}",
+            condition: null,
+            ["./tests/evals/SkillEvalContent.Tests.ps1"],
+            manifest);
+
+        ValidateContentHostMatrix(continuous);
         ValidateMode(
             continuous,
             continuousCommands,
@@ -51,6 +84,7 @@ internal static partial class PowerShellToolchainPolicy
             WindowsCondition,
             ["tests/windows-acls", "tests/dotnet-file-creation"],
             manifest);
+
         RequireFullTriggers(full);
         ValidateMode(
             full,
@@ -66,31 +100,57 @@ internal static partial class PowerShellToolchainPolicy
             .. continuousCommands.Where(command => command.Kind == CommandKind.Runner),
             .. fullCommands.Where(command => command.Kind == CommandKind.Runner)
         ];
-        if (expectedRunners.Length != 3)
+
+        if (expectedRunners.Length != 4)
         {
             throw new ToolchainPolicyException(
-                "Active workflows must contain exactly the three accepted static runner invocations.");
+                "Active workflows must contain exactly the four accepted static runner invocations.");
         }
 
         if (continuousCommands.Concat(fullCommands).Any(command =>
-                command.Kind == CommandKind.DirectPester))
+            command.Kind == CommandKind.DirectPester))
         {
             throw new ToolchainPolicyException(
                 "Active workflows must invoke Pester only through the canonical runner.");
         }
 
         foreach ((string path, string yaml) in workflows.Where(entry =>
-                     !string.Equals(entry.Key, CiPath, StringComparison.Ordinal) &&
-                     !string.Equals(entry.Key, FullCiPath, StringComparison.Ordinal) &&
-                     ContainsPesterRunCandidate(entry.Value)))
+            !string.Equals(entry.Key, CiPath, StringComparison.Ordinal)
+                && !string.Equals(entry.Key, FullCiPath, StringComparison.Ordinal)
+                && ContainsPesterRunCandidate(entry.Value)))
         {
             ParsedWorkflow additional = ParseWorkflow(path, yaml);
             if (FindCommands(additional).Any(command =>
-                    command.Kind is CommandKind.Runner or CommandKind.DirectPester))
+                command.Kind is CommandKind.Runner or CommandKind.DirectPester))
             {
                 throw new ToolchainPolicyException(
                     $"{path} contains an unexpected static Pester invocation.");
             }
+        }
+    }
+
+    private static void ValidateContentHostMatrix(ParsedWorkflow workflow)
+    {
+        YamlMappingNode jobs = RequireMapping(
+            RequireNode(workflow.Root, "jobs", workflow.Path), $"{workflow.Path}.jobs");
+
+        string path = $"{workflow.Path}.jobs.skill-content-evaluation";
+        YamlMappingNode job = RequireMapping(
+            RequireNode(jobs, "skill-content-evaluation", path), path);
+
+        YamlMappingNode strategy = RequireMapping(RequireNode(job, "strategy", path), $"{path}.strategy");
+        YamlMappingNode matrix = RequireMapping(
+            RequireNode(strategy, "matrix", path), $"{path}.strategy.matrix");
+
+        YamlSequenceNode hosts = RequireSequence(
+            RequireNode(matrix, "os", path), $"{path}.strategy.matrix.os");
+
+        string?[] values = hosts.Children.OfType<YamlScalarNode>().Select(value => value.Value).ToArray();
+        if (matrix.Children.Count != 1
+            || values.Length != hosts.Children.Count
+            || !values.SequenceEqual(["ubuntu-24.04-arm", "windows-latest"], StringComparer.Ordinal))
+        {
+            throw new ToolchainPolicyException($"{path} must use exactly the accepted Linux ARM64 and Windows matrix.");
         }
     }
 
@@ -103,10 +163,10 @@ internal static partial class PowerShellToolchainPolicy
         string[] expectedPaths,
         ToolchainManifest manifest)
     {
-        if (!workflow.Value.Jobs.TryGetValue(jobId, out WorkflowJob? job) ||
-            job is null ||
-            !string.Equals(job.RunsOn, host, StringComparison.Ordinal) ||
-            job.Condition is not null)
+        if (!workflow.Value.Jobs.TryGetValue(jobId, out WorkflowJob? job)
+            || job is null
+            || !string.Equals(job.RunsOn, host, StringComparison.Ordinal)
+            || job.Condition is not null)
         {
             throw new ToolchainPolicyException(
                 $"{workflow.Path} must contain the accepted {jobId} job.");
@@ -115,21 +175,25 @@ internal static partial class PowerShellToolchainPolicy
         RunnerCommandInfo[] commands = workflowCommands
             .Where(command => string.Equals(command.JobId, jobId, StringComparison.Ordinal))
             .ToArray();
+
         RunnerCommandInfo[] runners = commands
             .Where(command => command.Kind == CommandKind.Runner)
             .ToArray();
+
         RunnerCommandInfo[] installs = commands
             .Where(command => command.Kind == CommandKind.Install)
             .ToArray();
-        if (runners.Length != 1 || installs.Length != 1 ||
-            installs[0].StepIndex >= runners[0].StepIndex ||
-            !HasStepContract(installs[0].Step, condition) ||
-            !HasStepContract(runners[0].Step, condition) ||
-            !HasAcceptedRunnerArguments(
+
+        if (runners.Length != 1
+            || installs.Length != 1
+            || installs[0].StepIndex >= runners[0].StepIndex
+            || !HasStepContract(installs[0].Step, condition)
+            || !HasStepContract(runners[0].Step, condition)
+            || !HasAcceptedRunnerArguments(
                 runners[0].Script,
                 runners[0].Command,
-                expectedPaths) ||
-            !IsAcceptedInstall(installs[0], manifest))
+                expectedPaths)
+            || !IsAcceptedInstall(installs[0], manifest))
         {
             throw new ToolchainPolicyException(
                 $"{workflow.Path} {jobId} must use the accepted bootstrap and runner steps.");
@@ -144,8 +208,8 @@ internal static partial class PowerShellToolchainPolicy
 
     private static bool HasStepContract(WorkflowStep step, string? condition)
     {
-        return string.Equals(step.Shell, "pwsh", StringComparison.Ordinal) &&
-            string.Equals(step.Condition, condition, StringComparison.Ordinal);
+        return string.Equals(step.Shell, "pwsh", StringComparison.Ordinal)
+            && string.Equals(step.Condition, condition, StringComparison.Ordinal);
     }
 
     private static bool IsAcceptedInstall(
@@ -153,19 +217,20 @@ internal static partial class PowerShellToolchainPolicy
         ToolchainManifest manifest)
     {
         ScriptBlockAst script = ParsePowerShell(
-            install.Step.Run!,
+            install.Step.Run ?? throw new ToolchainPolicyException("A Pester installation step requires script text."),
             $"{install.WorkflowPath}.{install.JobId}.steps[{install.StepIndex}].run");
+
         CommandAst[] commands = FindPowerShellCommands(script);
-        if (commands.Length != 1 ||
-            Classify(commands[0]) != CommandKind.Install ||
-            !IsSingleTopLevelCommand(script, "Install-Module"))
+        if (commands.Length != 1
+            || Classify(commands[0]) != CommandKind.Install
+            || !IsSingleTopLevelCommand(script, "Install-Module"))
         {
             return false;
         }
 
         string[] versions = FindLiteralParameterValues(commands[0], "RequiredVersion");
-        return versions.Length == 1 &&
-            string.Equals(versions[0], manifest.PesterExecutionVersion, StringComparison.Ordinal);
+        return versions.Length == 1
+            && string.Equals(versions[0], manifest.PesterExecutionVersion, StringComparison.Ordinal);
     }
 
     private static ParsedWorkflow ParseRequired(
@@ -184,10 +249,10 @@ internal static partial class PowerShellToolchainPolicy
     {
         try
         {
-            YamlStream stream = new();
+            YamlStream stream = [];
             stream.Load(new StringReader(yaml));
-            if (stream.Documents.Count != 1 ||
-                stream.Documents[0].RootNode is not YamlMappingNode root)
+            if (stream.Documents.Count != 1
+                || stream.Documents[0].RootNode is not YamlMappingNode root)
             {
                 throw new ToolchainPolicyException($"{path} must contain one mapping document.");
             }
@@ -200,12 +265,13 @@ internal static partial class PowerShellToolchainPolicy
                 .IgnoreUnmatchedProperties()
                 .Build()
                 .Deserialize<WorkflowFile>(yaml);
+
             if (workflow?.On is null || workflow.Jobs is null)
             {
                 throw new ToolchainPolicyException($"{path} must define on and jobs mappings.");
             }
 
-            return new ParsedWorkflow(path, workflow);
+            return new ParsedWorkflow(path, workflow, root);
         }
         catch (ToolchainPolicyException)
         {
@@ -221,10 +287,11 @@ internal static partial class PowerShellToolchainPolicy
     {
         YamlMappingNode jobs = RequireMapping(RequireNode(root, "jobs", path), $"{path}.jobs");
         string[] ownedJobIds = string.Equals(path, CiPath, StringComparison.Ordinal)
-            ? ["scaffold-linux", "scaffold-windows"]
+            ? ["scaffold-linux", "scaffold-windows", "skill-content-evaluation"]
             : string.Equals(path, FullCiPath, StringComparison.Ordinal)
                 ? ["scaffold-windows"]
                 : [];
+
         foreach (string jobId in ownedJobIds)
         {
             YamlNode jobNode = RequireNode(jobs, jobId, $"{path}.jobs");
@@ -243,8 +310,8 @@ internal static partial class PowerShellToolchainPolicy
 
     private static void RejectOwnedIndirection(string path, YamlMappingNode root)
     {
-        if (!string.Equals(path, CiPath, StringComparison.Ordinal) &&
-            !string.Equals(path, FullCiPath, StringComparison.Ordinal))
+        if (!string.Equals(path, CiPath, StringComparison.Ordinal)
+            && !string.Equals(path, FullCiPath, StringComparison.Ordinal))
         {
             return;
         }
@@ -254,13 +321,15 @@ internal static partial class PowerShellToolchainPolicy
             ?
             [
                 RequireNode(jobs, "scaffold-linux", $"{path}.jobs"),
-                RequireNode(jobs, "scaffold-windows", $"{path}.jobs")
+                RequireNode(jobs, "scaffold-windows", $"{path}.jobs"),
+                RequireNode(jobs, "skill-content-evaluation", $"{path}.jobs")
             ]
             :
             [
                 RequireNode(root, "on", path),
                 RequireNode(jobs, "scaffold-windows", $"{path}.jobs")
             ];
+
         if (owned.Any(HasIndirection))
         {
             throw new ToolchainPolicyException(
@@ -270,8 +339,8 @@ internal static partial class PowerShellToolchainPolicy
 
     private static bool HasIndirection(YamlNode node)
     {
-        if (!node.Anchor.IsEmpty ||
-            node is YamlScalarNode scalar && string.Equals(scalar.Value, "<<", StringComparison.Ordinal))
+        if (!node.Anchor.IsEmpty
+            || node is YamlScalarNode scalar && string.Equals(scalar.Value, "<<", StringComparison.Ordinal))
         {
             return true;
         }
@@ -290,8 +359,8 @@ internal static partial class PowerShellToolchainPolicy
         return workflow.Value.Jobs.SelectMany(job =>
             job.Value.Steps.SelectMany((step, stepIndex) =>
             {
-                if (step.Run is null ||
-                    !string.Equals(step.Shell, "pwsh", StringComparison.Ordinal))
+                if (step.Run is null
+                    || !string.Equals(step.Shell, "pwsh", StringComparison.Ordinal))
                 {
                     return [];
                 }
@@ -299,6 +368,7 @@ internal static partial class PowerShellToolchainPolicy
                 ScriptBlockAst script = ParsePowerShell(
                     step.Run,
                     $"{workflow.Path}.{job.Key}.steps[{stepIndex}].run");
+
                 return FindPowerShellCommands(script)
                     .Select(command => new RunnerCommandInfo(
                         workflow.Path,
@@ -321,22 +391,23 @@ internal static partial class PowerShellToolchainPolicy
             return CommandKind.Runner;
         }
 
-        if (command.InvocationOperator == TokenKind.Unknown &&
-            string.Equals(name, "Install-Module", StringComparison.OrdinalIgnoreCase) &&
-            command.CommandElements.Count >= 2 &&
-            command.CommandElements[1] is StringConstantExpressionAst module &&
-            string.Equals(module.Value, "Pester", StringComparison.OrdinalIgnoreCase))
+        if (command.InvocationOperator == TokenKind.Unknown
+            && string.Equals(name, "Install-Module", StringComparison.OrdinalIgnoreCase)
+            && command.CommandElements.Count >= 2
+            && command.CommandElements[1] is StringConstantExpressionAst module
+            && string.Equals(module.Value, "Pester", StringComparison.OrdinalIgnoreCase))
         {
             return CommandKind.Install;
         }
 
         string? normalizedName = name?.Replace('\\', '/');
         int qualifier = normalizedName?.LastIndexOf('/') ?? -1;
-        return normalizedName is not null && normalizedName.AsSpan(qualifier + 1).Equals(
-            "Invoke-Pester",
-            StringComparison.OrdinalIgnoreCase)
-                ? CommandKind.DirectPester
-                : CommandKind.Other;
+        return normalizedName is not null
+            && normalizedName.AsSpan(qualifier + 1).Equals(
+                "Invoke-Pester",
+                StringComparison.OrdinalIgnoreCase)
+                    ? CommandKind.DirectPester
+                    : CommandKind.Other;
     }
 
     private static ScriptBlockAst ParsePowerShell(string script, string path)
@@ -345,6 +416,7 @@ internal static partial class PowerShellToolchainPolicy
             script,
             out _,
             out ParseError[] errors);
+
         if (errors.Length != 0)
         {
             throw new ToolchainPolicyException(
@@ -368,10 +440,12 @@ internal static partial class PowerShellToolchainPolicy
                 parameter.ParameterName,
                 parameterName,
                 StringComparison.OrdinalIgnoreCase);
+
             StringConstantExpressionAst? value = parameter.Argument as StringConstantExpressionAst;
-            if (value is null && parameter.Argument is null &&
-                index + 1 < command.CommandElements.Count &&
-                command.CommandElements[index + 1] is not CommandParameterAst)
+            if (value is null
+                && parameter.Argument is null
+                && index + 1 < command.CommandElements.Count
+                && command.CommandElements[index + 1] is not CommandParameterAst)
             {
                 value = command.CommandElements[++index] as StringConstantExpressionAst;
             }
@@ -399,9 +473,9 @@ internal static partial class PowerShellToolchainPolicy
 
     private static bool ContainsPesterCandidate(string text)
     {
-        return text.Contains("Invoke-PesterShards.ps1", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("Invoke-Pester", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("Install-Module Pester", StringComparison.OrdinalIgnoreCase);
+        return text.Contains("Invoke-PesterShards.ps1", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("Invoke-Pester", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("Install-Module Pester", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasAcceptedRunnerArguments(
@@ -409,41 +483,41 @@ internal static partial class PowerShellToolchainPolicy
         CommandAst command,
         string[] expectedPaths)
     {
-        if (!string.Equals(command.GetCommandName(), RunnerCommand, StringComparison.Ordinal) ||
-            command.InvocationOperator != TokenKind.Unknown ||
-            command.CommandElements.Count != 3 ||
-            command.CommandElements[1] is not CommandParameterAst parameter ||
-            !string.Equals(parameter.ParameterName, "Path", StringComparison.OrdinalIgnoreCase) ||
-            parameter.Argument is not null)
+        if (!string.Equals(command.GetCommandName(), RunnerCommand, StringComparison.Ordinal)
+            || command.InvocationOperator != TokenKind.Unknown
+            || command.CommandElements.Count != 3
+            || command.CommandElements[1] is not CommandParameterAst parameter
+            || !string.Equals(parameter.ParameterName, "Path", StringComparison.OrdinalIgnoreCase)
+            || parameter.Argument is not null)
         {
             return false;
         }
 
         if (expectedPaths.Length == 1)
         {
-            return command.CommandElements[2] is StringConstantExpressionAst path &&
-                string.Equals(path.Value, expectedPaths[0], StringComparison.Ordinal) &&
-                IsSingleTopLevelCommand(script, RunnerCommand);
+            return command.CommandElements[2] is StringConstantExpressionAst path
+                && string.Equals(path.Value, expectedPaths[0], StringComparison.Ordinal)
+                && IsSingleTopLevelCommand(script, RunnerCommand);
         }
 
-        if (command.CommandElements[2] is not VariableExpressionAst variable ||
-            !string.Equals(variable.VariablePath.UserPath, "paths", StringComparison.OrdinalIgnoreCase) ||
-            script.EndBlock.Statements.Count != 2 ||
-            script.EndBlock.Statements[0] is not AssignmentStatementAst assignment ||
-            assignment.Operator != TokenKind.Equals ||
-            assignment.Left is not VariableExpressionAst target ||
-            !string.Equals(target.VariablePath.UserPath, "paths", StringComparison.OrdinalIgnoreCase) ||
-            assignment.Right is not CommandExpressionAst right ||
-            right.Expression is not ArrayExpressionAst arrayExpression ||
-            arrayExpression.SubExpression.Statements.Count != 1 ||
-            arrayExpression.SubExpression.Statements[0] is not PipelineAst arrayPipeline ||
-            arrayPipeline.PipelineElements.Count != 1 ||
-            arrayPipeline.PipelineElements[0] is not CommandExpressionAst arrayCommand ||
-            arrayCommand.Expression is not ArrayLiteralAst arrayLiteral ||
-            command.Parent is not PipelineAst runnerPipeline ||
-            script.EndBlock.Statements[1] != runnerPipeline ||
-            runnerPipeline.PipelineElements.Count != 1 ||
-            runnerPipeline.PipelineElements[0] != command)
+        if (command.CommandElements[2] is not VariableExpressionAst variable
+            || !string.Equals(variable.VariablePath.UserPath, "paths", StringComparison.OrdinalIgnoreCase)
+            || script.EndBlock.Statements.Count != 2
+            || script.EndBlock.Statements[0] is not AssignmentStatementAst assignment
+            || assignment.Operator != TokenKind.Equals
+            || assignment.Left is not VariableExpressionAst target
+            || !string.Equals(target.VariablePath.UserPath, "paths", StringComparison.OrdinalIgnoreCase)
+            || assignment.Right is not CommandExpressionAst right
+            || right.Expression is not ArrayExpressionAst arrayExpression
+            || arrayExpression.SubExpression.Statements.Count != 1
+            || arrayExpression.SubExpression.Statements[0] is not PipelineAst arrayPipeline
+            || arrayPipeline.PipelineElements.Count != 1
+            || arrayPipeline.PipelineElements[0] is not CommandExpressionAst arrayCommand
+            || arrayCommand.Expression is not ArrayLiteralAst arrayLiteral
+            || command.Parent is not PipelineAst runnerPipeline
+            || script.EndBlock.Statements[1] != runnerPipeline
+            || runnerPipeline.PipelineElements.Count != 1
+            || runnerPipeline.PipelineElements[0] != command)
         {
             return false;
         }
@@ -452,15 +526,16 @@ internal static partial class PowerShellToolchainPolicy
             .OfType<StringConstantExpressionAst>()
             .Select(value => value.Value)
             .ToArray();
-        return paths.Length == arrayLiteral.Elements.Count &&
-            paths.SequenceEqual(expectedPaths, StringComparer.Ordinal);
+
+        return paths.Length == arrayLiteral.Elements.Count
+            && paths.SequenceEqual(expectedPaths, StringComparer.Ordinal);
     }
 
     private static bool ContainsPesterRunCandidate(string yaml)
     {
         try
         {
-            YamlStream stream = new();
+            YamlStream stream = [];
             stream.Load(new StringReader(yaml));
             return stream.Documents.Any(document =>
                 HasPesterRunValue(document.RootNode));
@@ -476,12 +551,12 @@ internal static partial class PowerShellToolchainPolicy
         return node switch
         {
             YamlMappingNode mapping => mapping.Children.Any(entry =>
-                entry.Key is YamlScalarNode key &&
-                string.Equals(key.Value, "run", StringComparison.Ordinal) &&
-                entry.Value is YamlScalarNode run &&
-                run.Value is not null &&
-                ContainsPesterCandidate(run.Value) ||
-                HasPesterRunValue(entry.Value)),
+                entry.Key is YamlScalarNode key
+                    && string.Equals(key.Value, "run", StringComparison.Ordinal)
+                    && entry.Value is YamlScalarNode run
+                    && run.Value is not null
+                    && ContainsPesterCandidate(run.Value)
+                        || HasPesterRunValue(entry.Value)),
             YamlSequenceNode sequence => sequence.Children.Any(HasPesterRunValue),
             _ => false
         };
@@ -489,18 +564,18 @@ internal static partial class PowerShellToolchainPolicy
 
     private static bool IsSingleTopLevelCommand(ScriptBlockAst script, string commandName)
     {
-        return script.EndBlock.Statements.Count == 1 &&
-            script.EndBlock.Statements[0] is PipelineAst pipeline &&
-            pipeline.PipelineElements.Count == 1 &&
-            pipeline.PipelineElements[0] is CommandAst command &&
-            string.Equals(command.GetCommandName(), commandName, StringComparison.OrdinalIgnoreCase);
+        return script.EndBlock.Statements.Count == 1
+            && script.EndBlock.Statements[0] is PipelineAst pipeline
+            && pipeline.PipelineElements.Count == 1
+            && pipeline.PipelineElements[0] is CommandAst command
+            && string.Equals(command.GetCommandName(), commandName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RequireFullTriggers(ParsedWorkflow full)
     {
-        if (!full.Value.On.ContainsKey("workflow_dispatch") ||
-            !full.Value.On.TryGetValue("schedule", out object? schedule) ||
-            schedule is not IList<object> { Count: > 0 })
+        if (!full.Value.On.ContainsKey("workflow_dispatch")
+            || !full.Value.On.TryGetValue("schedule", out object? schedule)
+            || schedule is not IList<object> { Count: > 0 })
         {
             throw new ToolchainPolicyException(
                 $"{FullCiPath} must run on schedule and manual dispatch.");
@@ -511,8 +586,8 @@ internal static partial class PowerShellToolchainPolicy
     {
         foreach ((YamlNode candidate, YamlNode value) in mapping.Children)
         {
-            if (candidate is YamlScalarNode scalar &&
-                string.Equals(scalar.Value, key, StringComparison.Ordinal))
+            if (candidate is YamlScalarNode scalar
+                && string.Equals(scalar.Value, key, StringComparison.Ordinal))
             {
                 return value;
             }
@@ -523,64 +598,14 @@ internal static partial class PowerShellToolchainPolicy
 
     private static YamlMappingNode RequireMapping(YamlNode node, string path)
     {
-        return node as YamlMappingNode ??
-            throw new ToolchainPolicyException($"{path} must be a mapping.");
+        return node as YamlMappingNode
+            ?? throw new ToolchainPolicyException($"{path} must be a mapping.");
     }
 
     private static YamlSequenceNode RequireSequence(YamlNode node, string path)
     {
-        return node as YamlSequenceNode ??
-            throw new ToolchainPolicyException($"{path} must be a sequence.");
+        return node as YamlSequenceNode
+            ?? throw new ToolchainPolicyException($"{path} must be a sequence.");
     }
 
-    private sealed record ParsedWorkflow(string Path, WorkflowFile Value);
-    private sealed record RunnerCommandInfo(
-        string WorkflowPath,
-        string JobId,
-        int StepIndex,
-        WorkflowStep Step,
-        ScriptBlockAst Script,
-        CommandAst Command,
-        CommandKind Kind);
-
-    private enum CommandKind
-    {
-        Other,
-        Install,
-        Runner,
-        DirectPester
-    }
-
-    private sealed class WorkflowFile
-    {
-        [YamlMember(Alias = "on")]
-        public Dictionary<string, object?> On { get; init; } = new(StringComparer.Ordinal);
-
-        [YamlMember(Alias = "jobs")]
-        public Dictionary<string, WorkflowJob> Jobs { get; init; } = new(StringComparer.Ordinal);
-    }
-
-    private sealed class WorkflowJob
-    {
-        [YamlMember(Alias = "runs-on")]
-        public string? RunsOn { get; init; }
-
-        [YamlMember(Alias = "if")]
-        public string? Condition { get; init; }
-
-        [YamlMember(Alias = "steps")]
-        public List<WorkflowStep> Steps { get; init; } = [];
-    }
-
-    private sealed class WorkflowStep
-    {
-        [YamlMember(Alias = "if")]
-        public string? Condition { get; init; }
-
-        [YamlMember(Alias = "shell")]
-        public string? Shell { get; init; }
-
-        [YamlMember(Alias = "run")]
-        public string? Run { get; init; }
-    }
 }

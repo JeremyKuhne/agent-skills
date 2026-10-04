@@ -1,15 +1,36 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using System.Diagnostics;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace PowerShellToolchain.Tests;
 
+/// <summary>
+///  Tests repository and scaffolded test-toolchain metadata, managed compiler policies, and workflow
+///  execution policies.
+/// </summary>
 [TestClass]
-public sealed class RepositoryPolicyTests
+public sealed partial class RepositoryPolicyTests
 {
     private static readonly string RepositoryRoot = FindRepositoryRoot();
+    private static readonly string[] GeneratedTestFileNames =
+    [
+        "Agents.Tests.ps1",
+        "EvaluationScenarios.Tests.ps1",
+        "Marketplace.Tests.ps1",
+        "Mcp.Tests.ps1",
+        "Plugin.Tests.ps1",
+        "Repository.Tests.ps1"
+    ];
 
+    /// <summary>
+    ///  Verifies that the checked-in manifest parses as schema 1, PowerShell 7.4, and Pester
+    ///  compatibility and execution versions 6.2.0.
+    /// </summary>
     [TestMethod]
-    public void CheckedInManifest_AcceptedShape_ReturnsTypedPolicy()
+    public void CheckedInManifestAcceptedShapeReturnsTypedPolicy()
     {
         ToolchainManifest manifest = LoadManifest();
 
@@ -19,8 +40,12 @@ public sealed class RepositoryPolicyTests
         Assert.AreEqual("6.2.0", manifest.PesterExecutionVersion);
     }
 
+    /// <summary>
+    ///  Verifies that exactly 17 Pester test files are discovered beneath the repository test directory
+    ///  and that each file's requirements match the checked-in manifest.
+    /// </summary>
     [TestMethod]
-    public void TrackedPesterTests_AcceptedRequirements_Pass()
+    public void TrackedPesterTestsAcceptedRequirementsPass()
     {
         ToolchainManifest manifest = LoadManifest();
         string[] testFiles = Directory.GetFiles(
@@ -28,7 +53,7 @@ public sealed class RepositoryPolicyTests
             "*.Tests.ps1",
             SearchOption.AllDirectories);
 
-        Assert.HasCount(16, testFiles);
+        Assert.HasCount(17, testFiles);
         foreach (string testFile in testFiles)
         {
             PowerShellToolchainPolicy.ValidateTestRequirements(
@@ -37,13 +62,18 @@ public sealed class RepositoryPolicyTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that the distribution scaffold emits exactly the six expected top-level Pester test
+    ///  files and that their requirements match the repository manifest.
+    /// </summary>
     [TestMethod]
-    public void GeneratedPesterTests_AcceptedRequirements_Pass()
+    public void GeneratedPesterTestsAcceptedRequirementsPass()
     {
         ToolchainManifest manifest = LoadManifest();
         string temporaryRoot = Path.Join(
             Path.GetTempPath(),
             $"agent-skills-toolchain-{Guid.NewGuid():N}");
+
         string generatedRoot = Path.Join(temporaryRoot, "generated");
 
         try
@@ -55,20 +85,15 @@ public sealed class RepositoryPolicyTests
                 Path.Join(generatedRoot, "tests"),
                 "*.Tests.ps1",
                 SearchOption.TopDirectoryOnly);
+
             string[] fileNames = testFiles
-                .Select(Path.GetFileName)
+                .Select(path => Path.GetFileName(path)
+                    ?? throw new InvalidOperationException("A generated test path must have a file name."))
                 .Order(StringComparer.Ordinal)
-                .ToArray()!;
+                .ToArray();
+
             CollectionAssert.AreEqual(
-                new[]
-                {
-                    "Agents.Tests.ps1",
-                    "EvaluationScenarios.Tests.ps1",
-                    "Marketplace.Tests.ps1",
-                    "Mcp.Tests.ps1",
-                    "Plugin.Tests.ps1",
-                    "Repository.Tests.ps1"
-                },
+                GeneratedTestFileNames,
                 fileNames);
 
             foreach (string testFile in testFiles)
@@ -87,12 +112,17 @@ public sealed class RepositoryPolicyTests
         }
     }
 
+    /// <summary>
+    ///  Scaffolds validated, team-CI, and distribution repositories and verifies byte-for-byte runner
+    ///  parity plus the applicable generated-workflow policies.
+    /// </summary>
     [TestMethod]
-    public void GeneratedPesterExecution_AcceptedOutputs_Pass()
+    public void GeneratedPesterExecutionAcceptedOutputsPass()
     {
         ToolchainManifest manifest = LoadManifest();
         byte[] canonicalRunner = File.ReadAllBytes(
             Path.Join(RepositoryRoot, "tests", "Invoke-PesterShards.ps1"));
+
         string temporaryRoot = Path.Join(
             Path.GetTempPath(),
             $"agent-skills-generated-execution-{Guid.NewGuid():N}");
@@ -137,8 +167,12 @@ public sealed class RepositoryPolicyTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that the canonical shard runner's host requirement and Pester-version default match
+    ///  the checked-in manifest.
+    /// </summary>
     [TestMethod]
-    public void CanonicalRunner_AcceptedMetadata_Passes()
+    public void CanonicalRunnerAcceptedMetadataPasses()
     {
         ToolchainManifest manifest = LoadManifest();
         string runnerPath = Path.Join(RepositoryRoot, "tests", "Invoke-PesterShards.ps1");
@@ -148,15 +182,19 @@ public sealed class RepositoryPolicyTests
             manifest);
     }
 
+    /// <summary>
+    ///  Verifies that the checked-in YAML workflows satisfy active Pester host, bootstrap, runner,
+    ///  and path policies.
+    /// </summary>
     [TestMethod]
-    public void ActivePesterWorkflows_AcceptedTopology_Passes()
+    public void ActivePesterWorkflowsAcceptedTopologyPasses()
     {
         ToolchainManifest manifest = LoadManifest();
         string workflowRoot = Path.Join(RepositoryRoot, ".github", "workflows");
         IReadOnlyDictionary<string, string> workflows = Directory
             .GetFiles(workflowRoot, "*.*", SearchOption.TopDirectoryOnly)
-            .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(
                 path => Path.GetRelativePath(RepositoryRoot, path).Replace('\\', '/'),
                 File.ReadAllText,
@@ -165,8 +203,12 @@ public sealed class RepositoryPolicyTests
         PowerShellToolchainPolicy.ValidateActivePesterWorkflows(workflows, manifest);
     }
 
+    /// <summary>
+    ///  Verifies that the checked-in CI job and coverage settings satisfy the managed file-creation
+    ///  matrix, Release-test, and production-source coverage policies.
+    /// </summary>
     [TestMethod]
-    public void ManagedFileCreationWorkflow_AcceptedPolicy_Passes()
+    public void ManagedFileCreationWorkflowAcceptedPolicyPasses()
     {
         PowerShellToolchainPolicy.ValidateManagedFileCreationWorkflow(
             File.ReadAllText(Path.Join(RepositoryRoot, ".github", "workflows", "ci.yml")),
@@ -181,6 +223,7 @@ public sealed class RepositoryPolicyTests
     {
         string temporaryRoot = Path.GetDirectoryName(generatedRoot)
             ?? throw new InvalidOperationException("Generated root has no parent directory.");
+
         string launcherPath = Path.Join(temporaryRoot, "Invoke-Scaffold.ps1");
         string scaffoldPath = Path.Join(
             RepositoryRoot,
@@ -189,6 +232,7 @@ public sealed class RepositoryPolicyTests
             "create-skill-repo",
             "scripts",
             "New-SkillRepository.ps1");
+
         File.WriteAllText(
             launcherPath,
             """
@@ -224,6 +268,7 @@ public sealed class RepositoryPolicyTests
             RedirectStandardError = true,
             UseShellExecute = false
         };
+
         foreach (string argument in new[]
                  {
                      "-NoProfile",
@@ -240,40 +285,17 @@ public sealed class RepositoryPolicyTests
             startInfo.ArgumentList.Add(argument);
         }
 
-        using Process process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("The scaffold process did not start.");
-        using CancellationTokenSource deadline = new(TimeSpan.FromMinutes(2));
-        Task<string> outputTask = process.StandardOutput.ReadToEndAsync(deadline.Token);
-        Task<string> errorTask = process.StandardError.ReadToEndAsync(deadline.Token);
-        try
-        {
-            process.WaitForExitAsync(deadline.Token).GetAwaiter().GetResult();
-        }
-        finally
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit();
-            }
-        }
-
-        string output = outputTask.GetAwaiter().GetResult();
-        string error = errorTask.GetAwaiter().GetResult();
-        Assert.AreEqual(
-            0,
-            process.ExitCode,
-            $"Scaffolder output:{Environment.NewLine}{output}{Environment.NewLine}{error}");
+        _ = RunRepositoryProcess(startInfo, "Scaffolder");
     }
 
-    private static IReadOnlyDictionary<string, string> ReadGeneratedWorkflows(
+    private static Dictionary<string, string> ReadGeneratedWorkflows(
         string generatedRoot)
     {
         string workflowRoot = Path.Join(generatedRoot, ".github", "workflows");
         return Directory
             .GetFiles(workflowRoot, "*.*", SearchOption.TopDirectoryOnly)
-            .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) ||
-                path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(
                 path => Path.GetRelativePath(generatedRoot, path).Replace('\\', '/'),
                 File.ReadAllText,
@@ -292,8 +314,8 @@ public sealed class RepositoryPolicyTests
              directory is not null;
              directory = directory.Parent)
         {
-            if (File.Exists(Path.Join(directory.FullName, "AGENTS.md")) &&
-                File.Exists(Path.Join(directory.FullName, "tests", "Invoke-PesterShards.ps1")))
+            if (File.Exists(Path.Join(directory.FullName, "AGENTS.md"))
+                && File.Exists(Path.Join(directory.FullName, "tests", "Invoke-PesterShards.ps1")))
             {
                 return directory.FullName;
             }

@@ -1,19 +1,23 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using System.Management.Automation.Language;
 using System.Text.Json;
 
 namespace PowerShellToolchain.Tests;
 
-internal sealed record ToolchainManifest(
-    int SchemaVersion,
-    string TestMinimumVersion,
-    string PesterCompatibilityMinimumVersion,
-    string PesterExecutionVersion);
-
-internal sealed class ToolchainPolicyException(string message, Exception? innerException = null)
-    : Exception(message, innerException);
-
+/// <summary>
+///  Validates retained PowerShell test metadata and workflow execution policies.
+/// </summary>
 internal static partial class PowerShellToolchainPolicy
 {
+    /// <summary>
+    ///  Parses the manifest's exact schema, retained-test host requirement, and Pester version values.
+    /// </summary>
+    /// <param name="json">The toolchain manifest's JSON source.</param>
+    /// <returns>The validated manifest values.</returns>
+    /// <exception cref="ToolchainPolicyException">The JSON is malformed or violates the manifest policy.</exception>
     public static ToolchainManifest ParseManifest(string json)
     {
         try
@@ -23,8 +27,8 @@ internal static partial class PowerShellToolchainPolicy
             RequireProperties(root, "manifest", "schemaVersion", "powerShell", "pester");
 
             JsonElement schemaVersion = root.GetProperty("schemaVersion");
-            if (schemaVersion.ValueKind != JsonValueKind.Number ||
-                schemaVersion.GetRawText() != "1")
+            if (schemaVersion.ValueKind != JsonValueKind.Number
+                || schemaVersion.GetRawText() != "1")
             {
                 throw new ToolchainPolicyException("schemaVersion must be the JSON token 1.");
             }
@@ -41,9 +45,11 @@ internal static partial class PowerShellToolchainPolicy
                 "pester",
                 "compatibilityMinimumVersion",
                 "executionVersion");
+
             string compatibilityMinimumVersion = RequireString(
                 pester.GetProperty("compatibilityMinimumVersion"),
                 "pester.compatibilityMinimumVersion");
+
             string executionVersion = RequireString(
                 pester.GetProperty("executionVersion"),
                 "pester.executionVersion");
@@ -53,6 +59,7 @@ internal static partial class PowerShellToolchainPolicy
                 compatibilityMinimumVersion,
                 "6.2.0",
                 "pester.compatibilityMinimumVersion");
+
             RequireExactValue(executionVersion, "6.2.0", "pester.executionVersion");
 
             return new ToolchainManifest(
@@ -79,17 +86,29 @@ internal static partial class PowerShellToolchainPolicy
         }
     }
 
+    /// <summary>
+    ///  Requires one PowerShell host directive and one Pester compatibility-floor directive matching the manifest.
+    /// </summary>
+    /// <param name="script">The PowerShell test source, including its requirement directives.</param>
+    /// <param name="manifest">The required host version and Pester compatibility floor.</param>
+    /// <exception cref="ToolchainPolicyException">The source has parse errors or unacceptable requirements.</exception>
     public static void ValidateTestRequirements(string script, ToolchainManifest manifest)
     {
         (ScriptBlockAst ast, Token[] tokens) = ParseScript(script, "PowerShell test");
         ValidateHostRequirement(ast, tokens, manifest, "PowerShell test");
 
-        var pesterRequirements = ast.ScriptRequirements!.RequiredModules
+        if (ast.ScriptRequirements is not { } requirements)
+        {
+            throw new ToolchainPolicyException("The PowerShell test must declare its requirements.");
+        }
+
+        var pesterRequirements = requirements.RequiredModules
             .Where(module => string.Equals(
                 module.Name,
                 "Pester",
                 StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
         if (pesterRequirements.Length != 1)
         {
             throw new ToolchainPolicyException(
@@ -98,15 +117,23 @@ internal static partial class PowerShellToolchainPolicy
 
         var pester = pesterRequirements[0];
         Version expectedVersion = Version.Parse(manifest.PesterCompatibilityMinimumVersion);
-        if (pester.Version != expectedVersion ||
-            pester.RequiredVersion is not null ||
-            pester.MaximumVersion is not null)
+        if (pester.Version != expectedVersion
+            || pester.RequiredVersion is not null
+            || pester.MaximumVersion is not null)
         {
             throw new ToolchainPolicyException(
                 $"The PowerShell test must declare Pester ModuleVersion '{manifest.PesterCompatibilityMinimumVersion}'.");
         }
     }
 
+    /// <summary>
+    ///  Requires the runner's host directive and typed PesterVersion default to match the manifest.
+    /// </summary>
+    /// <param name="script">The canonical Pester runner's PowerShell source.</param>
+    /// <param name="manifest">The required host version and Pester execution lock.</param>
+    /// <exception cref="ToolchainPolicyException">
+    ///  The source has parse errors or unacceptable runner metadata.
+    /// </exception>
     public static void ValidateRunnerMetadata(string script, ToolchainManifest manifest)
     {
         (ScriptBlockAst ast, Token[] tokens) = ParseScript(script, "Pester runner");
@@ -118,6 +145,7 @@ internal static partial class PowerShellToolchainPolicy
                 "PesterVersion",
                 StringComparison.OrdinalIgnoreCase))
             .ToArray() ?? [];
+
         if (parameters.Length != 1)
         {
             throw new ToolchainPolicyException(
@@ -131,9 +159,10 @@ internal static partial class PowerShellToolchainPolicy
                 attribute.TypeName.FullName,
                 "version",
                 StringComparison.OrdinalIgnoreCase));
-        if (!hasVersionType ||
-            parameter.DefaultValue is not StringConstantExpressionAst defaultValue ||
-            defaultValue.Value != manifest.PesterExecutionVersion)
+
+        if (!hasVersionType
+            || parameter.DefaultValue is not StringConstantExpressionAst defaultValue
+            || defaultValue.Value != manifest.PesterExecutionVersion)
         {
             throw new ToolchainPolicyException(
                 $"The Pester runner must default a typed PesterVersion parameter to '{manifest.PesterExecutionVersion}'.");
@@ -148,6 +177,7 @@ internal static partial class PowerShellToolchainPolicy
             script,
             out Token[] tokens,
             out ParseError[] parseErrors);
+
         if (parseErrors.Length != 0)
         {
             throw new ToolchainPolicyException(
@@ -182,8 +212,8 @@ internal static partial class PowerShellToolchainPolicy
         int count = 0;
         foreach (Token token in tokens)
         {
-            if (token.Kind != TokenKind.Comment ||
-                !token.Text.StartsWith("#requires", StringComparison.OrdinalIgnoreCase))
+            if (token.Kind != TokenKind.Comment
+                || !token.Text.StartsWith("#requires", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -192,8 +222,9 @@ internal static partial class PowerShellToolchainPolicy
                 token.Text,
                 out _,
                 out ParseError[] parseErrors);
-            if (parseErrors.Length == 0 &&
-                directive.ScriptRequirements?.RequiredPSVersion is not null)
+
+            if (parseErrors.Length == 0
+                && directive.ScriptRequirements?.RequiredPSVersion is not null)
             {
                 count++;
             }
@@ -219,7 +250,7 @@ internal static partial class PowerShellToolchainPolicy
             throw new ToolchainPolicyException($"{path} must be a string.");
         }
 
-        return value.GetString()!;
+        return value.GetString() ?? throw new ToolchainPolicyException($"{path} must be a non-null string.");
     }
 
     private static void RequireExactValue(string actual, string expected, string path)

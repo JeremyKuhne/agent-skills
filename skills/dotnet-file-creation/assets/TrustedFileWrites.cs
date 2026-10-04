@@ -1,10 +1,23 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 #nullable enable
 
 using System;
 using System.IO;
 
+/// <summary>
+///  Creates new files and publishes payloads within an existing trusted directory.
+/// </summary>
 public static class TrustedFileWrites
 {
+    /// <summary>
+    ///  Validates a storage key and maps it to a prefixed file name without accessing the filesystem.
+    /// </summary>
+    /// <param name="trustedDirectory">A fully qualified directory path trusted by the caller.</param>
+    /// <param name="key">One to 64 lowercase ASCII letters, digits, hyphens, or underscores.</param>
+    /// <returns>The fully qualified path to the key's file.</returns>
     public static string GetPath(string trustedDirectory, string key)
     {
         ArgumentException.ThrowIfNullOrEmpty(trustedDirectory);
@@ -32,23 +45,42 @@ public static class TrustedFileWrites
         return Path.Join(root, $"item-{key}.bin");
     }
 
+    /// <summary>
+    ///  Creates a write-only file without overwriting an existing file.
+    /// </summary>
+    /// <param name="trustedDirectory">An existing, fully qualified directory trusted by the caller.</param>
+    /// <param name="key">One to 64 lowercase ASCII letters, digits, hyphens, or underscores.</param>
+    /// <returns>The exclusively opened stream, which the caller must dispose.</returns>
     public static FileStream CreateNew(string trustedDirectory, string key)
     {
         return OpenNew(GetPath(trustedDirectory, key), FileAccess.Write, FileOptions.None);
     }
 
+    /// <summary>
+    ///  Creates a uniquely named, readable and writable file that is deleted when its stream closes.
+    /// </summary>
+    /// <param name="trustedDirectory">An existing, fully qualified directory trusted by the caller.</param>
+    /// <returns>The exclusively opened scratch stream, which the caller must dispose.</returns>
     public static FileStream CreateScratch(string trustedDirectory)
     {
         string path = GetPath(trustedDirectory, $"scratch-{Guid.NewGuid():N}");
         return OpenNew(path, FileAccess.ReadWrite, FileOptions.DeleteOnClose);
     }
 
+    /// <summary>
+    ///  Flushes a payload to a staging file and replaces the destination, with the last writer winning.
+    /// </summary>
+    /// <param name="trustedDirectory">An existing, fully qualified directory trusted by the caller.</param>
+    /// <param name="key">One to 64 lowercase ASCII letters, digits, hyphens, or underscores.</param>
+    /// <param name="payload">The bytes to publish.</param>
     public static void PublishLastWriterWins(string trustedDirectory, string key, byte[] payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
 
         string destination = GetPath(trustedDirectory, key);
-        string directory = Path.GetDirectoryName(destination)!;
+        string directory = Path.GetDirectoryName(destination)
+            ?? throw new InvalidOperationException("The destination must have a containing directory.");
+
         string temporary = Path.Join(directory, $".stage-{Guid.NewGuid():N}.tmp");
         bool temporaryCreated = false;
 

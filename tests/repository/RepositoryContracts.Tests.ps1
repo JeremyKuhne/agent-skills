@@ -148,6 +148,7 @@ Describe 'Unreachable fixture' {
         $run.Summary.FailedContainersCount | Should -Be 1
         $run.Summary.Shards[0].ExitCode | Should -Not -Be 0
         $run.Log | Should -Match 'Synthetic discovery failure'
+        $run.Output | Should -Match 'Synthetic discovery failure'
     }
 
     It 'reports an assertion failure as a failed test, not an infrastructure failure' {
@@ -175,6 +176,7 @@ Describe 'Setup fixture' {
         $run.ExitCode | Should -Not -Be 0
         $run.Summary.FailedBlocksCount | Should -Be 1
         $run.Log | Should -Match 'Synthetic setup failure'
+        $run.Output | Should -Match 'Synthetic setup failure'
     }
 
     It 'fails teardown even when every test passed' {

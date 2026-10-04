@@ -3632,7 +3632,7 @@ Describe 'Skill evaluation scenario contract' {
 
         foreach ($model in @(
                 'gpt-5.6-sol', 'gpt-5.6-luna',
-                'gpt-6-sol', 'gpt-6-luna')) {
+                'gpt-6-sol', 'gpt-6-luna', 'gpt-6.1-sol')) {
             foreach ($version in @('1.0.63', '1.0.82')) {
                 {
                     & $module {
@@ -3672,11 +3672,11 @@ Describe 'Skill evaluation scenario contract' {
         } | Should -BeExactly 'GitHub Copilot CLI 1.0.63.'
     }
 
-    It 'selects usage evidence for both Sol/Luna generations only' {
+    It 'selects usage evidence for current and historical Sol/Luna rosters only' {
         $module = Get-Module SkillEval
         foreach ($model in @(
                 'gpt-5.6-sol', 'gpt-5.6-luna',
-                'gpt-6-sol', 'gpt-6-luna')) {
+                'gpt-6-sol', 'gpt-6-luna', 'gpt-6.1-sol')) {
             & $module { param($modelId)
                 Test-SkillEvalUsageModel -Model $modelId
             } $model | Should -BeTrue

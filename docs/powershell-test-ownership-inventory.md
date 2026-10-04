@@ -25,6 +25,21 @@ those points; the different SHAs represent chronology, not conflicting trees.
 The maintainer accepted these decisions on 2026-09-15. The inventory records
 that decision; it does not implement a migration.
 
+## 2026-10-02 content-evaluation additions
+
+The dated inventory counts below remain historical. The output-quality
+foundation adds one retained Pester file, bringing the working-tree count to 17,
+plus a separate .NET 10 test project:
+
+| Surface | Owner and oracle |
+| --- | --- |
+| [Content managed tests](../tests/skill-evaluation/SkillEvaluation.Tests.csproj) | Typed profiles, schemas, Markdown, ledger consistency, artifact provenance, and quality states; maintained parsers plus synthetic positive/negative contracts. |
+| [Content adapter tests](../tests/evals/SkillEvalContent.Tests.ps1) | PowerShell/native process behavior, exact arguments, streams, exits, timeout cleanup, runner integration, and Windows junction handling. |
+| [Content CI lane](../.github/workflows/ci.yml) | Deterministic managed and adapter tests on Windows/Linux ARM64; no model inference. The managed workflow policy owns its fourth static Pester invocation and exact host matrix. |
+
+Classifier and judge accuracy remain separate, unexecuted evaluation work.
+Green parser/adapter tests do not establish useful model-output quality.
+
 ## Method and counts
 
 PowerShell's parser identified real Pester command ASTs, excluding `Describe`

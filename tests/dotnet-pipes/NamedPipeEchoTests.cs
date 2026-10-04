@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
 using System.Buffers.Binary;
 using System.IO.Pipes;
 using DotNetPipes.Sample;
@@ -5,22 +9,34 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DotNetPipes.Tests;
 
+/// <summary>
+///  Verifies bounded same-user pipe exchanges, worker recovery, and cancellation.
+/// </summary>
 [TestClass]
 public sealed class NamedPipeEchoTests
 {
+    /// <summary>
+    ///  Verifies that rejecting an unauthorized peer does not reject the next accepted peer.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task TryAcceptClientAsync_RejectedPeer_AllowsNextAcceptedPeer()
+    public async Task TryAcceptClientAsyncRejectedPeerAllowsNextAcceptedPeer()
     {
         bool rejected = await NamedPipeEchoServer.TryAcceptClientAsync(
             Task.FromException(new UnauthorizedAccessException()));
+
         bool accepted = await NamedPipeEchoServer.TryAcceptClientAsync(Task.CompletedTask);
 
         Assert.IsFalse(rejected);
         Assert.IsTrue(accepted);
     }
 
+    /// <summary>
+    ///  Verifies that an unexpected accept failure propagates unchanged.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task TryAcceptClientAsync_UnexpectedFailure_Propagates()
+    public async Task TryAcceptClientAsyncUnexpectedFailurePropagates()
     {
         IOException failure = new("The accept operation failed.");
 
@@ -30,8 +46,12 @@ public sealed class NamedPipeEchoTests
         Assert.AreSame(failure, actual);
     }
 
+    /// <summary>
+    ///  Verifies that a canceled accept propagates as cancellation.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
-    public async Task TryAcceptClientAsync_CanceledAccept_Propagates()
+    public async Task TryAcceptClientAsyncCanceledAcceptPropagates()
     {
         using CancellationTokenSource cancellation = new();
         cancellation.Cancel();
@@ -40,9 +60,13 @@ public sealed class NamedPipeEchoTests
             () => NamedPipeEchoServer.TryAcceptClientAsync(Task.FromCanceled(cancellation.Token)));
     }
 
+    /// <summary>
+    ///  Verifies that a running server returns the request payload.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task EchoAsync_ServerRunning_RoundTripsPayload()
+    public async Task EchoAsyncServerRunningRoundTripsPayload()
     {
         string pipeName = CreatePipeName();
         using CancellationTokenSource serverShutdown = new();
@@ -65,17 +89,24 @@ public sealed class NamedPipeEchoTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that clients held open require enough concurrent server workers for every reply.
+    /// </summary>
+    /// <param name="workerCount">The number of server workers.</param>
+    /// <param name="expectAllReplies">Whether every client should receive a reply before the deadline.</param>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
     [DataRow(4, true)]
     [DataRow(1, false)]
-    public async Task RunAsync_ClientsHeldOpen_RequiresConcurrentWorkers(int workerCount, bool expectAllReplies)
+    public async Task RunAsyncClientsHeldOpenRequiresConcurrentWorkers(int workerCount, bool expectAllReplies)
     {
         const int clientCount = 4;
         string pipeName = CreatePipeName();
         using CancellationTokenSource serverShutdown = new();
         using CancellationTokenSource testDeadline = new(
             expectAllReplies ? TimeSpan.FromSeconds(5) : TimeSpan.FromMilliseconds(500));
+
         Task serverTask = NamedPipeEchoServer.RunAsync(pipeName, workerCount, serverShutdown.Token);
         List<NamedPipeClientStream> clients = [];
 
@@ -120,9 +151,13 @@ public sealed class NamedPipeEchoTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that canceling pending accepts completes server shutdown normally.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task RunAsync_PendingAcceptsAreCanceled_CompletesNormally()
+    public async Task RunAsyncPendingAcceptsAreCanceledCompletesNormally()
     {
         using CancellationTokenSource serverShutdown = new();
         Task serverTask = NamedPipeEchoServer.RunAsync(CreatePipeName(), 4, serverShutdown.Token);
@@ -133,9 +168,13 @@ public sealed class NamedPipeEchoTests
         Assert.AreEqual(TaskStatus.RanToCompletion, serverTask.Status);
     }
 
+    /// <summary>
+    ///  Verifies that a startup failure cancels sibling workers and releases their pipe instances.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task RunAsync_PartialStartupFailure_CancelsWorkersAndReportsFailure()
+    public async Task RunAsyncPartialStartupFailureCancelsWorkersAndReportsFailure()
     {
         string pipeName = CreatePipeName();
         using NamedPipeServerStream existingInstance = new(
@@ -144,6 +183,7 @@ public sealed class NamedPipeEchoTests
             2,
             PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+
         using CancellationTokenSource serverShutdown = new();
         Task serverTask = NamedPipeEchoServer.RunAsync(pipeName, 2, serverShutdown.Token);
 
@@ -174,9 +214,13 @@ public sealed class NamedPipeEchoTests
         }
     }
 
+    /// <summary>
+    ///  Verifies that rejecting a negative frame length does not stop later clients.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task RunAsync_NegativeLengthDisconnects_NextClientStillSucceeds()
+    public async Task RunAsyncNegativeLengthDisconnectsNextClientStillSucceeds()
     {
         byte[] invalidHeader = new byte[sizeof(int)];
         BinaryPrimitives.WriteInt32BigEndian(invalidHeader, -1);
@@ -184,16 +228,24 @@ public sealed class NamedPipeEchoTests
         await AssertMalformedClientDoesNotStopServerAsync(invalidHeader);
     }
 
+    /// <summary>
+    ///  Verifies that a truncated header does not stop later clients.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task RunAsync_TruncatedHeaderDisconnects_NextClientStillSucceeds()
+    public async Task RunAsyncTruncatedHeaderDisconnectsNextClientStillSucceeds()
     {
         await AssertMalformedClientDoesNotStopServerAsync([0x00, 0x00]);
     }
 
+    /// <summary>
+    ///  Verifies that a truncated payload does not stop later clients.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task RunAsync_TruncatedPayloadDisconnects_NextClientStillSucceeds()
+    public async Task RunAsyncTruncatedPayloadDisconnectsNextClientStillSucceeds()
     {
         byte[] truncatedFrame = new byte[sizeof(int) + 2];
         BinaryPrimitives.WriteInt32BigEndian(truncatedFrame, 4);
@@ -203,9 +255,13 @@ public sealed class NamedPipeEchoTests
         await AssertMalformedClientDoesNotStopServerAsync(truncatedFrame);
     }
 
+    /// <summary>
+    ///  Verifies that connecting to an absent server reports a timeout.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task EchoAsync_ServerAbsent_ThrowsTimeoutException()
+    public async Task EchoAsyncServerAbsentThrowsTimeoutException()
     {
         await Assert.ThrowsExactlyAsync<TimeoutException>(
             () => NamedPipeEchoClient.EchoAsync(
@@ -215,9 +271,13 @@ public sealed class NamedPipeEchoTests
                 CancellationToken.None));
     }
 
+    /// <summary>
+    ///  Verifies that an already canceled caller token remains cancellation rather than a timeout.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task EchoAsync_CallerCanceled_ThrowsOperationCanceledException()
+    public async Task EchoAsyncCallerCanceledThrowsOperationCanceledException()
     {
         using CancellationTokenSource callerCancellation = new();
         callerCancellation.Cancel();
@@ -230,19 +290,28 @@ public sealed class NamedPipeEchoTests
                 callerCancellation.Token));
     }
 
+    /// <summary>
+    ///  Verifies that an idle client releases its server worker when the idle deadline expires.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task RunAsync_IdleClient_ReleasesWorker()
+    public async Task RunAsyncIdleClientReleasesWorker()
     {
         await AssertStalledClientDoesNotStopServerAsync([], TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(250));
     }
 
+    /// <summary>
+    ///  Verifies that a stalled frame releases its server worker when the request deadline expires.
+    /// </summary>
+    /// <param name="bytesSent">The number of header and payload bytes sent before stalling.</param>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
     [DataRow(2)]
     [DataRow(4)]
     [DataRow(6)]
-    public async Task RunAsync_StalledFrame_ReleasesWorker(int bytesSent)
+    public async Task RunAsyncStalledFrameReleasesWorker(int bytesSent)
     {
         byte[] frame = new byte[sizeof(int) + 4];
         BinaryPrimitives.WriteInt32BigEndian(frame, 4);
@@ -253,9 +322,13 @@ public sealed class NamedPipeEchoTests
             TimeSpan.FromSeconds(5));
     }
 
+    /// <summary>
+    ///  Verifies that a connected peer that never replies causes a request timeout.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task EchoAsync_ConnectedPeerStalls_ThrowsRequestTimeout()
+    public async Task EchoAsyncConnectedPeerStallsThrowsRequestTimeout()
     {
         string pipeName = CreatePipeName();
         using CancellationTokenSource testDeadline = new(TimeSpan.FromSeconds(8));
@@ -265,6 +338,7 @@ public sealed class NamedPipeEchoTests
             1,
             PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+
         Task acceptTask = silentServer.WaitForConnectionAsync(testDeadline.Token);
         Task<byte[]> clientTask = NamedPipeEchoClient.EchoAsync(
             pipeName,
@@ -278,23 +352,30 @@ public sealed class NamedPipeEchoTests
 
         TimeoutException exception = await Assert.ThrowsExactlyAsync<TimeoutException>(
             () => clientTask.WaitAsync(TimeSpan.FromSeconds(2)));
+
         StringAssert.Contains(exception.Message, "pipe request");
     }
 
+    /// <summary>
+    ///  Verifies that canceling a pending reply preserves caller cancellation.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task EchoAsync_CallerCancelsPendingReply_PreservesCancellation()
+    public async Task EchoAsyncCallerCancelsPendingReplyPreservesCancellation()
     {
         string pipeName = CreatePipeName();
         using CancellationTokenSource testDeadline = new(TimeSpan.FromSeconds(8));
         using CancellationTokenSource callerCancellation =
             CancellationTokenSource.CreateLinkedTokenSource(testDeadline.Token);
+
         await using NamedPipeServerStream silentServer = new(
             pipeName,
             PipeDirection.InOut,
             1,
             PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+
         Task acceptTask = silentServer.WaitForConnectionAsync(testDeadline.Token);
         Task<byte[]> clientTask = NamedPipeEchoClient.EchoAsync(
             pipeName,
@@ -311,9 +392,13 @@ public sealed class NamedPipeEchoTests
             () => clientTask.WaitAsync(TimeSpan.FromSeconds(2)));
     }
 
+    /// <summary>
+    ///  Verifies that a queued client can exchange frames after the previous client disconnects.
+    /// </summary>
+    /// <returns>A task representing the test.</returns>
     [TestMethod]
     [Timeout(10_000)]
-    public async Task RunAsync_QueuedClientSurvivesPreviousDisconnect()
+    public async Task RunAsyncQueuedClientSurvivesPreviousDisconnect()
     {
         string pipeName = CreatePipeName();
         using CancellationTokenSource testDeadline = new(TimeSpan.FromSeconds(8));
@@ -327,6 +412,7 @@ public sealed class NamedPipeEchoTests
                 pipeName,
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+
             byte[] firstResponse = await ExchangeFrameAsync(firstClient, 1, testDeadline.Token);
             CollectionAssert.AreEqual(BitConverter.GetBytes(1), firstResponse);
 
@@ -335,6 +421,7 @@ public sealed class NamedPipeEchoTests
                 pipeName,
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+
             Task connectTask = queuedClient.ConnectAsync(testDeadline.Token);
             if (!OperatingSystem.IsWindows())
             {
@@ -373,6 +460,7 @@ public sealed class NamedPipeEchoTests
                 pipeName,
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+
             await stalledClient.ConnectAsync(testDeadline.Token);
             if (partialFrame.Length != 0)
             {
@@ -381,6 +469,7 @@ public sealed class NamedPipeEchoTests
 
             int bytesRead = await stalledClient.ReadAsync(new byte[1], testDeadline.Token).AsTask()
                 .WaitAsync(TimeSpan.FromSeconds(2));
+
             Assert.AreEqual(0, bytesRead);
 
             byte[] expected = [0x10, 0x20];

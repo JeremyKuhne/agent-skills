@@ -5,7 +5,9 @@
    separate decisions.
 - Assessment date: 2026-09-13
 - Repository baseline: `main` at `254f1e5bb2837150a9b43dd9d4ebbb606584c83e`
-- Target models: GPT-6 Sol (`gpt-6-sol`) and GPT-6 Luna (`gpt-6-luna`)
+- Target models: GPT-6.1 Sol (`gpt-6.1-sol`) and GPT-6.0 Luna
+  (`gpt-6-luna`)
+- Model roster revised: 2026-10-02; applies to prospective campaigns
 - Reasoning effort: `medium` for both models
 - Scope: every published skill, including missing scenarios; retain existing
   repository-local workflow evaluations as a separately reported cohort
@@ -16,8 +18,8 @@
 E1.1 made test-runner failure reporting trustworthy and merged through PR #86.
 E1.2 now separates deterministic client prerequisites from real plugin and model
 integration. E1 remains incomplete pending maintainer acceptance and integration.
-Model IDs and the scenario inventory have been checked; those findings are
-planning evidence, not harness qualification.
+The earlier model IDs and scenario inventory were checked; those findings are
+baseline planning evidence, not qualification of the revised model roster.
 
 This table is the execution tracker. The implementation agent owns local work
 and evidence; the repository maintainer accepts milestones and owns budget,
@@ -28,7 +30,7 @@ been authorized. Status last reviewed: 2026-09-13.
 | ID | Milestone | State | Depends on | Exit evidence and decision |
 | --- | --- | --- | --- | --- |
 | E1 | Trustworthy runner and client prerequisites | Awaiting decision | E1.1 merged; E1.2 locally validated | Discovery/setup/process failures cannot report success; hermetic tests do not depend on ambient Copilot installation; supported-host check results recorded. |
-| E2 | Deterministic paired-model execution | Not started | E1 | Both exact models at `medium` scheduled once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
+| E2 | Deterministic paired-model execution | Not started | E1 | Both exact target models are recognized by receipt checks and scheduled at `medium` once per scenario/repetition, with isolated artifacts, shared concurrency, no silent fallback, and model-aware evidence reuse; synthetic tests pass. |
 | E3 | Cost, time, and outcome receipts | Not started | E2 | Synthetic usage fixtures verify 6:1 weighting, failed-work accounting, phase timing, missing-evidence handling, and balanced success/cost reports; pilot rubrics and budget-control tests ready. |
 | E4 | Paired pilot and explicit decision | Not started | E3; separate candidate/judge run approval | Approved 32-candidate-run pilot and judge calibration have complete evidence, actual cost/time, and a maintainer proceed/rework/inconclusive decision. This is the PR-plan handoff, not portfolio qualification. |
 | E5 | Full portfolio coverage ready | Not started | E3 | All four coverage obligations mapped for every published skill (26 as of 2026-09-27), including nullability remediation; fixtures, held-out variants, C# 14 checks, and reviewed outcome rubrics ready. The earlier 10-of-25 primary targeting is not a validation pass. |
@@ -39,6 +41,22 @@ E5 preparation can proceed while E4 awaits a paid-run decision. After E4, E5/E6,
 E7, and the PR-effectiveness workstream need not wait for each other unless a
 specific safety or evidence dependency requires it. Ongoing cost tracking starts
 with E1's first recorded checks; it does not wait for E6 or a metrics service.
+
+On 2026-10-02, the maintainer changed the prospective candidate and judge roster
+to GPT-6.1 Sol (`gpt-6.1-sol`) and GPT-6.0 Luna (`gpt-6-luna`), both at
+`medium`. Historical `gpt-6-sol` results and approvals remain attached to their
+original model; they cannot qualify GPT-6.1 Sol or authorize new inference.
+The revised roster starts a new comparison/calibration cohort.
+
+Before executing it, align the canonical qualification policy and the
+[receipt-protected model path](../evals/SkillEval.psm1), verify exact-model
+support in the selected client, and test requested/served identity and usage
+reconciliation for both target IDs. The output-quality foundation now aligns
+the canonical policy and model-recognition list with `gpt-6.1-sol`, retaining
+historical IDs for replay. Its synthetic receipt controls are local evidence,
+not confirmation of support from a real serving client.
+Do not silently fall back to the earlier Sol model. Obtain new exact-terms
+candidate and judge approvals before inference.
 
 On 2026-09-27, the maintainer changed the qualification roster to GPT-6 Sol and
 GPT-6 Luna. The approved P3a rung is a six-attempt paired pilot followed by at
@@ -54,10 +72,10 @@ outside the published-skill denominator.
 
 Independent judging is not included in the approved 132 P3a candidate calls.
 A prospective calibration would use eight synthetic, maintainer-labeled
-correct/defective packets with two repetitions on each GPT-6 judge (32 grading
-calls). If one meets the stated accuracy and safety requirements, grading the
-126 held-out P3a candidate answers would require up to 126 additional calls on
-that selected judge, plus a model-balanced human audit. The 32-call calibration
+correct/defective packets with two repetitions on GPT-6.1 Sol and GPT-6.0 Luna
+(32 grading calls). If one meets the stated accuracy and safety requirements,
+grading the 126 held-out P3a candidate answers would require up to 126 additional
+calls on that selected judge, plus a model-balanced human audit. The 32-call calibration
 and 126-call grading allowances are proposals, not authorizations; obtain a
 separate exact-model, effort, concurrency, token-budget, and scenario approval
 before any judge inference. Full E6 portfolio runs require another plan.

@@ -70,6 +70,15 @@ also prevent a core from relying on an undeclared sibling skill.
 
 ## Style
 
+- Repository-owned C# projects under `tools/` and `tests/` inherit pinned
+  `KlutzyNinja.Touki` and `KlutzyNinja.Touki.Analyzers` references from
+  [Touki.CSharp.props](tools/Touki.CSharp.props). Standalone samples under
+  `skills/` remain dependency-independent.
+- [Directory.Build.props](Directory.Build.props) promotes compiler and analyzer
+  warnings to build errors. [.editorconfig](.editorconfig) keeps Touki's opt-in
+  rules at warning severity with their default options and defines the exact
+  Touki copyright/license header. Do not suppress a requested rule to make a
+  build green.
 - Do not use HTML entities in prose. Write the character directly or use plain
   words so the source remains readable.
 - Prefer short, declarative sentences and match the surrounding document's voice.
