@@ -45,6 +45,18 @@ public sealed class WorkflowPolicyTests
                 run: |
                   $paths = @('tests/windows-acls', 'tests/dotnet-file-creation')
                   ./tests/Invoke-PesterShards.ps1 -Path $paths
+          skill-content-evaluation:
+            runs-on: ${{ matrix.os }}
+            strategy:
+              matrix:
+                os: [ubuntu-24.04-arm, windows-latest]
+            steps:
+              - name: Install Pester
+                shell: pwsh
+                run: Install-Module Pester -RequiredVersion 6.2.0 -Force
+              - name: Run content process contracts
+                shell: pwsh
+                run: ./tests/Invoke-PesterShards.ps1 -Path ./tests/evals/SkillEvalContent.Tests.ps1
         """;
 
     private const string FullContinuousIntegration = """
@@ -148,6 +160,26 @@ public sealed class WorkflowPolicyTests
             yield return ["wrong-linux-host", continuousIntegration.Replace(
                 "runs-on: ubuntu-24.04-arm",
                 "runs-on: ubuntu-latest")];
+
+            yield return ["missing-content-job", continuousIntegration.Replace(
+                "  skill-content-evaluation:",
+                "  renamed-content:")];
+
+            yield return ["wrong-content-runner-host", continuousIntegration.Replace(
+                "runs-on: ${{ matrix.os }}",
+                "runs-on: windows-latest")];
+
+            yield return ["missing-content-matrix-host", continuousIntegration.Replace(
+                "os: [ubuntu-24.04-arm, windows-latest]",
+                "os: [windows-latest]")];
+
+            yield return ["extra-content-matrix-host", continuousIntegration.Replace(
+                "os: [ubuntu-24.04-arm, windows-latest]",
+                "os: [ubuntu-24.04-arm, windows-latest, ubuntu-latest]")];
+
+            yield return ["wrong-content-runner-path", continuousIntegration.Replace(
+                "./tests/Invoke-PesterShards.ps1 -Path ./tests/evals/SkillEvalContent.Tests.ps1",
+                "./tests/Invoke-PesterShards.ps1 -Path ./tests")];
 
             yield return ["missing-linux-bootstrap", continuousIntegration.Replace(
                 "run: Install-Module Pester -RequiredVersion 6.2.0 -Force",
@@ -314,8 +346,8 @@ public sealed class WorkflowPolicyTests
     }
 
     /// <summary>
-    ///  Verifies that Linux ARM64 full-suite shards, conditional focused Windows shards, and
-    ///  scheduled and manually dispatched full Windows CI are accepted.
+    ///  Verifies that Linux ARM64 full-suite shards, conditional focused Windows shards, the two-host
+    ///  content-test matrix, and scheduled and manually dispatched full Windows CI are accepted.
     /// </summary>
     [TestMethod]
     public void ValidateActivePesterWorkflowsAcceptedTopologyPasses()

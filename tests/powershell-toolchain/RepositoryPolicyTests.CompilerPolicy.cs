@@ -50,6 +50,10 @@ public sealed partial class RepositoryPolicyTests
     /// </summary>
     /// <param name="projectPath">The repository-relative project path, using backslash separators.</param>
     [TestMethod]
+    [DataRow(@"tools\skill-evaluation\SkillEvaluation.Core\SkillEvaluation.Core.csproj")]
+    [DataRow(@"tools\skill-evaluation\SkillEvaluation.Cli\SkillEvaluation.Cli.csproj")]
+    [DataRow(@"tests\skill-evaluation\SkillEvaluation.Tests.csproj")]
+    [DataRow(@"tests\skill-evaluation\process-fixture\SkillEvaluation.ProcessFixture.csproj")]
     [DataRow(@"tests\powershell-toolchain\PowerShellToolchain.Tests.csproj")]
     [DataRow(@"tests\dotnet-pipes\DotNetPipes.Tests.csproj")]
     [DataRow(@"tests\dotnet-pipes\anonymous-child\AnonymousPipeChild.csproj")]

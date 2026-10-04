@@ -219,7 +219,7 @@ as infrastructure failure.
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-6-sol `
+  -Model gpt-6.1-sol `
   -RunCount 1
 ```
 
@@ -243,7 +243,7 @@ Run a six-document single-model diagnostic under one eight-worker limit:
 
 ```pwsh
 ./evals/Invoke-SkillEvalMatrix.ps1 `
-  -Model gpt-6-sol `
+  -Model gpt-6.1-sol `
   -RunCount 3 `
   -MaxConcurrency 8
 ```
@@ -251,7 +251,7 @@ Run a six-document single-model diagnostic under one eight-worker limit:
 The matrix allocates the worker budget by document workload and runs documents
 concurrently. It never creates more model workers than `-MaxConcurrency`.
 
-Both GPT-6 Sol (`gpt-6-sol`) and GPT-6 Luna (`gpt-6-luna`) are required
+Both GPT-6.1 Sol (`gpt-6.1-sol`) and GPT-6.0 Luna (`gpt-6-luna`) are required
 for skill qualification at medium reasoning effort. Current entry points require
 an explicit model and run only one at a time; their single-model summaries are
 diagnostic, not paired qualification. Obtain approval naming both models, the
@@ -261,7 +261,7 @@ Run one scenario while developing the harness:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-6-sol `
+  -Model gpt-6.1-sol `
   -ScenarioId create-pr-dirty-main-no-approval `
   -RunCount 1 `
   -ReportOnly
@@ -271,7 +271,7 @@ Select another scenario document explicitly:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-6-sol `
+  -Model gpt-6.1-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -RunCount 1 `
   -ReportOnly
@@ -289,7 +289,7 @@ scenarios instead:
 
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
-  -Model gpt-6-sol `
+  -Model gpt-6.1-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -BaselineSummaryPath ./artifacts/baseline/summary.json `
   -RunCount 3
@@ -299,7 +299,7 @@ Inspect the affected identifiers without running the model:
 
 ```pwsh
 ./evals/Get-SkillEvalAffectedScenarios.ps1 `
-  -Model gpt-6-sol `
+  -Model gpt-6.1-sol `
   -ScenarioPath ./evals/scenarios/technical-writing.json `
   -BaselineSummaryPath ./artifacts/baseline/summary.json
 ```
@@ -365,7 +365,7 @@ paired campaign:
 ```pwsh
 ./evals/Invoke-SkillEvals.ps1 `
   -ScenarioPath ./evals/scenarios/dotnet-file-creation.json `
-  -Model gpt-6-sol `
+  -Model gpt-6.1-sol `
   -RunCount 3 `
   -MaxConcurrency 2 `
   -ReportOnly
@@ -394,6 +394,41 @@ and the run identifier. Keep automated pattern passes and reviewed outcomes
 separate; not checked is not passed. Human review of these responses is not a
 novice-user study, and local code tests are not cross-platform or power-loss
 certification. Keep responses and any generated-code projects local and ignored.
+
+## Deterministic content evaluation
+
+The PR-description and review-comment cases now have versioned content profiles
+and human rubrics. Facts are rendered from each profile's single authoritative
+fact set before capture. Original response predicates, routing evidence, and
+safety checks remain in place.
+
+Build the [.NET content evaluator](../tools/skill-evaluation/README.md) before
+running either profiled case. Its maintained Markdown/JSON Schema parsers own
+content contracts; PowerShell remains the process/capture adapter. The CLI does
+not install or invoke models.
+
+At capture completion, declared final messages or artifact files are snapshotted
+with separate manifest and byte revisions. The existing output-hash algorithm
+is unchanged. A closing acknowledgment cannot replace a declared file, and a
+file's surviving workspace bytes cannot retroactively establish provenance.
+
+Analyze a captured single-suite run into a distinct empty directory:
+
+```pwsh
+.\evals\Invoke-SkillEvalSemantic.ps1 `
+  -ScenarioPath .\evals\scenarios\technical-writing.json `
+  -InputDirectory .\artifacts\baseline `
+  -OutputDirectory .\artifacts\content `
+  -ReportOnly
+```
+
+The derived summary preserves original results and reports literal, semantic,
+and useful-outcome states separately. This initial pass is deterministic:
+claims and rubric judgments remain pending, even when literal checks pass.
+Missing snapshots, changed evidence, invalid profiles, and process errors are
+explicit infrastructure failures. Report-only never waives those or original
+safety failures. No human calibration, learned inference, or portfolio
+qualification is claimed.
 
 ## Human A/B review
 
@@ -427,6 +462,12 @@ and retain only the aggregate evidence needed for the release decision.
   requested fresh run.
 
 ## Deterministic tests
+
+Restore/build the [content test project](../tests/skill-evaluation/SkillEvaluation.Tests.csproj)
+as described in the [component commands](../tools/skill-evaluation/README.md#build-and-test)
+before running evaluation Pester shards. It supplies the native evaluator and
+controlled process fixture; ordinary tests still never need a real Copilot
+client or model.
 
 Ordinary Pester tests do not install, discover, or invoke a real Copilot client.
 They use injected executors and controlled absent/launcher/native fixtures. The

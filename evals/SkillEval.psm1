@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'SkillEvalScorer.ps1')
+Import-Module (Join-Path $PSScriptRoot 'SkillEvalContent.psm1') -Force
 
 function Get-SkillEvalScenarios {
     [CmdletBinding()]
@@ -77,6 +78,8 @@ function New-SkillEvalArguments {
         [Parameter(Mandatory)]
         [string] $TranscriptPath,
 
+        [string] $Prompt = [string]$Scenario.prompt,
+
         [string] $UsageOutputPath,
 
         [string[]] $SecretEnvironmentNames = @(
@@ -90,7 +93,7 @@ function New-SkillEvalArguments {
 
     $arguments = [System.Collections.Generic.List[string]]::new()
     foreach ($argument in @(
-            '-p', [string]$Scenario.prompt,
+            '-p', $Prompt,
             '--plugin-dir', $PluginDirectory,
             '--add-dir', $PluginDirectory,
             '--model', $Model,
@@ -221,7 +224,7 @@ function ConvertFrom-SkillEvalCopilotVersion {
 function Test-SkillEvalUsageModel ([string] $Model) {
     return $Model -in @(
         'gpt-5.6-sol', 'gpt-5.6-luna',
-        'gpt-6-sol', 'gpt-6-luna')
+        'gpt-6-sol', 'gpt-6-luna', 'gpt-6.1-sol')
 }
 
 function Get-SkillEvalValidatedCopilotVersion {
@@ -1184,7 +1187,9 @@ function Invoke-SkillEvalProcess {
 
         [scriptblock] $Executor,
 
-        [switch] $IsolateCopilotHome = $true
+        [switch] $IsolateCopilotHome = $true,
+
+        [pscustomobject] $ContentPreparation
     )
 
     $transcriptPath = Join-Path $Context.RunDirectory 'transcript.md'
@@ -1212,6 +1217,7 @@ function Invoke-SkillEvalProcess {
     }
     $arguments = New-SkillEvalArguments `
         -Scenario $Scenario `
+        -Prompt $(if ($null -ne $ContentPreparation) { [string]$ContentPreparation.prompt } else { [string]$Scenario.prompt }) `
         -PluginDirectory $Context.PluginDirectory `
         -Model $Model `
         -TranscriptPath $transcriptPath `
@@ -1231,6 +1237,12 @@ function Invoke-SkillEvalProcess {
         StandardErrorPath = $standardErrorPath
         UsageOutputPath = $usageOutputPath
         ShimLogPath = $Context.ShimLogPath
+    }
+    if ($null -ne $ContentPreparation) {
+        $invocation | Add-Member -NotePropertyName ContentProfileRevision `
+            -NotePropertyValue ([string]$ContentPreparation.profileRevision)
+        $invocation | Add-Member -NotePropertyName ContentInputRevision `
+            -NotePropertyValue ([string]$ContentPreparation.inputRevision)
     }
     $invocation | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $Context.RunDirectory 'invocation.json')
 
@@ -1400,6 +1412,8 @@ function Invoke-SkillEvalWorkItem {
         [Parameter(Mandatory)]
         [string] $EvalRoot,
 
+        [string] $ScenarioPath,
+
         [Parameter(Mandatory)]
         [string] $OutputDirectory,
 
@@ -1416,7 +1430,9 @@ function Invoke-SkillEvalWorkItem {
 
         [scriptblock] $Executor,
 
-        [switch] $IsolateCopilotHome = $true
+        [switch] $IsolateCopilotHome = $true,
+
+        [pscustomobject] $ContentPreparation
     )
 
     $runDirectory = Join-Path $OutputDirectory "$($Scenario.id)/run-$RunNumber"
@@ -1429,6 +1445,7 @@ function Invoke-SkillEvalWorkItem {
     $contextMilliseconds = 0L
     $processMilliseconds = 0L
     $scoringMilliseconds = 0L
+    $result = $null
     try {
         $phaseStarted = $stopwatch.ElapsedMilliseconds
         $context = New-SkillEvalContext `
@@ -1446,7 +1463,8 @@ function Invoke-SkillEvalWorkItem {
             -TimeoutMinutes $TimeoutMinutes `
             -CopilotPath $CopilotPath `
             -Executor $Executor `
-            -IsolateCopilotHome:$IsolateCopilotHome
+            -IsolateCopilotHome:$IsolateCopilotHome `
+            -ContentPreparation $ContentPreparation
         $processMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
         if ($processResult.PSObject.Properties['UsageOutputPath'] -and
             $processResult.UsageOutputPath) {
@@ -1498,9 +1516,43 @@ function Invoke-SkillEvalWorkItem {
             RunDirectory = $runDirectory
             Error = $null
         }
+        if ($null -ne $ContentPreparation) {
+            $captureStarted = $stopwatch.ElapsedMilliseconds
+            $captureReceipt = Invoke-SkillEvalContentCli -Arguments @(
+                'capture',
+                '--repo-root', $RepoRoot,
+                '--scenario', $ScenarioPath,
+                '--scenario-id', [string]$Scenario.id,
+                '--workspace', [string]$context.Workspace,
+                '--run-directory', $runDirectory,
+                '--run-number', $RunNumber.ToString(),
+                '--scenario-revision', (Get-SkillEvalObjectRevision -InputObject $Scenario)
+            )
+            if ($captureReceipt.ExitCode -ne 0) {
+                throw "Content capture failed (exit $($captureReceipt.ExitCode)): $($captureReceipt.StandardError)"
+            }
+            $capture = ConvertFrom-Json -InputObject $captureReceipt.StandardOutput -ErrorAction Stop
+            if ([string]$capture.profileRevision -cne [string]$ContentPreparation.profileRevision -or
+                [string]$capture.inputRevision -cne [string]$ContentPreparation.inputRevision -or
+                [string]$capture.modelOutputRevision -cne (Get-SkillEvalRunArtifactRevision -RunDirectory $runDirectory)) {
+                throw 'Content inputs or source output changed during artifact capture.'
+            }
+            $result | Add-Member -NotePropertyName ArtifactManifestRevision `
+                -NotePropertyValue ([string]$capture.artifactManifestRevision)
+            $result | Add-Member -NotePropertyName ContentProfileRevision `
+                -NotePropertyValue ([string]$capture.profileRevision)
+            $result | Add-Member -NotePropertyName ContentInputRevision `
+                -NotePropertyValue ([string]$capture.inputRevision)
+            $result | Add-Member -NotePropertyName ContentCaptureMilliseconds `
+                -NotePropertyValue ($stopwatch.ElapsedMilliseconds - $captureStarted)
+        }
     }
     catch {
-        $result = [pscustomobject]@{
+        if ($null -ne $result) {
+            $result.Error = $_.Exception.Message
+        }
+        else {
+            $result = [pscustomobject]@{
             ScenarioId = [string]$Scenario.id
             ScenarioIndex = $ScenarioIndex
             Skill = [string]$Scenario.skill
@@ -1516,6 +1568,7 @@ function Invoke-SkillEvalWorkItem {
             Evidence = @()
             RunDirectory = $runDirectory
             Error = $_.Exception.Message
+            }
         }
     }
     $stopwatch.Stop()
@@ -1602,6 +1655,30 @@ function Invoke-SkillEvalSuite {
         }
     }
 
+    $contentByScenario = @{}
+    if (@($scenarios | Where-Object { $_.PSObject.Properties['contentEvaluation'] }).Count -gt 0) {
+        $preparationReceipt = Invoke-SkillEvalContentCli -Arguments @(
+            'prepare',
+            '--repo-root', $resolvedRepoRoot,
+            '--scenario', $resolvedScenarioPath
+        )
+        if ($preparationReceipt.ExitCode -ne 0) {
+            throw "Content profile preparation failed (exit $($preparationReceipt.ExitCode)): $($preparationReceipt.StandardError)"
+        }
+        $preparations = ConvertFrom-Json -InputObject $preparationReceipt.StandardOutput -NoEnumerate -ErrorAction Stop
+        if ($preparations -isnot [array]) { throw 'Content preparation must return a JSON array.' }
+        foreach ($preparation in $preparations) {
+            if ($contentByScenario.ContainsKey([string]$preparation.scenarioId)) {
+                throw 'Content preparation returned a duplicate scenario.'
+            }
+            $contentByScenario[[string]$preparation.scenarioId] = $preparation
+        }
+        foreach ($scenario in @($scenarios | Where-Object { $_.PSObject.Properties['contentEvaluation'] })) {
+            if (-not $contentByScenario.ContainsKey([string]$scenario.id)) {
+                throw "Content preparation omitted profiled scenario '$($scenario.id)'."
+            }
+        }
+    }
     $queuedAtUtc = [DateTime]::UtcNow
     $workItems = [System.Collections.Generic.List[object]]::new()
     for ($scenarioIndex = 0; $scenarioIndex -lt $scenarios.Count; $scenarioIndex++) {
@@ -1613,6 +1690,7 @@ function Invoke-SkillEvalSuite {
                     ScenarioIndex = $scenarioIndex
                     RunNumber = $runNumber
                     QueuedAtUtc = $queuedAtUtc
+                    ContentPreparation = $contentByScenario[[string]$scenario.id]
                 })
         }
     }
@@ -1627,13 +1705,15 @@ function Invoke-SkillEvalSuite {
                     -RunNumber $_.RunNumber `
                     -RepoRoot $resolvedRepoRoot `
                     -EvalRoot $evalRoot `
+                    -ScenarioPath $resolvedScenarioPath `
                     -OutputDirectory $resolvedOutputDirectory `
                     -Model $Model `
                     -TimeoutMinutes $TimeoutMinutes `
                     -QueuedAtUtc $_.QueuedAtUtc `
                     -CopilotPath $resolvedCopilotPath `
                     -Executor $Executor `
-                    -IsolateCopilotHome:$IsolateCopilotHome
+                    -IsolateCopilotHome:$IsolateCopilotHome `
+                    -ContentPreparation $_.ContentPreparation
             })
     }
     else {
@@ -1646,6 +1726,7 @@ function Invoke-SkillEvalSuite {
                         $WorkItem,
                         $RepoRoot,
                         $EvalRoot,
+                        $ScenarioPath,
                         $OutputDirectory,
                         $Model,
                         $TimeoutMinutes,
@@ -1659,16 +1740,19 @@ function Invoke-SkillEvalSuite {
                         -RunNumber $WorkItem.RunNumber `
                         -RepoRoot $RepoRoot `
                         -EvalRoot $EvalRoot `
+                        -ScenarioPath $ScenarioPath `
                         -OutputDirectory $OutputDirectory `
                         -Model $Model `
                         -TimeoutMinutes $TimeoutMinutes `
                         -QueuedAtUtc $WorkItem.QueuedAtUtc `
                         -CopilotPath $CopilotPath `
-                        -IsolateCopilotHome:$IsolateCopilotHome
+                        -IsolateCopilotHome:$IsolateCopilotHome `
+                        -ContentPreparation $WorkItem.ContentPreparation
                 } `
                     $_ `
                     $using:resolvedRepoRoot `
                     $using:evalRoot `
+                    $using:resolvedScenarioPath `
                     $using:resolvedOutputDirectory `
                     $using:Model `
                     $using:TimeoutMinutes `
@@ -1961,6 +2045,11 @@ function Invoke-SkillEvalRescore {
             ModelOutputEvidenceVerified = $modelOutputEvidenceVerified
             WorktreeEvidenceVerified = $worktreeEvidenceVerified
             RescoreMilliseconds = $runStopwatch.ElapsedMilliseconds
+        }
+        foreach ($property in @('ArtifactManifestRevision', 'ContentProfileRevision', 'ContentInputRevision')) {
+            if ($sourceRun.PSObject.Properties[$property]) {
+                $result | Add-Member -NotePropertyName $property -NotePropertyValue $sourceRun.$property
+            }
         }
         $derivedRunDirectory = Join-Path $outputPath "$($result.ScenarioId)/run-$($result.RunNumber)"
         New-Item -ItemType Directory -Path $derivedRunDirectory -Force | Out-Null

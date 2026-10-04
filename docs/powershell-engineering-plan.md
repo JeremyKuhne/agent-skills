@@ -190,6 +190,13 @@ PR #114 delivers evaluator and failed-cohort evidence, not P3a qualification.
 Keep the frozen 126-attempt set and its receipts unchanged and separate from
 development work and any new qualification denominator.
 
+The prospective roster is GPT-6.1 Sol (`gpt-6.1-sol`) and GPT-6.0 Luna
+(`gpt-6-luna`), both at `medium`, as revised on 2026-10-02. Retain the earlier
+cohort's exact model identities. The
+[evaluation plan](dual-model-evaluation-plan.md) owns policy/client and
+receipt-recognition alignment before fresh inference; a model change requires
+new comparison/calibration evidence and exact-terms run approval.
+
 1. Audit the four Luna application-performance near-miss invocations and the
    missed YAML positive trigger, plus Sol's two near-miss invocations. Use the
    private receipts to separate discovery errors from response-scoring errors;
@@ -204,10 +211,11 @@ development work and any new qualification denominator.
    paired accepted and reversed-answer tests. This rubric revision does not
    change the frozen held-out document or turn earlier answers into passes.
 4. Freeze new synthetic held-out variants and prospective outcome criteria
-   before comparing a revised core. Propose a bounded paired GPT-6 Sol/Luna
-   campaign at medium effort with repetitions, serial concurrency, exact
-   candidate-call and token budgets, and model/usage receipts stated up front.
-   The exhausted 132-call allowance does not carry over.
+   before comparing a revised core. Propose a bounded paired GPT-6.1 Sol
+   (`gpt-6.1-sol`) and GPT-6.0 Luna (`gpt-6-luna`) campaign at medium effort
+   with repetitions, serial concurrency, exact candidate-call and token budgets,
+   and model/usage receipts stated up front. The exhausted 132-call allowance
+   does not carry over.
 5. Assess each model against the proposed 95% routing floor (at least 60/63 if
    the previous sample size is reused), with zero safety and infrastructure
    failures. Obtain separate approval for judge calibration, independent grading,

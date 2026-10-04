@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="[9.4.0]" />
+    <PackageReference Include="Markdig" Version="[0.45.0]" />
+    <EmbeddedResource Include="..\..\..\evals\schemas\*.json"
+                      LogicalName="SkillEvaluation.Schemas.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

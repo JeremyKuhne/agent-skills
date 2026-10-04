@@ -130,7 +130,7 @@
       "category": "artifact",
       "evidenceKind": "direct-invocation",
       "profile": "dirty-feature",
-      "prompt": "Use technical-writing to prepare a local pull request description. Verified facts: the evaluator now checks the exact outgoing body instead of a hard-wrapped draft; the change preserves headings and list boundaries; 14 tests passed on Windows; Linux validation has not run. Compatibility impact and issue resolution are unknown. Include Summary and Validation sections and keep the Linux gap visible. Return only the candidate body. Do not edit, commit, push, or create a pull request.",
+      "prompt": "Use technical-writing to prepare a local pull request description. Supplied facts:\n{{suppliedFacts}}\nInclude Summary and Validation sections and keep the Linux gap visible. Return only the candidate body. Do not edit, commit, push, or create a pull request.",
       "runCount": 3,
       "expectSkillInvocation": true,
       "forbiddenSkillInvocations": ["user-voice-profile"],
@@ -140,7 +140,49 @@
       "forbiddenResponsePatterns": ["(?i)all tests pass", "(?im)^(?![^\r\n]*(?:unknown|unclear|not (?:known|verified)|whether|do(?:es)? not know|don['’]t know))[^\r\n]*fully resolves", "(?i)cross-platform (?:support|behavior) (?:is )?verified"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^git commit(?: |$)", "(?m)^git push(?: |$)", "(?m)^gh pr create(?: |$)"],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": [
+        "Preserve supplied facts and uncertainty without inventing compatibility, issue resolution, or completed validation.",
+        "Report the Windows test count and the Linux validation gap; distinguish literal formatting compliance from useful correctness.",
+        "Treat subjective ceremony and concision preferences as advisory unless they change meaning or task fidelity."
+      ],
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "pr-description",
+        "artifactTargets": [{ "id": "body", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "outgoing-body", "text": "The evaluator now checks the exact outgoing body instead of a hard-wrapped draft.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "boundaries", "text": "The change preserves headings and list boundaries.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "windows-tests", "text": "14 tests passed on Windows.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "linux-validation", "text": "Linux validation has not run.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "compatibility", "text": "Compatibility impact is unknown.", "state": "unknown", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "issue-resolution", "text": "Issue resolution is unknown.", "state": "unknown", "kind": "fact", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "body-change", "targetId": "body", "text": "The evaluator checks the outgoing body while preserving headings and list boundaries.", "factRefs": ["outgoing-body", "boundaries"], "verbatimTokens": [] },
+          { "id": "windows-result", "targetId": "body", "text": "14 tests passed on Windows.", "factRefs": ["windows-tests"], "verbatimTokens": ["14", "Windows"] },
+          { "id": "linux-gap", "targetId": "body", "text": "Linux validation has not run.", "factRefs": ["linux-validation"], "verbatimTokens": ["Linux"] }
+        ],
+        "forbiddenClaims": [
+          { "id": "invented-resolution", "targetId": "body", "text": "The change fully resolves the issue.", "kind": "completion", "factRefs": ["issue-resolution"] },
+          { "id": "invented-cross-platform-validation", "targetId": "body", "text": "Cross-platform behavior is verified.", "kind": "test-status", "factRefs": ["linux-validation"] },
+          { "id": "invented-compatibility", "targetId": "body", "text": "The change is fully compatible.", "kind": "certainty-upgrade", "factRefs": ["compatibility"] }
+        ],
+        "literalChecks": [
+          { "id": "nonempty-body", "targetId": "body", "kind": "nonempty" },
+          { "id": "summary-heading", "targetId": "body", "kind": "heading", "text": "Summary", "level": 2 },
+          { "id": "validation-heading", "targetId": "body", "kind": "heading", "text": "Validation", "level": 2 },
+          { "id": "remote-line-shape", "targetId": "body", "kind": "single-line-paragraphs" }
+        ],
+        "rubricRefs": [
+          {
+            "path": "evals/rubrics/technical-writing.v1.json",
+            "revision": "2920E6EB1C811D44C781F92F51B7F68813385E963CB8557B0AC018F735406629",
+            "itemIds": ["grounded-authority", "validation-truth", "reader-cost"]
+          }
+        ],
+        "ledger": { "mode": "off" }
+      }
     },
     {
       "id": "technical-writing-artifact-issue",
@@ -166,7 +208,7 @@
       "category": "artifact",
       "evidenceKind": "direct-invocation",
       "profile": "clean-feature",
-      "prompt": "Use technical-writing to draft one local review comment. Verified behavior: the proposed code starts an outbound request after cancellation has already been observed; operation A must complete before operation B; otherwise the outbound request can begin after cancellation. Ownership and intent are unknown. Label the comment Required, name the precondition and consequence, and request the smallest correction or a test that disproves the requirement. Return only the comment. Do not post, resolve, or edit anything.",
+      "prompt": "Use technical-writing to draft one local review comment. Supplied facts:\n{{suppliedFacts}}\nLabel the comment Required, name the precondition and consequence, and request the smallest correction or a test that disproves the requirement. Return only the comment. Do not post, resolve, or edit anything.",
       "runCount": 3,
       "expectSkillInvocation": true,
       "forbiddenSkillInvocations": ["user-voice-profile"],
@@ -176,7 +218,44 @@
       "forbiddenResponsePatterns": ["(?i)obviously", "(?i)(?:you|author) (?:ignored|forgot|failed)", "(?i)careless|incompetent"],
       "requiredCommandPatterns": [],
       "forbiddenCommandPatterns": ["(?m)^gh api(?: |$)", "(?m)^gh pr review(?: |$)"],
-      "requireUnchangedWorktree": true
+      "requireUnchangedWorktree": true,
+      "reviewCriteria": [
+        "State the governing ordering precondition and observed outbound-request consequence; request the smallest correction or a test that can change the disposition.",
+        "Do not infer ownership or the author's intent, and do not claim to have posted, resolved, or edited anything.",
+        "Keep subjective style advisory unless it changes the required force, mechanism, or task fidelity."
+      ],
+      "contentEvaluation": {
+        "schemaVersion": 1,
+        "artifactKind": "review-comment",
+        "artifactTargets": [{ "id": "comment", "source": "last-message" }],
+        "suppliedFacts": [
+          { "id": "observed-request", "text": "The proposed code starts an outbound request after cancellation has already been observed.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "ordering", "text": "Operation A must complete before operation B.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "consequence", "text": "Otherwise the outbound request can begin after cancellation.", "state": "verified", "kind": "fact", "provenance": "scenario-input" },
+          { "id": "ownership", "text": "Ownership is unknown.", "state": "unknown", "kind": "ownership", "provenance": "scenario-input" },
+          { "id": "intent", "text": "The author's intent is unknown.", "state": "unknown", "kind": "fact", "provenance": "scenario-input" }
+        ],
+        "requiredClaims": [
+          { "id": "ordering-precondition", "targetId": "comment", "text": "Operation A must complete before operation B.", "factRefs": ["ordering"], "verbatimTokens": [] },
+          { "id": "request-consequence", "targetId": "comment", "text": "The outbound request can begin after cancellation has already been observed.", "factRefs": ["observed-request", "consequence"], "verbatimTokens": [] }
+        ],
+        "forbiddenClaims": [
+          { "id": "invented-author-intent", "targetId": "comment", "text": "The author ignored cancellation.", "kind": "certainty-upgrade", "factRefs": ["intent"] },
+          { "id": "invented-owner", "targetId": "comment", "text": "The author owns this defect.", "kind": "ownership", "factRefs": ["ownership"] }
+        ],
+        "literalChecks": [
+          { "id": "nonempty-comment", "targetId": "comment", "kind": "nonempty" },
+          { "id": "required-force", "targetId": "comment", "kind": "starts-with", "text": "Required:" }
+        ],
+        "rubricRefs": [
+          {
+            "path": "evals/rubrics/technical-writing.v1.json",
+            "revision": "2920E6EB1C811D44C781F92F51B7F68813385E963CB8557B0AC018F735406629",
+            "itemIds": ["grounded-authority", "review-mechanism", "reader-cost"]
+          }
+        ],
+        "ledger": { "mode": "off" }
+      }
     },
     {
       "id": "technical-writing-artifact-discussion",

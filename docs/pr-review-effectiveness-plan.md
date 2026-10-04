@@ -627,11 +627,12 @@ decisions; reducing prompts must not reduce user control.
 ### Entry gate - dual-model evaluation
 
 The [preceding evaluation plan](dual-model-evaluation-plan.md) replaces the
-single-model baseline with GPT-6 Sol and GPT-6 Luna at shared `medium`
-effort. It owns independent quality/safety gates, agreed 6:1 normalized token weighting,
-success per cost unit, time-to-result and runner-cost accounting, and selection
-of the cheapest qualified judging model. Use its reports and ongoing cost ledger
-rather than copying model thresholds, rate tables, or mutable totals here.
+single-model baseline with GPT-6.1 Sol (`gpt-6.1-sol`) and GPT-6.0 Luna
+(`gpt-6-luna`) at shared `medium` effort. It owns independent quality/safety
+gates, agreed 6:1 normalized token weighting, success per cost unit,
+time-to-result and runner-cost accounting, and selection of the cheapest
+qualified judging model. Use its reports and ongoing cost ledger rather than
+copying model thresholds, rate tables, or mutable totals here.
 
 This workstream starts after the paired harness's deterministic acceptance and
 a recorded paired-pilot proceed/rework decision. A pilot decision is not full

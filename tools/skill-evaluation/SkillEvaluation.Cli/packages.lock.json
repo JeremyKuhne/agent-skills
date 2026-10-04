@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "KlutzyNinja.Touki": {
+        "type": "Direct",
+        "requested": "[0.10.0, 0.10.0]",
+        "resolved": "0.10.0",
+        "contentHash": "PEFKJaUA4+ufa8cSEyoNLeVNfnrfV2wvGUvORl2wdpbDN4QouSOpbSfTQEz22gdA53tGRWRBrKWj/ORBJCoIyg==",
+        "dependencies": {
+          "KlutzyNinja.Touki.Analyzers": "0.10.0",
+          "System.Formats.Nrbf": "10.0.9"
+        }
+      },
+      "KlutzyNinja.Touki.Analyzers": {
+        "type": "Direct",
+        "requested": "[0.11.1, 0.11.1]",
+        "resolved": "0.11.1",
+        "contentHash": "WWaCYHDgC6o6KyAgXQGTvoyppK4MA5bNAvyopuH7iaoognuiTkkFsb2WyoXJbgWKk26LWhuzqWZtrOr2Q5mBOg=="
+      },
+      "Humanizer.Core": {
+        "type": "Transitive",
+        "resolved": "3.0.10",
+        "contentHash": "yZIhtw8sYuvsONzQbZxWpR60tMWYHXoo0DL6nyOqSFiU5POjBTSEyWFpTQtJEZuy+oqiYTXKXY/Mjx7KnqIQFw=="
+      },
+      "Json.More.Net": {
+        "type": "Transitive",
+        "resolved": "3.0.1",
+        "contentHash": "fRctF2J2SILYG6wqP21drmeEODmCVkVQ/b3MndDu2fT1swfySyUgq7ePCk+aENGlDcIm05fyfjh9vcuqDEfv3w=="
+      },
+      "JsonPointer.Net": {
+        "type": "Transitive",
+        "resolved": "7.0.2",
+        "contentHash": "oClYHv2ooeRrtPZyC9sb/Za/ie5pGhjTbNHlAyFg4XOCyU+606FdoZKS7UdaWvtsPlrF+U2w0Ja3TRvn5+spyA==",
+        "dependencies": {
+          "Humanizer.Core": "3.0.10",
+          "Json.More.Net": "3.0.1"
+        }
+      },
+      "JsonSchema.Net": {
+        "type": "Transitive",
+        "resolved": "9.4.0",
+        "contentHash": "muE4nPuzbD9x5XA1mkXJNqX4mhz47oF3EY8qFLY1pyUY7lhXFKq65t/dSKIHeNSLBV17zwZuq24MD1em90rMNg==",
+        "dependencies": {
+          "JsonPointer.Net": "7.0.2"
+        }
+      },
+      "Markdig": {
+        "type": "Transitive",
+        "resolved": "0.45.0",
+        "contentHash": "ObNLcA1b+0lpNNoEg256g9faMeJZi35wZW0AnKJ4nGPJe+5qkwnV26kUvQTHuanFnSX9SdvPzOO41BVJ6XarAg=="
+      },
+      "System.Formats.Nrbf": {
+        "type": "Transitive",
+        "resolved": "10.0.9",
+        "contentHash": "5SYwGzBdCL65Ntz56LjHgiY8khvvucN89xW9TSD/KVPFKSSl/ugoyfdb1nR0yXPeGBXWd4Y+QwIW5uwOsec3Pg=="
+      },
+      "skillevaluation.core": {
+        "type": "Project",
+        "dependencies": {
+          "JsonSchema.Net": "[9.4.0, 9.4.0]",
+          "KlutzyNinja.Touki": "[0.10.0, 0.10.0]",
+          "Markdig": "[0.45.0, 0.45.0]"
+        }
+      }
+    }
+  }
+}
