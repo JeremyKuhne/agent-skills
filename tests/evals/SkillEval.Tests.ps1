@@ -603,6 +603,36 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'performance accepts establishing a representative allocation baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark without first establishing a representative allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance accepts requiring a representative baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark without a representative baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance rejects contradicting the representative baseline prerequisite'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark without first establishing a representative allocation baseline; do not establish one.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance rejects refusing a benchmark against a baseline'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
