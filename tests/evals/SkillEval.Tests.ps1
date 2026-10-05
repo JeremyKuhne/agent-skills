@@ -583,6 +583,26 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $false
         }
         @{
+            CaseName = 'performance rejects passive allocation benchmark negation'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Allocations should not be benchmarked against a baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance accepts affirmative passive allocation benchmarking'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Allocated bytes should be benchmarked against a baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
             CaseName = 'performance accepts establishing a baseline before benchmarking'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
@@ -701,6 +721,26 @@ Describe 'Skill evaluation scenario contract' {
                 'Correctness: Skip validating output and exit behavior.'
                 'Uncertainty: Report measurement limits.') -join "`n"
             Expected = $false
+        }
+        @{
+            CaseName = 'performance rejects passive output validation negation'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Establish an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Output and exit behavior should not be validated.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance accepts affirmative passive output validation'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Establish an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Output and exit behavior should be validated.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
         }
         @{
             CaseName = 'performance rejects all three reversed decisions'
