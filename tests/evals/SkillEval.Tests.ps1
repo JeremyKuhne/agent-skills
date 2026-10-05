@@ -643,6 +643,76 @@ Describe 'Skill evaluation scenario contract' {
             Expected = $true
         }
         @{
+            CaseName = 'performance accepts avoiding benchmarks without an allocation baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Avoid benchmarking allocations without an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance accepts avoiding benchmarks without a baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Avoid benchmarking without an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance accepts negated allocation benchmark prerequisites consistently'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Never benchmark allocations without first establishing a representative allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance accepts allocation measurement prerequisites consistently'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Avoid measuring allocations without a representative baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance accepts passive allocation benchmark prerequisites consistently'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Allocations should not be benchmarked without an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $true
+        }
+        @{
+            CaseName = 'performance rejects avoiding benchmarks against an allocation baseline'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Avoid benchmarking allocations against an allocation baseline.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
+            CaseName = 'performance rejects contradictory imperative benchmark prerequisites'
+            ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
+            Response = @(
+                'Measurement: Avoid benchmarking allocations without an allocation baseline; do not establish one.'
+                'Process-state: Match the inputs and cache state.'
+                'Correctness: Validate the same output and exit behavior.'
+                'Uncertainty: Report measurement limits.') -join "`n"
+            Expected = $false
+        }
+        @{
             CaseName = 'performance rejects contradicting the representative baseline prerequisite'
             ScenarioId = 'powershell-engineering-routing-application-performance-near-miss'
             Response = @(
