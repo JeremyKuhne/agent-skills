@@ -404,8 +404,8 @@ safety checks remain in place.
 
 Build the [.NET content evaluator](../tools/skill-evaluation/README.md) before
 running either profiled case. Its maintained Markdown/JSON Schema parsers own
-content contracts; PowerShell remains the process/capture adapter. The CLI does
-not install or invoke models.
+content contracts; PowerShell remains the process/capture adapter. These
+capture and semantic-rescore paths do not install or invoke models.
 
 At capture completion, declared final messages or artifact files are snapshotted
 with separate manifest and byte revisions. The existing output-hash algorithm
@@ -429,6 +429,23 @@ Missing snapshots, changed evidence, invalid profiles, and process errors are
 explicit infrastructure failures. Report-only never waives those or original
 safety failures. No human calibration, learned inference, or portfolio
 qualification is claimed.
+
+### Manual grounding development diagnostics
+
+The same CLI has a separate, explicit `ground` command for pinned CPU-local
+claim/fact probes in the development review bank. It does not run during
+capture, semantic rescoring, or CI. See the
+[operator contracts](../tools/skill-evaluation/README.md#manual-cpu-grounding-diagnostics)
+for local asset provisioning, completed separate human-label evidence,
+report-only opt-in, token limits, and exact-input provenance.
+
+Asset/review validation commands perform no inference. `ground` requires
+separately approved exact terms; merely building the CLI or approving code
+does not authorize dispatch. Its model relations and scores remain diagnostic:
+useful quality and calibration stay pending. Full prose, missing claims,
+omissions, and rubric judgment are not certified by selected probe agreement.
+Real Windows/Linux CPU qualification and learned CI promotion remain separate
+gates; ordinary tests use synthetic assets and deterministic scores.
 
 ## Human A/B review
 

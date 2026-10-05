@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Grounding-only projection of the version-one local review document. Documentary/rubric bookkeeping is deliberately retained outside this projection; this is not a complete human-review validator or signature.",
+  "type": "object",
+  "required": ["schemaVersion", "sessionId", "bankId", "bankRevision", "datasetRole", "reviewerRole", "status", "humanReviewedArtifactCount", "rubricDecisionCount", "groundingDecisionCount", "calibrationStatus", "decisions", "unresolved"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "bankId": { "type": "string", "minLength": 1 },
+    "bankRevision": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+    "datasetRole": { "const": "development" },
+    "reviewerRole": { "type": "string", "minLength": 1 },
+    "status": { "const": "completed" },
+    "humanReviewedArtifactCount": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "rubricDecisionCount": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "groundingDecisionCount": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "calibrationStatus": { "const": "pending" },
+    "unresolved": { "const": [] },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["pairId", "decisionKind", "reviewerResponse", "recordedAt", "decisionScope"],
+        "properties": {
+          "pairId": { "type": "string", "minLength": 1 },
+          "decisionKind": { "enum": ["rubric", "grounding"] },
+          "reviewerResponse": { "type": "string", "minLength": 1 },
+          "recordedAt": { "type": "string", "minLength": 1 },
+          "decisionScope": { "type": "string", "minLength": 1 },
+          "premiseFactRefs": { "$ref": "#/$defs/refs" },
+          "premise": { "type": "string", "minLength": 1 },
+          "labels": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["packetId", "artifactRevision", "probeId", "claim", "verdict"],
+              "properties": {
+                "packetId": { "type": "string", "minLength": 1 },
+                "artifactRevision": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+                "probeId": { "type": "string", "minLength": 1 },
+                "claim": { "type": "string", "minLength": 1 },
+                "verdict": { "enum": ["entailed", "contradicted", "neutral"] },
+                "premiseFactRefs": { "$ref": "#/$defs/refs" },
+                "premise": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "if": { "properties": { "decisionKind": { "const": "grounding" } } },
+        "then": { "required": ["labels"] }
+      }
+    }
+  },
+  "$defs": {
+    "refs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+  }
+}

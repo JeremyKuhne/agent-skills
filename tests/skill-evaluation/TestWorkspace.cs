@@ -4,6 +4,7 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Touki;
 
@@ -45,6 +46,41 @@ internal sealed class TestWorkspace : DisposableBase
     public TestWorkspace()
     {
         Directory.CreateDirectory(Workspace);
+    }
+
+    /// <summary>
+    ///  Copies the portable synthetic bank and its pinned rubric closure into this isolated test owner.
+    /// </summary>
+    /// <param name="mutate">An optional explicit mutation of the source JSON before writing.</param>
+    /// <returns>The owned bank path.</returns>
+    public string WriteReviewBank(Action<JsonObject>? mutate = null)
+    {
+        string root = FindRepositoryRoot();
+        foreach (string relative in new[]
+        {
+            "evals/rubrics/technical-writing.v2.json",
+            "skills/technical-writing/SKILL.md",
+            "skills/technical-writing/artifact-patterns.md"
+        })
+        {
+            string destination = OwnedPaths.Resolve(Root, relative, requireFile: false);
+            string parent = Path.GetDirectoryName(destination)
+                ?? throw new InvalidOperationException("Fixture files require a parent directory.");
+
+            Directory.CreateDirectory(parent);
+            File.Copy(OwnedPaths.Resolve(root, relative), destination);
+        }
+
+        string sourcePath = OwnedPaths.Resolve(root, "evals/fixtures/output-quality/review-packets.v1.json");
+        JsonObject bank = JsonNode.Parse(File.ReadAllText(sourcePath)) as JsonObject
+            ?? throw new InvalidOperationException("The public packet fixture must be an object.");
+
+        mutate?.Invoke(bank);
+        string input = Path.Join(Root, "inputs");
+        Directory.CreateDirectory(input);
+        string path = Path.Join(input, "bank.json");
+        File.WriteAllText(path, bank.ToJsonString(ContractJson.Options));
+        return path;
     }
 
     /// <summary>

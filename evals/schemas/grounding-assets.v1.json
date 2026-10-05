@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profileId", "modelId", "modelRevision", "license", "mode", "maximumTokens", "labelOrder", "inputNames", "runtimeVersions", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profileId": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "modelId": { "type": "string", "minLength": 1 },
+    "modelRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "license": { "type": "string", "minLength": 1 },
+    "mode": { "const": "report-only" },
+    "maximumTokens": { "type": "integer", "minimum": 4, "maximum": 512 },
+    "labelOrder": { "const": ["contradicted", "entailed", "neutral"] },
+    "inputNames": { "const": ["input_ids", "attention_mask"] },
+    "runtimeVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["onnxRuntime", "tokenizers"],
+      "properties": {
+        "onnxRuntime": { "const": "1.30.0" },
+        "tokenizers": { "const": "2.0.0" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "path", "sha256", "bytes", "source"],
+        "properties": {
+          "role": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+          "bytes": { "type": "integer", "minimum": 1 },
+          "source": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

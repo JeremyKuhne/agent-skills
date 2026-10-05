@@ -5,6 +5,7 @@
 using System.Text;
 using System.Text.Json;
 using SkillEvaluation;
+using SkillEvaluation.Onnx;
 
 namespace SkillEvaluation.Cli;
 
@@ -26,18 +27,23 @@ public static class Program
     /// <param name="args">The command followed by paired named options and values.</param>
     /// <param name="output">Receives the command result as JSON.</param>
     /// <param name="error">Receives contract and infrastructure failure messages.</param>
+    /// <param name="groundingBackendFactory">
+    ///  Optional explicit computation owner for deterministic integration tests; fixture evidence stays synthetic.
+    /// </param>
     /// <returns>
     ///  0 for success, 1 for failed quality checks, 2 for safety failures,
     ///  or 3 for contract or infrastructure failures.
     /// </returns>
-    public static int Run(string[] args, TextWriter output, TextWriter error)
+    public static int Run(
+        string[] args, TextWriter output, TextWriter error,
+        Func<VerifiedGroundingAssets, IGroundingBackend>? groundingBackendFactory = null)
     {
         try
         {
             if (args.Length == 0)
             {
                 throw new EvaluationContractException(
-                    "Specify prepare, validate-profile, capture, lint-artifact, check-ledger, rescore, validate-review-packets, or export-review-packets.");
+                    "Specify prepare, validate-profile, capture, lint-artifact, check-ledger, rescore, validate-review-packets, export-review-packets, validate-grounding-assets, validate-grounding-review, or ground.");
             }
 
             Dictionary<string, string> options = ParseOptions(args[1..]);
@@ -174,6 +180,43 @@ public static class Program
                         : ReviewPackets.Load(packetRoot, packetPath).Summary;
 
                     break;
+                case "validate-grounding-assets":
+                    string validationAssetRoot = Required("asset-root");
+                    string validationManifest = Required("manifest");
+                    CompleteOptions();
+                    result = GroundingAssets.Load(validationAssetRoot, validationManifest);
+                    break;
+                case "ground":
+                    string groundingRoot = Required("repo-root");
+                    string groundingPackets = Required("packets");
+                    string groundingAssets = Required("asset-root");
+                    string groundingManifest = Required("manifest");
+                    string groundingReviewOwner = Required("review-owner");
+                    string groundingReview = Required("review");
+                    string groundingOutput = Required("output-directory");
+                    if (!bool.TryParse(Required("report-only"), out bool diagnosticOnly) || !diagnosticOnly)
+                    {
+                        throw new EvaluationContractException("Grounding is explicitly report-only; --report-only true is required.");
+                    }
+
+                    CompleteOptions();
+                    result = GroundingReports.Evaluate(
+                        groundingRoot, groundingPackets, groundingAssets, groundingManifest,
+                        groundingReviewOwner, groundingReview, groundingOutput,
+                        groundingBackendFactory ?? (assets => new CpuNliBackend(assets)));
+
+                    break;
+                case "validate-grounding-review":
+                    string reviewedRoot = Required("repo-root");
+                    string reviewedPackets = Required("packets");
+                    string reviewOwner = Required("review-owner");
+                    string reviewPath = Required("review");
+                    CompleteOptions();
+                    ValidatedReviewPackets reviewedBank = ReviewPackets.Load(reviewedRoot, reviewedPackets);
+                    result = GroundingHumanLabels.Load(reviewOwner, reviewPath,
+                        reviewedBank, GroundingInference.Prepare(reviewedBank));
+
+                    break;
                 case "rescore":
                     string root = Required("repo-root");
                     string scenarioPath = Required("scenario");
@@ -218,6 +261,11 @@ public static class Program
                 or ArgumentException)
         {
             error.WriteLine($"Skill evaluation failed: {exception.Message}");
+            return 3;
+        }
+        catch (Exception exception) when (NativeLibraryFailures.FindCause(exception) is Exception cause)
+        {
+            error.WriteLine($"Skill evaluation failed: {cause.Message}");
             return 3;
         }
     }

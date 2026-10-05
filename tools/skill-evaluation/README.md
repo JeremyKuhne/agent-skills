@@ -1,9 +1,11 @@
-# Deterministic skill content evaluation
+# Skill content evaluation
 
 This .NET 10 CLI validates content profiles, snapshots declared artifacts, and
-checks literal Markdown and ledger contracts. It performs no classifier,
-candidate-model, or judge inference. A literal pass is not a useful-output pass:
-grounding and rubric judgments remain pending.
+checks literal Markdown and ledger contracts. Those capture/rescore paths remain
+deterministic and do not invoke a model. A separate manual `ground` command
+supports pinned CPU diagnostics for explicit development probes. Candidate and
+judge inference are not implemented. Literal or raw-classifier passes never
+establish useful-output qualification.
 
 ## Build and test
 
@@ -36,6 +38,11 @@ dotnet test --project .\tests\skill-evaluation\SkillEvaluation.Tests.csproj --co
 Managed tests own profiles, schemas, Markdown, snapshots, and quality states.
 Pester owns the PowerShell/native-process boundary: exact arguments, separate
 streams, nonzero exits, timeout cleanup, capture integration, and replay.
+Grounding contract tests use synthetic assets and deterministic backend scores,
+not learned inference. The separate
+[ONNX project](SkillEvaluation.Onnx/SkillEvaluation.Onnx.csproj) pins ONNX Runtime
+1.30.0 and Microsoft.ML.Tokenizers 2.0.0; the core stays inference-independent.
+Native/learned readiness still requires owning-host evidence and approved runs.
 The adapter selects one native `dotnet` application in discovery order, including
 hosts where several PATH entries resolve the same command.
 CI exercises those lanes on Windows and Linux ARM64. A skipped platform control
@@ -108,21 +115,112 @@ dotnet $cli lint-artifact --repo-root . --scenario .\evals\scenarios\technical-w
 - `export-review-packets` writes a separate JSON and Markdown review packet
   with rendered inputs, applicable criteria, proposals, and UTF-16 source spans.
   The source bank remains unchanged; an existing nonempty output is rejected.
+- `validate-grounding-assets` checks a local
+  [asset manifest](../../evals/schemas/grounding-assets.v1.json), owned paths,
+  immutable source declarations, exact byte lengths, and raw SHA-256 pins.
+  It does not download assets, tokenize, or run a model.
+- `validate-grounding-review` checks the completed review document's
+  [grounding projection](../../evals/schemas/grounding-review-projection.v1.json)
+  against the source bank. It preserves human decisions separately from
+  proposals and performs no inference.
+- `ground` requires explicit `--report-only true`, locally provisioned pinned
+  assets, a complete separate review record, and a disjoint output directory.
+  It preflights every declared pair before dispatching any classifier input,
+  then writes JSON/Markdown
+  [diagnostics](../../evals/schemas/grounding-diagnostic.v1.json).
+  Missing, malformed, changed, or overlength input fails explicitly with exit 3.
 
 The PowerShell semantic entry point preserves CLI exits 0 through 3 for valid summaries.
 Setup and process failures, missing or malformed summaries, and unexpected
 child exits write a diagnostic to stderr and exit 3 without success output.
 
-`ground` and generative judging are not implemented or silently simulated.
-They require the separately gated classifier/calibration work.
+Generative judging is not implemented or silently simulated. The manual
+grounding command does not grant classifier calibration or inference approval.
+
+## Manual CPU grounding diagnostics
+
+The bundled [NLI profile](../../evals/models/nli-deberta-v3-base.v1.json)
+contains only public metadata and pins, not weights. It names the
+`cross-encoder/nli-deberta-v3-base` revision
+`6c749ce3425cd33b46d187e45b92bbf96ee12ec7`, its declared Apache-2.0 source,
+the upstream floating-point ONNX export, SentencePiece/canonical tokenizer
+files, and supporting configurations/card. Quantized exports and moving
+aliases are not interchangeable with this profile.
+
+Provision the exact files locally, verify their licensing, and keep them out
+of the repository. There is no downloader or automatic fallback. Copy the
+bundled declaration into that owned asset directory; paths can be relocated,
+but role, byte, source, and hash identities must still match the supported
+profile.
+
+For example, after provisioning the two ignored input directories:
+
+```pwsh
+$assetRoot = '.\artifacts\grounding-assets'
+$reviewRoot = '.\artifacts\human-review'
+Copy-Item -LiteralPath .\evals\models\nli-deberta-v3-base.v1.json -Destination (Join-Path $assetRoot 'runtime-profile.json')
+dotnet $cli validate-grounding-assets --asset-root $assetRoot --manifest runtime-profile.json
+dotnet $cli validate-grounding-review --repo-root . --packets .\evals\fixtures\output-quality\review-packets.v1.json --review-owner $reviewRoot --review human-review.json
+```
+
+Only after separate approval of exact inference terms:
+
+```pwsh
+$diagnostics = Join-Path ([IO.Path]::GetTempPath()) "skill-grounding-$([guid]::NewGuid().ToString('N'))"
+dotnet $cli ground --repo-root . --packets .\evals\fixtures\output-quality\review-packets.v1.json --asset-root $assetRoot --manifest runtime-profile.json --review-owner $reviewRoot --review human-review.json --output-directory $diagnostics --report-only true
+```
+
+The native backend uses maintained SentencePiece segmentation, exact
+`[CLS] premise [SEP] claim [SEP]` structure, canonical attention/segment IDs,
+and a complete 512-token limit. All pairs are tokenized and checked before
+the lazy inference session opens. Inputs are never silently truncated or
+skipped. The pinned graph exposes `input_ids` and `attention_mask`, with
+contradiction/entailment/neutral label order. CPU execution is sequential,
+batch size 1, with one intra/inter-op model thread.
+
+Asset, source-bank/profile, and review revisions are checked before and
+after computation. The grounding revision binds those inputs, the actual
+backend/dependency/native-binary identity, platform/runtime, and complete
+preprocessing tensors. Exact raw-score ties remain unassessed instead of
+selecting an arbitrary verdict. Nonfinite or malformed scores are errors.
+The tokenizer package pin is checked against its informational/product version;
+its intentionally stable assembly binding version is not the package version.
+
+Only declared development claim/fact probes are evaluated. This is not
+automatic sentence extraction, complete prose grounding, required-claim
+coverage, omission detection, or a hostile-script sandbox. Source facts
+retain evidence state and authority kind even though the classifier consumes
+their text; model confidence cannot override those metadata or human judgments.
+
+The completed human record is treated as a local declaration, not a signature
+or authenticated calibration certificate. The adapter validates its grounding
+projection, exact bank/artifact/claim/fact identities, timestamps, and complete
+unique probe labels; documentary and rubric bookkeeping outside that projection
+is not independently certified. Completeness counters require positive Int32
+JSON number representations; overflow and decimal/exponent forms fail explicitly.
+Synthetic test reviewers/backends are visibly marked in diagnostic evidence.
+
+Complete pairs require at least one premise token and one claim token before
+their separators. Malformed late pairs reject the entire cohort before any
+prediction. Known native-loader failures retain infrastructure exit 3 and their
+underlying diagnostic, including CLR type-initialization wrappers; unrelated
+initialization defects are not silently classified as native-loader failures.
+
+Every result remains `qualityStatus: pending`, `usefulOutcome: pending`, and
+`calibrationStatus: pending`, with zero useful passes. Agreement with reviewed
+development controls is diagnostic, not held-out accuracy. Existing captured
+results, their safety status, and the deterministic semantic replay path are
+not rewritten or automatically connected to this command. No learned call was
+added to CI.
 
 ## Development review packets
 
 The [packet bank](../../evals/fixtures/output-quality/review-packets.v1.json)
 contains eight distinct base scenarios, four per pilot family, and eight
 single-defect twins. Its [schema](../../evals/schemas/review-packets.v1.json)
-permits only development data with assistant-proposed labels. Human review and
-calibration remain pending; the public bank is not a sealed acceptance set.
+permits only development data with assistant-proposed labels. The public bank
+contains no human approval or calibration certificate; completed human
+decisions must be supplied as a separate record. It is not a sealed acceptance set.
 Nested profiles are validated from their original JSON, not reconstructed
 typed values. Missing required fields, invalid enum casing, and forbidden
 null properties are rejected rather than silently becoming verified facts
@@ -156,8 +254,8 @@ artifact instead of inventing a quote. Twins share unchanged inputs, belong to
 one base-case cluster, and reproduce exactly one declared edit. Their declared
 hard-item flips must match, with unrelated verdicts unchanged.
 
-Fourteen explicit claim/fact probes are proposed for a later approved CPU spike.
-They are not an exhaustive prose-grounding pass. Three-way proposals distinguish
+Fourteen explicit claim/fact probes are declared for separately approved CPU
+diagnostics. They are not an exhaustive prose-grounding pass. Three-way proposals distinguish
 entailment, contradiction, and neutrality; support-only scores cannot be
 converted into contradiction verdicts.
 

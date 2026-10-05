@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "profileId": "deberta-nli-cpu-v1",
+  "modelId": "cross-encoder/nli-deberta-v3-base",
+  "modelRevision": "6c749ce3425cd33b46d187e45b92bbf96ee12ec7",
+  "license": "apache-2.0",
+  "mode": "report-only",
+  "maximumTokens": 512,
+  "labelOrder": ["contradicted", "entailed", "neutral"],
+  "inputNames": ["input_ids", "attention_mask"],
+  "runtimeVersions": { "onnxRuntime": "1.30.0", "tokenizers": "2.0.0" },
+  "files": [
+    {
+      "role": "model",
+      "path": "onnx/model.onnx",
+      "sha256": "369EBF04FCE8206C83B8FD62E9DC860144F10351A7F885ED3076BEB17B7C6DDA",
+      "bytes": 738574335,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/onnx/model.onnx"
+    },
+    {
+      "role": "sentencepiece",
+      "path": "spm.model",
+      "sha256": "C679FBF93643D19AAB7EE10C0B99E460BDBC02FEDF34B92B05AF343B4AF586FD",
+      "bytes": 2464616,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/spm.model"
+    },
+    {
+      "role": "model-config",
+      "path": "config.json",
+      "sha256": "897E756EB59D3183ADB505952E7910E7CBC7750A43F3B3747A96B688D2B02A47",
+      "bytes": 1052,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/config.json"
+    },
+    {
+      "role": "tokenizer-config",
+      "path": "tokenizer_config.json",
+      "sha256": "F3EECD07C370EF0BF7DD3780D3CD68CF9C8B00C267E21A208DDCD8F82BFEC1A6",
+      "bytes": 1346,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/tokenizer_config.json"
+    },
+    {
+      "role": "tokenizer-json",
+      "path": "tokenizer.json",
+      "sha256": "5124EF2EAD1A10A717703BC436DE7F353DA76D6340E4587719B42B1693707964",
+      "bytes": 8656624,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/tokenizer.json"
+    },
+    {
+      "role": "special-tokens",
+      "path": "special_tokens_map.json",
+      "sha256": "ED7C099C988DBB414B18A6980D20CB57B91B7CD119F6F6941EB364B0E892E712",
+      "bytes": 301,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/special_tokens_map.json"
+    },
+    {
+      "role": "added-tokens",
+      "path": "added_tokens.json",
+      "sha256": "A4B6BFE668F2B3CF6F0CD535E98A0663D2D0D4A4A15F13075AD3597D33985A23",
+      "bytes": 26,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/added_tokens.json"
+    },
+    {
+      "role": "model-card",
+      "path": "README.md",
+      "sha256": "B6A6DD82D5FEE7036E3B815CE1D28458DF294D8525FC234FB7E7277B6B79D878",
+      "bytes": 2856,
+      "source": "https://huggingface.co/cross-encoder/nli-deberta-v3-base/resolve/6c749ce3425cd33b46d187e45b92bbf96ee12ec7/README.md"
+    }
+  ]
+}

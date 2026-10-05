@@ -362,31 +362,7 @@ public sealed class ReviewPacketTests
     /// <returns>The owned input-bank path.</returns>
     private static string WriteFixture(TestWorkspace workspace, Action<JsonObject>? mutate = null)
     {
-        string root = TestWorkspace.FindRepositoryRoot();
-        foreach (string relative in new[]
-        {
-            "evals/rubrics/technical-writing.v2.json",
-            "skills/technical-writing/SKILL.md",
-            "skills/technical-writing/artifact-patterns.md"
-        })
-        {
-            string destination = OwnedPaths.Resolve(workspace.Root, relative, requireFile: false);
-            string parent = Path.GetDirectoryName(destination)
-                ?? throw new InvalidOperationException("Fixture files require a parent directory.");
-
-            Directory.CreateDirectory(parent);
-            File.Copy(OwnedPaths.Resolve(root, relative), destination);
-        }
-
-        JsonObject bank = JsonNode.Parse(File.ReadAllText(OwnedPaths.Resolve(root, BankRelativePath))) as JsonObject
-            ?? throw new InvalidOperationException("The public packet fixture must be an object.");
-
-        mutate?.Invoke(bank);
-        string input = Path.Join(workspace.Root, "inputs");
-        Directory.CreateDirectory(input);
-        string path = Path.Join(input, "bank.json");
-        File.WriteAllText(path, bank.ToJsonString(ContractJson.Options));
-        return path;
+        return workspace.WriteReviewBank(mutate);
     }
 
     /// <summary>
