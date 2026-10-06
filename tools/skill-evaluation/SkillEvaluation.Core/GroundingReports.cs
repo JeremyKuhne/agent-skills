@@ -87,8 +87,9 @@ public static class GroundingReports
         for (int index = 0; index < inputs.Length; index++)
         {
             Stopwatch watch = Stopwatch.StartNew();
-            GroundingScores scores = GroundingInference.Score(backend.Predict(tokens[index]));
+            GroundingLogits logits = backend.Predict(tokens[index]);
             watch.Stop();
+            GroundingScores scores = GroundingInference.Score(logits);
             GroundingRelation human = labels[inputs[index].PacketId + ":" + inputs[index].ProbeId].Relation;
             results.Add(new(inputs[index], tokens[index].InputIds.Length, scores,
                 QualityState.Pending, human,

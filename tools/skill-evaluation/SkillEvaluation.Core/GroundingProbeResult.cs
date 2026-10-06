@@ -13,7 +13,9 @@ namespace SkillEvaluation;
 /// <param name="QualityStatus">The pending quality status, never inferred from model confidence.</param>
 /// <param name="ReviewedRelation">The source-bound declared human development relation.</param>
 /// <param name="MatchesReviewedRelation">Whether the raw model relation agrees, or null for an exact score tie.</param>
-/// <param name="ElapsedMilliseconds">The model-dispatch duration, excluding tokenization.</param>
+/// <param name="ElapsedMilliseconds">
+///  The model-dispatch duration, excluding tokenization and score post-processing.
+/// </param>
 public sealed record GroundingProbeResult(
     PreparedGroundingProbe Input,
     int TokenCount,
