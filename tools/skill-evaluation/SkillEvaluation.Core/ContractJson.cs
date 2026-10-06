@@ -157,7 +157,11 @@ public static class ContractJson
     /// </summary>
     /// <param name="path">The path of the file to read.</param>
     /// <returns>The uppercase hexadecimal SHA-256 hash of the file bytes.</returns>
-    public static string HashFile(string path) => HashBytes(File.ReadAllBytes(path));
+    public static string HashFile(string path)
+    {
+        using FileStream stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream));
+    }
 
     /// <summary>
     ///  Computes a revision of a value's serialized contract JSON.

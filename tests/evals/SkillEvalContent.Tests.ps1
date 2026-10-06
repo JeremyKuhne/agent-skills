@@ -32,6 +32,41 @@ BeforeAll {
         }
     }
 
+    function New-SyntheticGroundingAssets([string] $root) {
+        New-Item -ItemType Directory -Path $root | Out-Null
+        [IO.File]::WriteAllText((Join-Path $root 'model.bin'), 'Synthetic bytes, not a learned model.')
+        [IO.File]::WriteAllText((Join-Path $root 'tokens.bin'), 'Synthetic bytes, not a tokenizer.')
+        $files = @(
+            @{ role = 'model'; path = 'model.bin' }
+            @{ role = 'sentencepiece'; path = 'tokens.bin' }
+        ) | ForEach-Object {
+            $path = Join-Path $root $_.path
+            @{
+                role = $_.role
+                path = $_.path
+                sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+                bytes = (Get-Item -LiteralPath $path).Length
+                source = 'fixture:' + $_.role
+            }
+        }
+        $manifest = @{
+            schemaVersion = 1
+            profileId = 'synthetic-test-v1'
+            modelId = 'synthetic-fixture'
+            modelRevision = ('a' * 40)
+            license = 'mit'
+            mode = 'report-only'
+            maximumTokens = 512
+            labelOrder = @('contradicted', 'entailed', 'neutral')
+            inputNames = @('input_ids', 'attention_mask')
+            runtimeVersions = @{ onnxRuntime = '1.30.0'; tokenizers = '2.0.0' }
+            files = @($files)
+        }
+        $path = Join-Path $root 'manifest.json'
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path
+        return $path
+    }
+
     function New-FileScenario([string] $root) {
         $scenarioDirectory = Join-Path $root 'scenarios'
         New-Item -ItemType Directory -Path $scenarioDirectory, (Join-Path $root 'fixtures') | Out-Null
@@ -157,6 +192,39 @@ Describe 'Skill content evaluator process boundary' {
         $repeated.ExitCode | Should -Be 3
         $repeated.StandardOutput | Should -BeNullOrEmpty
         $repeated.StandardError | Should -Match 'Derived output directory must be empty'
+    }
+
+    It 'validates synthetic grounding pins through the real CLI without loading a model' {
+        $root = Join-Path $TestDrive 'grounding assets with spaces'
+        $manifest = New-SyntheticGroundingAssets -root $root
+        $arguments = @('validate-grounding-assets', '--asset-root', $root, '--manifest', $manifest)
+        $receipt = Invoke-SkillEvalContentCli -Arguments $arguments
+        $receipt.ExitCode | Should -Be 0 -Because $receipt.StandardError
+        $receipt.StandardError | Should -BeNullOrEmpty
+        ($receipt.StandardOutput | ConvertFrom-Json).manifest.mode | Should -BeExactly 'report-only'
+        [IO.File]::AppendAllText((Join-Path $root 'model.bin'), 'tampered')
+        $changed = Invoke-SkillEvalContentCli -Arguments $arguments
+        $changed.ExitCode | Should -Be 3
+        $changed.StandardOutput | Should -BeNullOrEmpty
+        $changed.StandardError | Should -Match 'Grounding asset bytes or SHA-256 changed'
+    }
+
+    It 'rejects non-report-only grounding before any file or model dispatch' {
+        $receipt = Invoke-SkillEvalContentCli -Arguments @(
+            'ground',
+            '--repo-root', $script:RepoRoot,
+            '--packets', 'missing-bank.json',
+            '--asset-root', $TestDrive,
+            '--manifest', 'missing-manifest.json',
+            '--review-owner', $TestDrive,
+            '--review', 'missing-review.json',
+            '--output-directory', (Join-Path $TestDrive 'must-not-be-grounded'),
+            '--report-only', 'false'
+        )
+        $receipt.ExitCode | Should -Be 3
+        $receipt.StandardOutput | Should -BeNullOrEmpty
+        $receipt.StandardError | Should -Match 'explicitly report-only'
+        Test-Path -LiteralPath (Join-Path $TestDrive 'must-not-be-grounded') | Should -BeFalse
     }
 }
 

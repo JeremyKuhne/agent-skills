@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SkillEvaluation.Tests" />
+    <ProjectReference Include="..\SkillEvaluation.Core\SkillEvaluation.Core.csproj" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="[1.30.0]" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="[2.0.0]" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\evals\models\nli-deberta-v3-base.v1.json"
+                      LogicalName="SkillEvaluation.Models.nli-deberta-v3-base.v1.json" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "evidenceMode", "coverage", "bankId", "bankRevision", "assetRevision", "groundingRevision", "modelId", "modelRevision", "backend", "reviewEvidence", "probeCount", "usefulPassedCount", "usefulOutcome", "calibrationStatus", "probes"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "evidenceMode": { "const": "grounding-diagnostic" },
+    "coverage": { "const": "explicit-development-probes-only" },
+    "bankId": { "$ref": "#/$defs/text" },
+    "bankRevision": { "$ref": "#/$defs/revision" },
+    "assetRevision": { "$ref": "#/$defs/revision" },
+    "groundingRevision": { "$ref": "#/$defs/revision" },
+    "modelId": { "$ref": "#/$defs/text" },
+    "modelRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "synthetic", "revision", "runtime", "tokenizer"],
+      "properties": {
+        "id": { "$ref": "#/$defs/text" },
+        "synthetic": { "type": "boolean" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "runtime": { "$ref": "#/$defs/text" },
+        "tokenizer": { "$ref": "#/$defs/text" }
+      }
+    },
+    "reviewEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "sourceRevision", "bankRevision", "authorityScope", "labels"],
+      "properties": {
+        "sessionId": { "$ref": "#/$defs/text" },
+        "sourceRevision": { "$ref": "#/$defs/revision" },
+        "bankRevision": { "$ref": "#/$defs/revision" },
+        "authorityScope": { "enum": ["synthetic-review-fixture", "declared-human-reviewed-development"] },
+        "labels": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reviewedLabel" } }
+      }
+    },
+    "probeCount": { "type": "integer", "minimum": 1 },
+    "usefulPassedCount": { "const": 0 },
+    "usefulOutcome": { "const": "pending" },
+    "calibrationStatus": { "const": "pending" },
+    "probes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["input", "tokenCount", "scores", "qualityStatus", "reviewedRelation", "matchesReviewedRelation", "elapsedMilliseconds"],
+        "properties": {
+          "input": { "$ref": "#/$defs/preparedProbe" },
+          "tokenCount": { "type": "integer", "minimum": 5, "maximum": 512 },
+          "scores": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["logits", "contradiction", "entailment", "neutral", "rawRelation"],
+            "properties": {
+              "logits": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["contradiction", "entailment", "neutral"],
+                "properties": {
+                  "contradiction": { "type": "number" },
+                  "entailment": { "type": "number" },
+                  "neutral": { "type": "number" }
+                }
+              },
+              "contradiction": { "$ref": "#/$defs/score" },
+              "entailment": { "$ref": "#/$defs/score" },
+              "neutral": { "$ref": "#/$defs/score" },
+              "rawRelation": { "enum": ["entailed", "contradicted", "neutral", null] }
+            }
+          },
+          "qualityStatus": { "const": "pending" },
+          "reviewedRelation": { "enum": ["entailed", "contradicted", "neutral"] },
+          "matchesReviewedRelation": { "type": ["boolean", "null"] },
+          "elapsedMilliseconds": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1 },
+    "revision": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "refs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
+    "nonnegativeIndex": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+    "positiveIndex": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "reviewedLabel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packetId", "probeId", "artifactRevision", "relation", "reviewerResponse", "decisionScope", "recordedAt"],
+      "properties": {
+        "packetId": { "$ref": "#/$defs/text" },
+        "probeId": { "$ref": "#/$defs/text" },
+        "artifactRevision": { "$ref": "#/$defs/revision" },
+        "relation": { "enum": ["entailed", "contradicted", "neutral"] },
+        "reviewerResponse": { "$ref": "#/$defs/text" },
+        "decisionScope": { "$ref": "#/$defs/text" },
+        "recordedAt": { "$ref": "#/$defs/text" }
+      }
+    },
+    "preparedProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packetId", "probeId", "artifactRevision", "profileRevision", "inputRevision", "claim", "factRefs", "facts", "premise"],
+      "properties": {
+        "packetId": { "$ref": "#/$defs/text" },
+        "probeId": { "$ref": "#/$defs/text" },
+        "artifactRevision": { "$ref": "#/$defs/revision" },
+        "profileRevision": { "$ref": "#/$defs/revision" },
+        "inputRevision": { "$ref": "#/$defs/revision" },
+        "claim": { "$ref": "#/$defs/claim" },
+        "factRefs": { "$ref": "#/$defs/refs" },
+        "facts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/suppliedFact" } },
+        "premise": { "$ref": "#/$defs/text" }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span", "quote"],
+      "properties": {
+        "span": { "$ref": "#/$defs/span" },
+        "quote": { "$ref": "#/$defs/text" }
+      }
+    },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "length", "line"],
+      "properties": {
+        "start": { "$ref": "#/$defs/nonnegativeIndex" },
+        "length": { "$ref": "#/$defs/positiveIndex" },
+        "line": { "$ref": "#/$defs/positiveIndex" }
+      }
+    },
+    "suppliedFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "state", "kind", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/text" },
+        "text": { "$ref": "#/$defs/text" },
+        "state": { "enum": ["verified", "inference", "hypothesis", "unknown"] },
+        "kind": { "enum": ["fact", "ownership", "commitment", "permission"] },
+        "provenance": { "const": "scenario-input" }
+      }
+    }
+  }
+}
