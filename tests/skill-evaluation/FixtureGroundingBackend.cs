@@ -12,9 +12,9 @@ namespace SkillEvaluation.Tests;
 internal sealed class FixtureGroundingBackend : DisposableBase, IGroundingBackend
 {
     /// <summary>
-    ///  Gets the explicit synthetic computation identity.
+    ///  Gets or sets the controlled identity, synthetic by default; identity-pairing tests may vary its marker.
     /// </summary>
-    public GroundingBackendIdentity Identity { get; } = new(
+    public GroundingBackendIdentity Identity { get; init; } = new(
         "synthetic-grounding-fixture", Synthetic: true, ContractJson.HashText("synthetic-backend/v1"),
         "synthetic-cpu", "synthetic-tokenizer");
 

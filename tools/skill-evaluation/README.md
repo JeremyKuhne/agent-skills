@@ -177,6 +177,10 @@ the lazy inference session opens. Inputs are never silently truncated or
 skipped. The pinned graph exposes `input_ids` and `attention_mask`, with
 contradiction/entailment/neutral label order. CPU execution is sequential,
 batch size 1, with one intra/inter-op model thread.
+Literal CLS/SEP/PAD/MASK controls inside source text are rejected explicitly,
+not escaped, truncated, or silently interpreted as additional pair boundaries.
+Legitimate UNK tokens remain supported. A newly constructed native session is
+released on every failed post-construction validation before ownership transfers.
 
 Asset, source-bank/profile, and review revisions are checked before and
 after computation. The grounding revision binds those inputs, the actual
@@ -203,6 +207,9 @@ Supported reviewer declarations are `repository-maintainer` and
 `synthetic-fixture-reviewer`. Unknown roles, casing changes, and misspellings
 are rejected before backend construction, not classified as human evidence.
 These explicit role declarations still do not authenticate a reviewer.
+Synthetic review declarations are valid only with a synthetic backend.
+A non-synthetic backend requires the completed declared human-review record;
+an incompatible pairing fails before tokenization or prediction.
 
 Complete pairs require at least one premise token and one claim token before
 their separators; manifest limits and diagnostic counts therefore start at

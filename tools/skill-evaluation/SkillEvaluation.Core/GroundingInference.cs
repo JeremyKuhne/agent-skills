@@ -35,6 +35,14 @@ public static class GroundingInference
                 "Grounding tensors are malformed or exceed the complete-pair token limit; truncation is forbidden.");
         }
 
+        if (tokens.InputIds.Count(value => value == 1) != 1
+            || tokens.InputIds.Count(value => value == 2) != 2
+            || tokens.InputIds.Any(value => value is 0 or 128000))
+        {
+            throw new EvaluationContractException(
+                "Grounding text contains reserved CLS/SEP/PAD/MASK control tokens; unsupported source pairs cannot dispatch.");
+        }
+
         int second = Array.IndexOf(tokens.TokenTypeIds, 1);
         if (second < 3
             || second >= count - 1

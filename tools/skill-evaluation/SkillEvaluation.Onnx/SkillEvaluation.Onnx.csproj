@@ -3,6 +3,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="SkillEvaluation.Tests" />
     <ProjectReference Include="..\SkillEvaluation.Core\SkillEvaluation.Core.csproj" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="[1.30.0]" />
     <PackageReference Include="Microsoft.ML.Tokenizers" Version="[2.0.0]" />

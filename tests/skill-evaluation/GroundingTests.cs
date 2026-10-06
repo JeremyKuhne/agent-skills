@@ -148,6 +148,14 @@ public sealed class GroundingTests
             yield return ["short-mask", new GroundingTokens([1, 10, 2, 11, 2], [1, 1], [0, 0, 0, 1, 1])];
             yield return ["wrong-types", new GroundingTokens([1, 10, 2, 11, 2], [1, 1, 1, 1, 1], [0, 1, 0, 1, 1])];
             yield return ["out-of-vocabulary", new GroundingTokens([1, 128001, 2, 11, 2], [1, 1, 1, 1, 1], [0, 0, 0, 1, 1])];
+            foreach (int control in new[] { 0, 1, 2, 128000 })
+            {
+                yield return [$"premise-control-{control}",
+                    new GroundingTokens([1, control, 2, 11, 2], [1, 1, 1, 1, 1], [0, 0, 0, 1, 1])];
+
+                yield return [$"claim-control-{control}",
+                    new GroundingTokens([1, 10, 2, control, 2], [1, 1, 1, 1, 1], [0, 0, 0, 1, 1])];
+            }
         }
     }
 
@@ -162,6 +170,87 @@ public sealed class GroundingTests
     {
         Assert.ThrowsExactly<EvaluationContractException>(() =>
             GroundingInference.ValidateTokens(tokens, maximumTokens: 512), name);
+    }
+
+    /// <summary>
+    ///  Verifies composition cannot hide a reserved model control inside either text segment.
+    /// </summary>
+    /// <param name="control">The independently injected model control ID.</param>
+    /// <param name="inPremise">Whether the injection is in the premise rather than the claim.</param>
+    [TestMethod]
+    [DataRow(0, true)]
+    [DataRow(1, true)]
+    [DataRow(2, true)]
+    [DataRow(128000, true)]
+    [DataRow(0, false)]
+    [DataRow(1, false)]
+    [DataRow(2, false)]
+    [DataRow(128000, false)]
+    public void PairCompositionRejectsInteriorControls(int control, bool inPremise)
+    {
+        Assert.ThrowsExactly<EvaluationContractException>(() => DebertaPairEncoding.Compose(
+            inPremise ? [control] : [10], inPremise ? [11] : [control], maximumTokens: 512));
+    }
+
+    /// <summary>
+    ///  Verifies legitimate unknown-token IDs remain ordinary text evidence, not structural controls.
+    /// </summary>
+    [TestMethod]
+    public void PairCompositionPreservesUnknownTokens()
+    {
+        GroundingTokens tokens = DebertaPairEncoding.Compose([3], [3], maximumTokens: 512);
+        CollectionAssert.AreEqual(new[] { 1, 3, 2, 3, 2 }, tokens.InputIds);
+        GroundingInference.ValidateTokens(tokens, maximumTokens: 512);
+    }
+
+    /// <summary>
+    ///  Verifies only explicit human-review authority can accompany a non-synthetic computation marker.
+    /// </summary>
+    /// <param name="role">The supported review declaration.</param>
+    /// <param name="syntheticBackend">The controlled backend identity marker, not learned inference.</param>
+    /// <param name="accepted">Whether the authority/computation combination is permitted.</param>
+    [TestMethod]
+    [DataRow("synthetic-fixture-reviewer", true, true)]
+    [DataRow("synthetic-fixture-reviewer", false, false)]
+    [DataRow("repository-maintainer", true, true)]
+    [DataRow("repository-maintainer", false, true)]
+    public void GroundCliRequiresHumanEvidenceForNonSyntheticIdentity(
+        string role, bool syntheticBackend, bool accepted)
+    {
+        using TestWorkspace workspace = new();
+        string bank = workspace.WriteReviewBank();
+        string manifest = WriteSyntheticAssets(workspace);
+        string review = GroundingFixture.WriteReview(workspace, bank, document => document["reviewerRole"] = role);
+        using FixtureGroundingBackend backend = new()
+        {
+            Identity = new("controlled-fixture-identity", syntheticBackend,
+                ContractJson.HashText($"fixture-identity/{syntheticBackend}"),
+                "deterministic-fixture-runtime", "deterministic-fixture-tokenizer")
+        };
+
+        using StringWriter output = new();
+        using StringWriter error = new();
+        string destination = Path.Join(workspace.Root, "diagnostics");
+        int exit = Program.Run(Arguments(workspace, bank, manifest, review, destination),
+            output, error, _ => backend);
+
+        Assert.AreEqual(accepted ? 0 : 3, exit, error.ToString());
+        Assert.IsTrue(backend.WasDisposed);
+        if (accepted)
+        {
+            Assert.AreEqual(14, backend.PredictedCount);
+            System.Text.Json.JsonElement result = ContractJson.Parse(output.ToString());
+            Assert.AreEqual("pending", result.GetProperty("usefulOutcome").GetString());
+            Assert.AreEqual(0, result.GetProperty("usefulPassedCount").GetInt32());
+        }
+        else
+        {
+            Assert.AreEqual(0, backend.EncodedCount);
+            Assert.AreEqual(0, backend.PredictedCount);
+            Assert.AreEqual("", output.ToString());
+            Assert.Contains("Skill evaluation failed:", error.ToString());
+            Assert.IsFalse(Directory.Exists(destination));
+        }
     }
 
     /// <summary>

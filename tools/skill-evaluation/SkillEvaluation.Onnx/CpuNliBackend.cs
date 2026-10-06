@@ -206,8 +206,7 @@ public sealed class CpuNliBackend : DisposableBase, IGroundingBackend
             throw new EvaluationContractException("The loaded native runtime differs from the pinned version.");
         }
 
-        InferenceSession session = new(_assets.Paths["model"], options);
-        try
+        return SessionOwnership.Validate(new InferenceSession(_assets.Paths["model"], options), session =>
         {
             if (!session.InputNames.SequenceEqual(_assets.Manifest.InputNames)
                 || session.InputMetadata.Any(value => value.Value.ElementType != typeof(long)
@@ -221,12 +220,6 @@ public sealed class CpuNliBackend : DisposableBase, IGroundingBackend
             }
 
             GroundingAssets.RequireUnchanged(_assets);
-            return session;
-        }
-        catch (EvaluationContractException)
-        {
-            session.Dispose();
-            throw;
-        }
+        });
     }
 }

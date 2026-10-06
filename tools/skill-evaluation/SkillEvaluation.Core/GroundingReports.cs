@@ -61,6 +61,12 @@ public static class GroundingReports
         }
 
         ArtifactStore.RequireRevision(identity.Revision);
+        if (!identity.Synthetic && review.AuthorityScope != "declared-human-reviewed-development")
+        {
+            throw new EvaluationContractException(
+                "A non-synthetic grounding backend requires completed declared human review, not synthetic fixture evidence.");
+        }
+
         GroundingTokens[] tokens = inputs.Select(value =>
         {
             GroundingTokens pair = backend.Encode(value.Premise, value.Claim.Quote);
