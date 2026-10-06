@@ -18,11 +18,22 @@ public sealed class GroundingTests
     /// <summary>
     ///  Verifies the public validation command checks local byte pins without invoking a classifier.
     /// </summary>
+    /// <param name="maximumTokens">The complete-pair token limit in the original manifest.</param>
+    /// <param name="expectedExit">The expected public validation outcome.</param>
     [TestMethod]
-    public void ValidateGroundingAssetsCliChecksPinsWithoutInference()
+    [DataRow(4, 3)]
+    [DataRow(5, 0)]
+    [DataRow(512, 0)]
+    [DataRow(513, 3)]
+    public void ValidateGroundingAssetsCliChecksPinsWithoutInference(int maximumTokens, int expectedExit)
     {
         using TestWorkspace workspace = new();
         string manifest = WriteSyntheticAssets(workspace);
+        JsonObject document = JsonNode.Parse(File.ReadAllText(manifest)) as JsonObject
+            ?? throw new InvalidOperationException("The synthetic manifest must be an object.");
+
+        document["maximumTokens"] = maximumTokens;
+        File.WriteAllText(manifest, document.ToJsonString(ContractJson.Options));
         using StringWriter output = new();
         using StringWriter error = new();
         int exit = Program.Run([
@@ -30,10 +41,18 @@ public sealed class GroundingTests
             "--manifest", manifest
         ], output, error);
 
-        Assert.AreEqual(0, exit, error.ToString());
-        Assert.AreEqual("", error.ToString());
-        Assert.AreEqual("report-only", ContractJson.Parse(output.ToString())
-            .GetProperty("manifest").GetProperty("mode").GetString());
+        Assert.AreEqual(expectedExit, exit, error.ToString());
+        if (expectedExit == 0)
+        {
+            Assert.AreEqual("", error.ToString());
+            Assert.AreEqual("report-only", ContractJson.Parse(output.ToString())
+                .GetProperty("manifest").GetProperty("mode").GetString());
+        }
+        else
+        {
+            Assert.AreEqual("", output.ToString());
+            Assert.Contains("Skill evaluation failed:", error.ToString());
+        }
     }
 
     /// <summary>

@@ -10,7 +10,7 @@
     "modelRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "license": { "type": "string", "minLength": 1 },
     "mode": { "const": "report-only" },
-    "maximumTokens": { "type": "integer", "minimum": 4, "maximum": 512 },
+    "maximumTokens": { "type": "integer", "minimum": 5, "maximum": 512 },
     "labelOrder": { "const": ["contradicted", "entailed", "neutral"] },
     "inputNames": { "const": ["input_ids", "attention_mask"] },
     "runtimeVersions": {

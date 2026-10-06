@@ -201,8 +201,12 @@ JSON number representations; overflow and decimal/exponent forms fail explicitly
 Synthetic test reviewers/backends are visibly marked in diagnostic evidence.
 
 Complete pairs require at least one premise token and one claim token before
-their separators. Malformed late pairs reject the entire cohort before any
-prediction. Known native-loader failures retain infrastructure exit 3 and their
+their separators; manifest limits and diagnostic counts therefore start at
+five tokens. Diagnostic JSON requires complete, strict reviewed labels, probe
+inputs, claims/spans, and supplied-fact evidence, before typed constructors can
+fill missing fields with defaults. Structural validity is not an authentication
+or source-binding certificate. Malformed late pairs reject the entire cohort
+before any prediction. Known native-loader failures retain infrastructure exit 3 and their
 underlying diagnostic, including CLR type-initialization wrappers; unrelated
 initialization defects are not silently classified as native-loader failures.
 
