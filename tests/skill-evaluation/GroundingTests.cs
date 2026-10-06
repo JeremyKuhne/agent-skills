@@ -58,12 +58,16 @@ public sealed class GroundingTests
     /// <summary>
     ///  Verifies completed review projection can be checked through the public CLI without any runtime backend.
     /// </summary>
+    /// <param name="role">The explicitly supported reviewer declaration.</param>
+    /// <param name="authority">The corresponding evidence classification.</param>
     [TestMethod]
-    public void ValidateGroundingReviewCliKeepsSyntheticEvidenceExplicit()
+    [DataRow("synthetic-fixture-reviewer", "synthetic-review-fixture")]
+    [DataRow("repository-maintainer", "declared-human-reviewed-development")]
+    public void ValidateGroundingReviewCliKeepsDeclaredRolesExplicit(string role, string authority)
     {
         using TestWorkspace workspace = new();
         string bank = workspace.WriteReviewBank();
-        string review = GroundingFixture.WriteReview(workspace, bank);
+        string review = GroundingFixture.WriteReview(workspace, bank, document => document["reviewerRole"] = role);
         using StringWriter output = new();
         using StringWriter error = new();
         int exit = Program.Run([
@@ -73,7 +77,7 @@ public sealed class GroundingTests
 
         Assert.AreEqual(0, exit, error.ToString());
         System.Text.Json.JsonElement result = ContractJson.Parse(output.ToString());
-        Assert.AreEqual("synthetic-review-fixture", result.GetProperty("authorityScope").GetString());
+        Assert.AreEqual(authority, result.GetProperty("authorityScope").GetString());
         Assert.AreEqual(14, result.GetProperty("labels").GetArrayLength());
         Assert.AreEqual("", error.ToString());
     }
@@ -389,6 +393,66 @@ public sealed class GroundingTests
 
         document[field] = JsonNode.Parse(value);
         File.WriteAllText(review, document.ToJsonString(ContractJson.Options));
+        string destination = Path.Join(workspace.Root, "diagnostics");
+        string[] arguments = command == "ground"
+            ? Arguments(workspace, bank, manifest, review, destination)
+            : ["validate-grounding-review", "--repo-root", workspace.Root, "--packets", bank,
+                "--review-owner", Path.Join(workspace.Root, "reviews"), "--review", review];
+
+        using StringWriter output = new();
+        using StringWriter error = new();
+        bool constructed = false;
+        int exit = Program.Run(arguments, output, error, _ =>
+        {
+            constructed = true;
+            return new FixtureGroundingBackend();
+        });
+
+        Assert.AreEqual(3, exit);
+        Assert.AreEqual("", output.ToString());
+        Assert.Contains("Skill evaluation failed:", error.ToString());
+        Assert.IsFalse(constructed);
+        Assert.IsFalse(Directory.Exists(destination));
+    }
+
+    /// <summary>
+    ///  Gets unknown or mistyped reviewer roles through both public preflight entry points.
+    /// </summary>
+    public static IEnumerable<object[]> UnsupportedReviewerRoles
+    {
+        get
+        {
+            foreach (string command in new[] { "validate-grounding-review", "ground" })
+            {
+                foreach (string role in new[]
+                {
+                    "assistant",
+                    "judge",
+                    "unknown-reviewer",
+                    "synthetic-fixture-reviwer",
+                    "SYNTHETIC-FIXTURE-REVIEWER",
+                    "repository-maintainer "
+                })
+                {
+                    yield return [command, role];
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Verifies an unsupported role cannot become human evidence or reach backend construction.
+    /// </summary>
+    /// <param name="command">The public review or grounding command.</param>
+    /// <param name="role">The unsupported original role declaration.</param>
+    [TestMethod]
+    [DynamicData(nameof(UnsupportedReviewerRoles))]
+    public void GroundingCliRejectsUnsupportedReviewerRolesBeforeBackendCreation(string command, string role)
+    {
+        using TestWorkspace workspace = new();
+        string bank = workspace.WriteReviewBank();
+        string manifest = WriteSyntheticAssets(workspace);
+        string review = GroundingFixture.WriteReview(workspace, bank, document => document["reviewerRole"] = role);
         string destination = Path.Join(workspace.Root, "diagnostics");
         string[] arguments = command == "ground"
             ? Arguments(workspace, bank, manifest, review, destination)

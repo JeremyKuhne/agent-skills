@@ -9,7 +9,7 @@
     "bankId": { "type": "string", "minLength": 1 },
     "bankRevision": { "type": "string", "pattern": "^[0-9A-F]{64}$" },
     "datasetRole": { "const": "development" },
-    "reviewerRole": { "type": "string", "minLength": 1 },
+    "reviewerRole": { "enum": ["repository-maintainer", "synthetic-fixture-reviewer"] },
     "status": { "const": "completed" },
     "humanReviewedArtifactCount": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
     "rubricDecisionCount": { "type": "integer", "minimum": 1, "maximum": 2147483647 },

@@ -27,6 +27,13 @@ public static class GroundingHumanLabels
         JsonElement document = ContractJson.Read<JsonElement>(
             ContractJson.Parse(text), "grounding-review-projection.v1");
 
+        string authority = ProfileValidator.RequiredString(document, "reviewerRole") switch
+        {
+            "repository-maintainer" => "declared-human-reviewed-development",
+            "synthetic-fixture-reviewer" => "synthetic-review-fixture",
+            _ => throw new EvaluationContractException("Human grounding review requires an explicitly supported reviewer role.")
+        };
+
         if (ProfileValidator.RequiredString(document, "bankId") != bank.Bank.Id
             || ProfileValidator.RequiredString(document, "bankRevision") != bank.Summary.SourceRevision
             || !document.GetProperty("humanReviewedArtifactCount").TryGetInt32(out int artifactCount)
@@ -117,9 +124,6 @@ public static class GroundingHumanLabels
         {
             throw new EvaluationContractException("The completed human grounding record is incomplete for the selected bank.");
         }
-
-        string authority = ProfileValidator.RequiredString(document, "reviewerRole") == "synthetic-fixture-reviewer"
-            ? "synthetic-review-fixture" : "declared-human-reviewed-development";
 
         return new(ProfileValidator.RequiredString(document, "sessionId"), ContractJson.HashText(text),
             bank.Summary.SourceRevision, authority, labels.ToArray());

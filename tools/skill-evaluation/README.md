@@ -199,6 +199,10 @@ unique probe labels; documentary and rubric bookkeeping outside that projection
 is not independently certified. Completeness counters require positive Int32
 JSON number representations; overflow and decimal/exponent forms fail explicitly.
 Synthetic test reviewers/backends are visibly marked in diagnostic evidence.
+Supported reviewer declarations are `repository-maintainer` and
+`synthetic-fixture-reviewer`. Unknown roles, casing changes, and misspellings
+are rejected before backend construction, not classified as human evidence.
+These explicit role declarations still do not authenticate a reviewer.
 
 Complete pairs require at least one premise token and one claim token before
 their separators; manifest limits and diagnostic counts therefore start at
