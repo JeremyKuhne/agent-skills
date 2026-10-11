@@ -183,6 +183,185 @@ public sealed class SkillQualityReportTests
     }
 
     /// <summary>
+    ///  Verifies each named executable hard check needs a real pass, not an unassessed or inapplicable state.
+    /// </summary>
+    /// <param name="state">The observed named hard-check state.</param>
+    /// <param name="outcome">The expected descriptive task outcome.</param>
+    /// <param name="comparison">The expected matched comparison against a passing baseline.</param>
+    [TestMethod]
+    [DataRow(SkillQualityCheckState.Passed, "provisional-pass", "tie")]
+    [DataRow(SkillQualityCheckState.Failed, "failed-executable", "loss")]
+    [DataRow(SkillQualityCheckState.Pending, "pending", "pending")]
+    [DataRow(SkillQualityCheckState.NotApplicable, "pending", "pending")]
+    public void BuildRequiresEveryExecutableHardCheckToPass(
+        SkillQualityCheckState state, string outcome, string comparison)
+    {
+        SkillQualityRunRecord baseline = Run(SkillQualityCondition.NoSkill);
+        SkillQualityRunRecord current = Run(SkillQualityCondition.Current) with
+        {
+            OracleOutcome = SkillQualityOracleOutcome.Passed,
+            HardChecks = [new("compile", "Compiler", state,
+                "Controlled executable check state.", "The named hard check must pass.")]
+        };
+
+        SkillQualityJudgeRecord[] judges =
+        [
+            Judge(baseline, SkillQualityModelId.Gpt61Sol, SkillQualityJudgeState.Passed),
+            Judge(baseline, SkillQualityModelId.Gpt6Luna, SkillQualityJudgeState.Passed),
+            Judge(current, SkillQualityModelId.Gpt61Sol, SkillQualityJudgeState.Passed),
+            Judge(current, SkillQualityModelId.Gpt6Luna, SkillQualityJudgeState.Passed)
+        ];
+
+        JsonElement report = SkillQualityReports.Build(Campaign([baseline, current], judges));
+        Assert.AreEqual(outcome, report.GetProperty("rows")[1].GetProperty("outcome").GetString());
+        Assert.AreEqual(comparison, report.GetProperty("comparisons")[0].GetProperty("outcome").GetString());
+    }
+
+    /// <summary>
+    ///  Verifies work that never started belongs only in expected inventory, even when gates claim results.
+    /// </summary>
+    /// <param name="oracle">The misleading scheduled row's declared oracle result.</param>
+    [TestMethod]
+    [DataRow(SkillQualityOracleOutcome.None)]
+    [DataRow(SkillQualityOracleOutcome.Passed)]
+    [DataRow(SkillQualityOracleOutcome.Failed)]
+    [DataRow(SkillQualityOracleOutcome.Pending)]
+    public void ParseRejectsScheduledActualRows(SkillQualityOracleOutcome oracle)
+    {
+        SkillQualityRunRecord current = Run(SkillQualityCondition.Current) with
+        {
+            Status = SkillQualityRunStatus.Scheduled,
+            OracleOutcome = oracle
+        };
+
+        SkillQualityCampaign campaign = Campaign([current], []);
+        string json = ContractJson.Serialize(campaign);
+        Assert.ThrowsExactly<EvaluationContractException>(() => SkillQualityReports.Parse(json));
+        Assert.ThrowsExactly<EvaluationContractException>(() => SkillQualityReports.Build(campaign));
+    }
+
+    /// <summary>
+    ///  Verifies attempted executable observations cannot affect verdicts without a captured artifact identity.
+    /// </summary>
+    /// <param name="oracle">The attempted run's oracle result or absence.</param>
+    /// <param name="check">The named hard-check observation, when present.</param>
+    [TestMethod]
+    [DataRow(SkillQualityOracleOutcome.Passed, null)]
+    [DataRow(SkillQualityOracleOutcome.Failed, null)]
+    [DataRow(null, SkillQualityCheckState.Passed)]
+    [DataRow(null, SkillQualityCheckState.Failed)]
+    [DataRow(null, SkillQualityCheckState.Pending)]
+    [DataRow(null, SkillQualityCheckState.NotApplicable)]
+    [DataRow(SkillQualityOracleOutcome.Pending, SkillQualityCheckState.Passed)]
+    public void ParseRejectsUnboundExecutableEvidence(
+        SkillQualityOracleOutcome? oracle, SkillQualityCheckState? check)
+    {
+        SkillQualityRunRecord current = Run(SkillQualityCondition.Current) with
+        {
+            Status = SkillQualityRunStatus.Attempted,
+            ArtifactRevision = null,
+            OracleOutcome = oracle,
+            HardChecks = check is SkillQualityCheckState state
+                ? [new("compile", "Compiler", state, "An observed check.", "Must hold for the executed artifact.")]
+                : []
+        };
+
+        SkillQualityCampaign unbound = Campaign([current], []);
+        Assert.ThrowsExactly<EvaluationContractException>(() => SkillQualityReports.Parse(ContractJson.Serialize(unbound)));
+        Assert.ThrowsExactly<EvaluationContractException>(() => SkillQualityReports.Build(unbound));
+        SkillQualityCampaign bound = Campaign([current with { ArtifactRevision = new('C', 64) }], []);
+        Assert.IsNotNull(SkillQualityReports.Parse(ContractJson.Serialize(bound)));
+        JsonElement report = SkillQualityReports.Build(bound);
+        Assert.AreEqual(1, report.GetProperty("attempted").GetInt32());
+        Assert.AreEqual(0, report.GetProperty("completed").GetInt32());
+    }
+
+    /// <summary>
+    ///  Verifies absent executable observations remain valid and pending before an artifact is captured.
+    /// </summary>
+    /// <param name="oracle">The unexecuted oracle declaration.</param>
+    [TestMethod]
+    [DataRow(stringArrayData: null)]
+    [DataRow(SkillQualityOracleOutcome.Pending)]
+    [DataRow(SkillQualityOracleOutcome.None)]
+    public void BuildPreservesArtifactlessAttemptsWithoutExecutableEvidence(SkillQualityOracleOutcome? oracle)
+    {
+        SkillQualityRunRecord current = Run(SkillQualityCondition.Current) with
+        {
+            Status = SkillQualityRunStatus.Attempted,
+            ArtifactRevision = null,
+            OracleOutcome = oracle
+        };
+
+        SkillQualityCampaign campaign = Campaign([current], []);
+        Assert.IsNotNull(SkillQualityReports.Parse(ContractJson.Serialize(campaign)));
+        JsonElement report = SkillQualityReports.Build(campaign);
+        Assert.AreEqual("pending", report.GetProperty("rows")[1].GetProperty("outcome").GetString());
+        Assert.AreEqual(1, report.GetProperty("notRun").GetInt32());
+        Assert.AreEqual(1, report.GetProperty("attempted").GetInt32());
+        Assert.AreEqual(0, report.GetProperty("completed").GetInt32());
+    }
+
+    /// <summary>
+    ///  Verifies an incomplete judgment is pending rather than a conflicting terminal verdict.
+    /// </summary>
+    /// <param name="first">The first judge's state.</param>
+    /// <param name="second">The second judge's state.</param>
+    [TestMethod]
+    [DataRow(SkillQualityJudgeState.Pending, SkillQualityJudgeState.Passed)]
+    [DataRow(SkillQualityJudgeState.Passed, SkillQualityJudgeState.Pending)]
+    [DataRow(SkillQualityJudgeState.Pending, SkillQualityJudgeState.Failed)]
+    [DataRow(SkillQualityJudgeState.Failed, SkillQualityJudgeState.Pending)]
+    [DataRow(SkillQualityJudgeState.Pending, SkillQualityJudgeState.Pending)]
+    public void BuildPendingJudgmentsDoNotCountAsDisagreement(
+        SkillQualityJudgeState first, SkillQualityJudgeState second)
+    {
+        SkillQualityRunRecord current = Run(SkillQualityCondition.Current);
+        JsonElement report = SkillQualityReports.Build(Campaign([current],
+            [Judge(current, SkillQualityModelId.Gpt61Sol, first),
+                Judge(current, SkillQualityModelId.Gpt6Luna, second)]));
+
+        JsonElement row = report.GetProperty("rows")[1];
+        Assert.AreEqual("pending", row.GetProperty("items")[0].GetProperty("state").GetString());
+        Assert.AreEqual("pending", row.GetProperty("outcome").GetString());
+        Assert.AreEqual(0, report.GetProperty("judgeDisagreement").GetInt32());
+        Assert.AreEqual(0, report.GetProperty("judgeAgreement").GetInt32());
+        Assert.AreEqual(1, report.GetProperty("missingJudgments").GetInt32());
+        Assert.AreEqual("pending", report.GetProperty("comparisons")[0].GetProperty("outcome").GetString());
+    }
+
+    /// <summary>
+    ///  Verifies invalid actual evidence fails through the public command without producing a scorecard.
+    /// </summary>
+    [TestMethod]
+    public void QualityReportCliRejectsScheduledAndUnboundExecutableEvidence()
+    {
+        using TestWorkspace workspace = new();
+        string path = Path.Join(workspace.Root, "campaign.json");
+        SkillQualityRunRecord scheduled = Run(SkillQualityCondition.Current) with
+        {
+            Status = SkillQualityRunStatus.Scheduled
+        };
+
+        SkillQualityRunRecord unbound = Run(SkillQualityCondition.Current) with
+        {
+            Status = SkillQualityRunStatus.Attempted,
+            ArtifactRevision = null,
+            OracleOutcome = SkillQualityOracleOutcome.Failed
+        };
+
+        foreach (SkillQualityRunRecord row in new[] { scheduled, unbound })
+        {
+            File.WriteAllText(path, ContractJson.Serialize(Campaign([row], [])));
+            StringWriter output = new();
+            StringWriter error = new();
+            Assert.AreEqual(3, Program.Run(["quality-report", "--campaign", path], output, error));
+            Assert.AreEqual("", output.ToString());
+            Assert.Contains("Skill evaluation failed:", error.ToString());
+        }
+    }
+
+    /// <summary>
     ///  Makes a two-condition frozen pilot fixture with no expected outcome assertions.
     /// </summary>
     /// <param name="runs">The actual observed candidates.</param>

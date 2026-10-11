@@ -30,11 +30,30 @@
     "expectedRunInventory": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/runRecord" }
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/runRecord" },
+          { "properties": { "status": { "const": "scheduled" } } }
+        ]
+      }
     },
     "actualRunRecords": {
       "type": "array",
-      "items": { "$ref": "#/$defs/runRecord" }
+      "items": {
+        "allOf": [
+          { "$ref": "#/$defs/runRecord" },
+          { "properties": { "status": { "enum": ["attempted", "completed"] } } },
+          {
+            "if": {
+              "anyOf": [
+                { "properties": { "oracleOutcome": { "enum": ["passed", "failed"] } } },
+                { "properties": { "hardChecks": { "minItems": 1 } } }
+              ]
+            },
+            "then": { "properties": { "artifactRevision": { "$ref": "#/$defs/sha256" } } }
+          }
+        ]
+      }
     },
     "judgeRecords": {
       "type": "array",

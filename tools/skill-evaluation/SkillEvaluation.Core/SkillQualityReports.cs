@@ -202,11 +202,22 @@ public static class SkillQualityReports
                 throw new EvaluationContractException("An observed run is not bound to the frozen scheduled task.");
             }
 
+            if (row.Status == SkillQualityRunStatus.Scheduled)
+            {
+                throw new EvaluationContractException("Actual run records must represent attempted or completed work.");
+            }
+
             ProfileValidator.UniqueIds(row.HardChecks.Select(check => check.Id), "executable check");
             if (row.Status == SkillQualityRunStatus.Completed && (row.ArtifactRevision is null
                 || row.Infrastructure != SkillQualityCheckState.Passed))
             {
                 throw new EvaluationContractException("A completed candidate requires captured artifacts and successful infrastructure.");
+            }
+
+            if (row.ArtifactRevision is null && (row.OracleOutcome is
+                SkillQualityOracleOutcome.Passed or SkillQualityOracleOutcome.Failed || row.HardChecks.Length != 0))
+            {
+                throw new EvaluationContractException("Executable evidence requires the captured artifact revision.");
             }
 
             if (row.ArtifactRevision is not null)
@@ -303,6 +314,11 @@ public static class SkillQualityReports
             return "missing-judgment";
         }
 
+        if (states.Contains(SkillQualityJudgeState.Pending))
+        {
+            return "pending";
+        }
+
         if (states.Distinct().Count() > 1)
         {
             return "disputed";
@@ -363,7 +379,7 @@ public static class SkillQualityReports
         }
 
         if (run.OracleOutcome is null or SkillQualityOracleOutcome.Pending
-            || run.HardChecks.Any(check => check.Status == SkillQualityCheckState.Pending)
+            || run.HardChecks.Any(check => check.Status != SkillQualityCheckState.Passed)
             || hardStates.Any(state => state is "pending" or "missing-judgment"))
         {
             return "pending";
