@@ -3,9 +3,11 @@
 This .NET 10 CLI validates content profiles, snapshots declared artifacts, and
 checks literal Markdown and ledger contracts. Those capture/rescore paths remain
 deterministic and do not invoke a model. A separate manual `ground` command
-supports pinned CPU diagnostics for explicit development probes. Candidate and
-judge inference are not implemented. Literal or raw-classifier passes never
-establish useful-output qualification.
+supports pinned CPU diagnostics for explicit development probes. A manual
+`quality-report` command summarizes captured task evidence and separate
+provisional grades; this CLI does not run candidate or judge inference.
+Literal, executable, model-grade, or raw-classifier passes never establish
+whole-skill useful-output qualification.
 
 ## Build and test
 
@@ -123,6 +125,21 @@ dotnet $cli lint-artifact --repo-root . --scenario .\evals\scenarios\technical-w
   [grounding projection](../../evals/schemas/grounding-review-projection.v1.json)
   against the source bank. It preserves human decisions separately from
   proposals and performs no inference.
+- `quality-report --campaign <path>` validates a
+  [skill-quality campaign](../../evals/schemas/skill-quality-campaign.v1.json)
+  and emits a descriptive JSON scorecard. It retains scheduled missing rows,
+  separate safety/infrastructure states, exact artifact-bound grading evidence,
+  executable failures, and matched win/loss/tie/pending counts. Two agreeing
+  model grades remain provisional; neither they nor style can override an
+  executable failure. Unknown usage stays null. Exit 0 means the report was
+  built, even when it reports failed tasks; it does not qualify a skill or run
+  candidate, judge, or classifier inference. Malformed or mismatched evidence
+  produces stderr and exit 3.
+
+```pwsh
+dotnet $cli quality-report --campaign .\campaign.json
+```
+
 - `ground` requires explicit `--report-only true`, locally provisioned pinned
   assets, a complete separate review record, and a disjoint output directory.
   It preflights every declared pair before dispatching any classifier input,

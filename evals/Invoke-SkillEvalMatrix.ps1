@@ -1,3 +1,11 @@
+<#
+.SYNOPSIS
+    Runs scenario documents with one shared skill exposure treatment.
+.DESCRIPTION
+    SkillCondition and TargetSkill have the same contract as Invoke-SkillEvals.ps1.
+    One target applies to every document in the matrix. Run separate matrices for
+    different targets, conditions, and models, with fresh output directories.
+#>
 #Requires -Version 7.2
 [CmdletBinding()]
 param(
@@ -21,7 +29,10 @@ param(
     [ValidateRange(1, 240)]
     [int] $MatrixTimeoutMinutes = 60,
     [switch] $ReportOnly,
-    [string] $CopilotPath
+    [string] $CopilotPath,
+    [ValidateSet('enabled', 'no-skill')]
+    [string] $SkillCondition = 'enabled',
+    [string] $TargetSkill
 )
 
 Set-StrictMode -Version Latest
@@ -33,6 +44,8 @@ if ([string]::IsNullOrWhiteSpace($Model)) {
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 Import-Module (Join-Path $PSScriptRoot 'SkillEval.psm1') -Force
+$exposure = Get-SkillEvalExposure -RepoRoot $RepoRoot `
+    -SkillCondition $SkillCondition -TargetSkill $TargetSkill
 $resolvedCopilotPath = Resolve-SkillEvalCopilotPath -CopilotPath $CopilotPath
 Get-SkillEvalCopilotVersion -CopilotPath $resolvedCopilotPath -Model $Model | Out-Null
 $resolvedScenarioPaths = @($ScenarioPath | ForEach-Object {
@@ -94,6 +107,8 @@ $workItems = for ($index = 0; $index -lt $resolvedScenarioPaths.Count; $index++)
         OutputDirectory = Join-Path $outputPath $documentNames[$index]
         LogPath = Join-Path $outputPath "$($documentNames[$index]).log"
         Workers = $allocationByName[$documentNames[$index]]
+        SkillCondition = $SkillCondition
+        TargetSkill = $TargetSkill
     }
 }
 $pwshPath = [string]@(Get-Command pwsh -CommandType Application -All -ErrorAction Stop)[0].Source
@@ -115,10 +130,15 @@ $processResults = @($workItems | ForEach-Object -Parallel {
                 '-OutputDirectory', $_.OutputDirectory,
                 '-Model', $using:Model,
                 '-CopilotPath', $using:resolvedCopilotPath,
+                '-SkillCondition', $_.SkillCondition,
                 '-TimeoutMinutes', [string]$using:TimeoutMinutes,
                 '-MaxConcurrency', [string]$_.Workers,
                 '-ReportOnly')) {
             $arguments.Add([string]$argument)
+        }
+        if ($_.TargetSkill) {
+            $arguments.Add('-TargetSkill')
+            $arguments.Add($_.TargetSkill)
         }
         if ($using:RunCount -gt 0) {
             $arguments.Add('-RunCount')
@@ -166,6 +186,12 @@ foreach ($processResult in @($processResults | Sort-Object Index)) {
         throw "Matrix document '$($processResult.Name)' did not produce a summary; see '$($processResult.LogPath)'."
     }
     $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+    if (-not $summary.PSObject.Properties['Exposure'] -or
+        [string]$summary.Exposure.Revision -cne [string]$exposure.Revision -or
+        [string]$summary.SkillCondition -cne $SkillCondition -or
+        [string]$summary.TargetSkill -cne $TargetSkill) {
+        throw "Matrix document '$($processResult.Name)' has mismatched skill exposure."
+    }
     $documents.Add([pscustomobject]@{
             Name = $processResult.Name
             ScenarioPath = $resolvedScenarioPaths[$processResult.Index]
@@ -187,6 +213,9 @@ $summary = [pscustomobject]@{
     SchemaVersion = 1
     GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
     Model = $Model
+    SkillCondition = $SkillCondition
+    TargetSkill = $TargetSkill
+    Exposure = $exposure
     CopilotVersion = $clientIdentity.CopilotVersion
     CopilotExecutableSha256 = $clientIdentity.CopilotExecutableSha256
     CopilotExecutableEvidenceVerified = $clientIdentity.CopilotExecutableEvidenceVerified
@@ -205,6 +234,9 @@ $summary = [pscustomobject]@{
     Documents = @($documents | ForEach-Object {
             [pscustomobject]@{
                 Name = $_.Name
+                SkillCondition = $_.Summary.SkillCondition
+                TargetSkill = $_.Summary.TargetSkill
+                StagedExposures = $_.Summary.StagedExposures
                 Workers = $_.Workers
                 ExitCode = $_.ExitCode
                 TimedOut = $_.TimedOut
@@ -220,7 +252,7 @@ $summary = [pscustomobject]@{
             }
         })
 }
-$summary | ConvertTo-Json -Depth 10 |
+$summary | ConvertTo-Json -Depth 30 |
     Set-Content -LiteralPath (Join-Path $outputPath 'summary.json')
 $summary.Documents |
     Select-Object Name, Workers, RunCount, PassedCount, FailedCount, WallTimeMilliseconds |

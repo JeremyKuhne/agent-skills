@@ -40,6 +40,17 @@ plus a separate .NET 10 test project:
 Classifier and judge accuracy remain separate, unexecuted evaluation work.
 Green parser/adapter tests do not establish useful model-output quality.
 
+## 2026-10-11 matched-quality pilot additions
+
+The pilot adds one retained Pester file, bringing the current working-tree
+count to 18. The dated baseline counts below are unchanged.
+
+| Surface | Owner and oracle |
+| --- | --- |
+| [Coding-task oracles](../evals/oracles/Invoke-SkillQualityOracle.ps1) | PowerShell array, error, stream, argument, and environment behavior through fresh children; C# compilation and filesystem behavior through an offline .NET 10 generated project. Exact task assertions, not model grades or syntax proxies, own the results. |
+| [Oracle contract tests](../tests/evals/SkillQualityOracle.Tests.ps1) | Known-good and deliberately broken artifacts, complete source-bound receipts, compiler rejection, timeout and infrastructure controls, and projection through the real report CLI. No model inference. |
+| [Quality report tests](../tests/skill-evaluation/SkillQualityReportTests.cs) | Managed schema and exact input/artifact/criteria binding, scheduled denominators, executable-failure precedence, model disagreement, and provisional paired outcomes. No quality qualification claim. |
+
 ## Method and counts
 
 PowerShell's parser identified real Pester command ASTs, excluding `Describe`

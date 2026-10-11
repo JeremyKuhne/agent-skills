@@ -24,6 +24,9 @@ public sealed class CliAndReportTests
     [DataRow(new[] { "ground" })]
     [DataRow(new[] { "prepare", "--repo-root", "one", "--repo-root", "two" })]
     [DataRow(new[] { "prepare", "--scenario" })]
+    [DataRow(new[] { "quality-report" })]
+    [DataRow(new[] { "quality-report", "--campaign", "one", "--campaign", "two" })]
+    [DataRow(new[] { "quality-report", "--campaign", "one", "--unexpected", "two" })]
     public void InvalidInvocationReportsInfrastructureFailure(string[] args)
     {
         StringWriter output = new();

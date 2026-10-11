@@ -43,7 +43,7 @@ public static class Program
             if (args.Length == 0)
             {
                 throw new EvaluationContractException(
-                    "Specify prepare, validate-profile, capture, lint-artifact, check-ledger, rescore, validate-review-packets, export-review-packets, validate-grounding-assets, validate-grounding-review, or ground.");
+                    "Specify prepare, validate-profile, capture, lint-artifact, check-ledger, rescore, quality-report, validate-review-packets, export-review-packets, validate-grounding-assets, validate-grounding-review, or ground.");
             }
 
             Dictionary<string, string> options = ParseOptions(args[1..]);
@@ -167,6 +167,13 @@ public static class Program
 
                         exitCode = state == QualityState.Failed ? 1 : 0;
                     }
+
+                    break;
+                case "quality-report":
+                    string campaignPath = Required("campaign");
+                    CompleteOptions();
+                    result = SkillQualityReports.Build(SkillQualityReports.Parse(
+                        ArtifactStore.Decode(File.ReadAllBytes(campaignPath))));
 
                     break;
                 case "validate-review-packets":
