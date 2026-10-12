@@ -1245,12 +1245,31 @@ function Get-SkillEvalStagedExposure {
     param([Parameter(Mandatory)][string] $RunDirectory)
 
     $runtimeFiles = [System.Collections.Generic.List[object]]::new()
+    $runtimePrefix = 'sandbox-home/localappdata/copilot/pkg/'
     $files = @(foreach ($root in @('plugin', 'copilot-home', 'workspace', 'sandbox-home')) {
             $path = Join-Path $RunDirectory $root
             if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
-            foreach ($file in Get-ChildItem -LiteralPath $path -File -Force -Recurse) {
+            $rootFiles = @(Get-ChildItem -LiteralPath $path -File -Force -Recurse)
+            $bundlePrefixes = @(foreach ($entry in $rootFiles) {
+                    if ($entry.Name -iin @('SKILL.md', 'plugin.json')) {
+                        $relativeDirectory = [IO.Path]::GetRelativePath(
+                            $RunDirectory, $entry.DirectoryName).Replace('\', '/') + '/'
+                        if ($relativeDirectory.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                            $relativeDirectory
+                        }
+                    }
+                })
+            $bundlePrefixes = @($bundlePrefixes | Sort-Object -Unique)
+            foreach ($file in $rootFiles) {
                 $relativePath = [IO.Path]::GetRelativePath($RunDirectory, $file.FullName).Replace('\', '/')
-                $isCustomization = $root -eq 'plugin' -or
+                $isBundledResource = $false
+                foreach ($prefix in $bundlePrefixes) {
+                    if ($relativePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+                        $isBundledResource = $true
+                        break
+                    }
+                }
+                $isCustomization = $isBundledResource -or $root -eq 'plugin' -or
                     $file.Name -iin @('.mcp.json', 'plugin.json') -or
                     $file.Name -imatch '^(AGENTS|CLAUDE|GEMINI|SKILL)\.md$|(?:\.agent|\.instructions|\.prompt)\.md$|^copilot-instructions\.md$' -or
                     $relativePath -match '/(?:\.agents|\.claude|\.copilot)/(?:skills|agents|plugins)/|/\.github/(?:skills|agents|instructions|prompts)/|^copilot-home/(?:skills|agents|plugins)/'
@@ -1259,7 +1278,7 @@ function Get-SkillEvalStagedExposure {
                         Path = $relativePath
                         Sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
                     }
-                    if ($relativePath.StartsWith('sandbox-home/localappdata/copilot/pkg/', [StringComparison]::OrdinalIgnoreCase)) {
+                    if ($relativePath.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
                         $runtimeFiles.Add($record)
                     }
                     else { $record }

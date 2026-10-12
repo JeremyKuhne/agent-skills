@@ -16,7 +16,11 @@ fixtures. Omitting these options preserves the existing full-plugin default.
 Exposure manifests and revisions are recorded with the capture evidence.
 Customization-bearing files unpacked inside the client's
 `sandbox-home/localappdata/copilot/pkg/` installation are recorded separately
-as `ClientRuntimeExposure`, not mistaken for a changed selected core. A matched
+as `ClientRuntimeExposure`, including every file in each bundled skill or
+plugin directory identified by `SKILL.md` or `plugin.json`. Support Markdown,
+scripts, templates, and binary resources affect the revision; unrelated
+package files outside those directories are not skill exposure. This bundled
+material is not mistaken for a changed selected core. A matched
 pilot must verify that this bundled-client exposure is identical across its
 conditions; no-skill means no selected or user/project skill, not a client with
 its built-in capabilities removed.

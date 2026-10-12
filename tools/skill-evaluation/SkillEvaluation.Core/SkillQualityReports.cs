@@ -179,7 +179,15 @@ public static class SkillQualityReports
         Dictionary<string, SkillQualityRunRecord> actual = Map(campaign.ActualRunRecords);
         foreach (SkillQualityRunRecord row in campaign.ExpectedRunInventory)
         {
-            if (!campaign.ExpectedSkillIds.Contains(row.SkillId) || row.Status != SkillQualityRunStatus.Scheduled)
+            if (!campaign.ExpectedSkillIds.Contains(row.SkillId)
+                || row.Status != SkillQualityRunStatus.Scheduled
+                || row.ArtifactRevision is not null
+                || row.Safety != SkillQualityCheckState.Pending
+                || row.Infrastructure != SkillQualityCheckState.Pending
+                || row.OracleOutcome is not null
+                || row.HardChecks.Length != 0
+                || row.Usage is not null
+                || row.ElapsedMs is not null)
             {
                 throw new EvaluationContractException("Expected inventory contains observed outcomes or an unknown skill.");
             }

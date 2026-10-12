@@ -135,8 +135,11 @@ dotnet $cli lint-artifact --repo-root . --scenario .\evals\scenarios\technical-w
   built, even when it reports failed tasks; it does not qualify a skill or run
   candidate, judge, or classifier inference. Malformed or mismatched evidence
   produces stderr and exit 3.
-  Scheduled rows belong only in the expected inventory; actual rows must be
-  attempted or completed. Passed/failed oracle results and every named
+  Scheduled rows belong only in the expected inventory, with pending safety
+  and infrastructure gates, null artifact/oracle/usage/timing fields, and no
+  named hard-check observations. Observed evidence on scheduled rows is
+  rejected, not silently discarded. Actual rows must be attempted or completed.
+  Passed/failed oracle results and every named
   executable check require the captured artifact revision, even on an
   attempted row. An unexecuted oracle declaration without checks can remain
   artifactless and pending. Named hard checks must pass: pending or

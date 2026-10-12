@@ -5211,6 +5211,78 @@ $files = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force |
         if ($Condition -eq 'no-skill') { $summary.Runs[0].StagedExposure.Files.Count | Should -Be 0 }
     }
 
+    It 'records complete bundled resource directories for <Kind>' -ForEach @(
+        @{ Kind = 'builtin-skill'; Container = 'builtin-skills'; Entry = 'SKILL.md' }
+        @{ Kind = 'builtin-alias'; Container = 'builtin'; Entry = 'SKILL.md' }
+        @{ Kind = 'bundled-plugin'; Container = 'plugins'; Entry = 'plugin.json' }
+    ) {
+        $run = Join-Path $TestDrive "runtime-closure-$Kind"
+        $package = Join-Path $run 'sandbox-home' -AdditionalChildPath @(
+            'localappdata', 'copilot', 'pkg', 'win32-x64', '1.0.95')
+        $bundle = Join-Path $package $Container -AdditionalChildPath @('synthetic')
+        $null = New-Item -ItemType Directory -Path (Join-Path $bundle 'scripts'), (Join-Path $bundle 'references') -Force
+        $entryText = if ($Entry -eq 'plugin.json') {
+            '{"name":"synthetic","version":"1.0.0"}'
+        }
+        else { 'Synthetic bundled skill entry.' }
+        Set-Content -LiteralPath (Join-Path $bundle $Entry) -Value $entryText
+        $resources = @(
+            (Join-Path $bundle 'references' -AdditionalChildPath @('support.md'))
+            (Join-Path $bundle 'scripts' -AdditionalChildPath @('helper.ps1'))
+            (Join-Path $bundle 'template.txt')
+            (Join-Path $bundle 'resource.bin')
+        )
+        foreach ($resource in $resources) { [IO.File]::WriteAllText($resource, 'Original resource bytes.') }
+        $outside = Join-Path $package $Container -AdditionalChildPath @('synthetic-other')
+        $null = New-Item -ItemType Directory -Path $outside
+        $unrelated = Join-Path $outside 'support.md'
+        [IO.File]::WriteAllText($unrelated, 'Unrelated package content without a bundled entry.')
+        $before = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $before.Files.Count | Should -Be 0
+        $before.ClientRuntimeExposure.Files.Count | Should -Be 5
+        foreach ($resource in $resources) {
+            $relative = [IO.Path]::GetRelativePath($run, $resource).Replace('\', '/')
+            $before.ClientRuntimeExposure.Files.Path | Should -Contain $relative
+            $captured = @($before.ClientRuntimeExposure.Files | Where-Object Path -CEQ $relative)
+            $captured.Count | Should -Be 1
+            $captured[0].Sha256 | Should -BeExactly (Get-FileHash -LiteralPath $resource -Algorithm SHA256).Hash
+        }
+        $previous = $before.ClientRuntimeExposure.Revision
+        foreach ($resource in $resources) {
+            [IO.File]::WriteAllText($resource, 'Changed resource bytes.')
+            $after = & (Get-Module SkillEval) {
+                param($Directory)
+                Get-SkillEvalStagedExposure -RunDirectory $Directory
+            } $run
+            $after.ClientRuntimeExposure.Revision | Should -Not -BeExactly $previous
+            $after.Revision | Should -BeExactly $before.Revision
+            $previous = $after.ClientRuntimeExposure.Revision
+        }
+        [IO.File]::WriteAllText($unrelated, 'Changed unrelated package content.')
+        $after = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $after.ClientRuntimeExposure.Revision | Should -BeExactly $previous
+        $extra = Join-Path $bundle 'extra.dat'
+        [IO.File]::WriteAllText($extra, 'New bundled resource.')
+        $added = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $added.ClientRuntimeExposure.Files.Count | Should -Be 6
+        $added.ClientRuntimeExposure.Revision | Should -Not -BeExactly $previous
+        Remove-Item -LiteralPath $extra
+        $removed = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $removed.ClientRuntimeExposure.Revision | Should -BeExactly $previous
+    }
+
     It 'still rejects untracked customizations outside the exact native package root' {
         $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'native-lookalike')
         $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `

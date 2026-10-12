@@ -362,6 +362,117 @@ public sealed class SkillQualityReportTests
     }
 
     /// <summary>
+    ///  Verifies scheduled inventory cannot hide observed evidence that reporting would discard.
+    /// </summary>
+    /// <param name="caseName">The independently rejected evidence field or state.</param>
+    [TestMethod]
+    [DataRow("artifact-revision")]
+    [DataRow("safety-passed")]
+    [DataRow("safety-failed")]
+    [DataRow("safety-not-applicable")]
+    [DataRow("infrastructure-passed")]
+    [DataRow("infrastructure-failed")]
+    [DataRow("infrastructure-not-applicable")]
+    [DataRow("oracle-passed")]
+    [DataRow("oracle-failed")]
+    [DataRow("oracle-pending")]
+    [DataRow("oracle-none")]
+    [DataRow("hard-checks")]
+    [DataRow("usage-zero")]
+    [DataRow("usage-unknown")]
+    [DataRow("elapsed-zero")]
+    [DataRow("elapsed-positive")]
+    [DataRow("attempted-status")]
+    public void ParseRejectsObservedExpectedInventory(string caseName)
+    {
+        SkillQualityRunRecord scheduled = Scheduled(SkillQualityCondition.Current);
+        SkillQualityHardCheck check = new("compile", "Compiler", SkillQualityCheckState.Pending,
+            "Not executed.", "The executable check is required.");
+
+        SkillQualityUsage zeroUsage = new(
+            InputTokens: 0,
+            OutputTokens: 0,
+            CachedInputTokens: 0,
+            CachedOutputTokens: 0,
+            CostDollars: 0,
+            ElapsedMs: 0);
+
+        SkillQualityUsage unknownUsage = new(
+            InputTokens: null,
+            OutputTokens: null,
+            CachedInputTokens: null,
+            CachedOutputTokens: null,
+            CostDollars: null,
+            ElapsedMs: null);
+
+        SkillQualityRunRecord row = caseName switch
+        {
+            "artifact-revision" => scheduled with { ArtifactRevision = new('C', 64) },
+            "safety-passed" => scheduled with { Safety = SkillQualityCheckState.Passed },
+            "safety-failed" => scheduled with { Safety = SkillQualityCheckState.Failed },
+            "safety-not-applicable" => scheduled with { Safety = SkillQualityCheckState.NotApplicable },
+            "infrastructure-passed" => scheduled with { Infrastructure = SkillQualityCheckState.Passed },
+            "infrastructure-failed" => scheduled with { Infrastructure = SkillQualityCheckState.Failed },
+            "infrastructure-not-applicable" => scheduled with { Infrastructure = SkillQualityCheckState.NotApplicable },
+            "oracle-passed" => scheduled with { OracleOutcome = SkillQualityOracleOutcome.Passed },
+            "oracle-failed" => scheduled with { OracleOutcome = SkillQualityOracleOutcome.Failed },
+            "oracle-pending" => scheduled with { OracleOutcome = SkillQualityOracleOutcome.Pending },
+            "oracle-none" => scheduled with { OracleOutcome = SkillQualityOracleOutcome.None },
+            "hard-checks" => scheduled with { HardChecks = [check] },
+            "usage-zero" => scheduled with { Usage = zeroUsage },
+            "usage-unknown" => scheduled with { Usage = unknownUsage },
+            "elapsed-zero" => scheduled with { ElapsedMs = 0 },
+            "elapsed-positive" => scheduled with { ElapsedMs = 1 },
+            "attempted-status" => scheduled with { Status = SkillQualityRunStatus.Attempted },
+            _ => throw new InvalidOperationException($"Unknown controlled case '{caseName}'.")
+        };
+
+        SkillQualityCampaign invalid = Campaign([], []) with
+        {
+            ExpectedRunInventory = [Scheduled(SkillQualityCondition.NoSkill), row]
+        };
+
+        string json = ContractJson.Serialize(invalid);
+        Assert.ThrowsExactly<EvaluationContractException>(() =>
+            ContractJson.Read<SkillQualityCampaign>(ContractJson.Parse(json), "skill-quality-campaign.v1"));
+
+        Assert.ThrowsExactly<EvaluationContractException>(() => SkillQualityReports.Parse(json));
+        Assert.ThrowsExactly<EvaluationContractException>(() => SkillQualityReports.Build(invalid));
+    }
+
+    /// <summary>
+    ///  Verifies the public command rejects scheduled usage rather than dropping even zero-valued observations.
+    /// </summary>
+    [TestMethod]
+    public void QualityReportCliRejectsObservedExpectedUsage()
+    {
+        using TestWorkspace workspace = new();
+        string path = Path.Join(workspace.Root, "campaign.json");
+        SkillQualityRunRecord observed = Scheduled(SkillQualityCondition.Current) with
+        {
+            Usage = new(
+                InputTokens: 0,
+                OutputTokens: 0,
+                CachedInputTokens: 0,
+                CachedOutputTokens: 0,
+                CostDollars: 0,
+                ElapsedMs: 0)
+        };
+
+        SkillQualityCampaign campaign = Campaign([], []) with
+        {
+            ExpectedRunInventory = [Scheduled(SkillQualityCondition.NoSkill), observed]
+        };
+
+        File.WriteAllText(path, ContractJson.Serialize(campaign));
+        StringWriter output = new();
+        StringWriter error = new();
+        Assert.AreEqual(3, Program.Run(["quality-report", "--campaign", path], output, error));
+        Assert.AreEqual("", output.ToString());
+        Assert.Contains("Skill evaluation failed:", error.ToString());
+    }
+
+    /// <summary>
     ///  Makes a two-condition frozen pilot fixture with no expected outcome assertions.
     /// </summary>
     /// <param name="runs">The actual observed candidates.</param>

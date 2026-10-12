@@ -33,7 +33,18 @@
       "items": {
         "allOf": [
           { "$ref": "#/$defs/runRecord" },
-          { "properties": { "status": { "const": "scheduled" } } }
+          {
+            "properties": {
+              "status": { "const": "scheduled" },
+              "artifactRevision": { "const": null },
+              "safety": { "const": "pending" },
+              "infrastructure": { "const": "pending" },
+              "oracleOutcome": { "const": null },
+              "hardChecks": { "maxItems": 0 },
+              "usage": { "const": null },
+              "elapsedMs": { "const": null }
+            }
+          }
         ]
       }
     },
