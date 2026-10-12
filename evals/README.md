@@ -6,6 +6,84 @@ real model scenarios are manual and local-only to avoid unbudgeted CI token use.
 Use `-ReportOnly` for local calibration; safety and harness-infrastructure
 failures remain blocking.
 
+## Matched quality pilot
+
+Controlled captures accept `-TargetSkill <name>` and
+`-SkillCondition enabled|no-skill`. The enabled target contains only that core
+and its declared hard requirements; no-skill stages no skill or persona
+material. Both require isolated client homes and retain identical task
+fixtures. Omitting these options preserves the existing full-plugin default.
+Exposure manifests and revisions are recorded with the capture evidence.
+Customization-bearing files unpacked inside the client's
+`sandbox-home/localappdata/copilot/pkg/` installation are recorded separately
+as `ClientRuntimeExposure`, including every file in each bundled skill or
+plugin directory identified by `SKILL.md` or `plugin.json`. Support Markdown,
+scripts, templates, and binary resources affect the revision; unrelated
+package files outside those directories are not skill exposure. This bundled
+material is not mistaken for a changed selected core. A matched
+pilot must verify that this bundled-client exposure is identical across its
+conditions; no-skill means no selected or user/project skill, not a client with
+its built-in capabilities removed.
+Scenario roots must contain their `fixtures` directory and
+`SkillEvalScorer.ps1`; these metadata requirements are checked before dispatch,
+including when the selected tasks use no fixture files.
+Controlled target captures retain client-internal error attempts separately
+when they produced neither response identity nor usage and subsequent calls
+fully reconcile with the final receipt. Every completed call must still use
+the exact model and medium reasoning. Missing unmarked responses, partial
+error responses, mismatched models, and inconsistent totals remain
+infrastructure failures. Non-target captures retain the strict default.
+`process.json` records the actual child exit and timeout before later receipt
+validation; synthetic executors are explicitly marked non-real.
+Target selection accepts the existing flat literal-frontmatter subset with
+consistent space indentation, including the indentation used by every source
+core. It does not claim arbitrary YAML support: nested metadata, inconsistent
+indentation, and nonliteral dependency encodings still fail explicitly.
+Literal rescoring preserves the captured treatment, selected and bundled
+exposure manifests, and model-usage/error evidence alongside artifact/input
+bindings. Older sources without those optional fields remain absent; derived
+reports do not invent receipts or rewrite the original capture.
+
+The four opt-in [coding-task oracles](oracles/Invoke-SkillQualityOracle.ps1)
+check record-array preservation, native-child outcomes, export preservation,
+and disposable scratch ownership. They run fresh PowerShell children or
+compile the captured C# file with an installed stable .NET 10 SDK and C# 14.
+The generated compile project has no package dependencies and clears NuGet
+sources; no package installation or model inference is required.
+
+```pwsh
+.\evals\oracles\Invoke-SkillQualityOracle.ps1 -CaseId dotnet-preserve-export -ArtifactPath .\SaveText.cs -OutputDirectory .\oracle-export
+dotnet .\tools\skill-evaluation\SkillEvaluation.Cli\bin\Release\net10.0\SkillEvaluation.Cli.dll quality-report --campaign .\campaign.json
+.\tests\Invoke-PesterShards.ps1 -Path .\tests\evals\SkillQualityOracle.Tests.ps1
+```
+
+Oracle output must be new. Each receipt retains the raw artifact SHA-256,
+the complete pre-dispatch oracle-source/template closure, and
+passed/failed/pending check counts. Workers execute owned source snapshots;
+source or snapshot drift fails explicitly before a final receipt is emitted.
+Export cleanup is checked after successful publication and callback failure.
+Compiler rejection fails the compile item and leaves runtime items
+pending. Missing tools, failed workers, and timeouts throw explicit
+infrastructure errors, not task passes. Worker temporary roots are
+operation-owned and do not change the caller environment. Receipts and
+diagnostics remain in the chosen output directory.
+
+The oracles execute locally authorized code, not hostile input; they are not
+a sandbox. Their checks cover these task contracts on the exercised host,
+not whole-skill quality, cross-platform certification, or crash durability.
+Writing judgments and agreeing model grades remain provisional. The
+[public report command](../tools/skill-evaluation/README.md) preserves all
+scheduled rows and exposes actual executable evidence; it performs no
+candidate or judge inference and cannot authorize a real-model campaign.
+
+Model-grading packets must distinguish generation-time validation and tool
+permissions from evaluator-owned checks run afterward. Later oracle passes do
+not contradict an author's earlier statement that they did not run tests.
+Include the observed denial when judging a claimed reason for missing
+validation; a stripped candidate conversation must not create a false
+grounding failure. Keep raw model grades immutable and report unresolved
+conflicts separately from executable observations.
+
 ## Current vertical slices
 
 `scenarios/create-pr.json` covers eight behaviors:

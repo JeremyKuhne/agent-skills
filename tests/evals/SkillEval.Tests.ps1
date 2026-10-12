@@ -3304,6 +3304,7 @@ Describe 'Skill evaluation scenario contract' {
         @{ CaseName = 'missing per-call output tokens'; Requests = 1; Model = 'gpt-5.6-sol'; NoOutput = $true; Reason = '*missing input or output tokens*'; Valid = $false }
         @{ CaseName = 'missing per-call status'; Requests = 1; Model = 'gpt-5.6-sol'; NoStatus = $true; Reason = '*missing status code*'; Valid = $false }
         @{ CaseName = 'matched model'; Requests = 1; Model = 'gpt-5.6-sol'; Valid = $true }
+        @{ CaseName = 'unrelated permission span'; Requests = 1; Model = 'gpt-5.6-sol'; NoOperationSpan = $true; Valid = $true }
     ) {
         $path = Join-Path $TestDrive "$CaseName-usage.json"
         $telemetryPath = Join-Path $TestDrive "$CaseName-telemetry.jsonl"
@@ -3319,6 +3320,11 @@ Describe 'Skill evaluation scenario contract' {
         if (-not $NoTelemetry) {
             @{ type = 'log'; body = 'session started' } |
                 ConvertTo-Json -Compress | Set-Content -LiteralPath $telemetryPath
+            if ($NoOperationSpan) {
+                @{ type = 'span'; name = 'permission'; attributes = @{
+                        'github.copilot.permission.result' = 'deny' }; status = @{ code = 0 } } |
+                    ConvertTo-Json -Depth 5 -Compress | Add-Content -LiteralPath $telemetryPath
+            }
             $span = @{
                 type = 'span'
                 name = 'chat gpt-5.6-sol'
@@ -3342,6 +3348,61 @@ Describe 'Skill evaluation scenario contract' {
         if ($Valid) { $assert | Should -Not -Throw }
         elseif ($Reason) { $assert | Should -Throw $Reason }
         else { $assert | Should -Throw }
+    }
+
+    It 'accounts for recovered client-request errors without treating them as completed inference: <CaseName>' -ForEach @(
+        @{ CaseName = 'explicit recovered error'; ErrorModel = 'gpt-6-luna'; Finish = 'error'; Allow = $true; Accepted = $true }
+        @{ CaseName = 'strict default'; ErrorModel = 'gpt-6-luna'; Finish = 'error'; Allow = $false; Accepted = $false }
+        @{ CaseName = 'wrong requested model'; ErrorModel = 'gpt-6.1-sol'; Finish = 'error'; Allow = $true; Accepted = $false }
+        @{ CaseName = 'unmarked missing response'; ErrorModel = 'gpt-6-luna'; Finish = $null; Allow = $true; Accepted = $false }
+        @{ CaseName = 'partial failed response'; ErrorModel = 'gpt-6-luna'; Finish = 'error'; HasResponse = $true; Allow = $true; Accepted = $false }
+        @{ CaseName = 'wrong completed model'; ErrorModel = 'gpt-6-luna'; Finish = 'error'; Served = 'gpt-6.1-sol'; Allow = $true; Accepted = $false }
+        @{ CaseName = 'wrong completed totals'; ErrorModel = 'gpt-6-luna'; Finish = 'error'; WrongTokens = $true; Allow = $true; Accepted = $false }
+    ) {
+        $path = Join-Path $TestDrive "$CaseName-recovered-usage.json"
+        $telemetry = Join-Path $TestDrive "$CaseName-recovered-telemetry.jsonl"
+        @{ totalUserRequests = 1; modelMetrics = @{ 'gpt-6-luna' = @{
+                    requests = @{ count = 1 }; usage = @{ inputTokens = 12; outputTokens = 4 } } } } |
+            ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path
+        $failed = @{
+            type = 'span'; spanId = 'failed-control'; status = @{ code = 0 }
+            attributes = @{
+                'gen_ai.operation.name' = 'chat'; 'gen_ai.request.model' = $ErrorModel
+                'gen_ai.request.reasoning.level' = 'medium'
+            }
+        }
+        if ($Finish) { $failed.attributes['gen_ai.response.finish_reasons'] = @($Finish) }
+        if ($HasResponse) { $failed.attributes['gen_ai.response.model'] = $ErrorModel }
+        $complete = @{
+            type = 'span'; spanId = 'complete-control'; status = @{ code = 0 }
+            attributes = @{
+                'gen_ai.operation.name' = 'chat'; 'gen_ai.request.model' = 'gpt-6-luna'
+                'gen_ai.request.reasoning.level' = 'medium'
+                'gen_ai.response.model' = $(if ($Served) { $Served } else { 'gpt-6-luna' })
+                'gen_ai.usage.input_tokens' = $(if ($WrongTokens) { 11 } else { 12 })
+                'gen_ai.usage.output_tokens' = 4
+            }
+        }
+        @($failed, $complete) | ForEach-Object { $_ | ConvertTo-Json -Depth 8 -Compress } |
+            Set-Content -LiteralPath $telemetry
+        $invoke = {
+            & (Get-Module SkillEval) {
+                param($Path, $Telemetry, $Allow)
+                Assert-SkillEvalUsageReceipt -Path $Path -TelemetryPath $Telemetry `
+                    -ExpectedModel gpt-6-luna -AllowRecoveredClientErrors:$Allow
+            } $path $telemetry $Allow
+        }
+        if ($Accepted) {
+            $result = & $invoke
+            $result.CompletedCalls | Should -Be 1
+            $result.FailedClientAttempts.Count | Should -Be 1
+            $result.FailedClientAttempts[0].SpanId | Should -Be 'failed-control'
+            $result.FailedClientAttempts[0].ResponseModel | Should -BeNullOrEmpty
+            $result.FailedClientAttempts[0].InputTokens | Should -BeNullOrEmpty
+            $result.InputTokens | Should -Be 12
+            $result.OutputTokens | Should -Be 4
+        }
+        else { $invoke | Should -Throw }
     }
 
     It 'resolves native Copilot deterministically: <CaseName>' -ForEach @(
@@ -3592,15 +3653,15 @@ Describe 'Skill evaluation scenario contract' {
         $singleParameters | Should -Be @(
             'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'ScenarioId',
             'BaselineSummaryPath', 'RunCount', 'TimeoutMinutes', 'MaxConcurrency',
-            'IsolateCopilotHome', 'ReportOnly', 'CopilotPath')
+            'IsolateCopilotHome', 'ReportOnly', 'CopilotPath', 'SkillCondition', 'TargetSkill')
         $matrixParameters | Should -Be @(
             'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'RunCount',
             'TimeoutMinutes', 'MaxConcurrency', 'MatrixTimeoutMinutes',
-            'ReportOnly', 'CopilotPath')
+            'ReportOnly', 'CopilotPath', 'SkillCondition', 'TargetSkill')
         $suiteParameters | Should -Be @(
             'RepoRoot', 'ScenarioPath', 'OutputDirectory', 'Model', 'ScenarioId',
             'RunCount', 'TimeoutMinutes', 'MaxConcurrency', 'Executor',
-            'IsolateCopilotHome', 'CopilotPath')
+            'IsolateCopilotHome', 'CopilotPath', 'SkillCondition', 'TargetSkill')
         foreach ($modelParameter in @(
                 @($singleAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0],
                 @($matrixAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Model' })[0],
@@ -4773,6 +4834,604 @@ Describe 'Skill evaluation worker allocation' {
         ($allocation | Where-Object Name -eq 'manage-skills').Workers | Should -Be 1
         ($allocation | Where-Object Name -eq 'publishing-workflows').Workers | Should -Be 1
         ($allocation | Where-Object Name -eq 'create-skill-repo').Workers | Should -Be 1
+    }
+}
+
+Describe 'Skill evaluation exposure treatments' -Tag SkillExposure {
+    BeforeAll {
+        function New-ExposureFixture {
+            param([string] $Root)
+            foreach ($relativePath in @('skills', 'agents', '.agents/skills/technical-writing',
+                    'evals/scenarios', 'evals/fixtures/task-input')) {
+                New-Item -ItemType Directory -Path (Join-Path $Root $relativePath) -Force | Out-Null
+            }
+            Set-Content -LiteralPath (Join-Path $Root 'plugin.json') -Value (
+                '{"name":"synthetic","version":"1.0.0","skills":["skills/"],"agents":"agents/","mcpServers":".mcp.json"}')
+            Set-Content -LiteralPath (Join-Path $Root '.mcp.json') -Value '{"mcpServers":{}}'
+            Set-Content -LiteralPath (Join-Path $Root 'agents/synthetic.agent.md') -Value 'Synthetic persona.'
+            Set-Content -LiteralPath (Join-Path $Root '.agents/skills/technical-writing/SKILL.md') `
+                -Value 'Synthetic local overlay workflow.'
+            foreach ($skill in @(
+                    @{ Name = 'technical-writing'; Requires = 'shared-hard'; Related = 'unrelated' }
+                    @{ Name = 'shared-hard'; Requires = 'nested-hard'; Related = 'none' }
+                    @{ Name = 'nested-hard'; Requires = 'none'; Related = 'none' }
+                    @{ Name = 'unrelated'; Requires = 'none'; Related = 'none' })) {
+                $directory = Join-Path $Root "skills/$($skill.Name)"
+                New-Item -ItemType Directory -Path $directory | Out-Null
+                Set-Content -LiteralPath (Join-Path $directory 'SKILL.md') -Value @(
+                    '---', "name: $($skill.Name)", 'description: Synthetic test core.',
+                    'metadata:', "  requires: $($skill.Requires)", "  related: $($skill.Related)",
+                    '---', '# Synthetic core')
+            }
+            Set-Content -LiteralPath (Join-Path $Root 'evals/fixtures/task-input/input.txt') -Value 'Same task facts.'
+            Copy-Item -LiteralPath (Join-Path $script:RepoRoot 'evals/SkillEvalScorer.ps1') `
+                -Destination (Join-Path $Root 'evals/SkillEvalScorer.ps1')
+            $scenario = [pscustomobject]@{
+                id = 'exposure-probe'
+                skill = 'technical-writing'
+                category = 'quality'
+                evidenceKind = 'synthetic'
+                profile = 'clean-feature'
+                prompt = 'Revise the supplied task facts.'
+                runCount = 1
+                expectSkillInvocation = $false
+                allowedTools = @('read')
+                deniedTools = @('shell')
+                requiredResponsePatterns = @()
+                forbiddenResponsePatterns = @()
+                requiredCommandPatterns = @()
+                forbiddenCommandPatterns = @()
+                requireUnchangedWorktree = $true
+                workspaceFixturePath = 'fixtures/task-input'
+            }
+            $scenarioPath = Join-Path $Root 'evals/scenarios/exposure.json'
+            [pscustomobject]@{ schemaVersion = 1; scenarios = @($scenario) } |
+                ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $scenarioPath
+            return [pscustomobject]@{ Root = $Root; ScenarioPath = $scenarioPath; Scenario = $scenario }
+        }
+
+        $script:ExposureProbeExecutor = {
+            param($invocation)
+            $startInfo = [Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+            $startInfo.WorkingDirectory = $invocation.WorkingDirectory
+            $startInfo.Environment['EXPOSURE_RUN_ROOT'] = Split-Path $invocation.PluginDirectory
+            $startInfo.Environment['EXPOSURE_ARGUMENTS'] = ConvertTo-Json -InputObject $invocation.Arguments -Compress
+            $startInfo.Environment['COPILOT_HOME'] = $invocation.CopilotHome
+            $startInfo.Environment['HOME'] = Join-Path (Split-Path $invocation.PluginDirectory) 'sandbox-home'
+            $startInfo.Environment['USERPROFILE'] = $startInfo.Environment['HOME']
+            foreach ($argument in @('-NoProfile', '-Command', @'
+$root = $env:EXPOSURE_RUN_ROOT
+$files = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force |
+    Where-Object { $_.FullName -notmatch '[\\/]workspace[\\/]\.git[\\/]' } |
+    ForEach-Object { [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/') })
+[pscustomobject]@{
+    type = 'assistant.message'
+    data = @{ content = 'Synthetic context observation.'; toolRequests = @() }
+    Files = $files
+    Arguments = ConvertFrom-Json -InputObject $env:EXPOSURE_ARGUMENTS -NoEnumerate
+    Input = Get-Content -LiteralPath (Join-Path $PWD 'input.txt') -Raw
+    CopilotHome = $env:COPILOT_HOME
+    Home = $env:HOME
+    ProcessId = $PID
+} | ConvertTo-Json -Depth 10 -Compress
+'@)) {
+                $startInfo.ArgumentList.Add($argument)
+            }
+            $process = [Diagnostics.Process]::new()
+            try {
+                $process.StartInfo = $startInfo
+                if (-not $process.Start()) { throw 'Synthetic context probe did not start.' }
+                $stdout = $process.StandardOutput.ReadToEndAsync()
+                $stderr = $process.StandardError.ReadToEndAsync()
+                if (-not $process.WaitForExit(30000)) {
+                    $process.Kill($true)
+                    $process.WaitForExit()
+                    throw 'Synthetic context probe timed out.'
+                }
+                return [pscustomobject]@{
+                    ExitCode = $process.ExitCode
+                    StandardOutput = $stdout.GetAwaiter().GetResult()
+                    StandardError = $stderr.GetAwaiter().GetResult()
+                    Transcript = 'Synthetic context observation, not a model response.'
+                }
+            }
+            finally { $process.Dispose() }
+        }
+    }
+
+    It 'observes matched no-skill and target-core contexts in fresh real children' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'matched')
+        $observations = @{}
+        $summaries = @{}
+        foreach ($condition in @('enabled', 'no-skill')) {
+            $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+                -OutputDirectory (Join-Path $TestDrive "matched-$condition") -Model fake-model `
+                -SkillCondition $condition -TargetSkill technical-writing -RunCount 2 `
+                -Executor $script:ExposureProbeExecutor
+            $summary.RunCount | Should -Be 2
+            $summary.InfrastructureFailureCount | Should -Be 0 -Because ($summary.Runs.Error -join '; ')
+            $summary.SkillCondition | Should -BeExactly $condition
+            $summary.TargetSkill | Should -BeExactly 'technical-writing'
+            $summary.StagedExposures.Count | Should -Be 2
+            $observations[$condition] = @(foreach ($run in $summary.Runs) {
+                    Get-Content -LiteralPath (Join-Path $run.RunDirectory 'stdout.jsonl') -Raw | ConvertFrom-Json
+                })
+            foreach ($run in $summary.Runs) {
+                $invocation = Get-Content -LiteralPath (Join-Path $run.RunDirectory 'invocation.json') -Raw |
+                    ConvertFrom-Json
+                $context = Get-Content -LiteralPath (Join-Path $run.RunDirectory 'context.json') -Raw |
+                    ConvertFrom-Json
+                $invocation.SkillCondition | Should -BeExactly $condition
+                $invocation.IsolateCopilotHome | Should -BeTrue
+                $context.SkillCondition | Should -BeExactly $condition
+                $invocation.StagedExposure.Revision | Should -BeExactly $run.StagedExposure.Revision
+                $context.StagedExposure.Revision | Should -BeExactly $run.StagedExposure.Revision
+                $context.Exposure.Revision | Should -BeExactly $summary.Exposure.Revision
+                foreach ($file in $run.StagedExposure.Files) {
+                    (Get-FileHash -LiteralPath (Join-Path $run.RunDirectory $file.Path) -Algorithm SHA256).Hash |
+                        Should -BeExactly $file.Sha256
+                }
+            }
+            $summaries[$condition] = $summary
+        }
+        $enabled = $observations['enabled'][0]
+        $control = $observations['no-skill'][0]
+        $enabled.Files | Should -Contain 'plugin/skills/technical-writing/SKILL.md'
+        $enabled.Files | Should -Contain 'plugin/skills/shared-hard/SKILL.md'
+        $enabled.Files | Should -Contain 'plugin/skills/nested-hard/SKILL.md'
+        $enabled.Files | Should -Not -Contain 'plugin/skills/unrelated/SKILL.md'
+        $enabled.Files | Should -Not -Contain 'plugin/.mcp.json'
+        @($enabled.Files | Where-Object { $_ -like 'plugin/agents/*' -or $_ -like 'workspace/.agents/*' }).Count |
+            Should -Be 0
+        $plugin = Get-Content -LiteralPath (Join-Path $summaries['enabled'].Runs[0].RunDirectory 'plugin/plugin.json') `
+            -Raw | ConvertFrom-Json -AsHashtable
+        $plugin.ContainsKey('agents') | Should -BeFalse
+        $plugin.ContainsKey('mcpServers') | Should -BeFalse
+        @($control.Files | Where-Object {
+                $_ -like 'plugin/*' -or $_ -like 'copilot-home/*' -or
+                $_ -like 'workspace/.agents/*' -or $_ -match '(SKILL|AGENTS|\.agent|\.instructions|\.prompt)\.md$'
+            }).Count | Should -Be 0
+        $summaries['no-skill'].Runs[0].StagedExposure.Files.Count | Should -Be 0
+        $control.Arguments | Should -Not -Contain '--plugin-dir'
+        $control.Arguments | Should -Not -Contain '--add-dir'
+        $enabled.Arguments | Should -Contain '--plugin-dir'
+        $enabled.Arguments | Should -Contain '--add-dir'
+        $enabled.Input | Should -BeExactly $control.Input
+        foreach ($argument in @('--reasoning-effort', 'medium', '--no-remote', '--allow-tool=read', '--deny-tool=shell')) {
+            $enabled.Arguments | Should -Contain $argument
+            $control.Arguments | Should -Contain $argument
+        }
+        $enabled.Arguments[1] | Should -BeExactly $control.Arguments[1]
+        $children = @($observations.Values | ForEach-Object { $_ })
+        @($children.ProcessId | Sort-Object -Unique).Count | Should -Be 4
+        @($children.CopilotHome | Sort-Object -Unique).Count | Should -Be 4
+        @($children.Home | Sort-Object -Unique).Count | Should -Be 4
+        $summaries['enabled'].ScenarioRevisions[0].Revision |
+            Should -BeExactly $summaries['no-skill'].ScenarioRevisions[0].Revision
+        $summaries['enabled'].ScenarioRevisions[0].FixtureRevision |
+            Should -BeExactly $summaries['no-skill'].ScenarioRevisions[0].FixtureRevision
+    }
+
+    It 'preserves default full-plugin, agents, MCP, and project-skill staging in a real child' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'legacy')
+        $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory (Join-Path $TestDrive 'legacy-result') -Model fake-model `
+            -Executor $script:ExposureProbeExecutor
+        $summary.InfrastructureFailureCount | Should -Be 0 -Because ($summary.Runs.Error -join '; ')
+        $summary.Exposure.Composition | Should -BeExactly 'full-plugin'
+        $observation = Get-Content -LiteralPath (Join-Path $summary.Runs[0].RunDirectory 'stdout.jsonl') `
+            -Raw | ConvertFrom-Json
+        foreach ($file in @('plugin/plugin.json', 'plugin/.mcp.json', 'plugin/agents/synthetic.agent.md',
+                'plugin/skills/unrelated/SKILL.md', 'workspace/.agents/skills/technical-writing/SKILL.md')) {
+            $observation.Files | Should -Contain $file
+        }
+        (Get-FileHash (Join-Path $fixture.Root 'plugin.json')).Hash |
+            Should -BeExactly (Get-FileHash (Join-Path $summary.Runs[0].RunDirectory 'plugin/plugin.json')).Hash
+    }
+
+    It 'stages each real pilot target without exposing other skills or local workflows' -ForEach @(
+        @{ Target = 'technical-writing' }
+        @{ Target = 'powershell-engineering' }
+        @{ Target = 'dotnet-file-creation' }
+    ) {
+        $exposure = Get-SkillEvalExposure -RepoRoot $script:RepoRoot -TargetSkill $Target
+        $exposure.Skills | Should -Be @($Target)
+        $exposure.Components.Key | Should -Be @('manifest:plugin.json', "skill:$Target")
+        $exposure.Revision | Should -Match '^[0-9A-F]{64}$'
+        $context = & (Get-Module SkillEval) {
+            param($target, $repoRoot, $runDirectory)
+            New-Item -ItemType Directory -Path $runDirectory | Out-Null
+            New-SkillEvalContext -Scenario ([pscustomobject]@{ skill = $target; profile = 'clean-feature' }) `
+                -RepoRoot $repoRoot -EvalRoot (Join-Path $repoRoot 'evals') `
+                -RunDirectory $runDirectory -TargetSkill $target
+        } $Target $script:RepoRoot (Join-Path $TestDrive "real-$Target")
+        @(Get-ChildItem -LiteralPath (Join-Path $context.PluginDirectory 'skills') -Directory).Name |
+            Should -Be @($Target)
+        Test-Path (Join-Path $context.PluginDirectory 'agents') | Should -BeFalse
+        Test-Path (Join-Path $context.PluginDirectory '.mcp.json') | Should -BeFalse
+        Test-Path (Join-Path $context.Workspace '.agents') | Should -BeFalse
+        Test-Path (Join-Path $context.PluginDirectory "skills/$Target/SKILL.md") | Should -BeTrue
+    }
+
+    It 'selects and stages published core <Target> with its independent hard-requirement closure' -ForEach @(
+        Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..' -AdditionalChildPath @('..', 'skills')) -Directory |
+            ForEach-Object { @{ Target = $_.Name } }
+    ) {
+        . (Join-Path $script:RepoRoot 'tests/repository/SkillArtifactTestHelpers.ps1')
+        $expected = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $queue = [Collections.Generic.Queue[string]]::new()
+        $queue.Enqueue($Target)
+        while ($queue.Count -gt 0) {
+            $name = $queue.Dequeue()
+            if (-not $expected.Add($name)) { continue }
+            $source = Read-SkillArtifactFrontmatter -SkillPath (Join-Path $script:RepoRoot "skills/$name/SKILL.md")
+            $requirements = [string]$source.Metadata['requires']
+            if ($requirements -cne 'none') {
+                foreach ($dependency in $requirements.Split(', ')) { $queue.Enqueue($dependency) }
+            }
+        }
+        $exposure = Get-SkillEvalExposure -RepoRoot $script:RepoRoot -TargetSkill $Target
+        @($exposure.Skills | Sort-Object) | Should -Be @($expected | Sort-Object)
+        $exposure.Components.Count | Should -Be ($expected.Count + 1)
+        $control = Get-SkillEvalExposure -RepoRoot $script:RepoRoot -TargetSkill $Target -SkillCondition no-skill
+        $control.Skills.Count | Should -Be 0
+        $control.Components.Count | Should -Be 0
+        $context = & (Get-Module SkillEval) {
+            param($Target, $Repo, $Directory)
+            $null = New-Item -ItemType Directory -Path $Directory
+            New-SkillEvalContext -Scenario ([pscustomobject]@{ skill = $Target; profile = 'clean-feature' }) `
+                -RepoRoot $Repo -EvalRoot (Join-Path $Repo 'evals') -RunDirectory $Directory -TargetSkill $Target
+        } $Target $script:RepoRoot (Join-Path $TestDrive "all-core-$Target")
+        @(Get-ChildItem -LiteralPath (Join-Path $context.PluginDirectory 'skills') -Directory).Name |
+            Sort-Object | Should -Be @($expected | Sort-Object)
+        Test-Path -LiteralPath (Join-Path $context.PluginDirectory 'agents') | Should -BeFalse
+        Test-Path -LiteralPath (Join-Path $context.PluginDirectory '.mcp.json') | Should -BeFalse
+    }
+
+    It 'round-trips all new capture evidence fields for <Condition>' -ForEach @(
+        @{ Condition = 'enabled' }
+        @{ Condition = 'no-skill' }
+    ) {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive "round-trip-$Condition")
+        $sourceRoot = Join-Path $TestDrive "round-trip-source-$Condition"
+        $captured = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory $sourceRoot -Model fake-model -TargetSkill technical-writing `
+            -SkillCondition $Condition -Executor $script:ExposureProbeExecutor
+        $captured.InfrastructureFailureCount | Should -Be 0
+        $captured.Runs[0].ClientRuntimeExposure = [pscustomobject]@{
+            Files = @([pscustomobject]@{ Path = 'synthetic-runtime/SKILL.md'; Sha256 = 'F' * 64 })
+            Revision = 'E' * 64
+        }
+        $captured.Runs[0].ModelUsageEvidence = [pscustomobject]@{
+            CompletedCalls = 1
+            FailedClientAttempts = @([pscustomobject]@{
+                    SpanId = 'synthetic-only'; ResponseModel = $null; InputTokens = $null; OutputTokens = $null })
+            InputTokens = 0
+            OutputTokens = 0
+        }
+        $sourcePath = Join-Path $sourceRoot 'summary.json'
+        $captured | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $sourcePath -Encoding utf8
+        $before = (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash
+        $derivedRoot = Join-Path $TestDrive "round-trip-derived-$Condition"
+        $derived = Invoke-SkillEvalRescore -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -InputDirectory $sourceRoot -OutputDirectory $derivedRoot
+        foreach ($field in @('SkillCondition', 'TargetSkill', 'StagedExposure',
+                'ClientRuntimeExposure', 'ModelUsageEvidence', 'ExposureRevision')) {
+            $derived.Runs[0].PSObject.Properties[$field] | Should -Not -BeNullOrEmpty
+            ($derived.Runs[0].$field | ConvertTo-Json -Depth 20 -Compress) |
+                Should -BeExactly ($captured.Runs[0].$field | ConvertTo-Json -Depth 20 -Compress)
+        }
+        foreach ($field in @('SkillCondition', 'TargetSkill', 'Exposure', 'StagedExposures')) {
+            ($derived.$field | ConvertTo-Json -Depth 20 -Compress) |
+                Should -BeExactly ($captured.$field | ConvertTo-Json -Depth 20 -Compress)
+        }
+        $stored = Get-Content -LiteralPath (Join-Path $derivedRoot 'exposure-probe/run-1/result.json') -Raw |
+            ConvertFrom-Json
+        $stored.ClientRuntimeExposure.Revision | Should -BeExactly ('E' * 64)
+        $stored.ModelUsageEvidence.FailedClientAttempts.Count | Should -Be 1
+        $stored.ModelUsageEvidence.FailedClientAttempts[0].InputTokens | Should -BeNullOrEmpty
+        $stored.ModelUsageEvidence.InputTokens | Should -Be 0
+        (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash | Should -BeExactly $before
+    }
+
+    It 'retains legacy absence of new evidence rather than inventing capture receipts' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'legacy-evidence')
+        $sourceRoot = Join-Path $TestDrive 'legacy-evidence-source'
+        $captured = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory $sourceRoot -Model fake-model -Executor $script:ExposureProbeExecutor
+        $fields = @('SkillCondition', 'TargetSkill', 'StagedExposure',
+            'ClientRuntimeExposure', 'ModelUsageEvidence', 'ExposureRevision')
+        foreach ($field in $fields) { $captured.Runs[0].PSObject.Properties.Remove($field) }
+        foreach ($field in @('SkillCondition', 'TargetSkill', 'Exposure', 'StagedExposures')) {
+            $captured.PSObject.Properties.Remove($field)
+        }
+        $captured | ConvertTo-Json -Depth 30 |
+            Set-Content -LiteralPath (Join-Path $sourceRoot 'summary.json') -Encoding utf8
+        $derived = Invoke-SkillEvalRescore -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -InputDirectory $sourceRoot -OutputDirectory (Join-Path $TestDrive 'legacy-evidence-derived')
+        foreach ($field in $fields) {
+            $derived.Runs[0].PSObject.Properties[$field] | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'resolves comma-separated hard requirements once without optional related skills' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'multiple-requires')
+        Set-Content -LiteralPath (Join-Path $fixture.Root 'skills/technical-writing/SKILL.md') -Value @(
+            '---', 'name: technical-writing', 'metadata:', '  requires: shared-hard, nested-hard',
+            '  related: unrelated', '---')
+        $exposure = Get-SkillEvalExposure -RepoRoot $fixture.Root -TargetSkill technical-writing
+        $exposure.Skills | Should -Be @('nested-hard', 'shared-hard', 'technical-writing')
+        $exposure.Components.Count | Should -Be 4
+    }
+
+    It 'rejects invalid dependency declarations: <Case>' -ForEach @(
+        @{ Case = 'missing'; Requires = 'missing'; Expected = '*does not exist*' }
+        @{ Case = 'cycle'; Requires = 'technical-writing'; Expected = '*dependency cycle*' }
+        @{ Case = 'flow-list'; Requires = '[shared-hard]'; Expected = '*Unsupported literal metadata.requires*' }
+        @{ Case = 'quoted-requires'; Requires = '"shared-hard"'; Expected = '*Unsupported literal metadata.requires*' }
+        @{ Case = 'duplicate-requires'; Requires = "none`n  requires: shared-hard"; Expected = '*Unsupported literal metadata.requires*' }
+        @{ Case = 'nested-metadata'; Requires = "none`n    hidden: shared-hard"; Expected = '*Unsupported literal metadata*' }
+        @{ Case = 'quoted-metadata'; Requires = "none`n`"metadata`": { requires: unrelated }"; Expected = '*Unsupported literal top-level frontmatter*' }
+    ) {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive "invalid-$Case")
+        Set-Content -LiteralPath (Join-Path $fixture.Root 'skills/technical-writing/SKILL.md') -Value @(
+            '---', 'name: technical-writing', 'metadata:', "  requires: $Requires", '---')
+        { Get-SkillEvalExposure -RepoRoot $fixture.Root -TargetSkill technical-writing } |
+            Should -Throw $Expected
+    }
+
+    It 'rejects disabled home isolation for both controlled treatments' -ForEach @(
+        @{ Condition = 'enabled' }
+        @{ Condition = 'no-skill' }
+    ) {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive "isolation-$Condition")
+        { Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+                -OutputDirectory (Join-Path $TestDrive "isolation-result-$Condition") -Model fake-model `
+                -SkillCondition $Condition -TargetSkill technical-writing -IsolateCopilotHome:$false `
+                -Executor $script:ExposureProbeExecutor } | Should -Throw '*requires isolated Copilot homes*'
+    }
+
+    It 'fails closed on customization-bearing task fixtures without invoking the executor' -ForEach @(
+        @{ Condition = 'enabled' }
+        @{ Condition = 'no-skill' }
+    ) {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive "contaminated-$Condition")
+        Set-Content -LiteralPath (Join-Path $fixture.Root 'evals/fixtures/task-input/AGENTS.md') `
+            -Value 'Synthetic task contamination.'
+        $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory (Join-Path $TestDrive "contaminated-result-$Condition") -Model fake-model `
+            -SkillCondition $Condition -TargetSkill technical-writing `
+            -Executor { throw 'Executor must not be invoked.' }
+        $summary.InfrastructureFailureCount | Should -Be 1
+        $summary.Runs[0].Error | Should -BeLike '*customization artifacts*'
+        Test-Path (Join-Path $summary.Runs[0].RunDirectory 'invocation.json') | Should -BeFalse
+    }
+
+    It 'does not stage overlay or personal-skill fixtures in the no-skill condition' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:TechnicalWritingScenarioPath |
+            Where-Object id -eq 'technical-writing-personal-profile-composition')[0]
+        $context = & (Get-Module SkillEval) {
+            param($scenario, $repoRoot, $runDirectory)
+            New-Item -ItemType Directory -Path $runDirectory | Out-Null
+            New-SkillEvalContext -Scenario $scenario -RepoRoot $repoRoot `
+                -EvalRoot (Join-Path $repoRoot 'evals') -RunDirectory $runDirectory -SkillCondition no-skill
+        } $scenario $script:RepoRoot (Join-Path $TestDrive 'no-personal')
+        $context.HasPersonalSkillFixture | Should -BeFalse
+        $context.StagedExposure.Files.Count | Should -Be 0
+        $overlayScenario = @(Get-SkillEvalScenarios -Path $script:TechnicalWritingScenarioPath |
+            Where-Object id -eq 'technical-writing-overlay-sentinel')[0]
+        $overlayContext = & (Get-Module SkillEval) {
+            param($scenario, $repoRoot, $runDirectory)
+            New-Item -ItemType Directory -Path $runDirectory | Out-Null
+            New-SkillEvalContext -Scenario $scenario -RepoRoot $repoRoot `
+                -EvalRoot (Join-Path $repoRoot 'evals') -RunDirectory $runDirectory -SkillCondition no-skill
+        } $overlayScenario $script:RepoRoot (Join-Path $TestDrive 'no-overlay')
+        $overlayContext.StagedExposure.Files.Count | Should -Be 0
+    }
+
+    It 'rejects target-core composition fixtures rather than silently dropping their semantics' {
+        $scenario = @(Get-SkillEvalScenarios -Path $script:TechnicalWritingScenarioPath |
+            Where-Object id -eq 'technical-writing-personal-profile-composition')[0]
+        { & (Get-Module SkillEval) {
+                param($scenario, $repoRoot, $runDirectory)
+                New-SkillEvalContext -Scenario $scenario -RepoRoot $repoRoot `
+                    -EvalRoot (Join-Path $repoRoot 'evals') -RunDirectory $runDirectory `
+                    -TargetSkill technical-writing
+            } $scenario $script:RepoRoot (Join-Path $TestDrive 'reject-personal') } |
+            Should -Throw "*cannot include 'personalSkillFixturePath'*"
+    }
+
+    It 'matches condition, target, and hard dependency revisions before reusing baseline inputs' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'matching')
+        $output = Join-Path $TestDrive 'matching-result'
+        $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory $output -Model fake-model -TargetSkill technical-writing `
+            -Executor $script:ExposureProbeExecutor
+        $parameters = @{
+            RepoRoot = $fixture.Root
+            ScenarioPath = $fixture.ScenarioPath
+            BaselineSummaryPath = Join-Path $output 'summary.json'
+            Model = 'fake-model'
+            TargetSkill = 'technical-writing'
+        }
+        @(Get-SkillEvalAffectedScenarioIds @parameters).Count | Should -Be 0
+        @(Get-SkillEvalAffectedScenarioIds @parameters -SkillCondition no-skill) | Should -Be @('exposure-probe')
+        $parameters.TargetSkill = 'unrelated'
+        @(Get-SkillEvalAffectedScenarioIds @parameters) | Should -Be @('exposure-probe')
+        $parameters.TargetSkill = 'technical-writing'
+        Add-Content -LiteralPath (Join-Path $fixture.Root 'skills/nested-hard/SKILL.md') -Value 'Changed hard dependency.'
+        @(Get-SkillEvalAffectedScenarioIds @parameters) | Should -Be @('exposure-probe')
+        $summary.Runs[0].StagedExposure.Files.Count | Should -BeGreaterThan 0
+    }
+
+    It 'detects staged exposure mutation instead of accepting an unrecorded treatment' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'mutation')
+        $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory (Join-Path $TestDrive 'mutation-result') -Model fake-model `
+            -TargetSkill technical-writing -Executor {
+                param($invocation)
+                Add-Content -LiteralPath (Join-Path $invocation.PluginDirectory 'skills/technical-writing/SKILL.md') `
+                    -Value 'Synthetic mutation.'
+                [pscustomobject]@{ ExitCode = 0; StandardOutput = ''; StandardError = ''; Transcript = '' }
+            }
+        $summary.InfrastructureFailureCount | Should -Be 1
+        $summary.Runs[0].Error | Should -BeExactly 'Staged skill exposure changed during the evaluation.'
+        Test-Path (Join-Path $summary.Runs[0].RunDirectory 'context.json') | Should -BeTrue
+    }
+
+    It 'separates bundled client material from selected skill exposure in <Condition>' -ForEach @(
+        @{ Condition = 'enabled' }
+        @{ Condition = 'no-skill' }
+    ) {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive "native-assets-$Condition")
+        $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory (Join-Path $TestDrive "native-assets-result-$Condition") -Model fake-model `
+            -SkillCondition $Condition -TargetSkill technical-writing -Executor {
+                param($invocation)
+                $root = Split-Path $invocation.PluginDirectory
+                $directory = Join-Path $root 'sandbox-home/localappdata/copilot/pkg/win32-x64/1.0.95/builtin-skills/probe'
+                $null = New-Item -ItemType Directory -Path $directory -Force
+                Set-Content -LiteralPath (Join-Path $directory 'SKILL.md') -Value 'Synthetic native-bundled skill.'
+                [pscustomobject]@{ ExitCode = 0; StandardOutput = ''; StandardError = ''; Transcript = 'Synthetic probe.' }
+            }
+        $summary.InfrastructureFailureCount | Should -Be 0
+        $summary.Runs[0].ClientRuntimeExposure.Files.Count | Should -Be 1
+        $summary.Runs[0].ClientRuntimeExposure.Files[0].Path | Should -BeLike 'sandbox-home/localappdata/copilot/pkg/*'
+        $summary.Runs[0].ClientRuntimeExposure.Revision | Should -Match '^[0-9A-F]{64}$'
+        $processReceipt = Get-Content -LiteralPath (Join-Path $summary.Runs[0].RunDirectory 'process.json') -Raw |
+            ConvertFrom-Json
+        $processReceipt.IsRealClient | Should -BeFalse
+        $processReceipt.ExitCode | Should -Be 0
+        $processReceipt.TimedOut | Should -BeFalse
+        $context = Get-Content -LiteralPath (Join-Path $summary.Runs[0].RunDirectory 'context.json') -Raw | ConvertFrom-Json
+        $context.ClientRuntimeExposure.Revision | Should -BeExactly $summary.Runs[0].ClientRuntimeExposure.Revision
+        if ($Condition -eq 'no-skill') { $summary.Runs[0].StagedExposure.Files.Count | Should -Be 0 }
+    }
+
+    It 'records complete bundled resource directories for <Kind>' -ForEach @(
+        @{ Kind = 'builtin-skill'; Container = 'builtin-skills'; Entry = 'SKILL.md' }
+        @{ Kind = 'builtin-alias'; Container = 'builtin'; Entry = 'SKILL.md' }
+        @{ Kind = 'bundled-plugin'; Container = 'plugins'; Entry = 'plugin.json' }
+    ) {
+        $run = Join-Path $TestDrive "runtime-closure-$Kind"
+        $package = Join-Path $run 'sandbox-home' -AdditionalChildPath @(
+            'localappdata', 'copilot', 'pkg', 'win32-x64', '1.0.95')
+        $bundle = Join-Path $package $Container -AdditionalChildPath @('synthetic')
+        $null = New-Item -ItemType Directory -Path (Join-Path $bundle 'scripts'), (Join-Path $bundle 'references') -Force
+        $entryText = if ($Entry -eq 'plugin.json') {
+            '{"name":"synthetic","version":"1.0.0"}'
+        }
+        else { 'Synthetic bundled skill entry.' }
+        Set-Content -LiteralPath (Join-Path $bundle $Entry) -Value $entryText
+        $resources = @(
+            (Join-Path $bundle 'references' -AdditionalChildPath @('support.md'))
+            (Join-Path $bundle 'scripts' -AdditionalChildPath @('helper.ps1'))
+            (Join-Path $bundle 'template.txt')
+            (Join-Path $bundle 'resource.bin')
+        )
+        foreach ($resource in $resources) { [IO.File]::WriteAllText($resource, 'Original resource bytes.') }
+        $outside = Join-Path $package $Container -AdditionalChildPath @('synthetic-other')
+        $null = New-Item -ItemType Directory -Path $outside
+        $unrelated = Join-Path $outside 'support.md'
+        [IO.File]::WriteAllText($unrelated, 'Unrelated package content without a bundled entry.')
+        $before = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $before.Files.Count | Should -Be 0
+        $before.ClientRuntimeExposure.Files.Count | Should -Be 5
+        foreach ($resource in $resources) {
+            $relative = [IO.Path]::GetRelativePath($run, $resource).Replace('\', '/')
+            $before.ClientRuntimeExposure.Files.Path | Should -Contain $relative
+            $captured = @($before.ClientRuntimeExposure.Files | Where-Object Path -CEQ $relative)
+            $captured.Count | Should -Be 1
+            $captured[0].Sha256 | Should -BeExactly (Get-FileHash -LiteralPath $resource -Algorithm SHA256).Hash
+        }
+        $previous = $before.ClientRuntimeExposure.Revision
+        foreach ($resource in $resources) {
+            [IO.File]::WriteAllText($resource, 'Changed resource bytes.')
+            $after = & (Get-Module SkillEval) {
+                param($Directory)
+                Get-SkillEvalStagedExposure -RunDirectory $Directory
+            } $run
+            $after.ClientRuntimeExposure.Revision | Should -Not -BeExactly $previous
+            $after.Revision | Should -BeExactly $before.Revision
+            $previous = $after.ClientRuntimeExposure.Revision
+        }
+        [IO.File]::WriteAllText($unrelated, 'Changed unrelated package content.')
+        $after = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $after.ClientRuntimeExposure.Revision | Should -BeExactly $previous
+        $extra = Join-Path $bundle 'extra.dat'
+        [IO.File]::WriteAllText($extra, 'New bundled resource.')
+        $added = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $added.ClientRuntimeExposure.Files.Count | Should -Be 6
+        $added.ClientRuntimeExposure.Revision | Should -Not -BeExactly $previous
+        Remove-Item -LiteralPath $extra
+        $removed = & (Get-Module SkillEval) {
+            param($Directory)
+            Get-SkillEvalStagedExposure -RunDirectory $Directory
+        } $run
+        $removed.ClientRuntimeExposure.Revision | Should -BeExactly $previous
+    }
+
+    It 'still rejects untracked customizations outside the exact native package root' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'native-lookalike')
+        $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory (Join-Path $TestDrive 'native-lookalike-result') -Model fake-model `
+            -SkillCondition no-skill -TargetSkill technical-writing -Executor {
+                param($invocation)
+                $root = Split-Path $invocation.PluginDirectory
+                $directory = Join-Path $root 'sandbox-home/localappdata/copilot/package/probe'
+                $null = New-Item -ItemType Directory -Path $directory -Force
+                Set-Content -LiteralPath (Join-Path $directory 'SKILL.md') -Value 'Synthetic untracked skill.'
+                [pscustomobject]@{ ExitCode = 0; StandardOutput = ''; StandardError = ''; Transcript = 'Synthetic probe.' }
+            }
+        $summary.InfrastructureFailureCount | Should -Be 1
+        $summary.Runs[0].Error | Should -BeExactly 'Staged skill exposure changed during the evaluation.'
+    }
+
+    It 'validates metadata before invoking a candidate when <Missing> is absent' -ForEach @(
+        @{ Missing = 'fixtures' }
+        @{ Missing = 'SkillEvalScorer.ps1' }
+    ) {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive "missing-$Missing")
+        $fixture.Scenario.PSObject.Properties.Remove('workspaceFixturePath')
+        [pscustomobject]@{ schemaVersion = 1; scenarios = @($fixture.Scenario) } |
+            ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $fixture.ScenarioPath
+        Move-Item -LiteralPath (Join-Path $fixture.Root "evals/$Missing") `
+            -Destination (Join-Path $fixture.Root 'held-metadata')
+        $marker = Join-Path $TestDrive "launched-$Missing"
+        $executor = { Set-Content -LiteralPath $marker -Value 'Incorrectly launched.' }.GetNewClosure()
+        { Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+                -OutputDirectory (Join-Path $TestDrive "missing-metadata-result-$Missing") `
+                -Model fake-model -Executor $executor } | Should -Throw
+        Test-Path -LiteralPath $marker | Should -BeFalse
+    }
+
+    It 'exposes the same named treatment parameters through suite and matrix scripts' {
+        foreach ($relativePath in @('evals/Invoke-SkillEvals.ps1', 'evals/Invoke-SkillEvalMatrix.ps1')) {
+            $errors = $null
+            $ast = [Management.Automation.Language.Parser]::ParseFile(
+                (Join-Path $script:RepoRoot $relativePath), [ref]$null, [ref]$errors)
+            $errors.Count | Should -Be 0
+            $parameters = @($ast.ParamBlock.Parameters.Name.VariablePath.UserPath)
+            $parameters | Should -Contain 'SkillCondition'
+            $parameters | Should -Contain 'TargetSkill'
+        }
+        $matrix = Get-Content -LiteralPath (Join-Path $script:RepoRoot 'evals/Invoke-SkillEvalMatrix.ps1') -Raw
+        $matrix | Should -Match ([regex]::Escape("'-SkillCondition', " + '$_.SkillCondition'))
+        $matrix | Should -Match ([regex]::Escape('$arguments.Add($_.TargetSkill)'))
+        $matrix | Should -Match 'has mismatched skill exposure'
     }
 }
 

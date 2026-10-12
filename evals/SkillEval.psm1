@@ -88,14 +88,22 @@ function New-SkillEvalArguments {
             'GITHUB_TOKEN',
             'COPILOT_PROVIDER_API_KEY',
             'COPILOT_PROVIDER_BEARER_TOKEN'
-        )
+        ),
+
+        [ValidateSet('enabled', 'no-skill')]
+        [string] $SkillCondition = 'enabled'
     )
 
     $arguments = [System.Collections.Generic.List[string]]::new()
+    $arguments.Add('-p')
+    $arguments.Add($Prompt)
+    if ($SkillCondition -eq 'enabled') {
+        $arguments.Add('--plugin-dir')
+        $arguments.Add($PluginDirectory)
+        $arguments.Add('--add-dir')
+        $arguments.Add($PluginDirectory)
+    }
     foreach ($argument in @(
-            '-p', $Prompt,
-            '--plugin-dir', $PluginDirectory,
-            '--add-dir', $PluginDirectory,
             '--model', $Model,
             '--reasoning-effort', 'medium',
             '--no-ask-user',
@@ -483,7 +491,9 @@ function Assert-SkillEvalUsageReceipt {
         [string] $TelemetryPath,
 
         [Parameter(Mandatory)]
-        [string] $ExpectedModel
+        [string] $ExpectedModel,
+
+        [switch] $AllowRecoveredClientErrors
     )
 
     $receipt = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop |
@@ -511,6 +521,7 @@ function Assert-SkillEvalUsageReceipt {
     $chatCount = 0
     $inputTokens = 0L
     $outputTokens = 0L
+    $failedAttempts = [System.Collections.Generic.List[object]]::new()
     foreach ($line in (Get-Content -LiteralPath $TelemetryPath -ErrorAction Stop)) {
         $span = $line | ConvertFrom-Json -AsHashtable -ErrorAction Stop
         if ($span -isnot [System.Collections.IDictionary] -or
@@ -519,15 +530,34 @@ function Assert-SkillEvalUsageReceipt {
             continue
         }
         $attributes = $span['attributes']
-        if ($attributes.'gen_ai.operation.name' -ne 'chat') { continue }
-        if ($attributes.'gen_ai.request.model' -cne $ExpectedModel -or
-            $attributes.'gen_ai.response.model' -cne $ExpectedModel -or
-            $attributes.'gen_ai.request.reasoning.level' -cne 'medium') {
+        if ($attributes['gen_ai.operation.name'] -ne 'chat') { continue }
+        if ($attributes['gen_ai.request.model'] -cne $ExpectedModel -or
+            $attributes['gen_ai.request.reasoning.level'] -cne 'medium') {
             throw 'A model call did not use the requested model and medium effort.'
         }
         if ($span['status'] -isnot [System.Collections.IDictionary] -or
             -not $span['status'].Contains('code')) {
             throw 'A model call is missing status code evidence.'
+        }
+        $finish = $attributes['gen_ai.response.finish_reasons']
+        if ($AllowRecoveredClientErrors -and $finish -is [array] -and $finish.Count -eq 1 -and
+            $finish[0] -ceq 'error' -and -not $attributes.Contains('gen_ai.response.model') -and
+            -not $attributes.Contains('gen_ai.usage.input_tokens') -and
+            -not $attributes.Contains('gen_ai.usage.output_tokens')) {
+            $failedAttempts.Add([pscustomobject]@{
+                SpanId = $span['spanId']
+                RequestedModel = $ExpectedModel
+                ReasoningEffort = 'medium'
+                Outcome = 'client-internal-error-without-response'
+                ResponseModel = $null
+                InputTokens = $null
+                OutputTokens = $null
+            })
+            continue
+        }
+        if ($attributes['gen_ai.response.model'] -cne $ExpectedModel -or
+            ($finish -is [array] -and $finish -ccontains 'error')) {
+            throw 'A model call did not use the requested model and medium effort: served-model evidence is missing, mismatched, or an error response.'
         }
         if ([int]$span['status']['code'] -ne 0) {
             throw 'A model call reported a failing status code.'
@@ -544,6 +574,12 @@ function Assert-SkillEvalUsageReceipt {
         $inputTokens -ne [long]$metrics.usage.inputTokens -or
         $outputTokens -ne [long]$metrics.usage.outputTokens) {
         throw 'Per-call model usage does not reconcile with the final receipt.'
+    }
+    return [pscustomobject]@{
+        CompletedCalls = $chatCount
+        FailedClientAttempts = $failedAttempts.ToArray()
+        InputTokens = $inputTokens
+        OutputTokens = $outputTokens
     }
 }
 
@@ -792,7 +828,12 @@ function Get-SkillEvalAffectedScenarioIds {
         [ValidateNotNullOrWhiteSpace()]
         [string] $Model,
 
-        [string[]] $ScenarioId
+        [string[]] $ScenarioId,
+
+        [ValidateSet('enabled', 'no-skill')]
+        [string] $SkillCondition = 'enabled',
+
+        [string] $TargetSkill
     )
 
     $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
@@ -804,6 +845,16 @@ function Get-SkillEvalAffectedScenarioIds {
     $scenarios = @(Get-SkillEvalScenarios -Path $resolvedScenarioPath)
     if ($ScenarioId) {
         $scenarios = @($scenarios | Where-Object id -In $ScenarioId)
+    }
+    $exposure = Get-SkillEvalExposure -RepoRoot $resolvedRepoRoot `
+        -SkillCondition $SkillCondition -TargetSkill $TargetSkill
+    if ($baseline.PSObject.Properties['Exposure']) {
+        if ([string]$baseline.Exposure.Revision -cne [string]$exposure.Revision) {
+            return @($scenarios.id)
+        }
+    }
+    elseif ($SkillCondition -ne 'enabled' -or $TargetSkill) {
+        return @($scenarios.id)
     }
     if (-not $baseline.PSObject.Properties['Model'] -or
         [string]$baseline.Model -cne $Model -or
@@ -1059,6 +1110,199 @@ pwsh -NoProfile -File "%~dp0$commandName.ps1" %*
     }
 }
 
+function Get-SkillEvalExposure {
+    <#
+    .SYNOPSIS
+        Resolves the evaluation treatment without staging or invoking a model.
+    .DESCRIPTION
+        The default enabled condition retains the complete plugin composition.
+        TargetSkill restricts enabled staging to one public core and its transitive
+        hard dependencies, with no agents, MCP configuration, or local overlays.
+        Target selection accepts the commons' literal frontmatter contract:
+        name: <directory-name>, metadata:, and consistently space-indented requires:
+        none or comma-separated lowercase skill names. Other encodings fail closed.
+        No-skill stages no customization artifacts. Both controlled treatments
+        require fresh isolated homes and customization-free task fixtures.
+    #>
+    [CmdletBinding(PositionalBinding = $false)]
+    param(
+        [Parameter(Mandatory)]
+        [string] $RepoRoot,
+
+        [ValidateSet('enabled', 'no-skill')]
+        [string] $SkillCondition = 'enabled',
+
+        [ValidatePattern('^(?:[a-z0-9]+(?:-[a-z0-9]+)*)?$')]
+        [string] $TargetSkill
+    )
+
+    $skills = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $visiting = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    if ($TargetSkill) {
+        $visit = {
+            param([string] $Name)
+            if ($visiting.Contains($Name)) { throw "Hard skill dependency cycle at '$Name'." }
+            if ($skills.Contains($Name)) { return }
+            $skillDirectory = Join-Path $RepoRoot "skills/$Name"
+            $skillPath = Join-Path $skillDirectory 'SKILL.md'
+            if (-not (Test-Path -LiteralPath $skillPath -PathType Leaf)) {
+                throw "Target or hard-required skill '$Name' does not exist."
+            }
+            $unsafeItems = @(Get-Item -LiteralPath $skillDirectory -Force) +
+                @(Get-ChildItem -LiteralPath $skillDirectory -Force -Recurse)
+            if (@($unsafeItems | Where-Object {
+                        ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+                    }).Count -gt 0) {
+                throw "Target or hard-required skill '$Name' contains a reparse point."
+            }
+            $lines = @(Get-Content -LiteralPath $skillPath)
+            if ($lines.Count -lt 3 -or $lines[0] -cne '---') {
+                throw "Unsupported literal frontmatter for skill '$Name'."
+            }
+            $end = [Array]::IndexOf($lines, '---', 1)
+            if ($end -lt 0) { throw "Unclosed frontmatter for skill '$Name'." }
+            $frontmatter = @($lines[1..($end - 1)])
+            foreach ($line in $frontmatter) {
+                if ($line -cmatch '^\S' -and -not $line.StartsWith('#') -and
+                    $line -cnotmatch '^[a-z][a-z-]*:(?: |$)') {
+                    throw "Unsupported literal top-level frontmatter for skill '$Name'."
+                }
+            }
+            $nameLines = @($frontmatter | Where-Object { $_ -cmatch '^name:' })
+            $metadataLines = @($frontmatter | Where-Object { $_ -cmatch '^metadata:' })
+            if ($nameLines.Count -ne 1 -or $nameLines[0] -cne "name: $Name" -or
+                $metadataLines.Count -ne 1 -or $metadataLines[0] -cne 'metadata:') {
+                throw "Unsupported literal name/metadata frontmatter for skill '$Name'."
+            }
+            $metadataStart = [Array]::IndexOf($frontmatter, 'metadata:') + 1
+            $requires = @()
+            $metadataIndent = $null
+            for ($index = $metadataStart; $index -lt $frontmatter.Count; $index++) {
+                $line = [string]$frontmatter[$index]
+                if ($line -cmatch '^\S') { break }
+                if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith('#')) {
+                    continue
+                }
+                $indent = [regex]::Match($line, '^ +').Length
+                if ($indent -eq 0 -or ($null -ne $metadataIndent -and $indent -ne $metadataIndent)) {
+                    throw "Unsupported literal metadata for skill '$Name'."
+                }
+                $metadataIndent = $indent
+                $metadataLine = $line.Substring($indent)
+                if ($metadataLine -cnotmatch '^[a-z][a-z-]*: [^\r\n]+$') {
+                    throw "Unsupported literal metadata for skill '$Name'."
+                }
+                if ($metadataLine.StartsWith('requires:', [StringComparison]::Ordinal)) {
+                    $requires += $metadataLine
+                }
+            }
+            if ($requires.Count -ne 1 -or
+                $requires[0] -cnotmatch '^requires: (none|[a-z0-9]+(?:-[a-z0-9]+)*(?:, [a-z0-9]+(?:-[a-z0-9]+)*)*)$') {
+                throw "Unsupported literal metadata.requires for skill '$Name'."
+            }
+            $visiting.Add($Name) | Out-Null
+            $value = $requires[0].Substring('requires: '.Length)
+            if ($value -cne 'none') {
+                foreach ($dependency in $value.Split(', ')) {
+                    if ($dependency -ceq 'none') { throw "Invalid hard skill dependency 'none' for '$Name'." }
+                    & $visit $dependency
+                }
+            }
+            $visiting.Remove($Name) | Out-Null
+            $skills.Add($Name) | Out-Null
+        }
+        & $visit $TargetSkill
+    }
+    elseif ($SkillCondition -eq 'enabled') {
+        foreach ($directory in Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'skills') -Directory) {
+            $skills.Add($directory.Name) | Out-Null
+        }
+    }
+    $components = @()
+    if ($SkillCondition -eq 'enabled') {
+        $components = if ($TargetSkill) {
+            @([pscustomobject]@{
+                    Key = 'manifest:plugin.json'
+                    Revision = Get-SkillEvalPathRevision -Root $RepoRoot -RelativePath 'plugin.json'
+                }) + @(foreach ($name in @($skills | Sort-Object)) {
+                    [pscustomobject]@{
+                        Key = "skill:$name"
+                        Revision = Get-SkillEvalPathRevision -Root $RepoRoot -RelativePath "skills/$name"
+                    }
+                })
+        }
+        else { @(Get-SkillEvalCandidateComponents -RepoRoot $RepoRoot) }
+    }
+    $exposedSkills = @()
+    if ($SkillCondition -eq 'enabled') { $exposedSkills = @($skills | Sort-Object) }
+    $exposure = [pscustomobject]@{
+        SkillCondition = $SkillCondition
+        TargetSkill = $TargetSkill
+        Composition = if ($SkillCondition -eq 'no-skill') { 'none' }
+            elseif ($TargetSkill) { 'target-core-and-hard-requires' } else { 'full-plugin' }
+        Skills = $exposedSkills
+        Components = @($components)
+    }
+    $exposure | Add-Member -NotePropertyName Revision `
+        -NotePropertyValue (Get-SkillEvalObjectRevision -InputObject $exposure)
+    return $exposure
+}
+
+function Get-SkillEvalStagedExposure {
+    param([Parameter(Mandatory)][string] $RunDirectory)
+
+    $runtimeFiles = [System.Collections.Generic.List[object]]::new()
+    $runtimePrefix = 'sandbox-home/localappdata/copilot/pkg/'
+    $files = @(foreach ($root in @('plugin', 'copilot-home', 'workspace', 'sandbox-home')) {
+            $path = Join-Path $RunDirectory $root
+            if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+            $rootFiles = @(Get-ChildItem -LiteralPath $path -File -Force -Recurse)
+            $bundlePrefixes = @(foreach ($entry in $rootFiles) {
+                    if ($entry.Name -iin @('SKILL.md', 'plugin.json')) {
+                        $relativeDirectory = [IO.Path]::GetRelativePath(
+                            $RunDirectory, $entry.DirectoryName).Replace('\', '/') + '/'
+                        if ($relativeDirectory.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                            $relativeDirectory
+                        }
+                    }
+                })
+            $bundlePrefixes = @($bundlePrefixes | Sort-Object -Unique)
+            foreach ($file in $rootFiles) {
+                $relativePath = [IO.Path]::GetRelativePath($RunDirectory, $file.FullName).Replace('\', '/')
+                $isBundledResource = $false
+                foreach ($prefix in $bundlePrefixes) {
+                    if ($relativePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+                        $isBundledResource = $true
+                        break
+                    }
+                }
+                $isCustomization = $isBundledResource -or $root -eq 'plugin' -or
+                    $file.Name -iin @('.mcp.json', 'plugin.json') -or
+                    $file.Name -imatch '^(AGENTS|CLAUDE|GEMINI|SKILL)\.md$|(?:\.agent|\.instructions|\.prompt)\.md$|^copilot-instructions\.md$' -or
+                    $relativePath -match '/(?:\.agents|\.claude|\.copilot)/(?:skills|agents|plugins)/|/\.github/(?:skills|agents|instructions|prompts)/|^copilot-home/(?:skills|agents|plugins)/'
+                if ($isCustomization -and $relativePath -notmatch '^workspace/\.git/') {
+                    $record = [pscustomobject]@{
+                        Path = $relativePath
+                        Sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+                    }
+                    if ($relativePath.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                        $runtimeFiles.Add($record)
+                    }
+                    else { $record }
+                }
+            }
+        })
+    $files = @($files | Sort-Object Path)
+    return [pscustomobject]@{
+        Files = $files
+        Revision = Get-SkillEvalObjectRevision -InputObject ([pscustomobject]@{ Files = $files })
+        ClientRuntimeExposure = [pscustomobject]@{
+            Files = @($runtimeFiles | Sort-Object Path)
+            Revision = Get-SkillEvalObjectRevision -InputObject ([pscustomobject]@{ Files = @($runtimeFiles | Sort-Object Path) })
+        }
+    }
+}
+
 function New-SkillEvalContext {
     param(
         [Parameter(Mandatory)]
@@ -1071,9 +1315,24 @@ function New-SkillEvalContext {
         [string] $EvalRoot,
 
         [Parameter(Mandatory)]
-        [string] $RunDirectory
+        [string] $RunDirectory,
+
+        [ValidateSet('enabled', 'no-skill')]
+        [string] $SkillCondition = 'enabled',
+
+        [string] $TargetSkill
     )
 
+    $exposure = Get-SkillEvalExposure -RepoRoot $RepoRoot `
+        -SkillCondition $SkillCondition -TargetSkill $TargetSkill
+    if ($TargetSkill -and $SkillCondition -eq 'enabled') {
+        foreach ($propertyName in @('overlayPath', 'personalSkillFixturePath')) {
+            if ($Scenario.PSObject.Properties[$propertyName] -and
+                -not [string]::IsNullOrWhiteSpace([string]$Scenario.$propertyName)) {
+                throw "Target-core exposure cannot include '$propertyName'; select a scenario without composition fixtures."
+            }
+        }
+    }
     $gitPath = [string]@(Get-Command git -CommandType Application -All -ErrorAction Stop)[0].Source
     $workspace = Join-Path $RunDirectory 'workspace'
     $pluginDirectory = Join-Path $RunDirectory 'plugin'
@@ -1115,16 +1374,34 @@ function New-SkillEvalContext {
         Add-Content -LiteralPath (Join-Path $workspace 'README.md') -Value 'Evaluation change.'
     }
 
-    foreach ($component in @('plugin.json', '.mcp.json', 'skills', 'agents')) {
-        Copy-Item -LiteralPath (Join-Path $RepoRoot $component) -Destination $pluginDirectory -Recurse
+    if ($SkillCondition -eq 'enabled' -and $TargetSkill) {
+        $plugin = Get-Content -LiteralPath (Join-Path $RepoRoot 'plugin.json') -Raw |
+            ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        $plugin['skills'] = @('skills/')
+        $plugin.Remove('agents') | Out-Null
+        $plugin.Remove('mcpServers') | Out-Null
+        $plugin | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath (Join-Path $pluginDirectory 'plugin.json')
+        $skillsRoot = Join-Path $pluginDirectory 'skills'
+        New-Item -ItemType Directory -Path $skillsRoot | Out-Null
+        foreach ($skillName in $exposure.Skills) {
+            Copy-Item -LiteralPath (Join-Path $RepoRoot "skills/$skillName") `
+                -Destination $skillsRoot -Recurse
+        }
+    }
+    elseif ($SkillCondition -eq 'enabled') {
+        foreach ($component in @('plugin.json', '.mcp.json', 'skills', 'agents')) {
+            Copy-Item -LiteralPath (Join-Path $RepoRoot $component) -Destination $pluginDirectory -Recurse
+        }
     }
     $projectSkillSource = Join-Path $RepoRoot ".agents/skills/$($Scenario.skill)"
-    if (Test-Path -LiteralPath $projectSkillSource -PathType Container) {
+    if ($SkillCondition -eq 'enabled' -and -not $TargetSkill -and
+        (Test-Path -LiteralPath $projectSkillSource -PathType Container)) {
         $projectSkillsRoot = Join-Path $workspace '.agents/skills'
         New-Item -ItemType Directory -Path $projectSkillsRoot -Force | Out-Null
         Copy-Item -LiteralPath $projectSkillSource -Destination $projectSkillsRoot -Recurse
     }
-    if ($Scenario.PSObject.Properties['overlayPath'] -and -not [string]::IsNullOrWhiteSpace([string]$Scenario.overlayPath)) {
+    if ($SkillCondition -eq 'enabled' -and $Scenario.PSObject.Properties['overlayPath'] -and -not [string]::IsNullOrWhiteSpace([string]$Scenario.overlayPath)) {
         $overlaySource = Resolve-SkillEvalFixturePath `
             -EvalRoot $EvalRoot `
             -RelativePath ([string]$Scenario.overlayPath) `
@@ -1134,7 +1411,7 @@ function New-SkillEvalContext {
         Copy-Item -LiteralPath $overlaySource -Destination $overlayTarget
     }
     $hasPersonalSkillFixture = $false
-    if ($Scenario.PSObject.Properties['personalSkillFixturePath'] -and
+    if ($SkillCondition -eq 'enabled' -and $Scenario.PSObject.Properties['personalSkillFixturePath'] -and
         -not [string]::IsNullOrWhiteSpace([string]$Scenario.personalSkillFixturePath)) {
         $personalSkillSource = Resolve-SkillEvalFixturePath `
             -EvalRoot $EvalRoot `
@@ -1152,7 +1429,18 @@ function New-SkillEvalContext {
     Set-Content -LiteralPath $shimLogPath -Value @()
     $baselineWorktree = Get-SkillEvalWorktreeSnapshot -GitPath $gitPath -WorkingDirectory $workspace
 
+    $stagedExposure = Get-SkillEvalStagedExposure -RunDirectory $RunDirectory
+    if ($SkillCondition -eq 'no-skill' -and $stagedExposure.Files.Count -gt 0) {
+        throw 'No-skill context contains customization artifacts in the task fixture; use a customization-free task fixture.'
+    }
+    if ($TargetSkill -and @($stagedExposure.Files | Where-Object Path -Like 'workspace/*').Count -gt 0) {
+        throw 'Target-core context contains workspace customization artifacts; use a customization-free task fixture.'
+    }
     return [pscustomobject]@{
+        SkillCondition = $SkillCondition
+        TargetSkill = $TargetSkill
+        Exposure = $exposure
+        StagedExposure = $stagedExposure
         GitPath = $gitPath
         Workspace = $workspace
         PluginDirectory = $pluginDirectory
@@ -1219,13 +1507,22 @@ function Invoke-SkillEvalProcess {
         -Scenario $Scenario `
         -Prompt $(if ($null -ne $ContentPreparation) { [string]$ContentPreparation.prompt } else { [string]$Scenario.prompt }) `
         -PluginDirectory $Context.PluginDirectory `
+        -SkillCondition $Context.SkillCondition `
         -Model $Model `
         -TranscriptPath $transcriptPath `
         -UsageOutputPath $usageOutputPath `
         -SecretEnvironmentNames @($secretEnvironmentNames)
+    if (($Context.SkillCondition -eq 'no-skill' -or $Context.TargetSkill) -and
+        -not $IsolateCopilotHome) {
+        throw 'Controlled skill exposure requires isolated Copilot homes.'
+    }
     $effectiveCopilotHomeIsolation = $IsolateCopilotHome -or
         $Context.HasPersonalSkillFixture
     $invocation = [pscustomobject]@{
+        SkillCondition = $Context.SkillCondition
+        TargetSkill = $Context.TargetSkill
+        Exposure = $Context.Exposure
+        StagedExposure = $Context.StagedExposure
         Scenario = $Scenario
         Arguments = $arguments
         WorkingDirectory = $Context.Workspace
@@ -1253,6 +1550,11 @@ function Invoke-SkillEvalProcess {
         }
         Set-Content -LiteralPath $standardOutputPath -Value ([string]$executorResult.StandardOutput)
         Set-Content -LiteralPath $standardErrorPath -Value ([string]$executorResult.StandardError)
+        [pscustomobject]@{
+            IsRealClient = $false
+            ExitCode = [int]$executorResult.ExitCode
+            TimedOut = $false
+        } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Context.RunDirectory 'process.json')
         return [pscustomobject]@{
             ExitCode = [int]$executorResult.ExitCode
             TimedOut = $false
@@ -1324,6 +1626,11 @@ function Invoke-SkillEvalProcess {
     $standardError = $standardErrorTask.GetAwaiter().GetResult()
     [System.IO.File]::WriteAllText($standardOutputPath, $standardOutput)
     [System.IO.File]::WriteAllText($standardErrorPath, $standardError)
+    [pscustomobject]@{
+        IsRealClient = $true
+        ExitCode = if ($completed) { $process.ExitCode } else { -1 }
+        TimedOut = -not $completed
+    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Context.RunDirectory 'process.json')
 
     return [pscustomobject]@{
         ExitCode = if ($completed) { $process.ExitCode } else { -1 }
@@ -1350,6 +1657,13 @@ function Write-SkillEvalSummary {
     $lines.Add('# Skill evaluation summary')
     $lines.Add('')
     $lines.Add("- Model: ``$($Summary.Model)``")
+    if ($Summary.PSObject.Properties['Exposure']) {
+        $lines.Add("- Skill condition: ``$($Summary.SkillCondition)``")
+        $lines.Add("- Exposure composition: ``$($Summary.Exposure.Composition)``")
+        $lines.Add("- Target skill: ``$($Summary.TargetSkill)``")
+        $lines.Add("- Exposure input revision: ``$($Summary.Exposure.Revision)``")
+        $lines.Add("- Staged exposure manifests: ``summary.json`` (StagedExposures)")
+    }
     $lines.Add("- Copilot CLI: ``$($Summary.CopilotVersion)``")
     if (-not [string]::IsNullOrWhiteSpace([string]$Summary.CopilotExecutableSha256)) {
         $lines.Add("- Copilot executable SHA-256: ``$($Summary.CopilotExecutableSha256)``")
@@ -1432,7 +1746,14 @@ function Invoke-SkillEvalWorkItem {
 
         [switch] $IsolateCopilotHome = $true,
 
-        [pscustomobject] $ContentPreparation
+        [pscustomobject] $ContentPreparation,
+
+        [ValidateSet('enabled', 'no-skill')]
+        [string] $SkillCondition = 'enabled',
+
+        [string] $TargetSkill,
+
+        [string] $ExposureRevision
     )
 
     $runDirectory = Join-Path $OutputDirectory "$($Scenario.id)/run-$RunNumber"
@@ -1446,14 +1767,34 @@ function Invoke-SkillEvalWorkItem {
     $processMilliseconds = 0L
     $scoringMilliseconds = 0L
     $result = $null
+    $context = $null
+    $finalStagedExposure = $null
+    $usageEvidence = $null
     try {
         $phaseStarted = $stopwatch.ElapsedMilliseconds
         $context = New-SkillEvalContext `
             -Scenario $Scenario `
             -RepoRoot $RepoRoot `
             -EvalRoot $EvalRoot `
-            -RunDirectory $runDirectory
+            -RunDirectory $runDirectory `
+            -SkillCondition $SkillCondition `
+            -TargetSkill $TargetSkill
         $contextMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
+        if ($ExposureRevision -and $context.Exposure.Revision -cne $ExposureRevision) {
+            throw 'Skill exposure inputs changed before context staging.'
+        }
+        [pscustomobject]@{
+            SkillCondition = $SkillCondition
+            TargetSkill = $TargetSkill
+            Exposure = $context.Exposure
+            StagedExposure = $context.StagedExposure
+            ClientRuntimeExposure = $context.StagedExposure.ClientRuntimeExposure
+            ShimLogPath = $context.ShimLogPath
+            Workspace = $context.Workspace
+            BaselineWorktree = $context.BaselineWorktree
+            FinalWorktree = $null
+        } | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath (Join-Path $runDirectory 'context.json')
 
         $phaseStarted = $stopwatch.ElapsedMilliseconds
         $processResult = Invoke-SkillEvalProcess `
@@ -1466,12 +1807,18 @@ function Invoke-SkillEvalWorkItem {
             -IsolateCopilotHome:$IsolateCopilotHome `
             -ContentPreparation $ContentPreparation
         $processMilliseconds = $stopwatch.ElapsedMilliseconds - $phaseStarted
+        $finalStagedExposure = Get-SkillEvalStagedExposure -RunDirectory $runDirectory
+        if (($SkillCondition -eq 'no-skill' -or $TargetSkill) -and
+            $finalStagedExposure.Revision -cne $context.StagedExposure.Revision) {
+            throw 'Staged skill exposure changed during the evaluation.'
+        }
         if ($processResult.PSObject.Properties['UsageOutputPath'] -and
             $processResult.UsageOutputPath) {
-            Assert-SkillEvalUsageReceipt `
+            $usageEvidence = Assert-SkillEvalUsageReceipt `
                 -Path $processResult.UsageOutputPath `
                 -TelemetryPath (Join-Path $runDirectory 'telemetry.jsonl') `
-                -ExpectedModel $Model
+                -ExpectedModel $Model `
+                -AllowRecoveredClientErrors:([bool]$TargetSkill)
         }
 
         if ([bool]$Scenario.requireUnchangedWorktree) {
@@ -1483,6 +1830,10 @@ function Invoke-SkillEvalWorkItem {
                 -NotePropertyValue $finalWorktree
         }
         [pscustomobject]@{
+            SkillCondition = $SkillCondition
+            TargetSkill = $TargetSkill
+            Exposure = $context.Exposure
+            StagedExposure = $context.StagedExposure
             ShimLogPath = $context.ShimLogPath
             Workspace = $context.Workspace
             BaselineWorktree = $context.BaselineWorktree
@@ -1490,7 +1841,8 @@ function Invoke-SkillEvalWorkItem {
                 $context.FinalWorktree
             }
             else { $null }
-        } | ConvertTo-Json -Depth 10 |
+            ClientRuntimeExposure = $finalStagedExposure.ClientRuntimeExposure
+        } | ConvertTo-Json -Depth 20 |
             Set-Content -LiteralPath (Join-Path $runDirectory 'context.json')
 
         $phaseStarted = $stopwatch.ElapsedMilliseconds
@@ -1572,6 +1924,15 @@ function Invoke-SkillEvalWorkItem {
         }
     }
     $stopwatch.Stop()
+    $result | Add-Member -NotePropertyName SkillCondition -NotePropertyValue $SkillCondition
+    $result | Add-Member -NotePropertyName TargetSkill -NotePropertyValue $TargetSkill
+    $result | Add-Member -NotePropertyName StagedExposure `
+        -NotePropertyValue $(if ($null -ne $context) { $context.StagedExposure } else { $null })
+    $result | Add-Member -NotePropertyName ClientRuntimeExposure `
+        -NotePropertyValue $(if ($null -ne $finalStagedExposure) { $finalStagedExposure.ClientRuntimeExposure } else { $null })
+    $result | Add-Member -NotePropertyName ModelUsageEvidence -NotePropertyValue $usageEvidence
+    $result | Add-Member -NotePropertyName ExposureRevision `
+        -NotePropertyValue $(if ($null -ne $context) { $context.Exposure.Revision } else { $ExposureRevision })
     $result | Add-Member -NotePropertyName QueuedAtUtc -NotePropertyValue $QueuedAtUtc.ToString('O')
     $result | Add-Member -NotePropertyName StartedAtUtc -NotePropertyValue $startedAtUtc.ToString('O')
     $result | Add-Member -NotePropertyName QueueMilliseconds -NotePropertyValue $queueMilliseconds
@@ -1619,12 +1980,24 @@ function Invoke-SkillEvalSuite {
 
         [switch] $IsolateCopilotHome = $true,
 
-        [string] $CopilotPath
+        [string] $CopilotPath,
+
+        [ValidateSet('enabled', 'no-skill')]
+        [string] $SkillCondition = 'enabled',
+
+        [string] $TargetSkill
     )
 
     $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+    if (($SkillCondition -eq 'no-skill' -or $TargetSkill) -and -not $IsolateCopilotHome) {
+        throw 'Controlled skill exposure requires isolated Copilot homes.'
+    }
+    $exposure = Get-SkillEvalExposure -RepoRoot $resolvedRepoRoot `
+        -SkillCondition $SkillCondition -TargetSkill $TargetSkill
     $resolvedScenarioPath = (Resolve-Path -LiteralPath $ScenarioPath).Path
     $evalRoot = (Resolve-Path -LiteralPath (Join-Path (Split-Path $resolvedScenarioPath) '..')).Path
+    $fixtureRoot = (Resolve-Path -LiteralPath (Join-Path $evalRoot 'fixtures')).Path
+    $scorerRevision = (Get-FileHash -LiteralPath (Join-Path $evalRoot 'SkillEvalScorer.ps1') -Algorithm SHA256).Hash
     $resolvedCopilotPath = if ($Executor) {
         $null
     }
@@ -1691,6 +2064,9 @@ function Invoke-SkillEvalSuite {
                     RunNumber = $runNumber
                     QueuedAtUtc = $queuedAtUtc
                     ContentPreparation = $contentByScenario[[string]$scenario.id]
+                    SkillCondition = $SkillCondition
+                    TargetSkill = $TargetSkill
+                    ExposureRevision = $exposure.Revision
                 })
         }
     }
@@ -1713,7 +2089,10 @@ function Invoke-SkillEvalSuite {
                     -CopilotPath $resolvedCopilotPath `
                     -Executor $Executor `
                     -IsolateCopilotHome:$IsolateCopilotHome `
-                    -ContentPreparation $_.ContentPreparation
+                    -ContentPreparation $_.ContentPreparation `
+                    -SkillCondition $_.SkillCondition `
+                    -TargetSkill $_.TargetSkill `
+                    -ExposureRevision $_.ExposureRevision
             })
     }
     else {
@@ -1747,7 +2126,10 @@ function Invoke-SkillEvalSuite {
                         -QueuedAtUtc $WorkItem.QueuedAtUtc `
                         -CopilotPath $CopilotPath `
                         -IsolateCopilotHome:$IsolateCopilotHome `
-                        -ContentPreparation $WorkItem.ContentPreparation
+                        -ContentPreparation $WorkItem.ContentPreparation `
+                        -SkillCondition $WorkItem.SkillCondition `
+                        -TargetSkill $WorkItem.TargetSkill `
+                        -ExposureRevision $WorkItem.ExposureRevision
                 } `
                     $_ `
                     $using:resolvedRepoRoot `
@@ -1781,7 +2163,7 @@ function Invoke-SkillEvalSuite {
     if ($finalCandidateRevision -cne $candidateRevision) {
         throw 'Evaluated candidate inputs changed while the suite was running.'
     }
-    $fixtureManifest = @(Get-ChildItem -LiteralPath (Join-Path $evalRoot 'fixtures') -File -Recurse |
+    $fixtureManifest = @(Get-ChildItem -LiteralPath $fixtureRoot -File -Recurse |
         Sort-Object FullName |
         ForEach-Object {
             $relativePath = [System.IO.Path]::GetRelativePath(
@@ -1800,12 +2182,22 @@ function Invoke-SkillEvalSuite {
         SchemaVersion = 1
         GeneratedAtUtc = [DateTime]::UtcNow.ToString('O')
         Model = $Model
+        SkillCondition = $SkillCondition
+        TargetSkill = $TargetSkill
+        Exposure = $exposure
+        StagedExposures = @($resultArray | ForEach-Object {
+                [pscustomobject]@{
+                    ScenarioId = $_.ScenarioId
+                    RunNumber = $_.RunNumber
+                    StagedExposure = $_.StagedExposure
+                }
+            })
         ScenarioRevision = (Get-FileHash -LiteralPath $resolvedScenarioPath -Algorithm SHA256).Hash
         CandidateRevision = $candidateRevision
         CandidateComponents = Get-SkillEvalCandidateComponents -RepoRoot $resolvedRepoRoot
         FixtureRevision = $fixtureRevision
         ScenarioRevisions = $scenarioMetadata
-        ScorerRevision = (Get-FileHash -LiteralPath (Join-Path $evalRoot 'SkillEvalScorer.ps1') -Algorithm SHA256).Hash
+        ScorerRevision = $scorerRevision
         RequestedMaxConcurrency = $MaxConcurrency
         MaxConcurrency = $effectiveMaxConcurrency
         WallTimeMilliseconds = $suiteStopwatch.ElapsedMilliseconds
@@ -2046,7 +2438,9 @@ function Invoke-SkillEvalRescore {
             WorktreeEvidenceVerified = $worktreeEvidenceVerified
             RescoreMilliseconds = $runStopwatch.ElapsedMilliseconds
         }
-        foreach ($property in @('ArtifactManifestRevision', 'ContentProfileRevision', 'ContentInputRevision')) {
+        foreach ($property in @('ArtifactManifestRevision', 'ContentProfileRevision', 'ContentInputRevision',
+                'SkillCondition', 'TargetSkill', 'StagedExposure', 'ClientRuntimeExposure',
+                'ModelUsageEvidence', 'ExposureRevision')) {
             if ($sourceRun.PSObject.Properties[$property]) {
                 $result | Add-Member -NotePropertyName $property -NotePropertyValue $sourceRun.$property
             }
@@ -2109,6 +2503,15 @@ function Invoke-SkillEvalRescore {
         OperatingSystem = $PSVersionTable.OS
         Runs = $resultArray
     }
+    foreach ($property in @('SkillCondition', 'TargetSkill', 'Exposure')) {
+        if ($sourceSummary.PSObject.Properties[$property]) {
+            $summary | Add-Member -NotePropertyName $property -NotePropertyValue $sourceSummary.$property
+        }
+    }
+    if ($sourceSummary.PSObject.Properties['StagedExposures']) {
+        $summary | Add-Member -NotePropertyName StagedExposures -NotePropertyValue @(
+            $sourceSummary.StagedExposures | Where-Object ScenarioId -In $resultArray.ScenarioId)
+    }
     Write-SkillEvalSummary -Summary $summary -OutputDirectory $outputPath
     return $summary
 }
@@ -2124,5 +2527,6 @@ Export-ModuleMember -Function @(
     'Invoke-SkillEvalSuite',
     'Invoke-SkillEvalRescore',
     'Get-SkillEvalAffectedScenarioIds',
-    'Get-SkillEvalWorkerAllocation'
+    'Get-SkillEvalWorkerAllocation',
+    'Get-SkillEvalExposure'
 )

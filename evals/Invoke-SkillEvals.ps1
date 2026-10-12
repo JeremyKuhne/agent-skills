@@ -1,3 +1,20 @@
+<#
+.SYNOPSIS
+    Runs fresh evaluations with an explicit optional skill exposure treatment.
+.DESCRIPTION
+    SkillCondition defaults to enabled (the existing complete plugin).
+    TargetSkill selects only that public core and its hard dependencies, without
+    agents, MCP declarations, project skills, or composition fixtures. No-skill
+    stages no customization artifacts. Controlled treatments require isolated
+    homes; task fixtures, prompts, permissions, and scoring remain unchanged.
+    Pair separate fresh output directories with the same scenario IDs, model,
+    run count, timeout, and concurrency. Existing routing expectations are not
+    baseline quality grades and may intentionally fail under no-skill.
+.EXAMPLE
+    .\evals\Invoke-SkillEvals.ps1 -Model gpt-6.1-sol -ScenarioPath evals\scenarios\technical-writing.json -ScenarioId technical-writing-routing-explicit-draft -TargetSkill technical-writing -SkillCondition enabled -RunCount 1 -OutputDirectory scratch\pilot-enabled -CopilotPath C:\approved\copilot.exe
+    Use the same arguments with -SkillCondition no-skill and a new output directory
+    for the matched control. Model execution requires separate explicit approval.
+#>
 #Requires -Version 7.2
 [CmdletBinding()]
 param(
@@ -15,7 +32,10 @@ param(
     [int] $MaxConcurrency = 8,
     [switch] $IsolateCopilotHome = $true,
     [switch] $ReportOnly,
-    [string] $CopilotPath
+    [string] $CopilotPath,
+    [ValidateSet('enabled', 'no-skill')]
+    [string] $SkillCondition = 'enabled',
+    [string] $TargetSkill
 )
 
 Set-StrictMode -Version Latest
@@ -43,6 +63,8 @@ if (-not [string]::IsNullOrWhiteSpace($BaselineSummaryPath)) {
             -ScenarioPath $ScenarioPath `
             -BaselineSummaryPath $BaselineSummaryPath `
             -Model $Model `
+            -SkillCondition $SkillCondition `
+            -TargetSkill $TargetSkill `
             -ScenarioId $ScenarioId)
     if ($ScenarioId.Count -eq 0) {
         Write-Host 'No scenarios are affected by the current inputs.'
@@ -60,6 +82,8 @@ $parameters = @{
     TimeoutMinutes = $TimeoutMinutes
     MaxConcurrency = $MaxConcurrency
     IsolateCopilotHome = $IsolateCopilotHome
+    SkillCondition = $SkillCondition
+    TargetSkill = $TargetSkill
 }
 $summary = Invoke-SkillEvalSuite @parameters
 
