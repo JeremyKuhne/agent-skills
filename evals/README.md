@@ -35,6 +35,14 @@ error responses, mismatched models, and inconsistent totals remain
 infrastructure failures. Non-target captures retain the strict default.
 `process.json` records the actual child exit and timeout before later receipt
 validation; synthetic executors are explicitly marked non-real.
+Target selection accepts the existing flat literal-frontmatter subset with
+consistent space indentation, including the indentation used by every source
+core. It does not claim arbitrary YAML support: nested metadata, inconsistent
+indentation, and nonliteral dependency encodings still fail explicitly.
+Literal rescoring preserves the captured treatment, selected and bundled
+exposure manifests, and model-usage/error evidence alongside artifact/input
+bindings. Older sources without those optional fields remain absent; derived
+reports do not invent receipts or rewrite the original capture.
 
 The four opt-in [coding-task oracles](oracles/Invoke-SkillQualityOracle.ps1)
 check record-array preservation, native-child outcomes, export preservation,

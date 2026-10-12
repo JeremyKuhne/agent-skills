@@ -262,15 +262,25 @@ internal static class Program
         {
             string sentinel = Path.Join(temporaryRoot, "unrelated-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(sentinel);
-            string file = Path.Join(sentinel, "keep.txt");
-            File.WriteAllText(file, "keep");
-            WithScratch(directory =>
+            try
             {
-                Require(Path.GetFullPath(directory) != sentinel, "A pre-existing unrelated directory was reused.");
-                File.WriteAllText(Path.Join(directory, "owned.txt"), "owned");
-                return 0;
-            });
-            Require(File.Exists(file) && File.ReadAllText(file) == "keep", "Cleanup removed unrelated temporary contents.");
+                string file = Path.Join(sentinel, "keep.txt");
+                File.WriteAllText(file, "keep");
+                WithScratch(directory =>
+                {
+                    Require(Path.GetFullPath(directory) != sentinel, "A pre-existing unrelated directory was reused.");
+                    File.WriteAllText(Path.Join(directory, "owned.txt"), "owned");
+                    return 0;
+                });
+                Require(File.Exists(file) && File.ReadAllText(file) == "keep", "Cleanup removed unrelated temporary contents.");
+            }
+            finally
+            {
+                if (Directory.Exists(sentinel))
+                {
+                    Directory.Delete(sentinel, recursive: true);
+                }
+            }
         });
     }
 

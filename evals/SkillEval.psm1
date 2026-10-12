@@ -1119,7 +1119,7 @@ function Get-SkillEvalExposure {
         TargetSkill restricts enabled staging to one public core and its transitive
         hard dependencies, with no agents, MCP configuration, or local overlays.
         Target selection accepts the commons' literal frontmatter contract:
-        name: <directory-name>, metadata:, and two-space-indented requires:
+        name: <directory-name>, metadata:, and consistently space-indented requires:
         none or comma-separated lowercase skill names. Other encodings fail closed.
         No-skill stages no customization artifacts. Both controlled treatments
         require fresh isolated homes and customization-free task fixtures.
@@ -1176,25 +1176,32 @@ function Get-SkillEvalExposure {
             }
             $metadataStart = [Array]::IndexOf($frontmatter, 'metadata:') + 1
             $requires = @()
+            $metadataIndent = $null
             for ($index = $metadataStart; $index -lt $frontmatter.Count; $index++) {
                 $line = [string]$frontmatter[$index]
                 if ($line -cmatch '^\S') { break }
                 if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith('#')) {
                     continue
                 }
-                if ($line -cnotmatch '^  [a-z][a-z-]*: [^\r\n]+$') {
+                $indent = [regex]::Match($line, '^ +').Length
+                if ($indent -eq 0 -or ($null -ne $metadataIndent -and $indent -ne $metadataIndent)) {
                     throw "Unsupported literal metadata for skill '$Name'."
                 }
-                if ($line.StartsWith('  requires:', [StringComparison]::Ordinal)) {
-                    $requires += $line
+                $metadataIndent = $indent
+                $metadataLine = $line.Substring($indent)
+                if ($metadataLine -cnotmatch '^[a-z][a-z-]*: [^\r\n]+$') {
+                    throw "Unsupported literal metadata for skill '$Name'."
+                }
+                if ($metadataLine.StartsWith('requires:', [StringComparison]::Ordinal)) {
+                    $requires += $metadataLine
                 }
             }
             if ($requires.Count -ne 1 -or
-                $requires[0] -cnotmatch '^  requires: (none|[a-z0-9]+(?:-[a-z0-9]+)*(?:, [a-z0-9]+(?:-[a-z0-9]+)*)*)$') {
+                $requires[0] -cnotmatch '^requires: (none|[a-z0-9]+(?:-[a-z0-9]+)*(?:, [a-z0-9]+(?:-[a-z0-9]+)*)*)$') {
                 throw "Unsupported literal metadata.requires for skill '$Name'."
             }
             $visiting.Add($Name) | Out-Null
-            $value = $requires[0].Substring('  requires: '.Length)
+            $value = $requires[0].Substring('requires: '.Length)
             if ($value -cne 'none') {
                 foreach ($dependency in $value.Split(', ')) {
                     if ($dependency -ceq 'none') { throw "Invalid hard skill dependency 'none' for '$Name'." }
@@ -2432,7 +2439,8 @@ function Invoke-SkillEvalRescore {
             RescoreMilliseconds = $runStopwatch.ElapsedMilliseconds
         }
         foreach ($property in @('ArtifactManifestRevision', 'ContentProfileRevision', 'ContentInputRevision',
-                'SkillCondition', 'TargetSkill', 'StagedExposure', 'ExposureRevision')) {
+                'SkillCondition', 'TargetSkill', 'StagedExposure', 'ClientRuntimeExposure',
+                'ModelUsageEvidence', 'ExposureRevision')) {
             if ($sourceRun.PSObject.Properties[$property]) {
                 $result | Add-Member -NotePropertyName $property -NotePropertyValue $sourceRun.$property
             }

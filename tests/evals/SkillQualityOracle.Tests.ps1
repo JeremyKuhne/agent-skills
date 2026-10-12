@@ -167,6 +167,21 @@ Describe 'Frozen coding-task executable oracles' {
         ($result.checks | Where-Object id -EQ $fixture.FailedCheck).evidence | Should -Not -BeNullOrEmpty
     }
 
+    It 'cleans its own preservation sentinel when the candidate is <Kind>' -ForEach @(
+        @{ Kind = 'valid'; Broken = $false }
+        @{ Kind = 'invalid'; Broken = $true }
+    ) {
+        $fixture = $fixtures['dotnet-disposable-scratch']
+        $path = Join-Path $TestDrive "sentinel-$Kind.cs"
+        $source = if ($Broken) { $fixture.Bad } else { $fixture.Good }
+        [IO.File]::WriteAllText($path, $source)
+        $output = Join-Path $TestDrive "sentinel-$Kind-output"
+        $result = & $oracle -CaseId dotnet-disposable-scratch -ArtifactPath $path -OutputDirectory $output
+        $result.outcome | Should -Be $(if ($Broken) { 'failed' } else { 'passed' })
+        @(Get-ChildItem -LiteralPath (Join-Path $output 'temporary') -Directory -Filter 'unrelated-*').Count |
+            Should -Be 0
+    }
+
     It 'records compiler rejection without pretending unexecuted runtime checks passed' {
         $path = Join-Path $TestDrive 'does not compile.cs'
         [IO.File]::WriteAllText($path, 'public static class Scratch { deliberately invalid }')
