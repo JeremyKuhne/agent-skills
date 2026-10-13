@@ -3486,6 +3486,34 @@ Describe 'Skill evaluation scenario contract' {
         }
     }
 
+    It 'provides an explicitly closable input stream to noninteractive children' {
+        $startInfo = & (Get-Module SkillEval) {
+            param($path)
+            New-SkillEvalCopilotStartInfo -CopilotPath $path
+        } $script:PwshPath
+        $startInfo.RedirectStandardInput | Should -BeTrue
+        foreach ($argument in @('-NoProfile', '-NonInteractive', '-Command',
+                '[Console]::Out.Write("EOF:" + [Console]::In.ReadToEnd().Length)')) {
+            $startInfo.ArgumentList.Add($argument)
+        }
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        try {
+            $process.Start() | Should -BeTrue
+            $process.StandardInput.Close()
+            $stdout = $process.StandardOutput.ReadToEndAsync()
+            $stderr = $process.StandardError.ReadToEndAsync()
+            $process.WaitForExit(5000) | Should -BeTrue
+            $process.ExitCode | Should -Be 0
+            $stdout.GetAwaiter().GetResult() | Should -BeExactly 'EOF:0'
+            $stderr.GetAwaiter().GetResult() | Should -BeExactly ''
+        }
+        finally {
+            if (-not $process.HasExited) { $process.Kill($true); $process.WaitForExit() }
+            $process.Dispose()
+        }
+    }
+
     It 'decodes redirected native output and error streams as UTF-8' {
         $module = Get-Module SkillEval
         $startInfo = & $module {
@@ -5266,6 +5294,27 @@ $files = @(Get-ChildItem -LiteralPath $root -File -Recurse -Force |
         Add-Content -LiteralPath (Join-Path $fixture.Root 'skills/nested-hard/SKILL.md') -Value 'Changed hard dependency.'
         @(Get-SkillEvalAffectedScenarioIds @parameters) | Should -Be @('exposure-probe')
         $summary.Runs[0].StagedExposure.Files.Count | Should -BeGreaterThan 0
+    }
+
+    It 'preserves a process timeout instead of masking it with a missing usage receipt' {
+        $fixture = New-ExposureFixture -Root (Join-Path $TestDrive 'timeout-receipt')
+        Mock -ModuleName SkillEval Invoke-SkillEvalProcess {
+            [pscustomobject]@{
+                ExitCode = -1
+                TimedOut = $true
+                UsageOutputPath = Join-Path $Context.RunDirectory 'missing-usage.json'
+            }
+        }
+        Mock -ModuleName SkillEval Assert-SkillEvalUsageReceipt { throw 'Usage validation must not mask a timeout.' }
+        $summary = Invoke-SkillEvalSuite -RepoRoot $fixture.Root -ScenarioPath $fixture.ScenarioPath `
+            -OutputDirectory (Join-Path $TestDrive 'timeout-result') -Model fake-model `
+            -TargetSkill technical-writing -MaxConcurrency 1 -TimeoutMinutes 1 `
+            -Executor { throw 'The process boundary is mocked for this reporting control.' }
+        $summary.InfrastructureFailureCount | Should -Be 1
+        $summary.Runs[0].TimedOut | Should -BeTrue
+        $summary.Runs[0].ExitCode | Should -Be -1
+        $summary.Runs[0].Error | Should -BeLike '*timed out*'
+        Should -Invoke -ModuleName SkillEval Assert-SkillEvalUsageReceipt -Times 0 -Exactly
     }
 
     It 'detects staged exposure mutation instead of accepting an unrecorded treatment' {

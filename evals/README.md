@@ -35,6 +35,10 @@ error responses, mismatched models, and inconsistent totals remain
 infrastructure failures. Non-target captures retain the strict default.
 `process.json` records the actual child exit and timeout before later receipt
 validation; synthetic executors are explicitly marked non-real.
+Noninteractive native launches explicitly close stdin because their prompt is
+passed in arguments. They do not inherit an open job-host input pipe.
+Timeouts remain explicit process failures in the final result and are reported
+before usage validation, so a missing usage receipt cannot hide the deadline.
 Target selection accepts the existing flat literal-frontmatter subset with
 consistent space indentation, including the indentation used by every source
 core. It does not claim arbitrary YAML support: nested metadata, inconsistent
@@ -50,6 +54,20 @@ and disposable scratch ownership. They run fresh PowerShell children or
 compile the captured C# file with an installed stable .NET 10 SDK and C# 14.
 The generated compile project has no package dependencies and clears NuGet
 sources; no package installation or model inference is required.
+
+The record-array oracle has ten named checks. In addition to the original
+seven, it rejects singleton object-in-array roots and checks date-looking
+strings and distinct ordinal `a`/`A` keys, including nested record values.
+These enforce the task's existing object-root and value-preservation
+requirements; they do not add a new prompt requirement. Source hashes bind
+the executed check set. Earlier frozen campaign receipts retain their seven
+checks and original metrics; use a new frozen campaign for the expanded
+checks rather than rewriting historical evidence.
+Value checks accept native PowerShell values and independently owned
+`JsonElement` values through their exact JSON kinds and accessors. They do
+not reject a value-preserving parser representation merely because it lacks
+PowerShell dot-property access. Deliberately coerced strings and collapsed
+keys must still fail.
 
 ```pwsh
 .\evals\oracles\Invoke-SkillQualityOracle.ps1 -CaseId dotnet-preserve-export -ArtifactPath .\SaveText.cs -OutputDirectory .\oracle-export
