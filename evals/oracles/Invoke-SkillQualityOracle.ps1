@@ -94,7 +94,8 @@ function Run-Child([string] $Executable, [string[]] $Arguments, [string] $Name) 
 
 $expected = switch ($CaseId) {
     'powershell-record-array' { @('zero-array', 'single-array', 'multiple-array', 'missing-property-error',
-            'wrong-property-type-error', 'malformed-json-error', 'missing-file-error') }
+            'wrong-property-type-error', 'malformed-json-error', 'missing-file-error',
+            'object-root-error', 'date-string-preserved', 'ordinal-keys-preserved') }
     'powershell-child-outcome' { @('exit-zero-json', 'argument-with-spaces', 'stderr-separate',
             'nonzero-valid-json-error', 'malformed-json-error', 'caller-environment-unchanged') }
     'dotnet-preserve-export' { @('compile', 'publish-new-utf8', 'no-overwrite-preserves',

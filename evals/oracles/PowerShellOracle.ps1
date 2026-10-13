@@ -42,6 +42,44 @@ function Expect-Error([scriptblock] $Action) {
 }
 
 if ($CaseId -eq 'powershell-record-array') {
+    function Member([object] $Value, [string] $Name) {
+        if ($Value -is [Text.Json.JsonElement]) {
+            Require ($Value.ValueKind -eq [Text.Json.JsonValueKind]::Object) 'Expected a JSON object.'
+            return $Value.GetProperty($Name)
+        }
+        if ($Value -is [Collections.IDictionary]) {
+            Require (@($Value.Keys) -ccontains $Name) "Missing JSON member '$Name'."
+            return ,$Value[$Name]
+        }
+        $property = $Value.PSObject.Properties[$Name]
+        Require ($null -ne $property) "Missing JSON member '$Name'."
+        return ,$property.Value
+    }
+
+    function Scalar([object] $Value, [object] $Expected) {
+        if ($Value -is [Text.Json.JsonElement]) {
+            if ($null -eq $Expected) { return $Value.ValueKind -eq [Text.Json.JsonValueKind]::Null }
+            if ($Expected -is [string]) {
+                return $Value.ValueKind -eq [Text.Json.JsonValueKind]::String -and $Value.GetString() -ceq $Expected
+            }
+            if ($Expected -is [bool]) {
+                return $Value.ValueKind -in @([Text.Json.JsonValueKind]::True, [Text.Json.JsonValueKind]::False) -and
+                    $Value.GetBoolean() -eq $Expected
+            }
+            return $Value.ValueKind -eq [Text.Json.JsonValueKind]::Number -and $Value.GetDecimal() -eq $Expected
+        }
+        if ($null -eq $Expected) { return $null -eq $Value }
+        if ($Expected -is [string]) { return $Value -is [string] -and $Value -ceq $Expected }
+        if ($Expected -is [bool]) { return $Value -is [bool] -and $Value -eq $Expected }
+        if ($null -eq $Value) { return $false }
+        $numeric = $Value -is [Numerics.BigInteger] -or
+            [Type]::GetTypeCode($Value.GetType()) -in @(
+                [TypeCode]::Byte, [TypeCode]::SByte, [TypeCode]::Int16, [TypeCode]::UInt16,
+                [TypeCode]::Int32, [TypeCode]::UInt32, [TypeCode]::Int64, [TypeCode]::UInt64,
+                [TypeCode]::Single, [TypeCode]::Double, [TypeCode]::Decimal)
+        return $numeric -and $Value -eq $Expected
+    }
+
     function Records([string] $Json, [int] $Count) {
         $path = Join-Path $WorkDirectory 'records with spaces.json'
         [IO.File]::WriteAllText($path, $Json, [Text.UTF8Encoding]::new($false))
@@ -66,13 +104,42 @@ if ($CaseId -eq 'powershell-record-array') {
     }
     Check 'single-array' {
         $value = Records '{"records":[{"id":1,"text":"one value"}]}' 1
-        Require ($value.Records[0].id -eq 1 -and $value.Records[0].text -ceq 'one value') 'Single record values changed.'
+        Require ((Scalar (Member $value.Records[0] 'id') 1) -and
+            (Scalar (Member $value.Records[0] 'text') 'one value')) 'Single record values changed.'
     }
     Check 'multiple-array' {
         $value = Records '{"records":[{"id":1},false,null,4]}' 4
-        Require ($value.Records[0].id -eq 1 -and $value.Records[1] -is [bool] -and
-            -not $value.Records[1] -and $null -eq $value.Records[2] -and
-            $value.Records[3] -eq 4) 'Record order, false, null, or numeric values changed.'
+        Require ((Scalar (Member $value.Records[0] 'id') 1) -and (Scalar $value.Records[1] $false) -and
+            (Scalar $value.Records[2] $null) -and (Scalar $value.Records[3] 4)) `
+            'Record order, false, null, or numeric values changed.'
+    }
+    Check 'object-root-error' {
+        foreach ($json in @('[{"records":[]}]', '[{"records":[1]}]',
+                '[{"records":[]},{"records":[]}]')) {
+            $path = Join-Path $WorkDirectory 'array-root.json'
+            [IO.File]::WriteAllText($path, $json)
+            Expect-Error { Get-Records -Path $path -ErrorAction Stop }
+        }
+    }
+    Check 'date-string-preserved' {
+        $text = '2026-04-03T01:02:03Z'
+        $value = Records '{"records":["2026-04-03T01:02:03Z",{"stamp":"2026-04-03T01:02:03Z"}]}' 2
+        Require ((Scalar $value.Records[0] $text) -and (Scalar (Member $value.Records[1] 'stamp') $text)) `
+            'A date-looking JSON string changed type or value.'
+    }
+    Check 'ordinal-keys-preserved' {
+        function Require-OrdinalPair([object] $Value, [int] $Lower, [int] $Upper) {
+            $names = if ($Value -is [Text.Json.JsonElement]) { @($Value.EnumerateObject() | ForEach-Object Name) }
+            elseif ($Value -is [Collections.IDictionary]) { @($Value.Keys) }
+            else { @($Value.PSObject.Properties.Name) }
+            Require (@($names | Where-Object { $_ -ceq 'a' }).Count -eq 1 -and
+                @($names | Where-Object { $_ -ceq 'A' }).Count -eq 1 -and
+                (Scalar (Member $Value 'a') $Lower) -and (Scalar (Member $Value 'A') $Upper)) `
+                'Distinct ordinal JSON keys or their values changed.'
+        }
+        $value = Records '{"records":[{"a":1,"A":2,"nested":{"a":3,"A":4}}]}' 1
+        Require-OrdinalPair $value.Records[0] 1 2
+        Require-OrdinalPair (Member $value.Records[0] 'nested') 3 4
     }
     foreach ($case in @(
             @{ Id = 'missing-property-error'; Json = '{}' }

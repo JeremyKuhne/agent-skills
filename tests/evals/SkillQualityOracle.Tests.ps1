@@ -8,19 +8,50 @@ BeforeAll {
     $fixtures = @{
         'powershell-record-array' = @{
             Extension = '.ps1'
-            Count = 7
+            Count = 10
             FailedCheck = 'zero-array'
             Good = @'
+function Convert-RecordValue([Text.Json.JsonElement] $Value) {
+    switch ($Value.ValueKind) {
+        'Object' {
+            $result = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+            foreach ($property in $Value.EnumerateObject()) {
+                $result.Add($property.Name, (Convert-RecordValue $property.Value))
+            }
+            return ,$result
+        }
+        'Array' {
+            $result = [Collections.Generic.List[object]]::new()
+            foreach ($item in $Value.EnumerateArray()) {
+                $result.Add((Convert-RecordValue $item))
+            }
+            return ,$result.ToArray()
+        }
+        'String' { return $Value.GetString() }
+        'Number' { return $Value.GetDecimal() }
+        'True' { return $true }
+        'False' { return $false }
+        'Null' { return $null }
+        default { throw 'Unsupported JSON value.' }
+    }
+}
 function Get-Records {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string] $Path)
-    $value = Get-Content -LiteralPath $Path -Raw -Encoding utf8 -ErrorAction Stop |
-        ConvertFrom-Json -ErrorAction Stop
-    if ($null -eq $value -or $value -isnot [pscustomobject] -or
-        $null -eq $value.PSObject.Properties['records'] -or $value.records -isnot [Array]) {
-        throw 'Expected an object with a records array.'
+    $value = Get-Content -LiteralPath $Path -Raw -Encoding utf8 -ErrorAction Stop
+    $document = [Text.Json.JsonDocument]::Parse($value)
+    try {
+        $root = $document.RootElement
+        $recordElement = [Text.Json.JsonElement]::new()
+        if ($root.ValueKind -ne 'Object' -or
+            -not $root.TryGetProperty('records', [ref] $recordElement) -or
+            $recordElement.ValueKind -ne 'Array') {
+            throw 'Expected an object with a records array.'
+        }
+        $records = Convert-RecordValue $recordElement
+        [pscustomobject]@{ Count = $records.Count; Records = $records }
     }
-    [pscustomobject]@{ Count = $value.records.Count; Records = $value.records }
+    finally { $document.Dispose() }
 }
 '@
         }
@@ -109,7 +140,7 @@ public static class Scratch
         }
     }
     $fixtures['powershell-record-array'].Bad = $fixtures['powershell-record-array'].Good.Replace(
-        'Records = $value.records', 'Records = ($value.records | ForEach-Object { $_ })')
+        'Records = $records', 'Records = ($records | ForEach-Object { $_ })')
     $fixtures['powershell-child-outcome'].Bad = $fixtures['powershell-child-outcome'].Good.Replace(
         'if ($exitCode -ne 0) { throw "Child exit: $exitCode" }', '# Deliberately accept a failed child.')
     $fixtures['dotnet-preserve-export'].Bad = $fixtures['dotnet-preserve-export'].Good.Replace(
@@ -165,6 +196,54 @@ Describe 'Frozen coding-task executable oracles' {
         $result.scheduledChecks | Should -Be $fixture.Count
         ($result.checks | Where-Object id -EQ $fixture.FailedCheck).status | Should -Be 'failed'
         ($result.checks | Where-Object id -EQ $fixture.FailedCheck).evidence | Should -Not -BeNullOrEmpty
+    }
+
+    It 'detects JSON fidelity defect <Kind> through the public oracle' -ForEach @(
+        @{ Kind = 'singleton-root'; CheckId = 'object-root-error' }
+        @{ Kind = 'date-string'; CheckId = 'date-string-preserved' }
+        @{ Kind = 'ordinal-keys'; CheckId = 'ordinal-keys-preserved' }
+    ) {
+        $good = $fixtures['powershell-record-array'].Good
+        $source = switch ($Kind) {
+            'singleton-root' {
+                $good.Replace('$root = $document.RootElement', @'
+$root = $document.RootElement
+        if ($root.ValueKind -eq 'Array' -and $root.GetArrayLength() -eq 1) { $root = $root[0] }
+'@)
+            }
+            'date-string' {
+                $good.Replace("'String' { return `$Value.GetString() }",
+                    "'String' { return ConvertFrom-Json -InputObject `$Value.GetRawText() -NoEnumerate -ErrorAction Stop }")
+            }
+            'ordinal-keys' {
+                $good.Replace('[StringComparer]::Ordinal)', '[StringComparer]::OrdinalIgnoreCase)')
+            }
+        }
+        $source | Should -Not -BeExactly $good
+        $path = Join-Path $TestDrive "fidelity-$Kind.ps1"
+        [IO.File]::WriteAllText($path, $source)
+        $result = & $oracle -CaseId powershell-record-array -ArtifactPath $path `
+            -OutputDirectory (Join-Path $TestDrive "fidelity-$Kind-output")
+        $result.outcome | Should -Be 'failed'
+        $result.failedChecks | Should -Be 1
+        $result.passedChecks | Should -Be 9
+        $result.scheduledChecks | Should -Be 10
+        ($result.checks | Where-Object id -EQ $CheckId).status | Should -Be 'failed'
+        ($result.checks | Where-Object id -EQ $CheckId).evidence | Should -Not -BeNullOrEmpty
+    }
+
+    It 'accepts independently owned JsonElement record values without imposing a native-object representation' {
+        $good = $fixtures['powershell-record-array'].Good
+        $source = $good.Replace('$records = Convert-RecordValue $recordElement',
+            '$records = @(foreach ($item in $recordElement.EnumerateArray()) { $item.Clone() })')
+        $source | Should -Not -BeExactly $good
+        $path = Join-Path $TestDrive 'json-element-records.ps1'
+        [IO.File]::WriteAllText($path, $source)
+        $result = & $oracle -CaseId powershell-record-array -ArtifactPath $path `
+            -OutputDirectory (Join-Path $TestDrive 'json-element-records-output')
+        $result.outcome | Should -Be 'passed'
+        $result.passedChecks | Should -Be 10
+        $result.failedChecks | Should -Be 0
     }
 
     It 'cleans its own preservation sentinel when the candidate is <Kind>' -ForEach @(

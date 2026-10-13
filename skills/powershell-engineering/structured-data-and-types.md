@@ -17,6 +17,69 @@ If the chosen parser discards distinctions the contract needs, use one that
 preserves them or narrow the accepted input. Do not turn a format check into
 a claim that arbitrary input or scripts are safe to execute.
 
+## Preserve JSON roots and values
+
+When a task requires an object root, preserve the parsed root before testing
+its type. `ConvertFrom-Json -NoEnumerate` keeps a singleton JSON array from
+becoming its element; without it, `[{"records":[]}]` can look like an object
+and pass an object-only check.
+
+Do not assume JSON conversion preserves values merely because array-shape
+checks pass. Default conversion can turn date-looking strings into
+`DateTime`. `PSCustomObject` properties and ordinary PowerShell hashtables
+cannot preserve distinct JSON keys such as `a` and `A`. Use a maintained
+parser's exact string values and ordinal-key objects when that distinction is
+part of the task. Keep parsed objects as dictionaries or JSON elements rather
+than casting them back into a case-insensitive object shape.
+
+`ConvertFrom-Json -DateKind String` is available only on PowerShell 7.5 or
+later. It is not a fallback for a 7.4 contract. `-AsHashtable` preserves
+distinct-case keys, but does not alone disable date conversion. Choose the
+smallest maintained parser/API compatible with the declared floor; do not
+reimplement JSON syntax to avoid its conversions.
+
+If the contract requires exact JSON string values on PowerShell 7.4, do not
+use default `ConvertFrom-Json`, even with `-AsHashtable -NoEnumerate`.
+Use a maintained parser that leaves strings unchanged. Do not parse strings
+as dates unless the task explicitly requires that conversion.
+
+For an object-root contract, this PowerShell 7.4-compatible example returns
+an independently owned `JsonElement`. Cloning preserves the value after the
+document is disposed:
+
+```powershell
+function ConvertFrom-ExactJsonObject {
+    [CmdletBinding()]
+    [OutputType([System.Text.Json.JsonElement])]
+    param (
+        [Parameter(Mandatory)]
+        [string] $Json
+    )
+
+    $document = [System.Text.Json.JsonDocument]::Parse($Json)
+    try {
+        if ($document.RootElement.ValueKind -ne [System.Text.Json.JsonValueKind]::Object) {
+            throw 'Expected a JSON object.'
+        }
+
+        return $document.RootElement.Clone()
+    }
+    finally {
+        $document.Dispose()
+    }
+}
+```
+
+Read strings with `GetString()` and object members with ordinal
+`GetProperty()` lookup; PowerShell dot-property access is not the
+`JsonElement` API. When the output contract requires native PowerShell
+values, project by JSON kind using exact strings and ordinal dictionaries.
+Do not reparse or cast the preserved graph into a case-insensitive shape.
+
+Add independent controls for a singleton array root, a date-looking string,
+and distinct-case keys, including nested record values. A valid empty array
+and ordinary numeric records do not cover these conversion boundaries.
+
 ## Preserve the value states
 
 Check key presence *before* reading the value. Reading a missing field and an
@@ -36,7 +99,7 @@ For a required JSON Boolean in a PowerShell 7.4-or-later host, validate the
 root, presence, and type separately:
 
 ```powershell
-$receipt = ConvertFrom-Json -InputObject $json -AsHashtable -ErrorAction Stop
+$receipt = ConvertFrom-Json -InputObject $json -AsHashtable -NoEnumerate -ErrorAction Stop
 if ($receipt -isnot [System.Collections.IDictionary]) {
     throw 'Expected a JSON object.'
 }

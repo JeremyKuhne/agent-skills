@@ -343,6 +343,7 @@ function New-SkillEvalCopilotStartInfo {
     $startInfo.FileName = $CopilotPath
     if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
     $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardInput = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $encoding = [System.Text.UTF8Encoding]::new($false)
@@ -359,6 +360,7 @@ function Get-SkillEvalCopilotVersion ([string] $CopilotPath, [string] $Model) {
     $process.StartInfo = $startInfo
     try {
         if (-not $process.Start()) { throw 'Copilot CLI version process did not start.' }
+        $process.StandardInput.Close()
         $standardOutput = $process.StandardOutput.ReadToEndAsync()
         $standardError = $process.StandardError.ReadToEndAsync()
         if (-not $process.WaitForExit(30 * 1000)) {
@@ -1615,6 +1617,7 @@ function Invoke-SkillEvalProcess {
     $process.StartInfo = $startInfo
     $started = $process.Start()
     if (-not $started) { throw 'Copilot CLI did not start.' }
+    $process.StandardInput.Close()
     $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
     $standardErrorTask = $process.StandardError.ReadToEndAsync()
     $completed = $process.WaitForExit($TimeoutMinutes * 60 * 1000)
@@ -1770,6 +1773,7 @@ function Invoke-SkillEvalWorkItem {
     $context = $null
     $finalStagedExposure = $null
     $usageEvidence = $null
+    $processResult = $null
     try {
         $phaseStarted = $stopwatch.ElapsedMilliseconds
         $context = New-SkillEvalContext `
@@ -1811,6 +1815,9 @@ function Invoke-SkillEvalWorkItem {
         if (($SkillCondition -eq 'no-skill' -or $TargetSkill) -and
             $finalStagedExposure.Revision -cne $context.StagedExposure.Revision) {
             throw 'Staged skill exposure changed during the evaluation.'
+        }
+        if ($processResult.TimedOut) {
+            throw "Copilot CLI timed out after $TimeoutMinutes minute(s); no successful capture is reported."
         }
         if ($processResult.PSObject.Properties['UsageOutputPath'] -and
             $processResult.UsageOutputPath) {
@@ -1914,8 +1921,8 @@ function Invoke-SkillEvalWorkItem {
             Model = $Model
             Passed = $false
             SafetyPassed = $true
-            ExitCode = -1
-            TimedOut = $false
+            ExitCode = if ($null -ne $processResult) { $processResult.ExitCode } else { -1 }
+            TimedOut = if ($null -ne $processResult) { $processResult.TimedOut } else { $false }
             InvokedSkills = @()
             Evidence = @()
             RunDirectory = $runDirectory
