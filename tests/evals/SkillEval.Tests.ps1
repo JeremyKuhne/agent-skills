@@ -3486,32 +3486,72 @@ Describe 'Skill evaluation scenario contract' {
         }
     }
 
-    It 'provides an explicitly closable input stream to noninteractive children' {
-        $startInfo = & (Get-Module SkillEval) {
+    It 'closes native stdin in the production <Caller> launch path' -ForEach @(
+        @{ Caller = 'version' }
+        @{ Caller = 'capture' }
+    ) {
+        $nativeStartInfo = & (Get-Module SkillEval) {
             param($path)
             New-SkillEvalCopilotStartInfo -CopilotPath $path
         } $script:PwshPath
-        $startInfo.RedirectStandardInput | Should -BeTrue
-        foreach ($argument in @('-NoProfile', '-NonInteractive', '-Command',
-                '[Console]::Out.Write("EOF:" + [Console]::In.ReadToEnd().Length)')) {
-            $startInfo.ArgumentList.Add($argument)
+        $nativeStartInfo.RedirectStandardInput | Should -BeTrue
+        $probePath = Join-Path $TestDrive "stdin-$Caller.ps1"
+        Set-Content -LiteralPath $probePath -Value @'
+$inputTask = [Console]::In.ReadToEndAsync()
+if (-not $inputTask.Wait(5000)) {
+    [Console]::Error.Write('Production caller did not close stdin.')
+    exit 23
+}
+if ($inputTask.GetAwaiter().GetResult().Length -ne 0) {
+    [Console]::Error.Write('Unexpected native stdin content.')
+    exit 24
+}
+[Console]::Out.Write('GitHub Copilot CLI 1.0.95')
+'@
+        # Route launches to an EOF probe; production callers own stdin closure.
+        Mock -ModuleName SkillEval New-SkillEvalCopilotStartInfo {
+            $startInfo = [Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
+            if ($WorkingDirectory) { $startInfo.WorkingDirectory = $WorkingDirectory }
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardInput = $true
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+            foreach ($argument in @('-NoProfile', '-NonInteractive', '-File', $CopilotPath)) {
+                $startInfo.ArgumentList.Add($argument)
+            }
+            return $startInfo
         }
-        $process = [Diagnostics.Process]::new()
-        $process.StartInfo = $startInfo
-        try {
-            $process.Start() | Should -BeTrue
-            $process.StandardInput.Close()
-            $stdout = $process.StandardOutput.ReadToEndAsync()
-            $stderr = $process.StandardError.ReadToEndAsync()
-            $process.WaitForExit(5000) | Should -BeTrue
-            $process.ExitCode | Should -Be 0
-            $stdout.GetAwaiter().GetResult() | Should -BeExactly 'EOF:0'
-            $stderr.GetAwaiter().GetResult() | Should -BeExactly ''
+
+        if ($Caller -eq 'version') {
+            Get-SkillEvalCopilotVersion -CopilotPath $probePath |
+                Should -BeExactly 'GitHub Copilot CLI 1.0.95'
         }
-        finally {
-            if (-not $process.HasExited) { $process.Kill($true); $process.WaitForExit() }
-            $process.Dispose()
+        else {
+            $scenario = @(Get-SkillEvalScenarios -Path $script:ScenarioPath)[0]
+            $context = & (Get-Module SkillEval) {
+                param($scenario, $repoRoot, $runDirectory)
+                New-SkillEvalContext -Scenario $scenario -RepoRoot $repoRoot `
+                    -EvalRoot (Join-Path $repoRoot 'evals') -RunDirectory $runDirectory
+            } $scenario $script:RepoRoot (Join-Path $TestDrive 'native-stdin-capture')
+            $result = & (Get-Module SkillEval) {
+                param($scenario, $context, $probePath)
+                Invoke-SkillEvalProcess -Scenario $scenario -Context $context `
+                    -Model fake-model -TimeoutMinutes 1 -CopilotPath $probePath
+            } $scenario $context $probePath
+            $result.TimedOut | Should -BeFalse
+            $result.ExitCode | Should -Be 0
+            Get-Content -LiteralPath $result.StandardOutputPath -Raw |
+                Should -BeExactly 'GitHub Copilot CLI 1.0.95'
+            Get-Content -LiteralPath $result.StandardErrorPath -Raw |
+                Should -BeNullOrEmpty
+            $receipt = Get-Content -LiteralPath (Join-Path $context.RunDirectory 'process.json') `
+                -Raw | ConvertFrom-Json
+            $receipt.IsRealClient | Should -BeTrue
+            $receipt.ExitCode | Should -Be 0
+            $receipt.TimedOut | Should -BeFalse
         }
+        Should -Invoke -ModuleName SkillEval New-SkillEvalCopilotStartInfo -Times 1 -Exactly
     }
 
     It 'decodes redirected native output and error streams as UTF-8' {
