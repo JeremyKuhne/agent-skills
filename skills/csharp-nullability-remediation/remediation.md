@@ -26,6 +26,11 @@ Common compiler diagnostics are:
 The same `!` can suppress different warnings after a conversion or refactor. Always
 use the diagnostic from the current target framework and configuration.
 
+Compile combined edits even when each removal probe passed independently: nested
+suppressions can mask warnings in the same expression. Include containing-type
+diagnostics; an initialization warning can be reported on a constructor outside
+the edited member.
+
 ## Remedy selection
 
 ### Compiler flow already proves non-null
@@ -138,6 +143,11 @@ Do not hoist a result into static state when it depends on a call argument or mu
 instance. The constructor can cache the immutable dependency used to perform the
 operation, but each instance-dependent result must still be obtained and validated.
 
+Caching a dependency can move side-effectful getter evaluation. Preserve required
+evaluation timing, exception timing, and disposal ordering, not just value identity.
+For cyclic deserialization, keep two-phase ownership truthful; constructor injection
+must not silently introduce per-object factories or bound-delegate allocations.
+
 Adding an explicit static constructor removes `beforefieldinit` and can change when
 initialization runs. A failure is surfaced through `TypeInitializationException` and
 is cached for the type. Verify that the stricter timing and failure behavior match the
@@ -180,9 +190,11 @@ Do not change a required runtime dependency into an optional API merely to remov
 unless the lifecycle makes that guarantee before every read.
 
 For benchmark or test-framework fields initialized by a setup callback, verify that
-the callback is unconditional for every consuming method. A private `[AllowNull]`
-field can preserve a non-null read contract without adding a measured-path guard,
-but only after every read and cleanup path has been audited.
+the callback is unconditional for every consuming method, when that area is in scope.
+Do not change benchmark casts or add measured-path guards merely to remove `!`:
+the workload itself is a measurement contract. Resolve policy explicitly when a
+truthful remedy would change that workload; do not infer an exemption or use
+private `[AllowNull]` as a shortcut.
 
 ### Generic `default!`
 
@@ -194,8 +206,9 @@ Generic syntax is not an exemption. Classify the use:
   must remain unchanged.
 - **`Try*` output:** use a conditional postcondition matching actual success
   semantics.
-- **Inactive field:** consider `T?`, `[AllowNull]`, a tagged representation, or a
-  narrow `CS8601` suppression around `default`.
+- **Inactive field:** prefer `T?` with state-narrowed reads, or a tagged
+  representation. An exceptional storage remedy or narrow suppression needs the
+  justification below and must follow the repository's policy.
 - **Array slot clear:** `Array.Clear` performs equivalent zeroing without a direct
   assignment warning, but it does not make element nullability more truthful.
 - **`where T : class` / `notnull`:** returning default as `T` is a false non-null
@@ -205,8 +218,11 @@ Generic syntax is not an exemption. Classify the use:
 
 For inactive storage, `[AllowNull]` permits a null write while reads retain the
 non-null declared type. It moves trust to the declaration and can hide an invalid
-read, so use this remedy only for private storage whose state guard is independently
-enforced and tested. Public `[AllowNull]` is valid when the public write contract
+read. Use it only as a justified last resort: explain why nullable storage and
+existing lifecycle boundaries cannot preserve the required contract or layout,
+and independently enforce and test every read, reset, and cleanup path.
+Do not add it across private fields merely to silence initialization warnings.
+Public `[AllowNull]` is valid when the public write contract
 accepts null while reads remain non-null, such as a property setter that normalizes
 null; verify both accessor contracts.
 
@@ -237,7 +253,6 @@ A discriminator such as `_hasValue` plus a `T` payload is a relational invariant
 nullable type system cannot generally express. Options are:
 
 - nullable payload plus a checked/narrowed read;
-- `[AllowNull]` payload plus tests that prove every read is discriminator-guarded;
 - one optional state object whose absence means inactive and whose constructor or
   mode-specific type makes every active state complete;
 - a representation that makes invalid states unrepresentable;
@@ -245,12 +260,15 @@ nullable type system cannot generally express. Options are:
 - a narrow suppression documenting layout, compatibility, or measured performance
   constraints.
 
-When several nullable fields activate together, prefer reasoning about one optional
-state reference over rechecking relationships among sibling fields. Do not merely
-move the same nullable combinations into a bag: use constructor parameters,
-mode-specific implementations, or another discriminated representation so an active
-object cannot represent a partial mode. Account for the extra allocation on the rare
-path against the smaller owner object and simpler common-path branch.
+First try capturing and narrowing required values at an existing lifecycle boundary.
+When that cannot express several fields' shared invariant clearly, consider one
+optional state reference. Do not merely move the same nullable combinations into a
+bag: use constructor parameters or mode-specific types so an active object cannot
+represent a partial mode. Justify the redesign and its allocation/layout effects.
+Private `[AllowNull]` remains subject to the exceptional-storage justification above.
+
+Do not replace a mode discriminator with payload nullability when null is also
+representable within that mode or when doing so changes delayed-failure behavior.
 
 There is no universally correct rewrite. Preserve layout and hot-path behavior until
 evidence supports changing them.
@@ -271,7 +289,8 @@ contract from a runtime implementation.
 Choose deliberately among:
 
 - throwing when the enumerator is not positioned;
-- `[AllowNull]` private backing storage while retaining `T Current`;
+- `[AllowNull]` private backing storage while retaining `T Current`, only with the
+  exceptional-storage justification above;
 - a nullable member on a non-interface API; or
 - a narrow suppression that names the temporal protocol.
 
@@ -325,7 +344,7 @@ Reject these as automatic fixes:
 
 - `value!` -> `value ?? throw` without a non-null runtime contract;
 - `default!` -> `Array.Clear` while claiming the array is now null-safe;
-- `default!` -> `[AllowNull]` without auditing every read;
+- `default!` -> `[AllowNull]` merely to disguise uninitialized or inactive storage;
 - `null!` -> an opaque helper that still returns null as non-null;
 - adding `Debug.Assert` as the only release-mode guarantee;
 - changing a public return to nullable without checking consumers;

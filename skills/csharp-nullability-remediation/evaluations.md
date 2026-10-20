@@ -56,6 +56,46 @@ Expected:
 - use a typed pattern when type refinement is also required; and
 - retain a separate local when either branch or later control flow needs the value.
 
+### Combined removal probes
+
+Two nested suppressions each compile without warnings when removed independently;
+removing both exposes a nullable receiver warning.
+
+Expected:
+
+- compile the combined edit instead of treating independent probes as composable;
+- repair the newly exposed contract rather than inserting an unrelated guard; and
+- include containing-type diagnostics when initialization warnings occur on a
+  constructor outside the edited member.
+
+### Approved scope and measurement workloads
+
+A repository-wide inventory includes production, intentional invalid-input tests,
+and benchmark casts in measured methods; their inclusion has not been decided.
+
+Expected:
+
+- inventory those categories separately and confirm uncertain scope before edits;
+- use existing repository policy or explicit approval for exclusions;
+- preserve negative-test behavior and the original measured workload; and
+- do not add guards or private `[AllowNull]` fields just to satisfy the diagnostic.
+
+### Bounded performance work
+
+A targeted comparison reports a small per-call difference with uncertain practical
+impact. The user requests no slowdown but has not authorized a profiling project.
+
+Expected:
+
+- distinguish compiler-only changes from runtime rewrites before selecting checks;
+- report absolute and relative cost, frequency when known, and uncertainty;
+- preserve explicit acceptance criteria without treating statistical significance
+  alone as permission to investigate;
+- use at most one confirmatory repeat by default, within the agreed run budget;
+- report an unresolved gate rather than claim neutrality or create new harnesses;
+  and
+- stop when the budget is exhausted or the user declines further work.
+
 ### Domain-significant `Try*` helper
 
 Input has a private `bool TryGetNode(..., out Node? node)` that performs a bounded
@@ -128,9 +168,10 @@ Input uses `_hasValue` and `T _value = default!`.
 Expected:
 
 - explain that the compiler cannot generally relate the fields;
-- compare `T?`, `[AllowNull]`, representation change, guard/throw, and narrow
-  suppression;
-- audit all reads before using `[AllowNull]` for inactive private storage;
+- prefer truthful nullable storage and narrow reads at existing boundaries;
+- consider representation changes or policy-approved narrow suppression when
+  ordinary flow cannot express the contract;
+- justify private `[AllowNull]` as a last resort and audit reads, resets, and cleanup;
 - preserve public `[AllowNull]` contracts that accept or normalize null on write
   while remaining non-null on read; and
 - avoid declaring one universal winner without layout/performance context.
@@ -142,12 +183,26 @@ small set of valid active modes.
 
 Expected:
 
-- consider replacing the sibling fields with one optional state reference;
+- try narrowed values at an existing lifecycle boundary before adding a state object;
 - make each active mode complete through constructors or mode-specific types rather
   than moving nullable combinations unchanged;
 - compare the rare-path state allocation with owner-object size and common-path
   branching; and
 - test every mode plus the absent-state path.
+
+### Preserved lifecycle semantics
+
+A proposed constructor refactor caches a dependency getter used during processing;
+the getter has side effects. A separate mode accepts null until a later operation.
+
+Expected:
+
+- preserve required getter evaluation, exception, and disposal timing;
+- audit factory and delegate allocations when two-phase ownership is involved;
+- do not infer the mode solely from payload nullability when null can exist within
+  the mode; and
+- validate delayed-failure behavior instead of assuming the cleaner representation
+  is equivalent.
 
 ### Enumerator protocol
 
@@ -159,8 +214,9 @@ Expected:
 - identify the temporal-contract mismatch;
 - note that `T? Current` / `[MaybeNull] T Current` can conflict with the inherited
   contract and require a compile check against each reference surface;
-- compare runtime guard, private `[AllowNull]` storage, and narrow suppression;
-  and
+- compare runtime guard and policy-approved narrow suppression first; consider
+  private `[AllowNull]` storage only as a justified last resort, with audited
+  reads, resets, and cleanup; and
 - test default, before-first, active, after-end, and reset states.
 
 For a reference-type custom enumerator with nullable reference `Current`, also expect:

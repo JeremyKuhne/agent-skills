@@ -94,4 +94,47 @@ Describe 'C# nullability remediation skill contract' {
         $script:Verification | Should -Match 'compile a representative violation.*expected\s+diagnostic'
         $script:Verification | Should -Not -Match 'acyclic bootstrap|producer source gate'
     }
+
+    It 'confirms scope without changing measurement workloads automatically' {
+        $script:Skill | Should -Match 'Inventory production, tests,\s+generated code, and benchmarks separately'
+        $script:Skill | Should -Match 'Exclusions require repository policy or explicit approval'
+        $script:Remediation | Should -Match 'the workload itself is a measurement contract'
+        $script:Evaluations | Should -Match 'Approved scope and measurement workloads'
+    }
+
+    It 'requires combined probes and containing-type diagnostics' {
+        $script:Remediation | Should -Match 'Compile combined edits'
+        $script:Remediation | Should -Match 'Include containing-type\s+diagnostics'
+        $script:Evaluations | Should -Match 'Combined removal probes'
+    }
+
+    It 'makes private AllowNull storage exceptional without forbidding normalization setters' {
+        $script:Skill | Should -Match 'Private `\[AllowNull\]` storage is an\s+exceptional remedy'
+        $script:Remediation | Should -Match 'Use it only as a justified last resort'
+        $script:Remediation | Should -Match 'every read, reset, and cleanup path'
+        $script:Remediation | Should -Match 'Public `\[AllowNull\]` is valid'
+        $script:Evaluations | Should -Match 'justify private `\[AllowNull\]` as a last resort'
+        $script:Evaluations | Should -Match 'compare runtime guard and policy-approved narrow suppression first'
+        $script:Evaluations | Should -Match 'storage only as a justified last resort, with audited\s+reads, resets, and cleanup'
+    }
+
+    It 'bounds performance work without waiving acceptance criteria' {
+        $script:Verification | Should -Match 'defaults below do not waive a required gate'
+        $script:Verification | Should -Match 'no mandatory benchmark or IL inspection'
+        $script:Verification | Should -Match 'At most one\s+confirmatory repeat is the default'
+        $script:Verification | Should -Match 'Statistical\s+significance alone does not establish practical importance'
+        $script:Verification | Should -Match 'require separate approval unless already in scope'
+        $script:Verification | Should -Match 'When the budget is exhausted, stop'
+        $script:Verification | Should -Match 'satisfy explicit performance gates'
+        $script:Verification | Should -Match 'compiler-only or annotation-only changes need no\s+timing checks unless an explicit gate requires them'
+        $script:Evaluations | Should -Match 'Bounded performance work'
+    }
+
+    It 'preserves lifecycle timing and justifies structural rewrites' {
+        $script:Skill | Should -Match 'Justify a redesign'
+        $script:Remediation | Should -Match 'side-effectful getter evaluation'
+        $script:Remediation | Should -Match 'For cyclic deserialization, keep two-phase ownership truthful'
+        $script:Remediation | Should -Match 'Do not replace a mode discriminator with payload nullability'
+        $script:Evaluations | Should -Match 'Preserved lifecycle semantics'
+    }
 }
