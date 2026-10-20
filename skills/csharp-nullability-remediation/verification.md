@@ -52,17 +52,39 @@ The CLR signature remaining identical is not sufficient validation.
 | Reflection/external lookup | Missing member/result produces a descriptive controlled failure. |
 | Intentional invalid test input | The production null-validation path is still exercised. |
 
-## Hot paths and layout
+## Proportionate performance verification
 
-Do not assume an annotation or helper is free when replacing a direct store, field,
-or branch in a measured path.
+Nullability remediation is not an optimization project. Follow explicit user and
+repository acceptance criteria; the defaults below do not waive a required gate.
 
-- Check whether field type/layout changed.
-- Inspect generated code or IL when defensive copies, boxing, or generic expansion
-  are plausible.
-- Benchmark both the original and candidate on each relevant runtime/JIT.
-- Keep the existing suppression when the alternative regresses a stated threshold
-  and the invariant is otherwise pinned.
+| Change | Default performance check |
+| --- | --- |
+| Compiler-proven redundant suppression removal or annotation-only change that preserves executed expressions | Compilation and correctness tests; no mandatory benchmark or IL inspection. |
+| Guard or state-access change | An existing representative benchmark when the changed path is frequent enough to matter; do not benchmark every error-path check. |
+| Allocation, layout, loop, or callback rewrite | A bounded original/candidate comparison on the relevant runtime/JIT before accepting the rewrite. |
+
+Select the scenario, acceptance criteria, and run budget before measuring. Start
+with one targeted before/after comparison using the existing harness. At most one
+confirmatory repeat is the default unless a larger budget is already authorized.
+If the necessary benchmark does not exist, surface that gap instead of building
+measurement infrastructure automatically.
+
+Report absolute cost with units, relative cost, allocations, execution frequency
+when known, and end-to-end significance or its absence of evidence. Statistical
+significance alone does not establish practical importance or justify investigation.
+A small per-call difference can still matter on a sufficiently frequent path;
+do not use a universal nanosecond cutoff.
+
+If results are noisy, report uncertainty rather than rewrite production code from
+an unstable comparison. A failed or inconclusive gate is not a pass, but neither
+authorizes an open-ended investigation. When the budget is exhausted, stop and
+report the remaining risk.
+
+Profiling, IL/JIT disassembly, diagnostic variants, new harnesses, and system-wide
+configuration changes require separate approval unless already in scope. Do not
+repeatedly escalate through alternative tools after the user declines further work.
+Retain a suppression only when repository policy and the retention conditions in
+[remediation.md](remediation.md) allow it; otherwise report the unresolved site.
 
 Performance evidence must name the runtime, JIT, scenario, and uncertainty. A single
 stopwatch result is not enough.
@@ -75,7 +97,9 @@ Before calling the remediation complete:
 2. build every affected target in Release;
 3. run the repository's required Release tests;
 4. run public-consumer or package checks when annotations changed;
-5. run performance checks for any accepted hot-path rewrite;
+5. satisfy explicit performance gates and run the bounded comparisons above for
+   accepted hot-path rewrites; compiler-only or annotation-only changes need no
+   timing checks unless an explicit gate requires them;
 6. verify generated/vendored exclusions are configuration-based and documented; and
 7. when a diagnostic analyzer participates, compile a representative violation and confirm each intended project emits the expected diagnostic.
 

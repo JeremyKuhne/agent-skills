@@ -32,7 +32,8 @@ new code tells the truth about values that can be null.
   fix deliberately changes them. Nullable metadata can break warning-as-error
   consumers even when the CLR signature is unchanged.
 - Treat `[AllowNull]`, `Array.Clear`, helper methods, and pragmas as trust-boundary
-  choices, not proof that a value is non-null.
+  choices, not proof that a value is non-null. Private `[AllowNull]` storage is an
+  exceptional remedy, not a routine substitute for truthful nullable state.
 - Do not add `?? throw` merely to satisfy analysis. A throw is correct only when
   the runtime contract forbids null at that boundary.
 - Keep an intentional suppression narrow and explain the invariant that makes it
@@ -40,7 +41,10 @@ new code tells the truth about values that can be null.
 
 ## Workflow
 
-1. **Establish scope.** Record nullable context, effective SDK/compiler, targets, source policy, and public or hot-path exposure.
+1. **Establish scope.** Record nullable context, effective SDK/compiler, targets,
+   source policy, and public or hot-path exposure. Inventory production, tests,
+   generated code, and benchmarks separately; confirm uncertain scope once before
+   editing. Exclusions require repository policy or explicit approval, not inference.
 2. **Inventory real operators.** Prefer compiler/analyzer diagnostics or syntax
    parsing over textual `!` matches. Group sites by code shape and contract owner.
 3. **Run a removal probe.** Delete `!` at one representative site and run the
@@ -52,7 +56,9 @@ new code tells the truth about values that can be null.
    input, and unchecked external assumptions.
 5. **Choose the smallest truthful remedy.** State whether null is a valid value,
    an invalid value, an inactive representation, or impossible under a checked
-   invariant. Make the code and annotations match that answer.
+   invariant. Prefer narrowing at existing lifecycle boundaries over introducing
+   contexts, factories, or state objects automatically. Justify a redesign's scope
+   and lifecycle/allocation effects before expanding the cleanup.
 6. **Edit one category.** Change a small representative cluster, preserving
    behavior and local style. Do not mix unrelated nullability models in one pass.
 7. **Validate immediately.** Follow [verification.md](verification.md). Rerun the
@@ -75,8 +81,9 @@ Stop and surface the decision instead of editing when:
   evidence;
 - a state or protocol invariant cannot be represented and no local suppression
   policy exists;
-- replacing a direct store, branch, or field layout may affect a hot path and no
-  measurement is available;
+- a proposed hot-path rewrite has material runtime risk but no bounded validation
+  plan; use the proportionality limits in [verification.md](verification.md), not
+  an open-ended performance investigation;
 - a framework owns initialization but its lifecycle guarantee is not documented;
   or
 - the relevant target framework lacks an attribute and no approved downlevel
@@ -98,8 +105,8 @@ Name any sites intentionally left unchanged and the evidence still needed.
   itself.
 - Use `dotnet-polyfills` when nullable-analysis attributes are missing from an
   older target framework.
-- Use `performance-testing` before changing a measured hot path solely to avoid
-  a suppression.
+- Use `performance-testing` for bounded comparisons when remediation changes a
+  material hot path; follow the limits in [verification.md](verification.md).
 - Use `security-review` when nullability assumptions guard unsafe, reflection,
   deserialization, interop, or untrusted-input boundaries.
 - Run `pre-pr-self-review` after remediation changes are complete.
